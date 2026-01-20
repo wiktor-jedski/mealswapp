@@ -170,7 +170,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-013] Activity Sidebar
-**Statement:** WHILE in the search view, the software shall provide a collapsible sidebar on the right side of the screen containing the user's search history and favorites.
+**Statement:** WHILE in the search view, the software shall provide a collapsible sidebar on the left side of the screen containing the user's search history and favorites.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -196,7 +196,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-015] Light/Dark Mode Toggle
-**Statement:** The software shall provide a toggleable theme switcher allowing users to select between light mode and dark mode, persisting the preference across sessions.
+**Statement:** The software shall provide a toggleable theme switcher in the collapsible sidebar allowing users to select between light mode and dark mode, persisting the preference across sessions.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -206,6 +206,19 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Verification** | UI Test (Theme toggle and persistence check) |
 
 **Notes:** Default theme should respect the user's system preference (prefers-color-scheme). User selection overrides system preference.
+---
+
+## [SW-REQ-089] Style Guide
+**Statement:** The interface shall follow the Style Guide for layout, typography, and color consistency.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Functional (UI) |
+| **Priority** | High |
+| **Feasibility** | Feasible |
+| **Verification** | UI Inspection |
+
+**Notes:** Style Guide saved in 02_STYLE_GUIDE.md,
 ---
 
 ### 2.2 Similarity Algorithm & Filtering
@@ -1180,3 +1193,19 @@ This document defines the software-level requirements for the Mealswapp applicat
 
 **Notes:** Builds upon the caching mechanism defined in SW-REQ-003.
 ---
+
+## 3. Changelog
+
+### 2026-01-18
+
+* Added
+- Document created
+
+### 2026-01-20
+
+* Added
+- SW-REQ-089 - added Style Guide requirement
+
+* Changed
+- SW-REQ-013 - sidebar on the left side
+- SW-REQ-015 - mode toggle in sidebar
