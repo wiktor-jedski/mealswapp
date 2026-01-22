@@ -1,1263 +1,638 @@
-# Detailed Design: AutocompleteDropdown
-
-**Traceability:** [ARCH-001], [ARCH-002]
+# FILE: AutocompleteDropdown.md
+**Traceability:** ARCH-001
 
 ---
 
 ## 1. Data Structures & Types
 
-### 1.1 Autocomplete Item Types
+### 1.1 Component Props Interface
 
 ```typescript
-type MatchType = 'exact' | 'fuzzy' | 'partial';
+interface AutocompleteDropdownProps {
+  /** Placeholder text for the input field */
+  placeholder?: string;
+  /** Maximum number of suggestions to display */
+  maxSuggestions?: number;  // Default: 10
+  /** Debounce delay in milliseconds */
+  debounceMs?: number;  // Default: 150
+  /** Callback when user selects an item */
+  onSelect: (item: FoodItem) => void;
+  /** Callback when input value changes (after debounce) */
+  onSearch?: (query: string) => void;
+  /** Whether the component is disabled */
+  disabled?: boolean;
+  /** Minimum characters required before searching */
+  minChars?: number;  // Default: 2
+  /** Custom className for styling */
+  className?: string;
+}
+```
 
-interface AutocompleteItem {
+### 1.2 Internal State Interface
+
+```typescript
+interface AutocompleteState {
+  /** Current input value (raw, not debounced) */
+  inputValue: string;
+  /** List of suggestions from API/cache */
+  suggestions: FoodItem[];
+  /** Whether dropdown is visible */
+  isOpen: boolean;
+  /** Index of currently highlighted suggestion (-1 = none) */
+  highlightedIndex: number;
+  /** Loading state for API requests */
+  isLoading: boolean;
+  /** Error state */
+  error: AutocompleteError | null;
+  /** Whether currently offline */
+  isOffline: boolean;
+  /** Whether results are from cache */
+  isFromCache: boolean;
+}
+```
+
+### 1.3 FoodItem Interface
+
+```typescript
+interface FoodItem {
   id: string;
   name: string;
+  category: string;
   imageUrl: string | null;
-  categoryTags: string[];
-  functionalityTags: string[];
-  macros: MacroData;
-  matchType: MatchType;
-  matchScore: number;                    // 0-1 relevance score from backend ranking
-  highlightRanges: HighlightRange[];     // Character ranges to highlight in name
+  macros: {
+    calories: number;
+    protein: number;
+    carbohydrates: number;
+    fat: number;
+  };
+  servingSize: string;
 }
-
-interface MacroData {
-  protein: number;    // per 100g/ml
-  carbs: number;
-  fat: number;
-  calories: number;   // Derived: (protein * 4) + (carbs * 4) + (fat * 9)
-}
-
-interface HighlightRange {
-  start: number;      // Start index (inclusive)
-  end: number;        // End index (exclusive)
-}
-```
-
-### 1.2 Search History Item Types
-
-```typescript
-interface SearchHistoryItem {
-  id: string;
-  query: string;
-  mode: 'single' | 'recipe' | 'diet';
-  timestamp: number;
-  resultCount: number;
-}
-
-const MAX_HISTORY_DISPLAY = 5;
-const HISTORY_STORAGE_KEY = 'mealswapp_search_history';
-```
-
-### 1.3 Dropdown State Types
-
-```typescript
-type DropdownSection = 'results' | 'history' | 'empty' | 'loading' | 'error';
-
-interface AutocompleteDropdownState {
-  isOpen: boolean;
-  activeSection: DropdownSection;
-  items: AutocompleteItem[];
-  historyItems: SearchHistoryItem[];
-  highlightedIndex: number;             // -1 = none, 0+ = item index
-  highlightedSection: 'results' | 'history' | null;
-  totalCount: number;                    // Total matches from backend (may exceed displayed)
-  isLoading: boolean;
-  error: DropdownError | null;
-  query: string;                         // Current search query (for display)
-  hasMoreResults: boolean;               // true if totalCount > items.length
-}
-
-const INITIAL_DROPDOWN_STATE: AutocompleteDropdownState = {
-  isOpen: false,
-  activeSection: 'empty',
-  items: [],
-  historyItems: [],
-  highlightedIndex: -1,
-  highlightedSection: null,
-  totalCount: 0,
-  isLoading: false,
-  error: null,
-  query: '',
-  hasMoreResults: false
-};
-
-const MAX_VISIBLE_ITEMS = 8;
-const ITEM_HEIGHT_PX = 72;              // Height of each autocomplete item
-const MAX_DROPDOWN_HEIGHT_PX = 480;     // Maximum dropdown height (6.5 items visible)
 ```
 
 ### 1.4 Error Types
 
 ```typescript
-type DropdownErrorType =
-  | 'NETWORK_ERROR'
-  | 'TIMEOUT'
-  | 'NO_RESULTS'
-  | 'RATE_LIMITED'
-  | 'SERVER_ERROR';
-
-interface DropdownError {
-  type: DropdownErrorType;
-  message: string;
-  retryable: boolean;
-  retryAfterMs?: number;
-}
-
-const ERROR_MESSAGES: Record<DropdownErrorType, string> = {
-  NETWORK_ERROR: "You're offline. Check your connection.",
-  TIMEOUT: "Search timed out. Please try again.",
-  NO_RESULTS: "No items found for \"{query}\".",
-  RATE_LIMITED: "Too many searches. Please wait.",
-  SERVER_ERROR: "Something went wrong. Please try again."
-};
+type AutocompleteError =
+  | { type: 'NETWORK_ERROR'; message: string }
+  | { type: 'TIMEOUT_ERROR'; message: string }
+  | { type: 'API_ERROR'; statusCode: number; message: string }
+  | { type: 'NO_RESULTS'; message: string };
 ```
 
-### 1.5 Positioning Types
+### 1.5 Cache Entry Structure
 
 ```typescript
-type DropdownPosition = 'below' | 'above';
-
-interface DropdownPositionConfig {
-  position: DropdownPosition;
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
+interface CacheEntry {
+  query: string;
+  results: FoodItem[];
+  timestamp: number;  // Unix timestamp ms
 }
 
-interface ViewportBounds {
-  viewportHeight: number;
-  inputRect: DOMRect;
-  spaceBelow: number;
-  spaceAbove: number;
+interface SearchHistoryEntry {
+  query: string;
+  timestamp: number;
 }
 ```
 
-### 1.6 Keyboard Navigation Types
+### 1.6 Keyboard Navigation Constants
 
 ```typescript
-type NavigationDirection = 'up' | 'down' | 'first' | 'last';
-
-interface KeyboardAction {
-  key: string;
-  action: 'navigate' | 'select' | 'close' | 'clear' | 'none';
-  direction?: NavigationDirection;
-}
-
-const KEYBOARD_MAPPINGS: Record<string, KeyboardAction> = {
-  'ArrowDown': { key: 'ArrowDown', action: 'navigate', direction: 'down' },
-  'ArrowUp': { key: 'ArrowUp', action: 'navigate', direction: 'up' },
-  'Enter': { key: 'Enter', action: 'select' },
-  'Tab': { key: 'Tab', action: 'select' },
-  'Escape': { key: 'Escape', action: 'close' },
-  'Home': { key: 'Home', action: 'navigate', direction: 'first' },
-  'End': { key: 'End', action: 'navigate', direction: 'last' }
-};
-```
-
-### 1.7 Callback Types
-
-```typescript
-interface AutocompleteDropdownCallbacks {
-  onSelect: (item: AutocompleteItem) => void;
-  onSelectHistory: (historyItem: SearchHistoryItem) => void;
-  onClose: () => void;
-  onClearHistory: () => void;
-  onRemoveHistoryItem: (itemId: string) => void;
-  onViewAllResults: () => void;
-  onRetry: () => void;
-}
-```
-
-### 1.8 Animation Types
-
-```typescript
-interface AnimationConfig {
-  duration: number;
-  easing: string;
-}
-
-const DROPDOWN_ANIMATIONS: Record<string, AnimationConfig> = {
-  open: { duration: 150, easing: 'ease-out' },
-  close: { duration: 100, easing: 'ease-in' },
-  highlightChange: { duration: 50, easing: 'ease-out' }
-};
+const KEYBOARD_KEYS = {
+  ARROW_DOWN: 'ArrowDown',
+  ARROW_UP: 'ArrowUp',
+  ENTER: 'Enter',
+  ESCAPE: 'Escape',
+  TAB: 'Tab',
+} as const;
 ```
 
 ---
 
 ## 2. Logic & Algorithms (Step-by-Step)
 
-### 2.1 Dropdown Open/Close Logic
+### 2.1 Component Initialization
 
 ```
-FUNCTION openDropdown(query: string, items: AutocompleteItem[], historyItems: SearchHistoryItem[]):
-  1. Determine active section based on content:
-     IF isLoading:
-       state.activeSection = 'loading'
-     ELSE IF error !== null:
-       state.activeSection = 'error'
-     ELSE IF query.length === 0 AND historyItems.length > 0:
-       state.activeSection = 'history'
-       state.items = []
-       state.historyItems = historyItems.slice(0, MAX_HISTORY_DISPLAY)
-     ELSE IF query.length > 0 AND items.length > 0:
-       state.activeSection = 'results'
-       state.items = items.slice(0, MAX_VISIBLE_ITEMS)
-       state.hasMoreResults = totalCount > MAX_VISIBLE_ITEMS
-     ELSE IF query.length > 0 AND items.length === 0:
-       state.activeSection = 'empty'
-     ELSE:
-       state.activeSection = 'empty'
-       state.historyItems = []
+1. Initialize state with default values:
+   - inputValue = ''
+   - suggestions = []
+   - isOpen = false
+   - highlightedIndex = -1
+   - isLoading = false
+   - error = null
+   - isOffline = !navigator.onLine
+   - isFromCache = false
 
-  2. Calculate dropdown position:
-     positionConfig = calculateDropdownPosition()
-     applyPositionStyles(positionConfig)
+2. Set up event listeners:
+   - Add 'online' event listener → set isOffline = false
+   - Add 'offline' event listener → set isOffline = true
+   - Add document click listener for outside click detection
 
-  3. Reset highlight state:
-     state.highlightedIndex = -1
-     state.highlightedSection = null
+3. Create debounced search function with debounceMs delay (default 150ms)
 
-  4. Open dropdown:
-     state.isOpen = true
-     state.query = query
-
-  5. Animate open:
-     applyOpenAnimation()
-
-  6. Update ARIA attributes:
-     updateAriaExpanded(true)
-     announceToScreenReader(getAnnouncementText())
-
-FUNCTION closeDropdown():
-  1. IF state.isOpen === false:
-     RETURN (already closed)
-
-  2. Animate close:
-     applyCloseAnimation()
-
-  3. After animation completes:
-     state.isOpen = false
-     state.highlightedIndex = -1
-     state.highlightedSection = null
-
-  4. Update ARIA attributes:
-     updateAriaExpanded(false)
-
-  5. Notify parent:
-     callbacks.onClose()
+4. Load recent search history from localStorage for initial suggestions
 ```
 
-### 2.2 Dropdown Position Calculation
+### 2.2 Input Change Handler Algorithm
 
 ```
-FUNCTION calculateDropdownPosition(): DropdownPositionConfig
-  1. Get viewport and input element bounds:
-     viewportHeight = window.innerHeight
-     inputRect = inputElement.getBoundingClientRect()
+ON inputChange(newValue):
+  1. Update inputValue immediately (for responsive UI)
 
-  2. Calculate available space:
-     spaceBelow = viewportHeight - inputRect.bottom - 16  // 16px margin from viewport edge
-     spaceAbove = inputRect.top - 16
+  2. IF newValue.length < minChars:
+     a. Clear suggestions
+     b. Set isOpen = false
+     c. Cancel any pending debounced search
+     d. RETURN
 
-  3. Calculate required height:
-     itemCount = Math.max(state.items.length, state.historyItems.length)
-     IF state.activeSection === 'loading':
-       requiredHeight = 120  // Loading spinner height
-     ELSE IF state.activeSection === 'error':
-       requiredHeight = 160  // Error message height
-     ELSE IF state.activeSection === 'empty':
-       requiredHeight = 120  // Empty state message height
-     ELSE:
-       contentHeight = itemCount * ITEM_HEIGHT_PX
-       headerHeight = state.activeSection === 'history' ? 40 : 0  // "Recent Searches" header
-       footerHeight = state.hasMoreResults ? 48 : 0              // "View all results" footer
-       requiredHeight = Math.min(contentHeight + headerHeight + footerHeight, MAX_DROPDOWN_HEIGHT_PX)
+  3. Set isLoading = true
 
-  4. Determine position (prefer below, flip if insufficient space):
-     IF spaceBelow >= requiredHeight:
-       position = 'below'
-       top = inputRect.bottom + 4  // 4px gap
-       maxHeight = Math.min(requiredHeight, spaceBelow)
-     ELSE IF spaceAbove >= requiredHeight:
-       position = 'above'
-       top = inputRect.top - requiredHeight - 4
-       maxHeight = Math.min(requiredHeight, spaceAbove)
-     ELSE:
-       // Not enough space either direction, use larger space
-       IF spaceBelow >= spaceAbove:
-         position = 'below'
-         top = inputRect.bottom + 4
-         maxHeight = spaceBelow
-       ELSE:
-         position = 'above'
-         maxHeight = spaceAbove
-         top = inputRect.top - maxHeight - 4
-
-  5. Calculate horizontal positioning:
-     left = inputRect.left
-     width = inputRect.width
-
-  6. RETURN { position, top, left, width, maxHeight }
-
-FUNCTION applyPositionStyles(config: DropdownPositionConfig):
-  dropdownElement.style.top = `${config.top}px`
-  dropdownElement.style.left = `${config.left}px`
-  dropdownElement.style.width = `${config.width}px`
-  dropdownElement.style.maxHeight = `${config.maxHeight}px`
-  dropdownElement.setAttribute('data-position', config.position)
+  4. Call debouncedSearch(newValue)
 ```
 
-### 2.3 Keyboard Navigation
+### 2.3 Debounced Search Algorithm
 
 ```
-FUNCTION handleKeyDown(event: KeyboardEvent):
-  1. Get keyboard action mapping:
-     action = KEYBOARD_MAPPINGS[event.key]
-     IF action is undefined:
-       RETURN  // Not a handled key
+debouncedSearch(query): [debounced by 150ms]
+  1. Normalize query:
+     - Trim whitespace
+     - Convert to lowercase for cache lookup
 
-  2. Handle based on action type:
-     CASE action.action === 'navigate':
-       event.preventDefault()
-       handleNavigate(action.direction)
+  2. Check localStorage cache:
+     a. Get cached results for normalized query
+     b. IF cache hit AND cache age < 5 minutes:
+        - Set suggestions = cached results
+        - Set isFromCache = true
+        - Set isLoading = false
+        - Set isOpen = true (if suggestions.length > 0)
+        - Continue to step 3 for background refresh (stale-while-revalidate)
 
-     CASE action.action === 'select':
-       IF state.highlightedIndex >= 0:
-         event.preventDefault()
-         handleSelect()
-       ELSE IF event.key === 'Tab':
-         // Allow default tab behavior if nothing highlighted
-         closeDropdown()
+  3. IF isOffline:
+     a. IF no cache hit:
+        - Set error = { type: 'NETWORK_ERROR', message: 'You are offline. Showing cached results only.' }
+        - Load any partial matches from recent queries cache
+     b. Set isLoading = false
+     c. RETURN
 
-     CASE action.action === 'close':
-       event.preventDefault()
-       closeDropdown()
-
-FUNCTION handleNavigate(direction: NavigationDirection):
-  1. Determine navigable items:
-     IF state.activeSection === 'results':
-       itemCount = state.items.length
-       section = 'results'
-     ELSE IF state.activeSection === 'history':
-       itemCount = state.historyItems.length
-       section = 'history'
-     ELSE:
-       RETURN  // No items to navigate
-
-  2. IF itemCount === 0:
-     RETURN
-
-  3. Calculate new index based on direction:
-     currentIndex = state.highlightedIndex
-
-     CASE direction === 'down':
-       IF currentIndex === -1:
-         newIndex = 0
-       ELSE IF currentIndex >= itemCount - 1:
-         newIndex = 0  // Wrap to beginning
-       ELSE:
-         newIndex = currentIndex + 1
-
-     CASE direction === 'up':
-       IF currentIndex === -1:
-         newIndex = itemCount - 1
-       ELSE IF currentIndex === 0:
-         newIndex = itemCount - 1  // Wrap to end
-       ELSE:
-         newIndex = currentIndex - 1
-
-     CASE direction === 'first':
-       newIndex = 0
-
-     CASE direction === 'last':
-       newIndex = itemCount - 1
-
-  4. Update state:
-     state.highlightedIndex = newIndex
-     state.highlightedSection = section
-
-  5. Scroll highlighted item into view:
-     scrollItemIntoView(newIndex)
-
-  6. Update ARIA active descendant:
-     updateAriaActiveDescendant(newIndex)
-
-FUNCTION scrollItemIntoView(index: number):
-  1. Get item element:
-     itemElement = dropdownElement.querySelector(`[data-index="${index}"]`)
-     IF itemElement is null:
-       RETURN
-
-  2. Get scroll container:
-     scrollContainer = dropdownElement.querySelector('.dropdown-scroll-container')
-
-  3. Calculate visibility:
-     containerRect = scrollContainer.getBoundingClientRect()
-     itemRect = itemElement.getBoundingClientRect()
-
-  4. Scroll if needed:
-     IF itemRect.bottom > containerRect.bottom:
-       // Item is below visible area
-       scrollContainer.scrollTop += itemRect.bottom - containerRect.bottom + 8
-     ELSE IF itemRect.top < containerRect.top:
-       // Item is above visible area
-       scrollContainer.scrollTop -= containerRect.top - itemRect.top + 8
+  4. Make API request:
+     a. Call searchAPI(query) with 10s timeout (per ARCH-010)
+     b. ON success:
+        - Set suggestions = response.items
+        - Set isFromCache = false
+        - Set isLoading = false
+        - Set error = null
+        - Set isOpen = true (if suggestions.length > 0)
+        - Update localStorage cache with new results
+        - Add query to search history (max 5 recent)
+     c. ON timeout:
+        - Set error = { type: 'TIMEOUT_ERROR', message: 'Search is taking longer than expected. Please try again.' }
+        - Keep any cached results visible
+        - Set isLoading = false
+     d. ON network error:
+        - Set error = { type: 'NETWORK_ERROR', message: 'Unable to reach server.' }
+        - Fall back to cached results if available
+        - Set isLoading = false
+     e. ON API error (4xx/5xx):
+        - Set error = { type: 'API_ERROR', statusCode, message }
+        - Set isLoading = false
 ```
 
-### 2.4 Item Selection
+### 2.4 Keyboard Navigation Algorithm
 
 ```
-FUNCTION handleSelect():
-  1. Validate selection state:
-     IF state.highlightedIndex < 0:
-       RETURN
-     IF state.highlightedSection === null:
-       RETURN
+ON keyDown(event):
+  1. IF dropdown is not open:
+     a. IF key is ARROW_DOWN and inputValue.length >= minChars:
+        - Open dropdown with current suggestions (or history)
+        - event.preventDefault()
+     b. RETURN
 
-  2. Get selected item:
-     IF state.highlightedSection === 'results':
-       selectedItem = state.items[state.highlightedIndex]
-       IF selectedItem is undefined:
-         RETURN
-       callbacks.onSelect(selectedItem)
+  2. SWITCH event.key:
 
-     ELSE IF state.highlightedSection === 'history':
-       selectedHistoryItem = state.historyItems[state.highlightedIndex]
-       IF selectedHistoryItem is undefined:
-         RETURN
-       callbacks.onSelectHistory(selectedHistoryItem)
+     CASE ARROW_DOWN:
+       a. event.preventDefault()
+       b. IF highlightedIndex < suggestions.length - 1:
+          - highlightedIndex++
+       c. ELSE:
+          - highlightedIndex = 0  // Wrap to top
+       d. Scroll highlighted item into view
 
-  3. Close dropdown:
-     closeDropdown()
+     CASE ARROW_UP:
+       a. event.preventDefault()
+       b. IF highlightedIndex > 0:
+          - highlightedIndex--
+       c. ELSE:
+          - highlightedIndex = suggestions.length - 1  // Wrap to bottom
+       d. Scroll highlighted item into view
 
-FUNCTION handleItemClick(index: number, section: 'results' | 'history'):
-  1. Update highlight state (for visual feedback):
-     state.highlightedIndex = index
-     state.highlightedSection = section
+     CASE ENTER:
+       a. event.preventDefault()
+       b. IF highlightedIndex >= 0:
+          - selectItem(suggestions[highlightedIndex])
+       c. ELSE IF suggestions.length === 1:
+          - selectItem(suggestions[0])  // Auto-select single result
 
-  2. Call appropriate selection handler:
-     IF section === 'results':
-       callbacks.onSelect(state.items[index])
-     ELSE:
-       callbacks.onSelectHistory(state.historyItems[index])
+     CASE ESCAPE:
+       a. event.preventDefault()
+       b. closeDropdown()
+       c. Clear highlightedIndex
 
-  3. Close dropdown:
-     closeDropdown()
+     CASE TAB:
+       a. IF highlightedIndex >= 0:
+          - selectItem(suggestions[highlightedIndex])
+       b. closeDropdown()
+       // Allow default tab behavior to proceed
 ```
 
-### 2.5 Mouse Interaction
+### 2.5 Item Selection Algorithm
 
 ```
-FUNCTION handleItemMouseEnter(index: number, section: 'results' | 'history'):
-  1. Update highlight state:
-     state.highlightedIndex = index
-     state.highlightedSection = section
-
-  2. Update ARIA active descendant:
-     updateAriaActiveDescendant(index)
-
-FUNCTION handleItemMouseLeave():
-  1. Clear highlight if mouse leaves item area:
-     // Note: Only clear if mouse leaves dropdown entirely
-     // This prevents flicker when moving between items
-
-FUNCTION handleDropdownMouseLeave():
-  1. Clear highlight state:
-     state.highlightedIndex = -1
-     state.highlightedSection = null
-
-  2. Clear ARIA active descendant:
-     clearAriaActiveDescendant()
-
-FUNCTION handleClickOutside(event: MouseEvent):
-  1. Check if click is outside dropdown and input:
-     dropdownContains = dropdownElement.contains(event.target)
-     inputContains = inputElement.contains(event.target)
-
-  2. IF NOT dropdownContains AND NOT inputContains:
-     closeDropdown()
+selectItem(item):
+  1. Set inputValue = item.name
+  2. Call onSelect(item) callback
+  3. closeDropdown()
+  4. Clear highlightedIndex
+  5. Add to recent selections in localStorage
 ```
 
-### 2.6 Text Highlighting in Results
+### 2.6 Cache Management Algorithm
 
 ```
-FUNCTION renderHighlightedName(name: string, highlightRanges: HighlightRange[]): HTMLElement[]
-  1. IF highlightRanges is empty or null:
-     RETURN [createTextNode(name)]
+CACHE CONSTANTS:
+  MAX_CACHED_QUERIES = 20
+  MAX_HISTORY_ENTRIES = 5
+  CACHE_TTL_MS = 5 * 60 * 1000  // 5 minutes
+  CACHE_KEY = 'mealswapp_search_cache'
+  HISTORY_KEY = 'mealswapp_search_history'
 
-  2. Sort ranges by start index:
-     sortedRanges = highlightRanges.sort((a, b) => a.start - b.start)
+saveToCache(query, results):
+  1. Get existing cache from localStorage
+  2. Add new entry with current timestamp
+  3. IF cache.length > MAX_CACHED_QUERIES:
+     - Remove oldest entry (LRU eviction)
+  4. Save updated cache to localStorage
 
-  3. Build segments:
-     segments = []
-     currentIndex = 0
+getFromCache(query):
+  1. Get cache from localStorage
+  2. Find entry where entry.query === normalizedQuery
+  3. IF found AND (now - entry.timestamp) < CACHE_TTL_MS:
+     - RETURN entry.results
+  4. RETURN null
 
-     FOR each range IN sortedRanges:
-       // Add non-highlighted text before this range
-       IF range.start > currentIndex:
-         segments.push({
-           text: name.substring(currentIndex, range.start),
-           highlighted: false
-         })
+addToHistory(query):
+  1. Get history from localStorage
+  2. Remove duplicate if exists
+  3. Add new entry at front
+  4. IF history.length > MAX_HISTORY_ENTRIES:
+     - Remove oldest entry
+  5. Save updated history to localStorage
 
-       // Add highlighted text
-       segments.push({
-         text: name.substring(range.start, range.end),
-         highlighted: true
-       })
-
-       currentIndex = range.end
-
-     // Add remaining non-highlighted text
-     IF currentIndex < name.length:
-       segments.push({
-         text: name.substring(currentIndex),
-         highlighted: false
-       })
-
-  4. Convert segments to elements:
-     elements = []
-     FOR each segment IN segments:
-       IF segment.highlighted:
-         element = createHighlightSpan(segment.text)
-       ELSE:
-         element = createTextNode(segment.text)
-       elements.push(element)
-
-     RETURN elements
-
-FUNCTION createHighlightSpan(text: string): HTMLElement
-  span = document.createElement('span')
-  span.className = 'autocomplete-highlight'
-  span.textContent = text
-  RETURN span
+getRecentHistory():
+  1. Get history from localStorage
+  2. RETURN history entries (max 5)
 ```
 
-### 2.7 History Section Handling
+### 2.7 Focus Management Algorithm
 
 ```
-FUNCTION handleClearHistory():
-  1. Show confirmation (inline, not modal):
-     // Display "Clear all?" with Yes/Cancel options
+ON inputFocus:
+  1. IF inputValue.length >= minChars AND suggestions.length > 0:
+     - Set isOpen = true
+  2. ELSE IF inputValue.length === 0:
+     - Show recent search history as suggestions
+     - Set isOpen = true (if history exists)
 
-  2. IF user confirms:
-     2.1. Clear history items:
-          state.historyItems = []
-     2.2. Update localStorage:
-          localStorage.removeItem(HISTORY_STORAGE_KEY)
-     2.3. Update active section:
-          state.activeSection = 'empty'
-     2.4. Notify parent:
-          callbacks.onClearHistory()
-     2.5. Announce to screen reader:
-          announceToScreenReader("Search history cleared")
+ON inputBlur:
+  1. Delay close by 150ms to allow click on suggestion
+  2. IF not clicking on dropdown:
+     - closeDropdown()
 
-FUNCTION handleRemoveHistoryItem(itemId: string):
-  1. Find and remove item:
-     index = state.historyItems.findIndex(item => item.id === itemId)
-     IF index === -1:
-       RETURN
-
-  2. Remove from state:
-     state.historyItems.splice(index, 1)
-
-  3. Update localStorage:
-     storedHistory = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]')
-     updatedHistory = storedHistory.filter(item => item.id !== itemId)
-     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory))
-
-  4. Notify parent:
-     callbacks.onRemoveHistoryItem(itemId)
-
-  5. Update active section if empty:
-     IF state.historyItems.length === 0:
-       state.activeSection = 'empty'
-
-  6. Adjust highlight if needed:
-     IF state.highlightedIndex >= state.historyItems.length:
-       state.highlightedIndex = Math.max(0, state.historyItems.length - 1)
-       IF state.historyItems.length === 0:
-         state.highlightedIndex = -1
-
-  7. Announce removal:
-     announceToScreenReader("Search removed from history")
-```
-
-### 2.8 View All Results Handling
-
-```
-FUNCTION handleViewAllResults():
-  1. Close dropdown:
-     closeDropdown()
-
-  2. Trigger full search:
-     callbacks.onViewAllResults()
-
-  3. Announce to screen reader:
-     announceToScreenReader(`Viewing all ${state.totalCount} results`)
-```
-
-### 2.9 Error State Handling
-
-```
-FUNCTION displayError(errorType: DropdownErrorType, query: string):
-  1. Create error object:
-     errorMessage = ERROR_MESSAGES[errorType]
-     IF errorType === 'NO_RESULTS':
-       errorMessage = errorMessage.replace('{query}', query)
-
-     state.error = {
-       type: errorType,
-       message: errorMessage,
-       retryable: errorType !== 'NO_RESULTS',
-       retryAfterMs: errorType === 'RATE_LIMITED' ? 60000 : undefined
-     }
-
-  2. Update section:
-     state.activeSection = 'error'
-
-  3. Open dropdown to show error:
-     state.isOpen = true
-
-  4. Announce error:
-     announceToScreenReader(errorMessage)
-
-FUNCTION handleRetry():
-  1. Clear error state:
-     state.error = null
-
-  2. Show loading state:
-     state.activeSection = 'loading'
-     state.isLoading = true
-
-  3. Trigger retry:
-     callbacks.onRetry()
-```
-
-### 2.10 Loading State Handling
-
-```
-FUNCTION showLoading():
-  1. Update state:
-     state.isLoading = true
-     state.activeSection = 'loading'
-     state.error = null
-
-  2. Ensure dropdown is open:
-     IF NOT state.isOpen:
-       state.isOpen = true
-       applyOpenAnimation()
-
-FUNCTION hideLoading():
-  1. Update state:
-     state.isLoading = false
-
-  2. Section will be updated when results arrive
+ON outsideClick(event):
+  1. IF click target is not within component:
+     - closeDropdown()
 ```
 
 ---
 
 ## 3. State Management & Error Handling
 
-### 3.1 State Transitions Diagram
+### 3.1 State Transitions
 
 ```
-                                    ┌─────────────────┐
-                                    │     CLOSED      │
-                                    │                 │
-                                    └────────┬────────┘
-                                             │
-                                             │ User focuses input OR
-                                             │ Types query
-                                             ▼
-                           ┌─────────────────────────────────┐
-                           │              OPEN               │
-                           │                                 │
-                           └───────────────┬─────────────────┘
-                                           │
-              ┌────────────────────────────┼────────────────────────────┐
-              │                            │                            │
-              ▼                            ▼                            ▼
-     ┌────────────────┐          ┌────────────────┐          ┌────────────────┐
-     │    LOADING     │          │    RESULTS     │          │    HISTORY     │
-     │  (Spinner)     │          │  (Item List)   │          │  (When empty   │
-     └───────┬────────┘          └───────┬────────┘          │    query)      │
-             │                           │                    └───────┬────────┘
-             │                           │                            │
-             ▼                           │                            │
-     ┌────────────────┐                  │                            │
-     │    ERROR       │<─────────────────┘                            │
-     │  (Message +    │                                               │
-     │   Retry)       │                                               │
-     └───────┬────────┘                                               │
-             │                                                        │
-             │                           ┌────────────────┐           │
-             └──────────────────────────>│     EMPTY      │<──────────┘
-                                         │  (No results)  │
-                                         └───────┬────────┘
-                                                 │
-                                                 │ Escape / Click outside /
-                                                 │ Select item
-                                                 ▼
-                                         ┌────────────────┐
-                                         │     CLOSED     │
-                                         │                │
-                                         └────────────────┘
+                    ┌─────────────────────────────────────────────────────────────┐
+                    │                                                             │
+                    ▼                                                             │
+              ┌──────────┐                                                        │
+              │   IDLE   │◄────────────────────────────────────────┐              │
+              │          │                                         │              │
+              └────┬─────┘                                         │              │
+                   │                                               │              │
+                   │ input change (length >= minChars)             │              │
+                   ▼                                               │              │
+              ┌──────────┐                                         │              │
+              │ DEBOUNCE │──────150ms────┐                         │              │
+              │ PENDING  │               │                         │              │
+              └────┬─────┘               │                         │              │
+                   │                     │                         │              │
+                   │ new input           │ debounce complete       │              │
+                   │ (reset timer)       ▼                         │              │
+                   │              ┌─────────────┐                  │              │
+                   └─────────────►│   LOADING   │                  │              │
+                                  │             │                  │              │
+                                  └──────┬──────┘                  │              │
+                                         │                         │              │
+                   ┌─────────────────────┼─────────────────────┐   │              │
+                   │                     │                     │   │              │
+                   ▼                     ▼                     ▼   │              │
+            ┌───────────┐         ┌───────────┐         ┌───────────┐             │
+            │  SUCCESS  │         │   ERROR   │         │  TIMEOUT  │             │
+            │           │         │           │         │           │             │
+            └─────┬─────┘         └─────┬─────┘         └─────┬─────┘             │
+                  │                     │                     │                   │
+                  │ show results        │ show error +        │ show timeout +    │
+                  │                     │ cached results      │ cached results    │
+                  ▼                     ▼                     ▼                   │
+            ┌─────────────────────────────────────────────────────────┐           │
+            │                    DROPDOWN OPEN                        │           │
+            │                                                         │           │
+            │  - User navigates with arrows                           │           │
+            │  - User clicks suggestion → SELECT → IDLE               │           │
+            │  - User presses Enter → SELECT → IDLE                   │───────────┘
+            │  - User presses Escape → CLOSE → IDLE                   │
+            │  - User clicks outside → CLOSE → IDLE                   │
+            │  - Input cleared → CLOSE → IDLE                         │
+            └─────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Highlight State Transitions
+### 3.2 Error States
+
+| Error Type | Trigger | User Message | Recovery Action |
+|:-----------|:--------|:-------------|:----------------|
+| `NETWORK_ERROR` | No network connectivity | "Unable to connect. Showing cached results." | Show cached results; auto-retry when back online |
+| `TIMEOUT_ERROR` | API request exceeds 10s | "Search is taking longer than expected." | Show cached results; allow manual retry |
+| `API_ERROR` (4xx) | Invalid request | "Invalid search query." | Clear input; show suggestions |
+| `API_ERROR` (5xx) | Server error | "Something went wrong. Please try again." | Show retry button; use cached results |
+| `NO_RESULTS` | Empty API response | "No results found for '{query}'" | Show search tips; suggest similar queries |
+
+### 3.3 Offline Handling
 
 ```
-                    ┌─────────────────┐
-                    │  NO HIGHLIGHT   │
-                    │  (index: -1)    │
-                    └────────┬────────┘
-                             │
-           Arrow Down        │         Mouse Enter
-           Arrow Up          │
-                             ▼
-                    ┌─────────────────┐
-                    │   HIGHLIGHTED   │
-           ┌───────>│  (index: N)     │<───────┐
-           │        └────────┬────────┘        │
-           │                 │                 │
-   Arrow   │    Enter/Tab    │      Arrow      │  Mouse
-   Keys    │    Click        │      Keys       │  Enter
-           │                 ▼                 │
-           │        ┌─────────────────┐        │
-           │        │    SELECTED     │        │
-           │        │  (Callback +    │        │
-           │        │   Close)        │        │
-           │        └─────────────────┘        │
-           │                                   │
-           └───────────────────────────────────┘
-                    Navigate between items
+IF navigator.onLine === false:
+  1. Show offline indicator icon in input
+  2. Set isOffline = true in state
+  3. On search attempt:
+     a. Check localStorage cache for query
+     b. IF cache hit:
+        - Display cached results
+        - Show "Offline - showing cached results" banner
+     c. ELSE:
+        - Show "No cached results available offline"
+        - Display recent search history instead
+
+ON 'online' event:
+  1. Set isOffline = false
+  2. IF pending search exists:
+     - Trigger API search
+  3. Remove offline indicator
+  4. Optional: Background refresh of displayed cached results
 ```
 
-### 3.3 Error States
+### 3.4 Loading State Visual Behavior
 
-| Error State | Trigger | User Message | Visual | Recovery Action |
-|:------------|:--------|:-------------|:-------|:----------------|
-| **NETWORK_ERROR** | Fetch fails, navigator.onLine = false | "You're offline. Check your connection." | Offline icon, muted text | Auto-retry when online; show cached history if available |
-| **TIMEOUT** | API response > 10s | "Search timed out. Please try again." | Clock icon, retry button | Manual retry button |
-| **NO_RESULTS** | API returns empty array | "No items found for "{query}"." | Search icon with X, muted text | Suggest clearing filters, trying different terms |
-| **RATE_LIMITED** | API returns 429 | "Too many searches. Please wait." | Timer icon, countdown | Auto-retry after delay; show countdown |
-| **SERVER_ERROR** | API returns 5xx | "Something went wrong. Please try again." | Warning icon, retry button | Manual retry button |
-
-### 3.4 Error Handling Implementation
-
-```typescript
-FUNCTION handleDropdownError(error: unknown, query: string): DropdownError
-  1. IF !navigator.onLine OR error instanceof TypeError (network):
-     RETURN {
-       type: 'NETWORK_ERROR',
-       message: "You're offline. Check your connection.",
-       retryable: true
-     }
-
-  2. IF error.name === 'AbortError' OR error.name === 'TimeoutError':
-     RETURN {
-       type: 'TIMEOUT',
-       message: "Search timed out. Please try again.",
-       retryable: true
-     }
-
-  3. IF error.status === 429:
-     retryAfter = parseInt(error.headers?.get('Retry-After') || '60') * 1000
-     RETURN {
-       type: 'RATE_LIMITED',
-       message: "Too many searches. Please wait.",
-       retryable: true,
-       retryAfterMs: retryAfter
-     }
-
-  4. IF error.status >= 500:
-     RETURN {
-       type: 'SERVER_ERROR',
-       message: "Something went wrong. Please try again.",
-       retryable: true
-     }
-
-  5. IF error.status === 200 AND response.items.length === 0:
-     RETURN {
-       type: 'NO_RESULTS',
-       message: `No items found for "${query}".`,
-       retryable: false
-     }
-
-  6. DEFAULT:
-     RETURN {
-       type: 'SERVER_ERROR',
-       message: "An unexpected error occurred.",
-       retryable: true
-     }
 ```
-
-### 3.5 Graceful Degradation
-
-| Scenario | Degraded Functionality | Core Functionality Preserved |
-|:---------|:-----------------------|:-----------------------------|
-| **Offline mode** | Cannot fetch new results | Show search history, cached queries |
-| **Image CDN down** | Show placeholder images | All item data, selection, navigation |
-| **Slow connection** | Extended loading state | Results eventually display; history available |
-| **localStorage full** | History not persisted | Current session history works |
-| **CSS animation fails** | Instant open/close | Full keyboard/mouse functionality |
+DURING isLoading === true:
+  1. Show spinner icon in input field (replaces search icon)
+  2. IF cached results exist:
+     - Continue showing cached results with subtle opacity reduction
+     - Show "Updating..." indicator
+  3. ELSE:
+     - Show skeleton loader placeholders in dropdown
+     - Display 3-5 skeleton items
+  4. Disable keyboard selection (prevent selecting incomplete data)
+```
 
 ---
 
 ## 4. Component Interfaces
 
-### 4.1 AutocompleteDropdown Props
+### 4.1 Public Component API
 
 ```typescript
-interface AutocompleteDropdownProps {
-  // Required props
-  inputElement: HTMLInputElement;        // Reference to search input for positioning
-  isOpen: boolean;                       // Controlled open state
-  query: string;                         // Current search query
-  items: AutocompleteItem[];             // Search results
-  isLoading: boolean;                    // Loading state
-
-  // Optional props
-  historyItems?: SearchHistoryItem[];    // Search history (shown when query empty)
-  error?: DropdownError | null;          // Error state
-  totalCount?: number;                   // Total results (for "View all" footer)
-  highlightedIndex?: number;             // Controlled highlight (for keyboard nav)
-  maxItems?: number;                     // Override MAX_VISIBLE_ITEMS
-
-  // Callbacks
-  onSelect: (item: AutocompleteItem) => void;
-  onSelectHistory: (item: SearchHistoryItem) => void;
-  onClose: () => void;
-  onHighlightChange?: (index: number) => void;
-  onClearHistory?: () => void;
-  onRemoveHistoryItem?: (itemId: string) => void;
-  onViewAllResults?: () => void;
-  onRetry?: () => void;
-
-  // Accessibility
-  inputId: string;                       // ID of input for ARIA relationships
-  listboxId?: string;                    // Custom ID for listbox
-
-  // Styling
-  className?: string;
-  position?: 'auto' | 'below' | 'above'; // Position override
-}
+/**
+ * AutocompleteDropdown - Search input with suggestions dropdown
+ *
+ * @param props - Component configuration
+ * @returns React component
+ */
+function AutocompleteDropdown(props: AutocompleteDropdownProps): JSX.Element;
 ```
 
-### 4.2 Internal Component Functions
+### 4.2 Internal Functions
 
 ```typescript
-// Lifecycle
-function mountDropdown(): void;
-function unmountDropdown(): void;
-function updateDropdown(props: AutocompleteDropdownProps): void;
+/**
+ * Handles input field value changes
+ * Updates state and triggers debounced search
+ *
+ * @param event - Input change event
+ */
+function handleInputChange(event: React.ChangeEvent<HTMLInputElement>): void;
 
-// Position Management
-function calculateDropdownPosition(): DropdownPositionConfig;
-function applyPositionStyles(config: DropdownPositionConfig): void;
-function handleWindowResize(): void;
-function handleWindowScroll(): void;
+/**
+ * Debounced search function - waits 150ms before executing
+ * Checks cache first, then makes API request if needed
+ *
+ * @param query - Search query string
+ */
+function debouncedSearch(query: string): void;
 
-// Open/Close
-function openDropdown(query: string, items: AutocompleteItem[], historyItems: SearchHistoryItem[]): void;
+/**
+ * Handles all keyboard navigation within the component
+ * Manages arrow keys, Enter, Escape, and Tab
+ *
+ * @param event - Keyboard event
+ */
+function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void;
+
+/**
+ * Handles selection of a suggestion item
+ * Updates input, calls onSelect callback, closes dropdown
+ *
+ * @param item - Selected food item
+ */
+function selectItem(item: FoodItem): void;
+
+/**
+ * Closes the dropdown and resets highlight index
+ */
 function closeDropdown(): void;
-function applyOpenAnimation(): void;
-function applyCloseAnimation(): void;
 
-// Keyboard Navigation
-function handleKeyDown(event: KeyboardEvent): void;
-function handleNavigate(direction: NavigationDirection): void;
-function handleSelect(): void;
-function scrollItemIntoView(index: number): void;
+/**
+ * Opens the dropdown if there are suggestions to show
+ */
+function openDropdown(): void;
 
-// Mouse Interaction
-function handleItemClick(index: number, section: 'results' | 'history'): void;
-function handleItemMouseEnter(index: number, section: 'results' | 'history'): void;
-function handleItemMouseLeave(): void;
-function handleDropdownMouseLeave(): void;
-function handleClickOutside(event: MouseEvent): void;
+/**
+ * Handles click on a suggestion item
+ *
+ * @param item - Clicked food item
+ * @param event - Mouse event
+ */
+function handleSuggestionClick(item: FoodItem, event: React.MouseEvent): void;
 
-// Content Rendering
-function renderResultsSection(): HTMLElement;
-function renderHistorySection(): HTMLElement;
-function renderLoadingSection(): HTMLElement;
-function renderErrorSection(): HTMLElement;
-function renderEmptySection(): HTMLElement;
-function renderHighlightedName(name: string, ranges: HighlightRange[]): HTMLElement[];
-function renderMacroSummary(macros: MacroData): HTMLElement;
-function renderCategoryTags(tags: string[], maxVisible: number): HTMLElement;
+/**
+ * Handles mouse entering a suggestion item
+ * Updates highlighted index for hover state
+ *
+ * @param index - Index of hovered item
+ */
+function handleSuggestionHover(index: number): void;
 
-// History Management
-function handleClearHistory(): void;
-function handleRemoveHistoryItem(itemId: string): void;
-
-// Error Handling
-function displayError(errorType: DropdownErrorType, query: string): void;
-function handleRetry(): void;
-
-// Loading State
-function showLoading(): void;
-function hideLoading(): void;
-
-// Accessibility
-function updateAriaExpanded(expanded: boolean): void;
-function updateAriaActiveDescendant(index: number): void;
-function clearAriaActiveDescendant(): void;
-function announceToScreenReader(message: string): void;
-function getAnnouncementText(): string;
-
-// Cleanup
-function removeEventListeners(): void;
-function clearTimers(): void;
+/**
+ * Scrolls the highlighted suggestion into view within dropdown
+ *
+ * @param index - Index of item to scroll to
+ */
+function scrollToHighlighted(index: number): void;
 ```
 
-### 4.3 Event Handling Interface
+### 4.3 Cache Functions
 
 ```typescript
-// Events the dropdown listens to
-interface DropdownEventListeners {
-  'keydown': (event: KeyboardEvent) => void;      // On input element
-  'click': (event: MouseEvent) => void;           // On document (click outside)
-  'resize': () => void;                           // On window
-  'scroll': () => void;                           // On window
-  'online': () => void;                           // On window
-  'offline': () => void;                          // On window
-}
+/**
+ * Saves search results to localStorage cache
+ * Implements LRU eviction when cache exceeds 20 entries
+ *
+ * @param query - Normalized search query
+ * @param results - Array of food items
+ */
+function saveToCache(query: string, results: FoodItem[]): void;
 
-// Internal events
-interface DropdownInternalEvents {
-  'item:highlight': (index: number, section: string) => void;
-  'item:select': (item: AutocompleteItem | SearchHistoryItem) => void;
-  'dropdown:open': () => void;
-  'dropdown:close': () => void;
-  'error:display': (error: DropdownError) => void;
-  'error:retry': () => void;
-}
+/**
+ * Retrieves cached results for a query
+ * Returns null if not found or expired (>5 min)
+ *
+ * @param query - Normalized search query
+ * @returns Cached results or null
+ */
+function getFromCache(query: string): FoodItem[] | null;
+
+/**
+ * Adds a search query to recent history
+ * Maintains max 5 entries with deduplication
+ *
+ * @param query - Search query to add
+ */
+function addToHistory(query: string): void;
+
+/**
+ * Retrieves recent search history
+ *
+ * @returns Array of recent search queries (max 5)
+ */
+function getRecentHistory(): SearchHistoryEntry[];
+
+/**
+ * Clears all cached data (queries and history)
+ * Called on user logout or manual cache clear
+ */
+function clearCache(): void;
 ```
 
-### 4.4 ARIA Attributes Specification
+### 4.4 API Integration
 
 ```typescript
-// Input element attributes (set by parent)
-interface InputAriaAttributes {
-  'role': 'combobox';
-  'aria-expanded': 'true' | 'false';
-  'aria-haspopup': 'listbox';
-  'aria-controls': string;                    // listbox ID
-  'aria-activedescendant': string | undefined; // highlighted item ID
-  'aria-autocomplete': 'list';
-}
+/**
+ * Makes search API request to backend
+ * Includes 10s timeout per ARCH-010
+ *
+ * @param query - Search query
+ * @param signal - AbortController signal for cancellation
+ * @returns Promise resolving to food items array
+ * @throws NetworkError, TimeoutError, ApiError
+ */
+async function searchAPI(
+  query: string,
+  signal?: AbortSignal
+): Promise<FoodItem[]>;
 
-// Dropdown container attributes
-interface DropdownAriaAttributes {
-  'role': 'listbox';
-  'id': string;
-  'aria-label': 'Search suggestions';
-  'aria-busy': 'true' | 'false';             // During loading
-}
-
-// Item attributes
-interface ItemAriaAttributes {
-  'role': 'option';
-  'id': string;                               // For aria-activedescendant
-  'aria-selected': 'true' | 'false';
-  'aria-posinset': number;                    // Position in set
-  'aria-setsize': number;                     // Total items
-}
-
-// Group attributes (for history section)
-interface GroupAriaAttributes {
-  'role': 'group';
-  'aria-labelledby': string;                  // Header ID
-}
+// API Endpoint (per ARCH-010):
+// GET /api/v1/search?q={query}&limit={maxSuggestions}
+//
+// Headers:
+//   Content-Type: application/json
+//   Authorization: Bearer {token}
+//
+// Response:
+//   { items: FoodItem[], total: number }
 ```
 
----
-
-## 5. UI Component Structure
-
-```
-AutocompleteDropdown
-├── DropdownContainer
-│   │   [role="listbox", aria-label="Search suggestions"]
-│   │   [data-position="below" | "above"]
-│   │
-│   ├── ScrollContainer
-│   │   │   [class="dropdown-scroll-container"]
-│   │   │
-│   │   ├── ResultsSection (when activeSection === 'results')
-│   │   │   └── ResultItem[] (for each item)
-│   │   │       ├── ItemImage
-│   │   │       │   ├── Image (if imageUrl)
-│   │   │       │   └── Placeholder (if no imageUrl)
-│   │   │       ├── ItemContent
-│   │   │       │   ├── ItemName (with highlight spans)
-│   │   │       │   ├── CategoryTags
-│   │   │       │   │   └── TagChip[] (max 3)
-│   │   │       │   └── MacroSummary
-│   │   │       │       ├── ProteinValue
-│   │   │       │       ├── CarbsValue
-│   │   │       │       └── FatValue
-│   │   │       └── MatchIndicator (exact/fuzzy/partial)
-│   │   │
-│   │   ├── HistorySection (when activeSection === 'history')
-│   │   │   ├── SectionHeader
-│   │   │   │   ├── HeaderText ("Recent Searches")
-│   │   │   │   └── ClearButton
-│   │   │   └── HistoryItem[] (for each history item)
-│   │   │       ├── HistoryIcon
-│   │   │       ├── HistoryContent
-│   │   │       │   ├── QueryText
-│   │   │       │   └── ModeLabel + Timestamp
-│   │   │       └── RemoveButton
-│   │   │
-│   │   ├── LoadingSection (when activeSection === 'loading')
-│   │   │   ├── LoadingSpinner
-│   │   │   └── LoadingText ("Searching...")
-│   │   │
-│   │   ├── ErrorSection (when activeSection === 'error')
-│   │   │   ├── ErrorIcon
-│   │   │   ├── ErrorMessage
-│   │   │   └── RetryButton (if retryable)
-│   │   │
-│   │   └── EmptySection (when activeSection === 'empty')
-│   │       ├── EmptyIcon
-│   │       └── EmptyMessage
-│   │
-│   └── Footer (when hasMoreResults)
-│       └── ViewAllButton
-│           ├── ButtonText ("View all {totalCount} results")
-│           └── ArrowIcon
-│
-└── LiveRegion (for screen reader announcements)
-    [role="status", aria-live="polite", aria-atomic="true"]
-```
-
----
-
-## 6. Accessibility Requirements
-
-### 6.1 ARIA Implementation
-
-| Element | ARIA Attributes | Purpose |
-|:--------|:----------------|:--------|
-| Search Input | `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`, `aria-autocomplete="list"` | Indicates expandable search with suggestions |
-| Dropdown | `role="listbox"`, `aria-label="Search suggestions"`, `aria-busy` | Container for selectable options |
-| Result Item | `role="option"`, `aria-selected`, `aria-posinset`, `aria-setsize` | Selectable suggestion option |
-| History Section | `role="group"`, `aria-labelledby` | Groups related history items |
-| History Header | `id` (for group labelledby) | Labels the history group |
-| Clear History Button | `aria-label="Clear search history"` | Describes action |
-| Remove History Item | `aria-label="Remove {query} from history"` | Describes action for specific item |
-| Loading State | `aria-busy="true"` on listbox | Indicates content loading |
-| Error Message | `role="alert"` | Announces errors immediately |
-| Live Region | `role="status"`, `aria-live="polite"` | Non-intrusive announcements |
-
-### 6.2 Keyboard Support
-
-| Key | Dropdown Closed | Dropdown Open |
-|:----|:----------------|:--------------|
-| **Arrow Down** | Open dropdown, highlight first item | Move highlight down (wrap to first) |
-| **Arrow Up** | Open dropdown, highlight last item | Move highlight up (wrap to last) |
-| **Enter** | N/A | Select highlighted item; or submit search if no highlight |
-| **Tab** | N/A | Select highlighted item and move focus; or close and move focus |
-| **Escape** | N/A | Close dropdown, return focus to input |
-| **Home** | N/A | Highlight first item |
-| **End** | N/A | Highlight last item |
-| **Any printable** | Type in input | Type in input (dropdown updates) |
-
-### 6.3 Focus Management
-
-```
-Focus Flow:
-  1. Focus stays on input element at all times while dropdown is open
-  2. Keyboard navigation updates aria-activedescendant (not actual focus)
-  3. On item selection: focus remains on input (cleared for next search)
-  4. On Escape: focus remains on input
-  5. On Tab with selection: focus moves to next focusable element
-  6. Clear/Remove buttons in history are mouse-only (not in tab order)
-     - These actions accessible via keyboard shortcuts if needed
-```
-
-### 6.4 Screen Reader Announcements
-
-| Event | Announcement |
-|:------|:-------------|
-| Dropdown opens with results | "{N} suggestions available" |
-| Dropdown opens with history | "{N} recent searches" |
-| Dropdown opens with no results | "No results found for {query}" |
-| Highlight changes | Item name is read (via activedescendant) |
-| Item selected | "{Item name} selected" |
-| Error displayed | Error message |
-| History cleared | "Search history cleared" |
-| History item removed | "Search removed from history" |
-| Loading starts | "Searching..." |
-| Rate limited | "Too many searches. Please wait {N} seconds." |
-
-### 6.5 Color Contrast
-
-| Element | Foreground | Background | Contrast Ratio | WCAG Level |
-|:--------|:-----------|:-----------|:---------------|:-----------|
-| Item name | `--text-primary` | `--bg-surface` | 12.63:1 (light), 15.04:1 (dark) | AAA |
-| Highlight text | `--color-primary` | `--color-secondary` | 4.91:1 (light), 5.23:1 (dark) | AA |
-| Muted text (macros) | `--text-muted` | `--bg-surface` | 4.69:1 (light), 4.52:1 (dark) | AA |
-| Error text | `--color-error` | `--bg-surface` | 5.12:1 (light), 4.89:1 (dark) | AA |
-| Highlighted item bg | `--text-primary` | `--hover-bg` | 11.24:1 (light), 12.31:1 (dark) | AAA |
-
----
-
-## 7. Performance Considerations
-
-### 7.1 Optimizations
-
-| Optimization | Implementation | Impact |
-|:-------------|:---------------|:-------|
-| **Limited item rendering** | Max 8 items rendered, virtual scroll not needed | Consistent <16ms render |
-| **Debounced position updates** | 100ms debounce on resize/scroll handlers | Prevent layout thrashing |
-| **CSS containment** | `contain: layout style paint` on dropdown | Isolate repaints |
-| **Will-change hint** | `will-change: transform, opacity` on dropdown | Smoother open/close |
-| **Image lazy loading** | `loading="lazy"` on item images | Faster initial render |
-| **Memoized highlight ranges** | Cache highlight calculation per query | Avoid re-computation |
-| **Event delegation** | Single click handler on container | Fewer event listeners |
-| **RAF for scroll** | requestAnimationFrame for scrollIntoView | Smooth scrolling |
-
-### 7.2 Memory Management
+### 4.5 Custom Hooks (Optional Extraction)
 
 ```typescript
-// Cleanup on unmount
-function cleanup():
-  1. Remove all event listeners:
-     document.removeEventListener('click', handleClickOutside)
-     window.removeEventListener('resize', handleWindowResize)
-     window.removeEventListener('scroll', handleWindowScroll)
-     window.removeEventListener('online', handleOnline)
-     window.removeEventListener('offline', handleOffline)
-     inputElement.removeEventListener('keydown', handleKeyDown)
+/**
+ * Hook for managing debounced value
+ *
+ * @param value - Value to debounce
+ * @param delay - Debounce delay in ms
+ * @returns Debounced value
+ */
+function useDebounce<T>(value: T, delay: number): T;
 
-  2. Clear any pending timers:
-     clearTimeout(debounceTimerId)
-     clearTimeout(retryTimerId)
-     clearTimeout(animationTimerId)
+/**
+ * Hook for managing online/offline status
+ *
+ * @returns Current online status
+ */
+function useOnlineStatus(): boolean;
 
-  3. Clear references:
-     dropdownElement = null
-     inputElement = null
-     scrollContainer = null
-
-  4. Reset state:
-     state = INITIAL_DROPDOWN_STATE
-```
-
-### 7.3 Animation Performance
-
-```css
-/* GPU-accelerated animations only */
-.autocomplete-dropdown {
-  transform: translateY(0);
-  opacity: 1;
-  transition: transform 150ms ease-out, opacity 150ms ease-out;
-}
-
-.autocomplete-dropdown[data-state="closed"] {
-  transform: translateY(-8px);
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Reduce motion preference */
-@media (prefers-reduced-motion: reduce) {
-  .autocomplete-dropdown {
-    transition: none;
-  }
-}
-```
-
----
-
-## 8. Integration with SearchView
-
-### 8.1 Parent-Child Communication
-
-```typescript
-// SearchView manages dropdown state
-interface SearchViewDropdownIntegration {
-  // SearchView provides to AutocompleteDropdown:
-  inputElement: HTMLInputElement;
-  isOpen: boolean;
-  query: string;
-  items: AutocompleteItem[];
-  historyItems: SearchHistoryItem[];
+/**
+ * Hook for autocomplete search logic
+ * Encapsulates cache, API calls, and state management
+ *
+ * @param options - Search configuration
+ * @returns Search state and handlers
+ */
+function useAutocompleteSearch(options: {
+  debounceMs: number;
+  minChars: number;
+  maxSuggestions: number;
+}): {
+  suggestions: FoodItem[];
   isLoading: boolean;
-  error: DropdownError | null;
-  totalCount: number;
+  error: AutocompleteError | null;
+  isFromCache: boolean;
+  search: (query: string) => void;
+  clearResults: () => void;
+};
+```
 
-  // AutocompleteDropdown calls back to SearchView:
-  onSelect: (item: AutocompleteItem) => void;
-  onSelectHistory: (item: SearchHistoryItem) => void;
-  onClose: () => void;
-  onViewAllResults: () => void;
-  onRetry: () => void;
+### 4.6 Accessibility (ARIA) Attributes
+
+```typescript
+// Input element attributes:
+{
+  role: 'combobox',
+  'aria-expanded': isOpen,
+  'aria-controls': 'autocomplete-listbox',
+  'aria-activedescendant': highlightedIndex >= 0
+    ? `suggestion-${highlightedIndex}`
+    : undefined,
+  'aria-autocomplete': 'list',
+  'aria-haspopup': 'listbox',
+}
+
+// Dropdown list attributes:
+{
+  id: 'autocomplete-listbox',
+  role: 'listbox',
+  'aria-label': 'Search suggestions',
+}
+
+// Suggestion item attributes:
+{
+  id: `suggestion-${index}`,
+  role: 'option',
+  'aria-selected': index === highlightedIndex,
 }
 ```
-
-### 8.2 Event Flow
-
-```
-User types in SearchView input
-         │
-         ▼
-SearchView debounces (150ms)
-         │
-         ▼
-SearchView calls API
-         │
-         ▼
-SearchView receives results
-         │
-         ▼
-SearchView passes props to AutocompleteDropdown
-         │
-         ▼
-AutocompleteDropdown renders items
-         │
-         ▼
-User navigates/selects item
-         │
-         ▼
-AutocompleteDropdown calls onSelect callback
-         │
-         ▼
-SearchView handles selection (add to ingredients, navigate, etc.)
-         │
-         ▼
-SearchView sets isOpen=false
-         │
-         ▼
-AutocompleteDropdown closes
-```
-
----
-
-## Changelog
-
-### 2026-01-22 (Rev 1.0)
-
-**Added:**
-- Initial detailed design document for AutocompleteDropdown component
-- Complete type definitions for items, state, errors, and positioning
-- Step-by-step algorithms for all user interactions
-- Keyboard navigation with full ARIA support
-- Mouse interaction handling
-- Text highlighting for search matches
-- History section with clear/remove functionality
-- Error state handling with retry logic
-- Position calculation with viewport awareness
-- State transition diagrams
-- Full accessibility specification (WCAG 2.1 AA)
-- Performance optimization strategies
-- Integration specification with SearchView parent component

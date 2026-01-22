@@ -8,8 +8,8 @@ Output directory: docs/design/
 
 # REFERENCES
 Use information in these documents to generate the design:
-- docs/architecture/01_SOFT_ARCH_DESIGN.md - software architecture, you should start here, you should search for the particular component
-- docs/architecture/02_APPENDIX_A.md - useful information about deployment, behavior, NFR. Once you find the architectural component connected to the software component, you should search ARCH-ID here to check if you can get more information
+- docs/architecture/ARCH-ID.md - architecture design document. You will be given ARCH-ID in the prompt. Read this first, then read all documents that are listed in dependencies and reference documentation.
+**You are not allowed to use software requirements documents.**
 
 # OUTPUT STRUCTURE
 ---

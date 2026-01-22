@@ -101,7 +101,7 @@ interface SidebarState {
   displayMode: SidebarDisplayMode;
   activeRoute: NavigationRoute;
   user: UserSummary;
-  theme: 'light' | 'dark' | 'system';
+  theme: 'light' | 'dark';            // Managed by ThemeProvider
   isOnline: boolean;
   isMobileMenuOpen: boolean;          // For responsive mobile overlay
   isUserMenuOpen: boolean;            // Dropdown for user actions
@@ -112,7 +112,7 @@ const INITIAL_SIDEBAR_STATE: SidebarState = {
   displayMode: 'expanded',
   activeRoute: 'search',
   user: ANONYMOUS_USER,
-  theme: 'system',
+  theme: 'light',                     // Will be set by ThemeProvider on init
   isOnline: true,
   isMobileMenuOpen: false,
   isUserMenuOpen: false,
@@ -123,21 +123,21 @@ const INITIAL_SIDEBAR_STATE: SidebarState = {
 ### 1.4 Theme Toggle Types
 
 ```typescript
-type ThemeOption = 'light' | 'dark' | 'system';
+type Theme = 'light' | 'dark';
 
 interface ThemeToggleConfig {
-  value: ThemeOption;
+  value: Theme;
   label: string;
   icon: string;
 }
 
 const THEME_OPTIONS: ThemeToggleConfig[] = [
   { value: 'light', label: 'Light', icon: 'sun' },
-  { value: 'dark', label: 'Dark', icon: 'moon' },
-  { value: 'system', label: 'System', icon: 'monitor' }
+  { value: 'dark', label: 'Dark', icon: 'moon' }
 ];
 
-const THEME_STORAGE_KEY = 'mealswapp_theme';
+// Note: Theme persistence handled by ThemeProvider
+// System preference used only for first-visit default
 ```
 
 ### 1.5 Quick Actions Types
@@ -255,13 +255,10 @@ ON SidebarComponent Mount:
      1.2. Find matching breakpoint from RESPONSIVE_BREAKPOINTS
      1.3. Set state.displayMode = matchingConfig.displayMode
 
-  2. Load theme preference
-     2.1. Read localStorage key: THEME_STORAGE_KEY
-     2.2. IF value exists AND is valid ThemeOption:
-          - Set state.theme = storedValue
-     2.3. ELSE:
-          - Set state.theme = 'system'
-     2.4. Apply theme by calling applyTheme(state.theme)
+  2. Get theme from ThemeProvider context
+     2.1. { theme } = useTheme()
+     2.2. state.theme = theme
+     // Note: ThemeProvider handles persistence and DOM updates
 
   3. Load user session (if authenticated)
      3.1. Check for existing auth token in HttpOnly cookie (via API call)
@@ -332,60 +329,31 @@ FUNCTION handleNavigation(route: NavigationRoute):
 ### 2.3 Theme Toggle Handling
 
 ```
-FUNCTION handleThemeChange(newTheme: ThemeOption):
-  1. IF newTheme === state.theme:
-     - RETURN (no change needed)
+NOTE: Theme management is delegated to ThemeProvider (see ThemeProvider.md).
+SidebarComponent consumes theme state via useTheme() hook and provides UI controls.
 
-  2. Update state
-     state.theme = newTheme
+FUNCTION handleThemeToggle():
+  1. Get theme context
+     { theme, toggleTheme } = useTheme()
 
-  3. Determine effective theme
-     IF newTheme === 'system':
-       effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-                        ? 'dark' : 'light'
-     ELSE:
-       effectiveTheme = newTheme
+  2. Toggle theme
+     CALL toggleTheme()
+     // ThemeProvider handles:
+     // - CSS variable updates
+     // - DOM attribute updates
+     // - localStorage persistence
+     // - Event emission
 
-  4. Apply CSS custom properties
-     CALL applyThemeVariables(effectiveTheme)
+FUNCTION handleThemeSelect(newTheme: Theme):
+  1. Get theme context
+     { setTheme } = useTheme()
 
-  5. Update document attribute
-     document.documentElement.setAttribute('data-theme', effectiveTheme)
+  2. Set specific theme
+     CALL setTheme(newTheme)
 
-  6. Persist to localStorage
-     localStorage.setItem(THEME_STORAGE_KEY, newTheme)
-
-  7. Emit theme change event
-     emit('theme:change', effectiveTheme)
-
-FUNCTION applyThemeVariables(theme: 'light' | 'dark'):
-  root = document.documentElement.style
-
-  IF theme === 'light':
-    root.setProperty('--bg-primary', '#F7FCF7')
-    root.setProperty('--bg-surface', '#FFFFFF')
-    root.setProperty('--bg-sidebar', '#FFFFFF')
-    root.setProperty('--color-primary', '#166534')
-    root.setProperty('--color-secondary', '#DCFCE7')
-    root.setProperty('--color-accent', '#F97316')
-    root.setProperty('--color-error', '#DC2626')
-    root.setProperty('--text-primary', '#111827')
-    root.setProperty('--text-muted', '#6B7280')
-    root.setProperty('--border-color', '#E5E7EB')
-    root.setProperty('--hover-bg', '#F3F4F6')
-
-  IF theme === 'dark':
-    root.setProperty('--bg-primary', '#0A0F0A')
-    root.setProperty('--bg-surface', '#161D16')
-    root.setProperty('--bg-sidebar', '#0D120D')
-    root.setProperty('--color-primary', '#4ADE80')
-    root.setProperty('--color-secondary', '#86EFAC')
-    root.setProperty('--color-accent', '#FFB86C')
-    root.setProperty('--color-error', '#F87171')
-    root.setProperty('--text-primary', '#F3F4F6')
-    root.setProperty('--text-muted', '#9CA3AF')
-    root.setProperty('--border-color', '#374151')
-    root.setProperty('--hover-bg', '#1F2937')
+// Theme state is read from ThemeProvider context:
+// const { theme } = useTheme()
+// state.theme reflects this value for UI rendering
 ```
 
 ### 2.4 Responsive Handling
@@ -685,19 +653,16 @@ FUNCTION handleUpgradeClick():
        - Trigger login flow
 ```
 
-### 2.11 System Theme Change Detection
+### 2.11 Theme State Synchronization
 
 ```
-ON System Theme Change (via matchMedia listener):
-  1. IF state.theme === 'system':
-     1.1. Detect new system preference
-          newSystemTheme = event.matches ? 'dark' : 'light'
-     1.2. Apply theme variables
-          CALL applyThemeVariables(newSystemTheme)
-     1.3. Update document attribute
-          document.documentElement.setAttribute('data-theme', newSystemTheme)
-     1.4. Emit theme change
-          emit('theme:change', newSystemTheme)
+NOTE: System theme detection is handled by ThemeProvider on first visit only.
+SidebarComponent does not need to listen for system theme changes.
+
+ON ThemeProvider Context Change:
+  1. SidebarComponent re-renders with new theme value from useTheme()
+  2. UI updates to reflect current theme (toggle icon, selected option)
+  3. No manual DOM manipulation needed - ThemeProvider handles it
 ```
 
 ---
@@ -844,10 +809,12 @@ FUNCTION handleSidebarError(error: unknown, context: string): SidebarError
 ### 4.1 SidebarComponent Props
 
 ```typescript
+type Theme = 'light' | 'dark';
+
 interface SidebarComponentProps {
   initialRoute?: NavigationRoute;
   onNavigate?: (route: NavigationRoute) => void;
-  onThemeChange?: (theme: 'light' | 'dark') => void;
+  onThemeChange?: (theme: Theme) => void;  // Bubbled from ThemeProvider
   onAuthRequired?: () => void;
   onLogout?: () => void;
   className?: string;
@@ -880,11 +847,10 @@ function toggleMobileMenu(): void;
 function handleMobileOverlayClick(): void;
 function isMobileMenuOpen(): boolean;
 
-// Theme
-function handleThemeChange(theme: ThemeOption): void;
-function applyThemeVariables(effectiveTheme: 'light' | 'dark'): void;
-function getEffectiveTheme(): 'light' | 'dark';
-function setupSystemThemeListener(): void;
+// Theme (delegated to ThemeProvider)
+function handleThemeToggle(): void;
+function handleThemeSelect(theme: Theme): void;
+// Theme state accessed via useTheme() hook
 
 // User Menu
 function toggleUserMenu(): void;
@@ -970,7 +936,7 @@ interface ExportDataResponse {
 
 | Key | Type | Description |
 |:----|:-----|:------------|
-| `mealswapp_theme` | `'light' \| 'dark' \| 'system'` | User theme preference |
+| `mealswapp_theme` | `'light' \| 'dark'` | User theme preference (managed by ThemeProvider) |
 | `mealswapp_quick_actions` | `QuickAction[]` | Recent quick actions |
 | `mealswapp_sidebar_collapsed` | `boolean` | Manual collapse preference |
 | `mealswapp_pending_sync` | `PendingSyncItem[]` | Offline changes awaiting sync |
@@ -1009,9 +975,9 @@ SidebarComponent
 │   │   └── PendingSyncBadge (conditional)
 │   │
 │   ├── ThemeToggle
-│   │   ├── ThemeIcon (sun/moon/monitor)
+│   │   ├── ThemeIcon (sun/moon based on current theme)
 │   │   └── ThemeSelector (hidden when collapsed)
-│   │       └── ThemeOption[] (light/dark/system)
+│   │       └── ThemeOption[] (light/dark)
 │   │
 │   ├── SubscriptionStatus (conditional: when authenticated)
 │   │   ├── StatusBadge
@@ -1052,8 +1018,8 @@ SidebarComponent
 | User Menu Button | `aria-haspopup="menu"`, `aria-expanded` | Enter/Space to toggle |
 | User Menu | `role="menu"` | Arrow keys, Enter to select, Escape to close |
 | User Menu Item | `role="menuitem"` | Enter/Space to activate |
-| Theme Toggle | `role="radiogroup"`, `aria-label="Theme selection"` | Arrow keys within group |
-| Theme Option | `role="radio"`, `aria-checked` | Space to select |
+| Theme Toggle | `role="switch"`, `aria-checked`, `aria-label="Dark mode"` | Space/Enter to toggle |
+| Theme Selector | `role="radiogroup"`, `aria-label="Theme selection"` | Arrow keys within group |
 | Collapse Toggle | `aria-expanded`, `aria-controls="sidebar-content"` | Enter/Space to toggle |
 | Mobile Menu Button | `aria-expanded`, `aria-controls="mobile-sidebar"` | Enter/Space to toggle |
 | Offline Indicator | `role="status"`, `aria-live="polite"` | - |
@@ -1144,6 +1110,14 @@ ON Mouse Leave:
 ---
 
 ## Changelog
+
+### 2026-01-22 (Rev 1.1)
+
+**Changed:**
+- Theme toggle simplified to binary light/dark (removed 'system' option)
+- Theme management delegated to ThemeProvider component
+- Updated theme-related types, functions, and UI structure
+- System theme detection only used on first visit for initial default
 
 ### 2026-01-22 (Rev 1.0)
 
