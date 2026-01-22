@@ -23,8 +23,8 @@ interface AutocompleteDropdownProps {
   disabled?: boolean;
   /** Minimum characters required before searching */
   minChars?: number;  // Default: 2
-  /** Custom className for styling */
-  className?: string;
+  /** Additional CSS classes */
+  class?: string;
 }
 ```
 
@@ -113,7 +113,7 @@ const KEYBOARD_KEYS = {
 ### 2.1 Component Initialization
 
 ```
-1. Initialize state with default values:
+1. Initialize Svelte store with default values:
    - inputValue = ''
    - suggestions = []
    - isOpen = false
@@ -123,7 +123,7 @@ const KEYBOARD_KEYS = {
    - isOffline = !navigator.onLine
    - isFromCache = false
 
-2. Set up event listeners:
+2. Set up event listeners using $effect:
    - Add 'online' event listener → set isOffline = false
    - Add 'offline' event listener → set isOffline = true
    - Add document click listener for outside click detection
@@ -418,13 +418,36 @@ DURING isLoading === true:
 ### 4.1 Public Component API
 
 ```typescript
-/**
- * AutocompleteDropdown - Search input with suggestions dropdown
- *
- * @param props - Component configuration
- * @returns React component
- */
-function AutocompleteDropdown(props: AutocompleteDropdownProps): JSX.Element;
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import { createAutocompleteStore } from './stores/autocomplete';
+  import { createQuery } from '@tanstack/svelte-query';
+
+  type Props = {
+    placeholder?: string;
+    maxSuggestions?: number;
+    debounceMs?: number;
+    onSelect: (item: FoodItem) => void;
+    onSearch?: (query: string) => void;
+    disabled?: boolean;
+    minChars?: number;
+    class?: string;
+  };
+
+  let {
+    placeholder = 'Search for food...',
+    maxSuggestions = 10,
+    debounceMs = 150,
+    onSelect,
+    onSearch,
+    disabled = false,
+    minChars = 2,
+    class: className = ''
+  }: Props = $props();
+
+  const dispatch = createEventDispatcher();
+  const autocompleteStore = createAutocompleteStore({ debounceMs, minChars, maxSuggestions });
+</script>
 ```
 
 ### 4.2 Internal Functions
@@ -432,11 +455,11 @@ function AutocompleteDropdown(props: AutocompleteDropdownProps): JSX.Element;
 ```typescript
 /**
  * Handles input field value changes
- * Updates state and triggers debounced search
+ * Updates store and triggers debounced search
  *
- * @param event - Input change event
+ * @param event - Input event
  */
-function handleInputChange(event: React.ChangeEvent<HTMLInputElement>): void;
+function handleInputChange(event: Event): void;
 
 /**
  * Debounced search function - waits 150ms before executing
@@ -452,7 +475,7 @@ function debouncedSearch(query: string): void;
  *
  * @param event - Keyboard event
  */
-function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void;
+function handleKeyDown(event: KeyboardEvent): void;
 
 /**
  * Handles selection of a suggestion item
@@ -478,7 +501,7 @@ function openDropdown(): void;
  * @param item - Clicked food item
  * @param event - Mouse event
  */
-function handleSuggestionClick(item: FoodItem, event: React.MouseEvent): void;
+function handleSuggestionClick(item: FoodItem, event: MouseEvent): void;
 
 /**
  * Handles mouse entering a suggestion item
@@ -567,72 +590,143 @@ async function searchAPI(
 //   { items: FoodItem[], total: number }
 ```
 
-### 4.5 Custom Hooks (Optional Extraction)
+### 4.5 Svelte Stores & TanStack Query
 
 ```typescript
+// Store for autocomplete state management
+function createAutocompleteStore(options: {
+  debounceMs: number;
+  minChars: number;
+  maxSuggestions: number;
+}) {
+  const { debounceMs, minChars, maxSuggestions } = options;
+
+  const inputValue = $state('');
+  const suggestions = $state<FoodItem[]>([]);
+  const isOpen = $state(false);
+  const highlightedIndex = $state(-1);
+  const isLoading = $state(false);
+  const error = $state<AutocompleteError | null>(null);
+  const isOffline = $state(!navigator.onLine);
+  const isFromCache = $state(false);
+
+  return {
+    get inputValue() { return inputValue; },
+    setInputValue(value: string) { inputValue = value; },
+    get suggestions() { return suggestions; },
+    setSuggestions(value: FoodItem[]) { suggestions = value; },
+    get isOpen() { return isOpen; },
+    setIsOpen(value: boolean) { isOpen = value; },
+    get highlightedIndex() { return highlightedIndex; },
+    setHighlightedIndex(value: number) { highlightedIndex = value; },
+    get isLoading() { return isLoading; },
+    setIsLoading(value: boolean) { isLoading = value; },
+    get error() { return error; },
+    setError(value: AutocompleteError | null) { error = value; },
+    get isOffline() { return isOffline; },
+    setIsOffline(value: boolean) { isOffline = value; },
+    get isFromCache() { return isFromCache; },
+    setIsFromCache(value: boolean) { isFromCache = value; },
+    reset() {
+      inputValue = '';
+      suggestions = [];
+      isOpen = false;
+      highlightedIndex = -1;
+      isLoading = false;
+      error = null;
+      isFromCache = false;
+    },
+  };
+}
+
+// TanStack Query for API requests with caching
+function createSearchQuery(query: () => string, options: { maxSuggestions: number }) {
+  return createQuery({
+    queryKey: ['search', query],
+    queryFn: async ({ signal }) => {
+      return searchAPI(query(), signal);
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+  });
+}
+
 /**
- * Hook for managing debounced value
+ * Hook for managing debounced value using Svelte's $derived
  *
  * @param value - Value to debounce
  * @param delay - Debounce delay in ms
  * @returns Debounced value
  */
-function useDebounce<T>(value: T, delay: number): T;
+function useDebounce<T>(value: () => T, delay: number): () => T {
+  let timeout: ReturnType<typeof setTimeout>;
+  const debouncedValue = $state(value());
+
+  $effect(() => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      debouncedValue = value();
+    }, delay);
+    return () => clearTimeout(timeout);
+  });
+
+  return () => debouncedValue;
+}
 
 /**
  * Hook for managing online/offline status
  *
  * @returns Current online status
  */
-function useOnlineStatus(): boolean;
+function useOnlineStatus(): () => boolean {
+  const online = $state(navigator.onLine);
 
-/**
- * Hook for autocomplete search logic
- * Encapsulates cache, API calls, and state management
- *
- * @param options - Search configuration
- * @returns Search state and handlers
- */
-function useAutocompleteSearch(options: {
-  debounceMs: number;
-  minChars: number;
-  maxSuggestions: number;
-}): {
-  suggestions: FoodItem[];
-  isLoading: boolean;
-  error: AutocompleteError | null;
-  isFromCache: boolean;
-  search: (query: string) => void;
-  clearResults: () => void;
-};
+  $effect(() => {
+    const handleOnline = () => online = true;
+    const handleOffline = () => online = false;
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  });
+
+  return () => online;
+}
 ```
 
 ### 4.6 Accessibility (ARIA) Attributes
 
-```typescript
-// Input element attributes:
-{
-  role: 'combobox',
-  'aria-expanded': isOpen,
-  'aria-controls': 'autocomplete-listbox',
-  'aria-activedescendant': highlightedIndex >= 0
-    ? `suggestion-${highlightedIndex}`
-    : undefined,
-  'aria-autocomplete': 'list',
-  'aria-haspopup': 'listbox',
-}
+```svelte
+<!-- Input element attributes: -->
+<input
+  role="combobox"
+  aria-expanded={isOpen}
+  aria-controls="autocomplete-listbox"
+  aria-activedescendant={highlightedIndex >= 0 ? `suggestion-${highlightedIndex}` : undefined}
+  aria-autocomplete="list"
+  aria-haspopup="listbox"
+/>
 
-// Dropdown list attributes:
-{
-  id: 'autocomplete-listbox',
-  role: 'listbox',
-  'aria-label': 'Search suggestions',
-}
-
-// Suggestion item attributes:
-{
-  id: `suggestion-${index}`,
-  role: 'option',
-  'aria-selected': index === highlightedIndex,
-}
+<!-- Dropdown list attributes: -->
+<ul
+  id="autocomplete-listbox"
+  role="listbox"
+  aria-label="Search suggestions"
+>
+  {#each suggestions as item, index (item.id)}
+    <li
+      id="suggestion-{index}"
+      role="option"
+      aria-selected={index === highlightedIndex}
+      on:click={() => selectItem(item)}
+      on:mouseenter={() => handleSuggestionHover(index)}
+    >
+      {item.name}
+    </li>
+  {/each}
+</ul>
 ```

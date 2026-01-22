@@ -1,5 +1,9 @@
 # Detailed Design: ThemeProvider
 
+**Framework:** Svelte 5
+**State Management:** Svelte stores + localStorage
+**Styling:** CSS Custom Properties + Tailwind
+
 **Traceability:** [ARCH-001]
 
 ---
@@ -12,10 +16,115 @@
 type Theme = 'light' | 'dark';
 
 interface ThemeConfig {
-  theme: Theme;  // Current active theme (always explicit)
+  theme: Theme;
 }
 
-const DEFAULT_THEME: Theme = 'light';  // Fallback if system preference unavailable
+const DEFAULT_THEME: Theme = 'light';
+```
+
+### 1.2 CSS Custom Property Definitions
+
+```typescript
+interface ThemeColors {
+  bgPrimary: string;
+  bgSurface: string;
+  bgSidebar: string;
+  bgInput: string;
+  bgOverlay: string;
+
+  colorPrimary: string;
+  colorPrimaryHover: string;
+  colorSecondary: string;
+
+  colorAccent: string;
+  colorError: string;
+  colorWarning: string;
+  colorSuccess: string;
+  colorInfo: string;
+
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  textInverse: string;
+
+  borderColor: string;
+  borderColorStrong: string;
+  dividerColor: string;
+
+  hoverBg: string;
+  activeBg: string;
+  focusRing: string;
+  disabledBg: string;
+  disabledText: string;
+
+  shadowColor: string;
+}
+```
+
+### 1.3 Storage Keys
+
+```typescript
+const THEME_STORAGE_KEY = 'mealswapp_theme';
+const THEME_ATTRIBUTE = 'data-theme';
+const THEME_COLOR_META_ID = 'theme-color-meta';
+```
+
+### 1.4 Store Types
+
+```typescript
+import { writable, type Writable } from 'svelte/store';
+
+interface ThemeContextValue {
+  theme: Writable<Theme>;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
+}
+
+const ThemeContext = symbol('ThemeContext');
+```
+
+### 1.5 Provider Props
+
+```typescript
+interface ThemeProviderProps {
+  children?: import('svelte').Snippet;
+  storageKey?: string;
+  disablePersistence?: boolean;
+  onThemeChange?: (theme: Theme) => void;
+}
+```
+
+### 1.6 CSS Variable Mapping
+
+```typescript
+const CSS_VARIABLE_MAP: Record<keyof ThemeColors, string> = {
+  bgPrimary: '--bg-primary',
+  bgSurface: '--bg-surface',
+  bgSidebar: '--bg-sidebar',
+  bgInput: '--bg-input',
+  bgOverlay: '--bg-overlay',
+  colorPrimary: '--color-primary',
+  colorPrimaryHover: '--color-primary-hover',
+  colorSecondary: '--color-secondary',
+  colorAccent: '--color-accent',
+  colorError: '--color-error',
+  colorWarning: '--color-warning',
+  colorSuccess: '--color-success',
+  colorInfo: '--color-info',
+  textPrimary: '--text-primary',
+  textSecondary: '--text-secondary',
+  textMuted: '--text-muted',
+  textInverse: '--text-inverse',
+  borderColor: '--border-color',
+  borderColorStrong: '--border-color-strong',
+  dividerColor: '--divider-color',
+  hoverBg: '--hover-bg',
+  activeBg: '--active-bg',
+  focusRing: '--focus-ring',
+  disabledBg: '--disabled-bg',
+  disabledText: '--disabled-text',
+  shadowColor: '--shadow-color'
+};
 ```
 
 ### 1.2 CSS Custom Property Definitions
@@ -218,6 +327,348 @@ const CSS_VARIABLE_MAP: Record<keyof ThemeColors, string> = {
 
 ### 2.1 Initialization Flow
 
+```
+ON ThemeProvider Mount:
+  1. Prevent flash of incorrect theme (FOIT)
+     1.1. Check if inline script already applied theme during SSR/initial load
+     1.2. IF document.documentElement has THEME_ATTRIBUTE:
+           - Read existing attribute value as initial theme
+           - Skip to step 5
+     1.3. ELSE:
+           - Proceed with detection
+
+  2. Check for persisted user preference
+     2.1. IF disablePersistence is false:
+           - TRY:
+               stored = localStorage.getItem(storageKey)
+               IF stored AND isValidTheme(stored):
+                 initialTheme = stored as Theme
+                 SKIP to step 4
+           - CATCH (SecurityError):
+               Log warning: 'localStorage unavailable'
+
+  3. Detect system color scheme preference (first visit only)
+     3.1. IF no stored preference found:
+           - Query media: window.matchMedia('(prefers-color-scheme: dark)')
+           - initialTheme = mediaQuery.matches ? 'dark' : 'light'
+     3.2. IF matchMedia unavailable:
+           - initialTheme = DEFAULT_THEME ('light')
+
+  4. Apply theme to DOM
+     4.1. CALL applyThemeToDom(initialTheme)
+
+  5. Initialize store
+     theme = writable<Theme>(initialTheme)
+```
+
+### 2.2 Theme Validation
+
+```
+FUNCTION isValidTheme(value: unknown): boolean
+  RETURN value === 'light' OR value === 'dark'
+```
+
+### 2.3 Theme Application to DOM
+
+```
+FUNCTION applyThemeToDom(theme: Theme):
+  1. Select color palette
+     colors = theme === 'dark' ? DARK_THEME : LIGHT_THEME
+
+  2. Apply CSS custom properties to document root
+     root = document.documentElement.style
+     FOR EACH [key, cssVar] IN CSS_VARIABLE_MAP:
+       root.setProperty(cssVar, colors[key])
+
+  3. Set theme attribute on html element
+     document.documentElement.setAttribute(THEME_ATTRIBUTE, theme)
+
+  4. Update meta theme-color for browser chrome
+     4.1. Find or create meta tag: <meta name="theme-color">
+          metaTag = document.getElementById(THEME_COLOR_META_ID)
+          IF metaTag is null:
+            metaTag = document.createElement('meta')
+            metaTag.id = THEME_COLOR_META_ID
+            metaTag.name = 'theme-color'
+            document.head.appendChild(metaTag)
+     4.2. Set content based on theme:
+          metaTag.content = colors.bgPrimary
+
+  5. Update color-scheme CSS property
+     document.documentElement.style.colorScheme = theme
+```
+
+### 2.4 Theme Change Handling
+
+```
+FUNCTION setTheme(newTheme: Theme):
+  1. Validate input
+     IF NOT isValidTheme(newTheme):
+       Log error: 'Invalid theme value'
+       RETURN
+
+  2. Get current theme from store
+     currentTheme = $theme
+     IF newTheme === currentTheme:
+       RETURN (no change needed)
+
+  3. Update store
+     theme.set(newTheme)
+
+  4. Apply to DOM
+     CALL applyThemeToDom(newTheme)
+
+  5. Persist to storage
+     IF NOT disablePersistence:
+       TRY:
+         localStorage.setItem(storageKey, newTheme)
+       CATCH (QuotaExceededError):
+         Log warning: 'Could not persist theme preference'
+
+  6. Notify listeners
+     IF onThemeChange callback exists:
+       CALL onThemeChange(newTheme)
+
+     Dispatch custom event for non-Svelte listeners:
+       window.dispatchEvent(new CustomEvent('mealswapp:themechange', {
+         detail: { theme: newTheme, previousTheme: previousTheme }
+       }))
+
+FUNCTION toggleTheme():
+  1. Determine opposite theme
+     nextTheme = $theme === 'light' ? 'dark' : 'light'
+
+  2. CALL setTheme(nextTheme)
+```
+
+### 2.5 Flash Prevention (SSR/SSG Inline Script)
+
+```
+INLINE SCRIPT (to be placed in <head> before any content):
+
+(function() {
+  var STORAGE_KEY = 'mealswapp_theme';
+  var THEME_ATTR = 'data-theme';
+
+  function getStoredTheme() {
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getSystemTheme() {
+    try {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch (e) {
+      return 'light';
+    }
+  }
+
+  var stored = getStoredTheme();
+  var theme = (stored === 'light' || stored === 'dark')
+              ? stored
+              : getSystemTheme();
+
+  document.documentElement.setAttribute(THEME_ATTR, theme);
+  document.documentElement.style.colorScheme = theme;
+})();
+```
+
+### 2.6 Svelte Store Implementation
+
+```
+FUNCTION createThemeStore(initialTheme: Theme, options: ThemeProviderProps):
+  1. Create writable store
+     theme = writable<Theme>(initialTheme)
+
+  2. Subscribe to changes for side effects
+     theme.subscribe((newTheme) => {
+       applyThemeToDom(newTheme)
+
+       IF NOT options.disablePersistence:
+         persistTheme(newTheme)
+
+       options.onThemeChange?.(newTheme)
+     })
+
+  3. Return store with helper methods
+     RETURN {
+       subscribe: theme.subscribe,
+       set: setTheme,
+       update: theme.update,
+       setTheme,
+       toggleTheme
+     }
+```
+
+### 2.7 ThemeProvider Component Implementation (Svelte 5)
+
+```svelte
+<script lang="ts">
+  import { onMount, setContext, type Snippet } from 'svelte';
+  import { writable, type Writable } from 'svelte/store';
+
+  interface Props {
+    children?: Snippet;
+    storageKey?: string;
+    disablePersistence?: boolean;
+    onThemeChange?: (theme: Theme) => void;
+  }
+
+  let { children, storageKey = THEME_STORAGE_KEY, disablePersistence = false, onThemeChange }: Props = $props();
+
+  let theme: Writable<Theme>;
+  let currentTheme: Theme;
+
+  function isValidTheme(value: unknown): value is Theme {
+    return value === 'light' || value === 'dark';
+  }
+
+  function applyThemeToDom(targetTheme: Theme): void {
+    const colors = targetTheme === 'dark' ? DARK_THEME : LIGHT_THEME;
+
+    for (const [key, cssVar] of Object.entries(CSS_VARIABLE_MAP)) {
+      document.documentElement.style.setProperty(cssVar, colors[key as keyof ThemeColors]);
+    }
+
+    document.documentElement.setAttribute(THEME_ATTRIBUTE, targetTheme);
+
+    let metaTag = document.getElementById(THEME_COLOR_META_ID);
+    if (!metaTag) {
+      metaTag = document.createElement('meta');
+      metaTag.id = THEME_COLOR_META_ID;
+      metaTag.name = 'theme-color';
+      document.head.appendChild(metaTag);
+    }
+    metaTag.content = colors.bgPrimary;
+
+    document.documentElement.style.colorScheme = targetTheme;
+  }
+
+  function getStoredTheme(): Theme | null {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (isValidTheme(stored)) return stored;
+    } catch {
+      console.warn('localStorage unavailable');
+    }
+    return null;
+  }
+
+  function getSystemTheme(): Theme {
+    try {
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+    } catch {
+      // matchMedia not supported
+    }
+    return 'light';
+  }
+
+  function setTheme(newTheme: Theme): void {
+    if (!isValidTheme(newTheme)) return;
+    if (newTheme === currentTheme) return;
+
+    theme.set(newTheme);
+    applyThemeToDom(newTheme);
+
+    if (!disablePersistence) {
+      try {
+        localStorage.setItem(storageKey, newTheme);
+      } catch (e) {
+        console.warn('Could not persist theme preference');
+      }
+    }
+
+    onThemeChange?.(newTheme);
+
+    window.dispatchEvent(new CustomEvent('mealswapp:themechange', {
+      detail: { theme: newTheme, previousTheme: currentTheme }
+    }));
+  }
+
+  function toggleTheme(): void {
+    setTheme(currentTheme === 'light' ? 'dark' : 'light');
+  }
+
+  onMount(() => {
+    const existingTheme = document.documentElement.getAttribute(THEME_ATTRIBUTE);
+    let initialTheme: Theme;
+
+    if (isValidTheme(existingTheme)) {
+      initialTheme = existingTheme;
+    } else {
+      const stored = getStoredTheme();
+      initialTheme = stored ?? getSystemTheme();
+    }
+
+    theme = writable<Theme>(initialTheme);
+
+    theme.subscribe((value) => {
+      currentTheme = value;
+    });
+
+    applyThemeToDom(initialTheme);
+
+    setContext('theme', {
+      theme,
+      setTheme,
+      toggleTheme
+    });
+  });
+</script>
+
+{@render children?.()}
+```
+
+### 2.8 Hook Implementation (Svelte)
+
+```typescript
+import { getContext, hasContext } from 'svelte';
+
+interface ThemeContextValue {
+  theme: Writable<Theme>;
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
+}
+
+function useTheme(): ThemeContextValue {
+  if (!hasContext('theme')) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return getContext<ThemeContextValue>('theme');
+}
+```
+
+### 2.9 Helper Functions
+
+```
+FUNCTION getSystemTheme(): Theme
+  TRY:
+    IF typeof window !== 'undefined' AND window.matchMedia:
+      RETURN window.matchMedia('(prefers-color-scheme: dark)').matches
+             ? 'dark' : 'light'
+  CATCH:
+    // matchMedia not supported
+  RETURN 'light'
+
+FUNCTION getStoredThemePreference(): Theme | null
+  TRY:
+    stored = localStorage.getItem(THEME_STORAGE_KEY)
+    IF stored === 'light' OR stored === 'dark':
+      RETURN stored
+  CATCH:
+    // localStorage unavailable
+  RETURN null
+
+FUNCTION persistTheme(theme: Theme): void
+  TRY:
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  CATCH:
+    Log warning: 'Could not persist theme'
 ```
 ON ThemeProvider Mount:
   1. Prevent flash of incorrect theme (FOIT)
@@ -585,75 +1036,48 @@ FUNCTION handleStorageWrite(theme: Theme): boolean
 
 ### 4.1 ThemeProvider Component
 
-```typescript
-interface ThemeProviderProps {
-  children: ReactNode;
-  storageKey?: string;                    // Default: 'mealswapp_theme'
-  disablePersistence?: boolean;           // Default: false
-  onThemeChange?: (theme: Theme) => void; // Called when theme changes
-}
+```svelte
+<script lang="ts">
+  import { type Snippet } from 'svelte';
 
-function ThemeProvider(props: ThemeProviderProps): JSX.Element;
+  interface Props {
+    children?: Snippet;
+    storageKey?: string;
+    disablePersistence?: boolean;
+    onThemeChange?: (theme: Theme) => void;
+  }
+</script>
 ```
 
-### 4.2 useTheme Hook
+### 4.2 useTheme Hook (Svelte Context)
 
 ```typescript
+import { getContext, hasContext } from 'svelte';
+import { type Writable } from 'svelte/store';
+
 interface ThemeContextValue {
-  /** Current active theme ('light' or 'dark') */
-  theme: Theme;
-
-  /** Set a specific theme */
+  theme: Writable<Theme>;
   setTheme: (theme: Theme) => void;
-
-  /** Toggle between light and dark */
   toggleTheme: () => void;
 }
 
-function useTheme(): ThemeContextValue;
+function useTheme(): ThemeContextValue {
+  if (!hasContext('theme')) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return getContext<ThemeContextValue>('theme');
+}
 ```
 
 ### 4.3 Utility Functions (Exported)
 
 ```typescript
-/**
- * Get the current theme from DOM attribute.
- * Useful for non-React code.
- */
 function getCurrentTheme(): Theme;
-
-/**
- * Apply a theme to the DOM immediately.
- * Useful for flash prevention scripts.
- */
 function applyTheme(theme: Theme): void;
-
-/**
- * Get the stored theme preference from localStorage.
- * Returns null if no preference is stored.
- */
 function getStoredThemePreference(): Theme | null;
-
-/**
- * Clear the stored theme preference.
- * Next visit will use system preference.
- */
 function clearStoredThemePreference(): void;
-
-/**
- * Get CSS variable value for current theme.
- */
 function getThemeColor(colorKey: keyof ThemeColors): string;
-
-/**
- * Get the complete color palette for a theme.
- */
 function getThemePalette(theme: Theme): ThemeColors;
-
-/**
- * Detect system color scheme preference.
- * Returns 'light' if detection fails.
- */
 function getSystemTheme(): Theme;
 ```
 
@@ -722,22 +1146,20 @@ type ThemeChangeEvent = CustomEvent<ThemeChangeEventDetail>;
 
 ### 5.1 Application Root Setup
 
-```typescript
-// App.tsx or _app.tsx
-import { ThemeProvider } from './providers/ThemeProvider';
+```svelte
+<!-- App.svelte -->
+<script lang="ts">
+  import ThemeProvider from './providers/ThemeProvider.svelte';
+</script>
 
-function App({ children }) {
-  return (
-    <ThemeProvider
-      onThemeChange={(theme) => {
-        // Optional: analytics tracking
-        analytics.track('theme_changed', { theme });
-      }}
-    >
-      {children}
-    </ThemeProvider>
-  );
-}
+<ThemeProvider
+  onThemeChange={(theme) => {
+    // Optional: analytics tracking
+    console.log('theme_changed', { theme });
+  }}
+>
+  <slot />
+</ThemeProvider>
 ```
 
 ### 5.2 HTML Document Setup
@@ -763,43 +1185,66 @@ function App({ children }) {
   <!-- Rest of head content -->
 </head>
 <body>
-  <div id="root"></div>
+  <div id="app"><!-- Svelte renders here --></div>
 </body>
 </html>
 ```
 
 ### 5.3 Component Usage Example
 
-```typescript
-// Simple toggle button
-function ThemeToggle() {
+```svelte
+<!-- ThemeToggle.svelte -->
+<script lang="ts">
+  import { useTheme } from './providers/ThemeProvider.svelte';
+  import MoonIcon from './icons/MoonIcon.svelte';
+  import SunIcon from './icons/SunIcon.svelte';
+
   const { theme, toggleTheme } = useTheme();
+</script>
 
-  return (
-    <button onClick={toggleTheme} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
-      {theme === 'light' ? <MoonIcon /> : <SunIcon />}
-    </button>
-  );
-}
+<button
+  onclick={toggleTheme}
+  aria-label="Switch to {$theme === 'light' ? 'dark' : 'light'} mode"
+>
+  {#if $theme === 'light'}
+    <MoonIcon />
+  {:else}
+    <SunIcon />
+  {/if}
+</button>
 
-// Settings panel with explicit selection
-function SettingsPanel() {
+<!-- SettingsPanel.svelte -->
+<script lang="ts">
+  import { useTheme } from './providers/ThemeProvider.svelte';
+
   const { theme, setTheme } = useTheme();
+</script>
 
-  return (
-    <div>
-      <h2>Theme</h2>
-      <RadioGroup
-        value={theme}
-        onChange={setTheme}
-        options={[
-          { value: 'light', label: 'Light', icon: 'sun' },
-          { value: 'dark', label: 'Dark', icon: 'moon' }
-        ]}
+<div>
+  <h2>Theme</h2>
+  <div class="radio-group">
+    <label>
+      <input
+        type="radio"
+        name="theme"
+        value="light"
+        checked={$theme === 'light'}
+        onchange={() => setTheme('light')}
       />
-    </div>
-  );
-}
+      Light
+    </label>
+    <label>
+      <input
+        type="radio"
+        name="theme"
+        value="dark"
+        checked={$theme === 'dark'}
+        onchange={() => setTheme('dark')}
+      />
+      Dark
+    </label>
+  </div>
+</div>
 ```
 
 ### 5.4 CSS Usage
@@ -838,8 +1283,7 @@ function SettingsPanel() {
 | Optimization | Implementation | Impact |
 |:-------------|:---------------|:-------|
 | **Flash prevention** | Inline script in `<head>` | No visible theme flash on load |
-| **Memoized context** | `useMemo` for context value | Prevent unnecessary re-renders |
-| **Stable callbacks** | `useCallback` for setTheme/toggleTheme | Prevent child re-renders |
+| **Store subscriptions** | Svelte store with efficient subscriptions | Automatic cleanup, minimal re-renders |
 | **Batched DOM updates** | Apply all CSS vars in single frame | No layout thrashing |
 | **Lazy color calculation** | Colors computed once per theme | No redundant calculations |
 | **No runtime listeners** | System preference only checked on init | Zero ongoing overhead |
@@ -900,7 +1344,28 @@ function SettingsPanel() {
 
 ---
 
+# Detailed Design: ThemeProvider
+
+**Framework:** Svelte 5
+**State Management:** Svelte stores + localStorage
+**Styling:** CSS Custom Properties + Tailwind
+
+**Traceability:** [ARCH-001]
+
+---
+
 ## Changelog
+
+### 2026-01-22 (Rev 2.0)
+
+**Migrated from React to Svelte:**
+- Replaced React Context with Svelte context API
+- Replaced `useState` with `svelte/store` writable
+- Replaced `useEffect` with `onMount` lifecycle
+- Replaced `useCallback` with Svelte reactive functions
+- Updated component syntax from JSX to Svelte 5 snippets
+- Replaced `ReactNode` children with Svelte `Snippet`
+- Maintained same functionality and design decisions
 
 ### 2026-01-22 (Rev 1.0)
 

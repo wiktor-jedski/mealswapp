@@ -330,7 +330,7 @@ ON ResultsGrid Mount:
      2.1. Parse URL query parameters: ?q=, &mode=, &page=, &sort=
      2.2. IF parameters exist:
           - Set state.sourceItem from URL
-          - Trigger initial search
+          - Trigger initial search via TanStack Query
      2.3. ELSE:
           - Set state.status = 'idle'
 
@@ -343,7 +343,7 @@ ON ResultsGrid Mount:
   4. Check online status
      4.1. Set state.isOffline = !navigator.onLine
      4.2. IF offline:
-          - Attempt to load cached results
+          - Attempt to load cached results from Service Worker cache
 ```
 
 ### 2.2 Receiving Search Results
@@ -493,56 +493,41 @@ FUNCTION handlePageChange(newPage: number):
      state.loading.isLoadingMore = true
      state.loading.loadingMessage = 'Loading more results...'
 
-  3. Request new page from API
+  3. Request new page from API via TanStack Query
      TRY:
-       response = await GET /api/v1/search/results?{
-         query: currentQuery,
-         page: newPage,
-         pageSize: state.pagination.pageSize,
-         sort: state.sort.field,
-         direction: state.sort.direction
-       }
+       // Use TanStack Query for caching, retry, and state management
+       response = await queryClient.fetchQuery({
+         queryKey: ['search/results', { query: currentQuery, page: newPage, pageSize: state.pagination.pageSize }],
+         queryFn: () => GET /api/v1/search/results?{
+           query: currentQuery,
+           page: newPage,
+           pageSize: state.pagination.pageSize,
+           sort: state.sort.field,
+           direction: state.sort.direction
+         },
+         staleTime: 5 * 60 * 1000 // 5 minutes
+       })
 
-       // Update results (append or replace based on mode)
-       state.results = response.items.map(transformToSimilarityResult)
-       state.pagination.currentPage = newPage
-       state.pagination.hasNextPage = newPage < state.pagination.totalPages
-       state.pagination.hasPreviousPage = newPage > 1
+        // Update results (append or replace based on mode)
+        state.results = response.items.map(transformToSimilarityResult)
+        state.pagination.currentPage = newPage
+        state.pagination.hasNextPage = newPage < state.pagination.totalPages
+        state.pagination.hasPreviousPage = newPage > 1
 
-     CATCH error:
-       CALL handleResultsError(error)
+      CATCH error:
+        CALL handleResultsError(error)
 
-     FINALLY:
-       state.loading.isLoadingMore = false
+      FINALLY:
+        state.loading.isLoadingMore = false
 
-  4. Scroll to top of results grid
-     document.getElementById('results-grid')?.scrollTo({ top: 0, behavior: 'smooth' })
+   4. Scroll to top of results grid
+      document.getElementById('results-grid')?.scrollTo({ top: 0, behavior: 'smooth' })
 
-  5. Update URL
-     updateUrlParams({ page: newPage })
+   5. Update URL
+      updateUrlParams({ page: newPage })
 
-  6. Announce page change
-     announce(`Page ${newPage} of ${state.pagination.totalPages}`)
-
-FUNCTION handlePageSizeChange(newSize: number):
-  1. Validate page size
-     IF !PAGE_SIZE_OPTIONS.includes(newSize):
-       RETURN
-
-  2. Update page size
-     state.pagination.pageSize = newSize
-
-  3. Recalculate total pages
-     state.pagination.totalPages = Math.ceil(state.pagination.totalCount / newSize)
-
-  4. Reset to first page (to avoid showing empty page)
-     state.pagination.currentPage = 1
-
-  5. Re-fetch results with new page size
-     CALL fetchResults({ page: 1, pageSize: newSize })
-
-  6. Persist preference
-     localStorage.setItem('mealswapp_results_pagesize', newSize.toString())
+   6. Announce page change
+      announce(`Page ${newPage} of ${state.pagination.totalPages}`)
 ```
 
 ### 2.5 View Mode Switching
@@ -806,22 +791,31 @@ FUNCTION handleRetry():
      emit('search:retry', { query: lastQuery, page: state.pagination.currentPage })
 ```
 
-### 2.10 Offline Caching
+### 2.10 Offline Caching (Service Worker + localStorage)
 
 ```
 FUNCTION cacheResults(query: string, results: SimilarityResult[]):
-  1. Load existing cache
+  1. Store in Service Worker cache for offline access
+     // Service Worker caches API responses
+     cacheName = 'search-results-v1'
+     cache.put(`/api/v1/search/results?q=${query}`, new Response(JSON.stringify({
+       query,
+       results,
+       timestamp: Date.now()
+     })))
+
+  2. Also persist to localStorage for quick access
      TRY:
        existingCache = JSON.parse(localStorage.getItem(RESULTS_CACHE_KEY) || '[]')
      CATCH:
        existingCache = []
 
-  2. Check for existing entry for this query
+  3. Check for existing entry for this query
      existingIndex = existingCache.findIndex(c => c.query === query)
      IF existingIndex !== -1:
        existingCache.splice(existingIndex, 1)
 
-  3. Create new cache entry
+  4. Create new cache entry
      newEntry: CachedResult = {
        query: query,
        mode: currentSearchMode,
@@ -830,16 +824,16 @@ FUNCTION cacheResults(query: string, results: SimilarityResult[]):
        expiresAt: Date.now() + CACHE_TTL_MS
      }
 
-  4. Add to beginning (most recent first)
+  5. Add to beginning (most recent first)
      existingCache.unshift(newEntry)
 
-  5. Trim to max size and remove expired
+  6. Trim to max size and remove expired
      now = Date.now()
      existingCache = existingCache
        .filter(c => c.expiresAt > now)
        .slice(0, MAX_CACHED_RESULTS)
 
-  6. Persist cache
+  7. Persist cache to localStorage
      TRY:
        localStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify(existingCache))
      CATCH quotaError:
@@ -848,21 +842,32 @@ FUNCTION cacheResults(query: string, results: SimilarityResult[]):
        localStorage.setItem(RESULTS_CACHE_KEY, JSON.stringify(existingCache))
 
 FUNCTION loadCachedResults(query: string): SimilarityResult[] | null
-  1. Load cache
+  1. First try Service Worker cache (preferred for offline)
+     TRY:
+       cachedResponse = await caches.match(`/api/v1/search/results?q=${query}`)
+       IF cachedResponse:
+         data = await cachedResponse.json()
+         IF data.expiresAt > Date.now():
+           RETURN data.results
+     CATCH:
+       // Fall through to localStorage
+
+  2. Fall back to localStorage
      TRY:
        cache = JSON.parse(localStorage.getItem(RESULTS_CACHE_KEY) || '[]')
      CATCH:
        RETURN null
 
-  2. Find matching entry
+  3. Find matching entry
      entry = cache.find(c => c.query === query && c.expiresAt > Date.now())
 
-  3. IF entry found:
+  4. IF entry found:
      RETURN entry.results
   ELSE:
      RETURN null
 
 FUNCTION hasCachedResults(): boolean
+  // Check both caches
   cache = JSON.parse(localStorage.getItem(RESULTS_CACHE_KEY) || '[]')
   RETURN cache.length > 0
 
@@ -957,6 +962,8 @@ FUNCTION getCategoryPlaceholder(tags: Tag[]): string
 
 ## 3. State Management & Error Handling
 
+State management uses Svelte stores for local UI state combined with TanStack Query for server state (caching, retry, synchronization).
+
 ### 3.1 State Transitions Diagram
 
 ```
@@ -994,40 +1001,40 @@ FUNCTION getCategoryPlaceholder(tags: Tag[]): string
                           └─────────────┘
 ```
 
-### 3.2 Offline State Diagram
+### 3.2 Offline State Diagram (Service Worker + localStorage)
 
 ```
-                    ┌─────────────┐
-                    │   ONLINE    │
-                    │  (Normal)   │
-                    └──────┬──────┘
-                           │
-                    Network lost
-                           │
-                           ▼
-                    ┌─────────────┐
-              ┌─────│   OFFLINE   │─────┐
-              │     └─────────────┘     │
-              │                         │
-        Has cached               No cached
-          data                     data
-              │                         │
-              ▼                         ▼
-       ┌─────────────┐          ┌─────────────┐
-       │   CACHED    │          │   OFFLINE   │
-       │  (Stale     │          │   ERROR     │
-       │   banner)   │          │             │
-       └─────────────┘          └─────────────┘
-              │                         │
-              └──────────┬──────────────┘
-                         │
-                  Network restored
-                         │
-                         ▼
-                  ┌─────────────┐
-                  │   ONLINE    │
-                  │  (Refresh)  │
-                  └─────────────┘
+                     ┌─────────────┐
+                     │   ONLINE    │
+                     │  (Normal)   │
+                     └──────┬──────┘
+                            │
+                     Network lost
+                            │
+                            ▼
+                     ┌─────────────┐
+               ┌─────│   OFFLINE   │─────┐
+               │     └─────────────┘     │
+               │                         │
+         Has Service              No cached
+         Worker cache               data
+               │                         │
+               ▼                         ▼
+        ┌─────────────┐          ┌─────────────┐
+        │   CACHED    │          │   OFFLINE   │
+        │  (Stale     │          │   ERROR     │
+        │   banner)   │          │             │
+        └─────────────┘          └─────────────┘
+               │                         │
+               └──────────┬──────────────┘
+                          │
+                   Network restored
+                          │
+                          ▼
+                   ┌─────────────┐
+                   │   ONLINE    │
+                   │  (Refresh)  │
+                   └─────────────┘
 ```
 
 ### 3.3 Error States
@@ -1067,11 +1074,11 @@ interface ResultsError {
 
 | Scenario | Degraded Functionality | Core Functionality Preserved |
 |:---------|:-----------------------|:-----------------------------|
-| **Similarity service slow** | Results without similarity scores/colors | Item list, basic data |
+| **Similarity service slow** | Results without similarity scores/colors (TanStack Query timeout) | Item list, basic data |
 | **Image CDN down** | Category placeholder images | All data, interactions |
-| **Offline mode** | Cached results with stale banner | View previous results |
+| **Offline mode** | Service Worker cache serves stale results with banner | View previous results |
 | **Comparison feature down** | Comparison disabled | Selection, details, save |
-| **Save API down** | Save action shows error | Browse, select, compare |
+| **Save API down** | Save action shows error (with TanStack Query retry) | Browse, select, compare |
 
 ---
 
@@ -1088,6 +1095,12 @@ interface ResultsGridProps {
   onError?: (error: ResultsError) => void;
   className?: string;
 }
+
+// Svelte stores for state management
+import { writable, derived } from 'svelte/store';
+
+// Server state managed by TanStack Query
+import { createQuery, createMutation } from '@tanstack/svelte-query';
 ```
 
 ### 4.2 Internal Component Functions
@@ -1230,8 +1243,8 @@ interface SaveItemResponse {
 
 | Key | Type | Description |
 |:----|:-----|:------------|
-| `mealswapp_cached_results` | `CachedResult[]` | Offline results cache (LRU, max 20) |
-| `mealswapp_results_view` | `ViewConfig` | View mode and preferences |
+| `mealswapp_cached_results` | `CachedResult[]` | UI preferences and quick-access cache (supplemented by Service Worker) |
+| `mealswapp_results_view` | `ViewConfig` | View mode and preferences (Svelte store sync) |
 | `mealswapp_results_pagesize` | `number` | Preferred page size |
 
 ---
@@ -1405,12 +1418,13 @@ ResultsGrid
 
 | Optimization | Implementation | Impact |
 |:-------------|:---------------|:-------|
+| **TanStack Query caching** | Automatic caching with configurable staleTime | Reduced API calls, instant back-nav |
 | Virtual scrolling | Render only visible cards (for large result sets) | Memory: O(visible) vs O(total) |
 | Image lazy loading | `loading="lazy"` + IntersectionObserver | Faster initial render |
 | Skeleton loading | Placeholder cards matching layout | Perceived performance |
 | Debounced resize | 100ms debounce on resize handler | Prevent layout thrashing |
 | Memoized sorting | Memo sort results, skip if unchanged | Prevent unnecessary recalcs |
-| Result caching | LRU cache, 20 queries max | Offline support, faster back-nav |
+| Result caching | Service Worker + localStorage (LRU, 20 queries max) | Offline support, faster back-nav |
 | Preload on hover | Prefetch item details on card hover | Faster detail view |
 | CSS containment | `contain: layout style` on cards | Isolate repaints |
 
@@ -1424,10 +1438,17 @@ ResultsGrid
 - Initial detailed design document for ResultsGrid component
 - Complete type definitions for results, similarity, pagination, and view state
 - Step-by-step algorithms for result handling, sorting, pagination, and selection
-- Offline caching specifications with LRU eviction
+- Offline caching specifications with Service Worker + localStorage (LRU eviction)
+- TanStack Query integration for data fetching and caching
 - Error handling and graceful degradation specifications
 - Similarity indicator visual specifications per ARCH-003 requirements
 - Accessibility requirements (WCAG 2.1 AA)
 - Component interface contracts and event emitters
 - UI component structure hierarchy
 - Performance optimization strategies
+
+**Updated for Tech Stack Compliance:**
+- Added TanStack Query integration for pagination and API fetching
+- Updated caching section to use Service Worker + localStorage dual-layer cache
+- Added Svelte stores + TanStack Query to state management section
+- Updated graceful degradation to reference TanStack Query timeout/retry behavior

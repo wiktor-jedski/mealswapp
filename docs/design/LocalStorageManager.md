@@ -1020,9 +1020,12 @@ interface StorageUsage {
 }
 ```
 
-### 4.4 React Hook: useLocalStorage
+### 4.4 Svelte Store: createLocalStorage
 
 ```typescript
+// stores/createLocalStorage.ts
+import { writable, get } from 'svelte/store';
+
 interface UseLocalStorageOptions<T> {
   key: StorageKey;
   defaultValue: T;
@@ -1030,16 +1033,48 @@ interface UseLocalStorageOptions<T> {
   deserialize?: (raw: string) => T;
 }
 
-function useLocalStorage<T>(
+function createLocalStorage<T>(
   options: UseLocalStorageOptions<T>
-): [T, (value: T | ((prev: T) => T)) => void, () => void];
+): readonly [ReadableStore<T>, (value: T | ((prev: T) => T)) => void, () => void] {
+  const { key, defaultValue, serialize = JSON.stringify, deserialize = JSON.parse } = options;
 
-// Returns: [currentValue, setValue, clearValue]
+  const storedValue = browser ? localStorage.getItem(key) : null;
+  const initial = storedValue ? deserialize(storedValue) : defaultValue;
+
+  const store = writable<T>(initial);
+
+  function setValue(value: T | ((prev: T) => T)): void {
+    const newValue = value instanceof Function ? value(get(store)) : value;
+    store.set(newValue);
+    if (browser) {
+      try {
+        localStorage.setItem(key, serialize(newValue));
+      } catch {
+        console.warn(`Failed to save ${key} to localStorage`);
+      }
+    }
+  }
+
+  function clearValue(): void {
+    store.set(defaultValue);
+    if (browser) {
+      localStorage.removeItem(key);
+    }
+  }
+
+  return [store, setValue, clearValue];
+}
+
+const browser = typeof window !== 'undefined';
 ```
 
-### 4.5 React Hook: useQueryCache
+### 4.5 Svelte Store: createQueryCache
 
 ```typescript
+// stores/createQueryCache.ts
+import { writable, get } from 'svelte/store';
+import { LocalStorageManager } from '../services/LocalStorageManager';
+
 interface UseQueryCacheResult {
   getCached: (query: NormalizedQuery) => CachedQueryResult | null;
   setCached: (
@@ -1051,20 +1086,89 @@ interface UseQueryCacheResult {
   stats: QueryCacheStats | null;
 }
 
-function useQueryCache(): UseQueryCacheResult;
+function createQueryCache(): UseQueryCacheResult {
+  const storage = LocalStorageManager.getInstance();
+  const stats = writable<QueryCacheStats | null>(null);
+
+  function getCached(query: NormalizedQuery): CachedQueryResult | null {
+    const result = storage.getCachedQuery(query);
+    if (result.success) {
+      return result.data;
+    }
+    return null;
+  }
+
+  function setCached(
+    query: NormalizedQuery,
+    results: FoodItemSummary[],
+    totalCount: number
+  ): void {
+    storage.storeQueryResult(query, results, totalCount);
+    updateStats();
+  }
+
+  function invalidate(): void {
+    storage.invalidateQueryCache();
+    updateStats();
+  }
+
+  async function updateStats(): Promise<void> {
+    const result = await storage.getQueryCacheStats();
+    if (result.success) {
+      stats.set(result.data);
+    }
+  }
+
+  updateStats();
+
+  return { getCached, setCached, invalidate, stats: $stats };
+}
 ```
 
-### 4.6 React Hook: useSearchHistory
+### 4.6 Svelte Store: createSearchHistory
 
 ```typescript
+// stores/createSearchHistory.ts
+import { writable, get } from 'svelte/store';
+import { LocalStorageManager } from '../services/LocalStorageManager';
+
 interface UseSearchHistoryResult {
-  history: SearchHistoryEntry[];
+  history: WritableStore<SearchHistoryEntry[]>;
   addEntry: (query: string, resultCount: number) => void;
   removeEntry: (query: string) => void;
   clearHistory: () => void;
 }
 
-function useSearchHistory(): UseSearchHistoryResult;
+function createSearchHistory(): UseSearchHistoryResult {
+  const storage = LocalStorageManager.getInstance();
+  const history = writable<SearchHistoryEntry[]>([]);
+
+  async function loadHistory(): Promise<void> {
+    const result = storage.getSearchHistory();
+    if (result.success) {
+      history.set(result.data);
+    }
+  }
+
+  function addEntry(query: string, resultCount: number): void {
+    storage.addToSearchHistory(query, resultCount);
+    loadHistory();
+  }
+
+  function removeEntry(query: string): void {
+    storage.removeFromSearchHistory(query);
+    loadHistory();
+  }
+
+  function clearHistory(): void {
+    storage.clearSearchHistory();
+    loadHistory();
+  }
+
+  loadHistory();
+
+  return { history, addEntry, removeEntry, clearHistory };
+}
 ```
 
 ### 4.7 Utility Functions (Exported)
@@ -1125,110 +1229,151 @@ type StorageClearedEvent = CustomEvent<StorageClearedEventDetail>;
 ### 5.1 Application Initialization
 
 ```typescript
-// main.tsx or App.tsx
+// main.ts or src/routes/+layout.svelte
+import { onMount } from 'svelte';
 import { LocalStorageManager } from './services/LocalStorageManager';
 
-async function initializeApp() {
+let storageInitialized = false;
+let initError: string | null = null;
+
+onMount(async () => {
   const storage = LocalStorageManager.getInstance();
   const result = await storage.initialize();
 
   if (!result.success) {
     console.warn('Storage initialization failed:', result.error);
-    // App continues with degraded storage (safe defaults)
+    initError = result.error.message;
   }
 
-  // Continue with app render
-  render(<App />);
-}
+  storageInitialized = true;
+});
+```
+
+```svelte
+<!-- App.svelte -->
+<script>
+  import { storageInitialized, initError } from './stores/app';
+</script>
+
+{#if storageInitialized}
+  <AppContent />
+{:else if initError}
+  <div class="warning">
+    Storage unavailable: {initError}
+  </div>
+{:else}
+  <Loading />
+{/if}
 ```
 
 ### 5.2 SearchView Integration
 
-```typescript
-// SearchView.tsx
-function SearchView() {
-  const { getCached, setCached } = useQueryCache();
-  const { addEntry } = useSearchHistory();
-  const { isOffline } = useNetwork();
+```svelte
+<!-- SearchView.svelte -->
+<script lang="ts">
+  import { createQueryCache } from '../stores/createQueryCache';
+  import { createSearchHistory } from '../stores/createSearchHistory';
+  import { browser } from '$app/environment';
 
-  async function handleSearch(query: NormalizedQuery) {
-    // Check cache first
+  const { getCached, setCached } = createQueryCache();
+  const { addEntry } = createSearchHistory();
+
+  let results: FoodItemSummary[] = [];
+  let totalCount = 0;
+  let error: string | null = null;
+
+  export async function handleSearch(query: NormalizedQuery): Promise<void> {
+    if (!browser) return;
+
     const cached = getCached(query);
     if (cached) {
-      // Use cached results
-      setResults(cached.results);
-      setTotalCount(cached.totalCount);
+      results = cached.results;
+      totalCount = cached.totalCount;
       return;
     }
 
-    if (isOffline) {
-      // Cannot fetch, no cache available
-      setError('No cached results available offline');
+    if (!navigator.onLine) {
+      error = 'No cached results available offline';
       return;
     }
 
-    // Fetch from API
-    const response = await searchApi.search(query);
-    setResults(response.results);
-    setTotalCount(response.totalCount);
+    try {
+      const response = await searchApi.search(query);
+      results = response.results;
+      totalCount = response.totalCount;
 
-    // Cache results
-    setCached(query, response.results, response.totalCount);
-
-    // Add to history
-    addEntry(query.searchTerm, response.totalCount);
+      setCached(query, response.results, response.totalCount);
+      addEntry(query.searchTerm, response.totalCount);
+    } catch (e) {
+      error = e instanceof Error ? e.message : 'Search failed';
+    }
   }
-
-  // ...
-}
+</script>
 ```
 
 ### 5.3 AutocompleteDropdown Integration
 
-```typescript
-// AutocompleteDropdown.tsx
-function AutocompleteDropdown({ inputValue, onSelect }) {
-  const { history } = useSearchHistory();
+```svelte
+<!-- AutocompleteDropdown.svelte -->
+<script lang="ts">
+  import { createSearchHistory } from '../stores/createSearchHistory';
+  import { derived } from 'svelte/store';
 
-  // Filter history based on current input
-  const suggestions = useMemo(() => {
-    if (!inputValue) return history;
+  export let inputValue = '';
+  export let onSelect: (query: string) => void;
+
+  const { history } = createSearchHistory();
+
+  $: suggestions = derived(history, $history => {
+    if (!inputValue) return $history;
 
     const normalized = inputValue.toLowerCase().trim();
-    return history.filter(entry =>
+    return $history.filter(entry =>
       entry.normalizedQuery.includes(normalized)
     );
-  }, [history, inputValue]);
+  });
+</script>
 
-  return (
-    <ul>
-      {suggestions.map(entry => (
-        <li key={entry.normalizedQuery} onClick={() => onSelect(entry.query)}>
-          {entry.query}
-          <span className="result-count">{entry.resultCount} results</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+<ul>
+  {#each $suggestions as entry}
+    <li>
+      <button on:click={() => onSelect(entry.query)}>
+        {entry.query}
+        <span class="result-count">{entry.resultCount} results</span>
+      </button>
+    </li>
+  {/each}
+</ul>
 ```
 
 ### 5.4 SettingsPanel Integration
 
-```typescript
-// SettingsPanel.tsx
-function SettingsPanel() {
+```svelte
+<!-- SettingsPanel.svelte -->
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { LocalStorageManager } from '../services/LocalStorageManager';
+  import { formatStorageSize } from '../utils/storage';
+
   const storage = LocalStorageManager.getInstance();
-  const [usage, setUsage] = useState<StorageUsage | null>(null);
+  let usage: StorageUsage | null = null;
+  let toastMessage: string | null = null;
 
-  useEffect(() => {
-    const result = storage.getStorageUsage();
+  onMount(async () => {
+    const result = await storage.getStorageUsage();
     if (result.success) {
-      setUsage(result.data);
+      usage = result.data;
     }
-  }, []);
+  });
 
-  async function handleClearCache() {
+  async function refreshUsage(): Promise<void> {
+    const result = await storage.getStorageUsage();
+    if (result.success) {
+      usage = result.data;
+    }
+  }
+
+  async function handleClearCache(): Promise<void> {
     const result = await storage.invalidateQueryCache();
     if (result.success) {
       showToast('Cache cleared');
@@ -1236,14 +1381,14 @@ function SettingsPanel() {
     }
   }
 
-  async function handleClearHistory() {
+  async function handleClearHistory(): Promise<void> {
     const result = await storage.clearSearchHistory();
     if (result.success) {
       showToast('Search history cleared');
     }
   }
 
-  async function handleClearAllData() {
+  async function handleClearAllData(): Promise<void> {
     if (confirm('This will clear all cached data and preferences. Continue?')) {
       await storage.clearAllData();
       showToast('All data cleared');
@@ -1251,23 +1396,30 @@ function SettingsPanel() {
     }
   }
 
-  return (
-    <section>
-      <h2>Storage</h2>
+  function showToast(message: string): void {
+    toastMessage = message;
+    setTimeout(() => toastMessage = null, 3000);
+  }
+</script>
 
-      {usage && (
-        <div className="storage-usage">
-          <ProgressBar value={usage.percentUsed} max={100} />
-          <span>{formatStorageSize(usage.totalUsed)} of {formatStorageSize(usage.quota)}</span>
-        </div>
-      )}
+<section>
+  <h2>Storage</h2>
 
-      <button onClick={handleClearCache}>Clear Search Cache</button>
-      <button onClick={handleClearHistory}>Clear Search History</button>
-      <button onClick={handleClearAllData}>Clear All Data</button>
-    </section>
-  );
-}
+  {#if usage}
+    <div class="storage-usage">
+      <ProgressBar value={usage.percentUsed} max={100} />
+      <span>{formatStorageSize(usage.totalUsed)} of {formatStorageSize(usage.quota)}</span>
+    </div>
+  {/if}
+
+  <button on:click={handleClearCache}>Clear Search Cache</button>
+  <button on:click={handleClearHistory}>Clear Search History</button>
+  <button on:click={handleClearAllData}>Clear All Data</button>
+
+  {#if toastMessage}
+    <div class="toast">{toastMessage}</div>
+  {/if}
+</section>
 ```
 
 ### 5.5 Service Worker Coordination
@@ -1275,14 +1427,19 @@ function SettingsPanel() {
 ```typescript
 // When Service Worker caches API responses, coordinate with LocalStorageManager
 
-// In main thread:
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data.type === 'CACHE_UPDATED') {
-    // Service Worker cached a new API response
-    // LocalStorageManager doesn't need to duplicate this
-    const storage = LocalStorageManager.getInstance();
-    storage.markQueryAsServiceWorkerCached(event.data.queryHash);
-  }
+// In main thread (src/routes/+layout.svelte):
+import { onMount } from 'svelte';
+import { browser } from '$app/environment';
+
+onMount(() => {
+  if (!browser || !navigator.serviceWorker) return;
+
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data.type === 'CACHE_UPDATED') {
+      const storage = LocalStorageManager.getInstance();
+      storage.markQueryAsServiceWorkerCached(event.data.queryHash);
+    }
+  });
 });
 ```
 
@@ -1293,7 +1450,8 @@ navigator.serviceWorker.addEventListener('message', (event) => {
 | Optimization | Implementation | Impact |
 |:-------------|:---------------|:-------|
 | **Singleton pattern** | Single instance manages all storage | No redundant reads/parsing |
-| **Lazy loading** | Cache containers loaded on first access | Faster app startup |
+| **Lazy loading** | Store subscriptions trigger load on first access | Faster app startup |
+| **Derived stores** | Svelte derived stores for computed values | Automatic reactivity |
 | **Batch writes** | Debounce rapid successive writes | Reduce serialization overhead |
 | **Size estimation** | Track sizes without re-serializing | Fast quota checks |
 | **LRU efficiency** | Array shift/unshift O(n) acceptable for 20 items | Simple, fast enough |
@@ -1344,7 +1502,7 @@ interface GoodCacheEntry {
 
 ## 8. Testing Requirements
 
-### 8.1 Unit Test Cases
+### 8.1 Unit Test Cases (Bun Test Runner)
 
 | Test Case | Input | Expected Output |
 |:----------|:------|:----------------|
@@ -1361,7 +1519,7 @@ interface GoodCacheEntry {
 | generateQueryHash determinism | Same query twice | Same hash both times |
 | generateQueryHash uniqueness | Different queries | Different hashes |
 
-### 8.2 Integration Test Cases
+### 8.2 Integration Test Cases (@testing-library/svelte)
 
 | Test Case | Scenario | Expected Behavior |
 |:----------|:---------|:------------------|
@@ -1373,7 +1531,7 @@ interface GoodCacheEntry {
 | Multi-tab consistency | Update in tab A | Tab B sees update (on next read) |
 | Migration on version bump | Old format data | Migrated to new format |
 
-### 8.3 Edge Case Test Cases
+### 8.3 Component Test Cases (Playwright)
 
 | Test Case | Scenario | Expected Behavior |
 |:----------|:---------|:------------------|
@@ -1384,9 +1542,66 @@ interface GoodCacheEntry {
 | Unicode search terms | Japanese/emoji queries | Properly stored and retrieved |
 | Browser storage disabled | User disabled localStorage | Graceful degradation |
 
+### 8.4 Svelte Store Tests
+
+```typescript
+// stores/createLocalStorage.test.ts
+import { describe, it, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { createLocalStorage } from './createLocalStorage';
+
+describe('createLocalStorage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('returns stored value on mount', () => {
+    localStorage.setItem('test_key', 'test_value');
+    const [store] = createLocalStorage({
+      key: 'test_key' as StorageKey,
+      defaultValue: 'default'
+    });
+
+    expect($store).toBe('test_value');
+  });
+
+  it('updates value when setValue is called', () => {
+    const [, setValue] = createLocalStorage({
+      key: 'test_key' as StorageKey,
+      defaultValue: 'default'
+    });
+
+    setValue('new_value');
+    expect(localStorage.getItem('test_key')).toBe('new_value');
+  });
+
+  it('clears value when clearValue is called', () => {
+    localStorage.setItem('test_key', 'some_value');
+    const [, , clearValue] = createLocalStorage({
+      key: 'test_key' as StorageKey,
+      defaultValue: 'default'
+    });
+
+    clearValue();
+    expect(localStorage.getItem('test_key')).toBeNull();
+  });
+});
+```
+
 ---
 
 ## Changelog
+
+### 2026-01-22 (Rev 1.1)
+
+**Updated:**
+- Replaced React hooks with Svelte stores (`createLocalStorage`, `createQueryCache`, `createSearchHistory`)
+- Updated integration examples to use Svelte syntax (.svelte components)
+- Changed from `useState`, `useEffect`, `useMemo` to Svelte reactive declarations
+- Updated imports to use SvelteKit routing patterns (`+layout.svelte`, `+page.svelte`)
+- Added browser detection for SSR compatibility using `$app/environment`
+- Modified component examples to use Svelte event handlers (`on:click`) and blocks (`{#if}`, `{#each}`)
+- Added TypeScript typing for Svelte stores (`ReadableStore`, `WritableStore`)
+- Updated Performance Considerations to reference Svelte derived stores
 
 ### 2026-01-22 (Rev 1.0)
 

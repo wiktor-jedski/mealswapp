@@ -13,8 +13,8 @@ type NetworkStatus = 'online' | 'offline';
 
 interface NetworkState {
   status: NetworkStatus;
-  lastOnlineTimestamp: number | null;  // Unix timestamp of last known online state
-  offlineDuration: number;             // Milliseconds since going offline (0 if online)
+  lastOnlineTimestamp: number | null;
+  offlineDuration: number;
 }
 ```
 
@@ -24,13 +24,13 @@ interface NetworkState {
 type BannerVariant = 'default' | 'stale-data' | 'reconnecting';
 
 interface OfflineBannerConfig {
-  showDismissButton: boolean;          // Default: false (banner auto-hides on reconnect)
-  showReconnectingState: boolean;      // Default: true
-  staleDurationThreshold: number;      // Milliseconds before showing stale warning (default: 300000 = 5min)
-  animationDuration: number;           // Banner slide animation (default: 200ms)
+  showDismissButton: boolean;
+  showReconnectingState: boolean;
+  staleDurationThreshold: number;
+  animationDuration: number;
 }
 
-const DEFAULT_CONFIG: OfflineBannerConfig = {
+export const DEFAULT_CONFIG: OfflineBannerConfig = {
   showDismissButton: false,
   showReconnectingState: true,
   staleDurationThreshold: 300000,
@@ -42,9 +42,9 @@ const DEFAULT_CONFIG: OfflineBannerConfig = {
 
 ```typescript
 interface OfflineBannerState {
-  isVisible: boolean;                  // Whether banner is rendered and visible
-  variant: BannerVariant;              // Current display variant
-  isAnimating: boolean;                // Whether entry/exit animation is in progress
+  isVisible: boolean;
+  variant: BannerVariant;
+  isAnimating: boolean;
 }
 ```
 
@@ -54,39 +54,113 @@ interface OfflineBannerState {
 const LAST_ONLINE_STORAGE_KEY = 'mealswapp_last_online';
 ```
 
-### 1.5 Context Types
+### 1.5 Svelte Store Types
 
 ```typescript
-interface NetworkContextValue {
-  status: NetworkStatus;               // Current network status
-  isOffline: boolean;                  // Convenience: status === 'offline'
-  lastOnlineTimestamp: number | null;  // When connection was last active
-  offlineDuration: number;             // How long device has been offline
+import { type Writable, writable, derived } from 'svelte/store';
+
+interface NetworkStoreValue {
+  status: NetworkStatus;
+  isOffline: boolean;
+  lastOnlineTimestamp: number | null;
+  offlineDuration: number;
 }
 
-const NetworkContext = createContext<NetworkContextValue | null>(null);
+function createNetworkStore() {
+  const { subscribe, set, update }: Writable<NetworkStoreValue> = writable({
+    status: 'online',
+    isOffline: false,
+    lastOnlineTimestamp: null,
+    offlineDuration: 0
+  });
+
+  let offlineDurationInterval: ReturnType<typeof setInterval> | null = null;
+
+  function startOfflineTimer() {
+    if (offlineDurationInterval) return;
+    offlineDurationInterval = setInterval(() => {
+      update(state => {
+        if (state.lastOnlineTimestamp) {
+          return {
+            ...state,
+            offlineDuration: Date.now() - state.lastOnlineTimestamp
+          };
+        }
+        return state;
+      });
+    }, 1000);
+  }
+
+  function stopOfflineTimer() {
+    if (offlineDurationInterval) {
+      clearInterval(offlineDurationInterval);
+      offlineDurationInterval = null;
+    }
+  }
+
+  return {
+    subscribe,
+    setOnline: () => {
+      const timestamp = Date.now();
+      try {
+        localStorage.setItem(LAST_ONLINE_STORAGE_KEY, String(timestamp));
+      } catch {
+        console.warn('Could not persist online timestamp');
+      }
+      stopOfflineTimer();
+      set({
+        status: 'online',
+        isOffline: false,
+        lastOnlineTimestamp: timestamp,
+        offlineDuration: 0
+      });
+    },
+    setOffline: () => {
+      update(state => ({
+        ...state,
+        status: 'offline',
+        isOffline: true
+      }));
+      startOfflineTimer();
+    },
+    initialize: (initialOnline: boolean, storedTimestamp: number | null) => {
+      const timestamp = initialOnline ? Date.now() : storedTimestamp;
+      set({
+        status: initialOnline ? 'online' : 'offline',
+        isOffline: !initialOnline,
+        lastOnlineTimestamp: timestamp,
+        offlineDuration: 0
+      });
+      if (!initialOnline && timestamp) {
+        startOfflineTimer();
+      }
+    }
+  };
+}
+
+export const networkStore = createNetworkStore();
+export const isOffline = derived(networkStore, $n => $n.isOffline);
 ```
 
 ### 1.6 Component Props
 
 ```typescript
 interface OfflineBannerProps {
-  position?: 'top' | 'bottom';         // Default: 'top'
-  className?: string;                  // Additional CSS classes
-  zIndex?: number;                     // Default: 1000
+  position?: 'top' | 'bottom';
+  className?: string;
+  zIndex?: number;
 }
 
 interface NetworkProviderProps {
-  children: ReactNode;
+  children: snippet;
   onStatusChange?: (status: NetworkStatus) => void;
-  pollInterval?: number;               // Backup poll interval in ms (default: 30000)
+  pollInterval?: number;
 }
 ```
 
 ### 1.7 CSS Custom Properties (consumed from ThemeProvider)
 
 ```typescript
-// OfflineBanner uses these CSS variables from ThemeProvider
 const CONSUMED_CSS_VARS = {
   backgroundColor: '--color-warning',
   textColor: '--text-inverse',
@@ -108,7 +182,7 @@ FUNCTION initializeNetworkDetection():
      1.1. IF navigator.onLine exists:
           initialStatus = navigator.onLine ? 'online' : 'offline'
      1.2. ELSE:
-          initialStatus = 'online'  // Assume online if API unavailable
+          initialStatus = 'online'
           Log warning: 'navigator.onLine not supported'
 
   2. Register browser event listeners
@@ -117,7 +191,7 @@ FUNCTION initializeNetworkDetection():
 
   3. Start backup polling (for edge cases where events don't fire)
      3.1. IF pollInterval > 0:
-          setInterval(checkNetworkStatus, pollInterval)
+          pollIntervalId = setInterval(checkNetworkStatus, pollInterval)
 
   4. Load persisted last-online timestamp
      4.1. TRY:
@@ -131,31 +205,25 @@ FUNCTION initializeNetworkDetection():
      5.1. Update lastOnlineTimestamp to Date.now()
      5.2. Persist to localStorage
 
-  RETURN { status: initialStatus, lastOnlineTimestamp }
+  6. Initialize networkStore
+     networkStore.initialize(initialStatus === 'online', lastOnlineTimestamp)
+
+  RETURN pollIntervalId
 ```
 
 ### 2.2 Online Event Handler
 
 ```
 FUNCTION handleOnline():
-  1. Update state
-     previousStatus = state.status
-     state.status = 'online'
-     state.lastOnlineTimestamp = Date.now()
-     state.offlineDuration = 0
+  1. Update store state
+     networkStore.setOnline()
 
-  2. Persist timestamp
-     TRY:
-       localStorage.setItem(LAST_ONLINE_STORAGE_KEY, String(Date.now()))
-     CATCH:
-       Log warning: 'Could not persist online timestamp'
-
-  3. Notify listeners
+  2. Notify listeners
      IF previousStatus === 'offline':
-       3.1. Trigger banner hide animation
-       3.2. IF onStatusChange callback:
+       2.1. Trigger banner hide animation
+       2.2. IF onStatusChange callback:
             CALL onStatusChange('online')
-       3.3. Dispatch custom event:
+       2.3. Dispatch custom event:
             window.dispatchEvent(new CustomEvent('mealswapp:networkchange', {
               detail: { status: 'online', previousStatus: 'offline' }
             }))
@@ -165,24 +233,15 @@ FUNCTION handleOnline():
 
 ```
 FUNCTION handleOffline():
-  1. Update state
-     previousStatus = state.status
-     state.status = 'offline'
-     // lastOnlineTimestamp remains unchanged (tracks last known online time)
+  1. Update store state
+     networkStore.setOffline()
 
-  2. Start offline duration timer
-     IF NOT offlineDurationInterval:
-       offlineDurationInterval = setInterval(() => {
-         IF state.lastOnlineTimestamp:
-           state.offlineDuration = Date.now() - state.lastOnlineTimestamp
-       }, 1000)
-
-  3. Notify listeners
+  2. Notify listeners
      IF previousStatus === 'online':
-       3.1. Trigger banner show animation
-       3.2. IF onStatusChange callback:
+       2.1. Trigger banner show animation
+       2.2. IF onStatusChange callback:
             CALL onStatusChange('offline')
-       3.3. Dispatch custom event:
+       2.3. Dispatch custom event:
             window.dispatchEvent(new CustomEvent('mealswapp:networkchange', {
               detail: { status: 'offline', previousStatus: 'online' }
             }))
@@ -192,23 +251,23 @@ FUNCTION handleOffline():
 
 ```
 FUNCTION checkNetworkStatus():
-  // Backup check in case browser events don't fire (rare edge cases)
   1. IF navigator.onLine exists:
      currentOnline = navigator.onLine
   ELSE:
-     RETURN  // Cannot determine status without API
+     RETURN
 
   2. Compare with current state
-     IF currentOnline AND state.status === 'offline':
+     currentState = get(networkStore)
+     IF currentOnline AND currentState.status === 'offline':
        CALL handleOnline()
-     ELSE IF NOT currentOnline AND state.status === 'online':
+     ELSE IF NOT currentOnline AND currentState.status === 'online':
        CALL handleOffline()
 ```
 
 ### 2.5 Banner Visibility Logic
 
 ```
-FUNCTION determineBannerState(networkState: NetworkState, config: OfflineBannerConfig): OfflineBannerState
+FUNCTION determineBannerState(networkState: NetworkStoreValue, config: OfflineBannerConfig): OfflineBannerState
   1. Determine visibility
      isVisible = networkState.status === 'offline'
 
@@ -228,12 +287,11 @@ FUNCTION determineBannerState(networkState: NetworkState, config: OfflineBannerC
 ```
 FUNCTION showBanner():
   1. Set initial state (banner positioned off-screen)
-     bannerElement.style.transform = 'translateY(-100%)'  // For top position
-     // OR 'translateY(100%)' for bottom position
+     bannerElement.style.transform = 'translateY(-100%)'
 
   2. Make visible in DOM
-     state.isVisible = true
-     state.isAnimating = true
+     isVisible = true
+     isAnimating = true
 
   3. Trigger animation frame
      requestAnimationFrame(() => {
@@ -242,19 +300,18 @@ FUNCTION showBanner():
 
   4. Wait for animation completion
      setTimeout(() => {
-       state.isAnimating = false
+       isAnimating = false
      }, config.animationDuration)
 
 FUNCTION hideBanner():
   1. Start exit animation
-     state.isAnimating = true
-     bannerElement.style.transform = 'translateY(-100%)'  // Slide up for top
-     // OR 'translateY(100%)' for bottom
+     isAnimating = true
+     bannerElement.style.transform = 'translateY(-100%)'
 
   2. Wait for animation completion
      setTimeout(() => {
-       state.isVisible = false
-       state.isAnimating = false
+       isVisible = false
+       isAnimating = false
      }, config.animationDuration)
 ```
 
@@ -276,165 +333,161 @@ FUNCTION formatOfflineDuration(durationMs: number): string
        RETURN `${seconds}s`
 ```
 
-### 2.8 NetworkProvider Implementation
+### 2.8 NetworkProvider Implementation (Svelte)
 
-```
-FUNCTION NetworkProvider(props: NetworkProviderProps):
-  1. Initialize state
-     [networkState, setNetworkState] = useState<NetworkState>(() => {
-       return initializeNetworkDetection()
-     })
+```svelte
+<script lang="typescript">
+  import { onMount, onDestroy } from 'svelte';
+  import { networkStore } from './networkStore';
 
-  2. Set up event listeners
-     useEffect(() => {
-       handleOnline = () => {
-         setNetworkState(prev => ({
-           status: 'online',
-           lastOnlineTimestamp: Date.now(),
-           offlineDuration: 0
-         }))
-         props.onStatusChange?.('online')
-       }
+  let { children, onStatusChange, pollInterval = 30000 } = $props();
 
-       handleOffline = () => {
-         setNetworkState(prev => ({
-           ...prev,
-           status: 'offline'
-         }))
-         props.onStatusChange?.('offline')
-       }
+  let pollIntervalId: ReturnType<typeof setInterval> | null = null;
+  let previousStatus: NetworkStatus | null = null;
 
-       window.addEventListener('online', handleOnline)
-       window.addEventListener('offline', handleOffline)
+  function handleOnline() {
+    const prev = previousStatus;
+    previousStatus = 'online';
+    networkStore.setOnline();
+    if (prev === 'offline' && onStatusChange) {
+      onStatusChange('online');
+    }
+    window.dispatchEvent(new CustomEvent('mealswapp:networkchange', {
+      detail: { status: 'online', previousStatus: 'offline' }
+    }));
+  }
 
-       // Backup polling
-       pollIntervalId = null
-       IF props.pollInterval && props.pollInterval > 0:
-         pollIntervalId = setInterval(checkNetworkStatus, props.pollInterval)
+  function handleOffline() {
+    const prev = previousStatus;
+    previousStatus = 'offline';
+    networkStore.setOffline();
+    if (prev === 'online' && onStatusChange) {
+      onStatusChange('offline');
+    }
+    window.dispatchEvent(new CustomEvent('mealswapp:networkchange', {
+      detail: { status: 'offline', previousStatus: 'online' }
+    }));
+  }
 
-       // Cleanup
-       RETURN () => {
-         window.removeEventListener('online', handleOnline)
-         window.removeEventListener('offline', handleOffline)
-         IF pollIntervalId:
-           clearInterval(pollIntervalId)
-       }
-     }, [props.onStatusChange, props.pollInterval])
+  function checkNetworkStatus() {
+    const current = $networkStore.status;
+    const online = navigator.onLine;
+    if (online && current === 'offline') {
+      handleOnline();
+    } else if (!online && current === 'online') {
+      handleOffline();
+    }
+  }
 
-  3. Update offline duration
-     useEffect(() => {
-       IF networkState.status === 'offline' AND networkState.lastOnlineTimestamp:
-         intervalId = setInterval(() => {
-           setNetworkState(prev => ({
-             ...prev,
-             offlineDuration: Date.now() - (prev.lastOnlineTimestamp || Date.now())
-           }))
-         }, 1000)
+  onMount(() => {
+    const stored = localStorage.getItem(LAST_ONLINE_STORAGE_KEY);
+    const lastOnline = stored ? parseInt(stored, 10) : null;
+    networkStore.initialize(navigator.onLine !== false, lastOnline);
+    previousStatus = $networkStore.status;
 
-         RETURN () => clearInterval(intervalId)
-     }, [networkState.status, networkState.lastOnlineTimestamp])
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
-  4. Create context value
-     contextValue = useMemo(() => ({
-       status: networkState.status,
-       isOffline: networkState.status === 'offline',
-       lastOnlineTimestamp: networkState.lastOnlineTimestamp,
-       offlineDuration: networkState.offlineDuration
-     }), [networkState])
+    if (pollInterval > 0) {
+      pollIntervalId = setInterval(checkNetworkStatus, pollInterval);
+    }
+  });
 
-  5. Render provider
-     RETURN (
-       <NetworkContext.Provider value={contextValue}>
-         {props.children}
-       </NetworkContext.Provider>
-     )
+  onDestroy(() => {
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+    if (pollIntervalId) {
+      clearInterval(pollIntervalId);
+    }
+  });
+</script>
+
+{@render children()}
 ```
 
-### 2.9 OfflineBanner Component Implementation
+### 2.9 OfflineBanner Component Implementation (Svelte)
 
-```
-FUNCTION OfflineBanner(props: OfflineBannerProps):
-  1. Get network context
-     network = useNetwork()
-     IF network === null:
-       THROW Error('OfflineBanner must be used within NetworkProvider')
+```svelte
+<script lang="typescript">
+  import { networkStore } from '../stores/networkStore';
+  import { DEFAULT_CONFIG } from '../config/offlineBanner';
 
-  2. Local state for animation
-     [isAnimating, setIsAnimating] = useState(false)
-     [isRendered, setIsRendered] = useState(false)
+  let { position = 'top', className = '', zIndex = 1000 }: OfflineBannerProps = $props();
 
-  3. Handle visibility changes
-     useEffect(() => {
-       IF network.isOffline AND NOT isRendered:
-         // Show banner
-         setIsRendered(true)
-         setIsAnimating(true)
-         requestAnimationFrame(() => {
-           requestAnimationFrame(() => {
-             setIsAnimating(false)
-           })
-         })
-       ELSE IF NOT network.isOffline AND isRendered:
-         // Hide banner with animation
-         setIsAnimating(true)
-         setTimeout(() => {
-           setIsRendered(false)
-           setIsAnimating(false)
-         }, DEFAULT_CONFIG.animationDuration)
-     }, [network.isOffline])
+  let isAnimating = $state(false);
+  let isRendered = $state(false);
 
-  4. Determine variant
-     variant = useMemo(() => {
-       IF network.offlineDuration >= DEFAULT_CONFIG.staleDurationThreshold:
-         RETURN 'stale-data'
-       RETURN 'default'
-     }, [network.offlineDuration])
+  let network = $derived($networkStore);
 
-  5. Render nothing if not visible
-     IF NOT isRendered:
-       RETURN null
+  $effect(() => {
+    if (network.isOffline && !isRendered) {
+      isRendered = true;
+      isAnimating = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          isAnimating = false;
+        });
+      });
+    } else if (!network.isOffline && isRendered) {
+      isAnimating = true;
+      setTimeout(() => {
+        isRendered = false;
+        isAnimating = false;
+      }, DEFAULT_CONFIG.animationDuration);
+    }
+  });
 
-  6. Compute styles
-     position = props.position || 'top'
-     translateDirection = position === 'top' ? '-100%' : '100%'
-     transform = isAnimating AND NOT network.isOffline
-                 ? `translateY(${translateDirection})`
-                 : 'translateY(0)'
+  let variant = $derived(
+    network.offlineDuration >= DEFAULT_CONFIG.staleDurationThreshold
+      ? 'stale-data'
+      : 'default'
+  );
 
-  7. Render banner
-     RETURN (
-       <div
-         role="alert"
-         aria-live="polite"
-         className={classNames('offline-banner', `offline-banner--${position}`, props.className)}
-         style={{
-           transform,
-           zIndex: props.zIndex || 1000,
-           transition: `transform ${DEFAULT_CONFIG.animationDuration}ms ease-out`
-         }}
-       >
-         <OfflineIcon aria-hidden="true" />
-         <span className="offline-banner__text">
-           {variant === 'stale-data'
-             ? `You're offline. Showing cached data from ${formatOfflineDuration(network.offlineDuration)} ago.`
-             : "You're offline. Showing cached data."}
-         </span>
-       </div>
-     )
+  let translateDirection = $derived(position === 'top' ? '-100%' : '100%');
+  let transform = $derived(
+    isAnimating && !network.isOffline
+      ? `translateY(${translateDirection})`
+      : 'translateY(0)'
+  );
+</script>
+
+{#if isRendered}
+  <div
+    role="alert"
+    aria-live="polite"
+    class="offline-banner offline-banner--{position} {className}"
+    style:transform={transform}
+    style:z-index={zIndex}
+    style:transition="transform {DEFAULT_CONFIG.animationDuration}ms ease-out"
+  >
+    <svg aria-hidden="true" class="offline-banner__icon">
+      <circle cx="12" cy="12" r="10" fill="currentColor" />
+      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" stroke="white" stroke-width="2" />
+    </svg>
+    <span class="offline-banner__text">
+      {#if variant === 'stale-data'}
+        You're offline. Showing cached data from {formatOfflineDuration(network.offlineDuration)} ago.
+      {:else}
+        You're offline. Showing cached data.
+      {/if}
+    </span>
+  </div>
+{/if}
 ```
 
-### 2.10 useNetwork Hook
+### 2.10 useNetwork Helper (Svelte)
 
-```
-FUNCTION useNetwork(): NetworkContextValue
-  1. Get context
-     context = useContext(NetworkContext)
+```typescript
+import { networkStore } from '../stores/networkStore';
 
-  2. Validate context exists
-     IF context === null:
-       THROW Error('useNetwork must be used within a NetworkProvider')
-
-  3. RETURN context
+export function useNetwork() {
+  return {
+    get status() { return $networkStore.status; },
+    get isOffline() { return $networkStore.isOffline; },
+    get lastOnlineTimestamp() { return $networkStore.lastOnlineTimestamp; },
+    get offlineDuration() { return $networkStore.offlineDuration; }
+  };
+}
 ```
 
 ---
@@ -512,7 +565,7 @@ FUNCTION useNetwork(): NetworkContextValue
 | **NAVIGATOR_ONLINE_UNAVAILABLE** | Browser doesn't support `navigator.onLine` | Offline detection may not work | Default to 'online', rely on API failure detection |
 | **EVENT_LISTENER_FAILED** | Cannot add online/offline listeners | Banner won't auto-show/hide | Fall back to polling only |
 | **STORAGE_UNAVAILABLE** | localStorage blocked | Last online timestamp not persisted | Track in memory only |
-| **CONTEXT_MISSING** | Component used outside NetworkProvider | Banner doesn't render | Throw error with clear message |
+| **STORE_MISSING** | Component used outside NetworkProvider | Banner doesn't render | Show console warning |
 
 ### 3.4 Error Handling Implementation
 
@@ -521,7 +574,7 @@ type NetworkErrorType =
   | 'NAVIGATOR_UNAVAILABLE'
   | 'EVENT_LISTENER_FAILED'
   | 'STORAGE_UNAVAILABLE'
-  | 'CONTEXT_MISSING';
+  | 'STORE_MISSING';
 
 interface NetworkError {
   type: NetworkErrorType;
@@ -530,27 +583,22 @@ interface NetworkError {
   fallbackBehavior: string;
 }
 
-FUNCTION handleNetworkDetectionError(error: unknown): NetworkState
-  1. Log error for debugging
-     console.warn('[OfflineBanner] Network detection error:', error)
+function handleNetworkDetectionError(error: unknown): void {
+  console.warn('[OfflineBanner] Network detection error:', error);
+}
 
-  2. Return safe fallback state
-     RETURN {
-       status: 'online',          // Assume online by default
-       lastOnlineTimestamp: null,
-       offlineDuration: 0
-     }
-
-FUNCTION safeAddEventListener(
+function safeAddEventListener(
   event: string,
   handler: EventListener
-): boolean
-  TRY:
-    window.addEventListener(event, handler)
-    RETURN true
-  CATCH (error):
-    Log warning: `Failed to add ${event} listener: ${error}`
-    RETURN false
+): boolean {
+  try {
+    window.addEventListener(event, handler);
+    return true;
+  } catch (error) {
+    console.warn(`Failed to add ${event} listener: ${error}`);
+    return false;
+  }
+}
 ```
 
 ### 3.5 Graceful Degradation
@@ -566,79 +614,68 @@ FUNCTION safeAddEventListener(
 
 ## 4. Component Interfaces
 
-### 4.1 NetworkProvider Component
+### 4.1 NetworkProvider Component (Svelte)
 
-```typescript
-interface NetworkProviderProps {
-  children: ReactNode;
-  /** Callback fired when network status changes */
-  onStatusChange?: (status: NetworkStatus) => void;
-  /** Backup polling interval in ms. Set to 0 to disable. Default: 30000 */
-  pollInterval?: number;
-}
+```svelte
+<script lang="typescript">
+  import type { Snippet } from 'svelte';
 
-function NetworkProvider(props: NetworkProviderProps): JSX.Element;
+  interface NetworkProviderProps {
+    children: Snippet;
+    onStatusChange?: (status: NetworkStatus) => void;
+    pollInterval?: number;
+  }
+
+  let { children, onStatusChange, pollInterval = 30000 }: NetworkProviderProps = $props();
+</script>
+
+<slot />
 ```
 
-### 4.2 OfflineBanner Component
+### 4.2 OfflineBanner Component (Svelte)
 
-```typescript
-interface OfflineBannerProps {
-  /** Banner position. Default: 'top' */
-  position?: 'top' | 'bottom';
-  /** Additional CSS classes */
-  className?: string;
-  /** Z-index for stacking. Default: 1000 */
-  zIndex?: number;
-}
+```svelte
+<script lang="typescript">
+  interface OfflineBannerProps {
+    position?: 'top' | 'bottom';
+    className?: string;
+    zIndex?: number;
+  }
+</script>
 
-function OfflineBanner(props: OfflineBannerProps): JSX.Element | null;
+<!-- Component implementation -->
 ```
 
-### 4.3 useNetwork Hook
+### 4.3 Network Store (Svelte)
 
 ```typescript
-interface NetworkContextValue {
-  /** Current network status */
+import { derived, writable } from 'svelte/store';
+
+export interface NetworkContextValue {
   status: NetworkStatus;
-  /** Convenience: true when offline */
   isOffline: boolean;
-  /** Unix timestamp of last known online state, null if never online */
   lastOnlineTimestamp: number | null;
-  /** Milliseconds since going offline (0 when online) */
   offlineDuration: number;
 }
 
-function useNetwork(): NetworkContextValue;
+export const networkStore: Writable<NetworkContextValue>;
+export const isOffline: Readable<boolean>;
 ```
 
 ### 4.4 Utility Functions (Exported)
 
 ```typescript
-/**
- * Check current network status synchronously.
- * Falls back to 'online' if navigator.onLine unavailable.
- */
-function getNetworkStatus(): NetworkStatus;
+export function getNetworkStatus(): NetworkStatus;
 
-/**
- * Format offline duration for display.
- * @example formatOfflineDuration(125000) => "2m"
- */
-function formatOfflineDuration(durationMs: number): string;
+export function formatOfflineDuration(durationMs: number): string;
 
-/**
- * Check if cached data should be considered stale.
- * @param lastOnlineTimestamp - When data was last refreshed
- * @param threshold - Staleness threshold in ms (default: 300000)
- */
-function isDataStale(
+export function isDataStale(
   lastOnlineTimestamp: number | null,
   threshold?: number
 ): boolean;
 ```
 
-### 4.5 Event Types (for non-React listeners)
+### 4.5 Event Types (for non-framework listeners)
 
 ```typescript
 interface NetworkChangeEventDetail {
@@ -646,23 +683,19 @@ interface NetworkChangeEventDetail {
   previousStatus: NetworkStatus;
 }
 
-// Usage: window.addEventListener('mealswapp:networkchange', handler)
 type NetworkChangeEvent = CustomEvent<NetworkChangeEventDetail>;
 ```
 
 ### 4.6 CSS Class Contract
 
 ```css
-/* Base banner classes */
 .offline-banner { }
 .offline-banner--top { }
 .offline-banner--bottom { }
 
-/* Variant modifiers */
 .offline-banner--default { }
 .offline-banner--stale-data { }
 
-/* Internal elements */
 .offline-banner__icon { }
 .offline-banner__text { }
 .offline-banner__dismiss { }
@@ -672,30 +705,24 @@ type NetworkChangeEvent = CustomEvent<NetworkChangeEventDetail>;
 
 ## 5. Integration Requirements
 
-### 5.1 Application Root Setup
+### 5.1 Application Root Setup (Svelte)
 
-```typescript
-// App.tsx
-import { NetworkProvider } from './providers/NetworkProvider';
-import { OfflineBanner } from './components/OfflineBanner';
+```svelte
+<script lang="typescript">
+  import { NetworkProvider } from './providers/NetworkProvider';
+  import { OfflineBanner } from './components/OfflineBanner';
+</script>
 
-function App({ children }) {
-  return (
-    <ThemeProvider>
-      <NetworkProvider
-        onStatusChange={(status) => {
-          // Optional: analytics or Service Worker notification
-          if (status === 'offline') {
-            analytics.track('user_went_offline');
-          }
-        }}
-      >
-        <OfflineBanner position="top" />
-        {children}
-      </NetworkProvider>
-    </ThemeProvider>
-  );
-}
+<NetworkProvider
+  onStatusChange={(status) => {
+    if (status === 'offline') {
+      console.log('user went offline');
+    }
+  }}
+>
+  <OfflineBanner position="top" />
+  <slot />
+</NetworkProvider>
 ```
 
 ### 5.2 CSS Implementation
@@ -737,7 +764,6 @@ function App({ children }) {
   text-align: center;
 }
 
-/* Ensure banner doesn't interfere with main content */
 body:has(.offline-banner--top[data-visible="true"]) {
   padding-top: 48px;
 }
@@ -746,7 +772,6 @@ body:has(.offline-banner--bottom[data-visible="true"]) {
   padding-bottom: 48px;
 }
 
-/* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   .offline-banner {
     transition: none;
@@ -754,38 +779,31 @@ body:has(.offline-banner--bottom[data-visible="true"]) {
 }
 ```
 
-### 5.3 Usage in Other Components
+### 5.3 Usage in Other Components (Svelte)
 
-```typescript
-// SearchView.tsx - conditionally show offline hint
-function SearchView() {
-  const { isOffline } = useNetwork();
+```svelte
+<script lang="typescript">
+  import { networkStore } from '../stores/networkStore';
+</script>
 
-  return (
-    <div>
-      <SearchInput />
-      {isOffline && (
-        <p className="search-hint">
-          Searching cached results only while offline.
-        </p>
-      )}
-      <ResultsGrid />
-    </div>
-  );
-}
+<div>
+  <SearchInput />
+  {#if $networkStore.isOffline}
+    <p class="search-hint">
+      Searching cached results only while offline.
+    </p>
+  {/if}
+  <ResultsGrid />
+</div>
 ```
 
 ### 5.4 Service Worker Coordination
 
 ```typescript
-// In Service Worker (sw.ts)
-// Notify when serving cached responses
-
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', (event: FetchEvent) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse && !navigator.onLine) {
-        // Add header to indicate cached response
         const headers = new Headers(cachedResponse.headers);
         headers.set('X-Served-From-Cache', 'true');
         return new Response(cachedResponse.body, {
@@ -808,9 +826,9 @@ self.addEventListener('fetch', (event) => {
 |:-------------|:---------------|:-------|
 | **Event-driven detection** | Use native `online`/`offline` events | No polling overhead |
 | **Minimal polling** | Backup poll only every 30s | Negligible CPU usage |
-| **Conditional rendering** | Return `null` when online | No DOM nodes when not needed |
+| **Conditional rendering** | `{#if}` block when online | No DOM nodes when not needed |
 | **CSS transitions** | Hardware-accelerated transform | Smooth 60fps animation |
-| **Memoized context** | `useMemo` for context value | Prevent cascading re-renders |
+| **Svelte store derivation** | derived() for computed values | Efficient reactivity |
 | **Lazy duration update** | 1s interval only when offline | No timer when online |
 
 ---
@@ -820,7 +838,7 @@ self.addEventListener('fetch', (event) => {
 | Requirement | Implementation |
 |:------------|:---------------|
 | **Screen reader announcement** | `role="alert"` and `aria-live="polite"` |
-| **No focus trap** | Banner is non-interactive (no dismiss button by default) |
+| **No focus trap** | Banner is non-interactive |
 | **Color contrast** | Warning background with inverse text meets WCAG AA |
 | **Icon has alt text** | Icon marked `aria-hidden`, text provides context |
 | **Reduced motion** | Respects `prefers-reduced-motion` media query |
@@ -846,7 +864,7 @@ self.addEventListener('fetch', (event) => {
 
 ## 8. Testing Requirements
 
-### 8.1 Unit Test Cases
+### 8.1 Unit Test Cases (Bun + @testing-library/svelte)
 
 | Test Case | Input | Expected Output |
 |:----------|:------|:----------------|
@@ -858,7 +876,7 @@ self.addEventListener('fetch', (event) => {
 | Duration formatting (seconds) | `45000ms` | "45s" |
 | Duration formatting (minutes) | `125000ms` | "2m" |
 | Duration formatting (hours) | `7500000ms` | "2h 5m" |
-| Context missing | useNetwork outside provider | Throws error |
+| Store updates | Manual status change | Reactive UI update |
 
 ### 8.2 Integration Test Cases
 
@@ -871,7 +889,7 @@ self.addEventListener('fetch', (event) => {
 | With Service Worker | Offline with cached data | Banner + cached content displayed |
 | Screen reader | Go offline | "You're offline" announced |
 
-### 8.3 E2E Test Cases
+### 8.3 E2E Test Cases (Playwright)
 
 | Test Case | Steps | Expected Result |
 |:----------|:------|:----------------|
@@ -888,14 +906,20 @@ self.addEventListener('fetch', (event) => {
 - Initial detailed design document for OfflineBanner
 - Network status detection using browser `online`/`offline` events
 - Backup polling mechanism for edge cases
-- NetworkProvider context for app-wide network state
+- Svelte stores for app-wide network state
 - Banner variants: default and stale-data
 - Slide animation with reduced-motion support
 - CSS implementation using ThemeProvider variables
-- useNetwork hook for consuming network state
 - Integration with Service Worker caching (ARCH-011)
 - Accessibility implementation with ARIA attributes
 - Comprehensive test cases
+
+**Updated 2026-01-22:**
+- Migrated from React to Svelte per tech stack requirements
+- Replaced React hooks with Svelte stores, $state, and $effect
+- Updated component syntax from JSX to Svelte template syntax
+- Replaced React context with Svelte writable/derived stores
+- Updated type definitions for Svelte 5 patterns (snippets, $props, $state, $derived, $effect)
 
 **Design Decisions:**
 - Banner auto-hides on reconnect (no manual dismiss required)

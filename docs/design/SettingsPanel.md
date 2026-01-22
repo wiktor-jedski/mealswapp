@@ -2,6 +2,13 @@
 
 **Traceability:** [ARCH-001]
 
+**Tech Stack Compliance:**
+- Frontend Framework: Svelte 5 (using runes: `$state`, `$effect`, `$derived`, `$props`)
+- Build Tool: Bun
+- State Management: Svelte stores + TanStack Query
+- CSS: Tailwind
+- Testing: Bun test runner + @testing-library/svelte + Playwright
+
 ---
 
 ## 1. Data Structures & Types
@@ -93,9 +100,7 @@ interface SettingsPanelProps {
 interface SettingsSectionProps {
   id: SettingsSectionId;
   title: string;
-  children: ReactNode;
-  isExpanded?: boolean;                 // For accordion behavior (optional)
-  onToggle?: () => void;
+  children: Snippet;  // Svelte uses Snippet for slot content
 }
 ```
 
@@ -180,7 +185,7 @@ interface SettingsPanelContextValue {
   toggle: () => void;
 }
 
-const SettingsPanelContext = createContext<SettingsPanelContextValue | null>(null);
+const SETTINGS_PANEL_CONTEXT_KEY = 'settings-panel-context';
 ```
 
 ---
@@ -192,9 +197,9 @@ const SettingsPanelContext = createContext<SettingsPanelContextValue | null>(nul
 ```
 FUNCTION openSettingsPanel(initialSection?: SettingsSectionId):
   1. Update state
-     state.mode = 'open'
-     state.activeSection = initialSection || null
-     state.isAnimating = true
+     panelState.mode = 'open'
+     panelState.activeSection = initialSection || null
+     panelState.isAnimating = true
 
   2. Prevent body scroll
      document.body.style.overflow = 'hidden'
@@ -215,7 +220,7 @@ FUNCTION openSettingsPanel(initialSection?: SettingsSectionId):
 
 FUNCTION closeSettingsPanel():
   1. Start exit animation
-     state.isAnimating = true
+     panelState.isAnimating = true
 
   2. Restore body scroll
      document.body.style.overflow = ''
@@ -226,9 +231,9 @@ FUNCTION closeSettingsPanel():
 
   4. After animation completes
      setTimeout(() => {
-       state.mode = 'closed'
-       state.activeSection = null
-       state.isAnimating = false
+       panelState.mode = 'closed'
+       panelState.activeSection = null
+       panelState.isAnimating = false
      }, ANIMATION_DURATION)
 ```
 
@@ -679,180 +684,276 @@ FUNCTION formatStorageSize(bytes: number): string
 ### 2.15 SettingsPanel Component Implementation
 
 ```
-FUNCTION SettingsPanel(props: SettingsPanelProps):
-  1. Initialize state
-     [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_USER_PREFERENCES)
-     [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null)
-     [storageLoading, setStorageLoading] = useState(false)
-     [isClearing, setIsClearing] = useState(false)  // For clear operations in progress
-     [confirmation, setConfirmation] = useState<ConfirmationDialogState>({
-       isOpen: false,
-       action: null
-     })
+<script lang="ts">
+  import { setContext, onMount, onDestroy } from 'svelte';
+  import { writable } from 'svelte/store';
 
-  2. Get theme context
-     { theme, setTheme } = useTheme()
+  interface SettingsPanelProps {
+    isOpen: boolean;
+    onClose: () => void;
+    initialSection?: SettingsSectionId;
+  }
 
-  3. Refs for focus management
-     panelRef = useRef<HTMLDivElement>(null)
-     previouslyFocusedRef = useRef<HTMLElement | null>(null)
-     closeButtonRef = useRef<HTMLButtonElement>(null)
+  let { isOpen, onClose, initialSection }: SettingsPanelProps = $props();
 
-  4. Load data on open
-     useEffect(() => {
-       IF props.isOpen:
-         previouslyFocusedRef.current = document.activeElement as HTMLElement
-         CALL loadPreferences()
-         CALL refreshStorageUsage()
-         document.body.style.overflow = 'hidden'
+  let preferences = $state<UserPreferences>(DEFAULT_USER_PREFERENCES);
+  let storageUsage = $state<StorageUsage | null>(null);
+  let storageLoading = $state(false);
+  let isClearing = $state(false);
+  let confirmation = $state<ConfirmationDialogState>({
+    isOpen: false,
+    action: null
+  });
 
-         // Focus close button after animation
-         setTimeout(() => {
-           closeButtonRef.current?.focus()
-         }, ANIMATION_DURATION)
-       ELSE:
-         document.body.style.overflow = ''
-         IF previouslyFocusedRef.current?.isConnected:
-           previouslyFocusedRef.current.focus()
-     }, [props.isOpen])
+  let theme = $state<Theme>('light');
+  let panelElement = $state<HTMLElement | null>(null);
+  let previouslyFocused = $state<HTMLElement | null>(null);
+  let closeButton = $state<HTMLButtonElement | null>(null);
 
-  5. Handle keyboard events
-     useEffect(() => {
-       IF NOT props.isOpen:
-         RETURN
+  const panelState = $state({
+    mode: 'closed' as 'closed' | 'open',
+    activeSection: null as SettingsSectionId | null,
+    isAnimating: false
+  });
 
-       handleKeyDown = (e: KeyboardEvent) => {
-         IF e.key === 'Escape':
-           e.preventDefault()
-           props.onClose()
-       }
+  $effect(() => {
+    if (isOpen) {
+      openSettingsPanel();
+    } else {
+      closeSettingsPanel();
+    }
+  });
 
-       document.addEventListener('keydown', handleKeyDown)
-       RETURN () => document.removeEventListener('keydown', handleKeyDown)
-     }, [props.isOpen, props.onClose])
+  $effect(() => {
+    if (!isOpen) return;
 
-  6. Handle confirmation action
-     handleConfirmAction = useCallback(() => {
-       SWITCH confirmation.action:
-         CASE 'clear-query-cache':
-           CALL confirmClearQueryCache()
-         CASE 'clear-image-cache':
-           CALL confirmClearImageCache()
-         CASE 'clear-history':
-           CALL confirmClearHistory()
-         CASE 'clear-all-data':
-           CALL confirmClearAllData()
-         CASE 'reset-preferences':
-           CALL confirmResetPreferences()
-     }, [confirmation.action])
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    }
 
-  7. Render nothing if closed
-     IF NOT props.isOpen:
-       RETURN null
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
 
-  8. Render panel
-     RETURN (
-       <>
-         {/* Backdrop */}
-         <div
-           className="settings-panel__backdrop"
-           onClick={props.onClose}
-           aria-hidden="true"
-         />
+  function openSettingsPanel() {
+    panelState.mode = 'open';
+    panelState.activeSection = initialSection || null;
+    panelState.isAnimating = true;
+    document.body.style.overflow = 'hidden';
+    previouslyFocused = document.activeElement as HTMLElement;
 
-         {/* Panel */}
-         <aside
-           ref={panelRef}
-           role="dialog"
-           aria-modal="true"
-           aria-labelledby="settings-panel-title"
-           className="settings-panel"
-         >
-           {/* Header */}
-           <header className="settings-panel__header">
-             <h2 id="settings-panel-title" className="settings-panel__title">
-               Settings
-             </h2>
-             <button
-               ref={closeButtonRef}
-               onClick={props.onClose}
-               className="settings-panel__close"
-               aria-label="Close settings"
-             >
-               <CloseIcon aria-hidden="true" />
-             </button>
-           </header>
+    loadPreferences();
+    refreshStorageUsage();
 
-           {/* Content */}
-           <div className="settings-panel__content">
-             {/* Appearance Section */}
-             <SettingsSection id="appearance" title="Appearance">
-               <ThemeSelector theme={theme} onChange={setTheme} />
-             </SettingsSection>
+    setTimeout(() => {
+      closeButton?.focus();
+      panelState.isAnimating = false;
 
-             {/* Search Defaults Section */}
-             <SettingsSection id="search-defaults" title="Search Defaults">
-               <SearchModeSelector
-                 value={preferences.searchMode}
-                 onChange={handleSearchModeChange}
-               />
-               <MacroTogglesSelector
-                 value={preferences.defaultMacroToggles}
-                 onChange={handleMacroToggleChange}
-               />
-               <SortSelector
-                 value={preferences.defaultSort}
-                 onChange={handleSortChange}
-               />
-               <ResultsPerPageSelector
-                 value={preferences.resultsPerPage}
-                 onChange={handleResultsPerPageChange}
-               />
-             </SettingsSection>
+      if (initialSection) {
+        scrollToSection(initialSection);
+      }
+    }, ANIMATION_DURATION);
+  }
 
-             {/* Storage Section (ARCH-011: localStorage + Service Worker) */}
-             <SettingsSection id="storage" title="Storage">
-               <StorageUsageDisplay
-                 usage={storageUsage}
-                 loading={storageLoading}
-               />
-               <StorageActions
-                 onClearQueryCache={handleClearQueryCache}
-                 onClearImageCache={handleClearImageCache}
-                 onClearHistory={handleClearHistory}
-                 onClearAllData={handleClearAllData}
-                 isServiceWorkerAvailable={storageUsage?.serviceWorkerCache?.isAvailable ?? false}
-                 isClearing={isClearing}
-               />
-             </SettingsSection>
+  function closeSettingsPanel() {
+    panelState.isAnimating = true;
 
-             {/* About Section */}
-             <SettingsSection id="about" title="About">
-               <AboutInfo />
-             </SettingsSection>
+    setTimeout(() => {
+      document.body.style.overflow = '';
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
+      }
+      panelState.mode = 'closed';
+      panelState.activeSection = null;
+      panelState.isAnimating = false;
+    }, ANIMATION_DURATION);
+  }
 
-             {/* Reset Preferences */}
-             <button
-               onClick={handleResetPreferences}
-               className="settings-panel__reset-button"
-             >
-               Reset All Preferences
-             </button>
-           </div>
-         </aside>
+  function scrollToSection(sectionId: SettingsSectionId) {
+    const element = document.getElementById(`settings-section-${sectionId}`);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
-         {/* Confirmation Dialog */}
-         <ConfirmationDialog
-           isOpen={confirmation.isOpen}
-           title={confirmation.title}
-           message={confirmation.message}
-           confirmLabel={confirmation.confirmLabel}
-           isDestructive={confirmation.isDestructive}
-           onConfirm={handleConfirmAction}
-           onCancel={() => setConfirmation({ isOpen: false, action: null })}
-         />
-       </>
-     )
+  function loadPreferences() {
+    const storage = LocalStorageManager.getInstance();
+    const result = storage.getUserPreferences();
+
+    if (result.success) {
+      preferences = result.data;
+    } else {
+      preferences = DEFAULT_USER_PREFERENCES;
+    }
+  }
+
+  function refreshStorageUsage() {
+    storageLoading = true;
+    const storage = LocalStorageManager.getInstance();
+
+    Promise.all([
+      storage.getStorageUsage(),
+      getServiceWorkerCacheUsage()
+    ]).then(([localStorageResult, swCacheResult]) => {
+      storageUsage = {
+        localStorage: localStorageResult.success ? localStorageResult.data! : null,
+        serviceWorkerCache: swCacheResult,
+        combinedTotal: (localStorageResult.data?.totalUsed || 0) +
+                       (swCacheResult?.totalUsed || 0)
+      };
+      storageLoading = false;
+    });
+  }
+
+  async function getServiceWorkerCacheUsage(): Promise<ServiceWorkerCacheUsage | null> {
+    if (!('serviceWorker' in navigator)) return null;
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if (!registration?.active) return null;
+
+      const channel = new MessageChannel();
+      registration.active.postMessage(
+        { type: 'GET_CACHE_USAGE' },
+        [channel.port2]
+      );
+
+      const response = await Promise.race([
+        new Promise<CacheUsageResponse | null>(resolve => {
+          channel.port1.onmessage = (event) => resolve(event.data);
+        }),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 5000))
+      ]);
+
+      if (response) {
+        return {
+          totalUsed: response.totalBytes,
+          imageCount: response.imageCount,
+          apiResponseCount: response.apiResponseCount,
+          isAvailable: true
+        };
+      }
+    } catch {
+      return null;
+    }
+
+    return { totalUsed: 0, imageCount: 0, apiResponseCount: 0, isAvailable: false };
+  }
+
+  function handleConfirmAction() {
+    switch (confirmation.action) {
+      case 'clear-query-cache':
+        confirmClearQueryCache();
+        break;
+      case 'clear-image-cache':
+        confirmClearImageCache();
+        break;
+      case 'clear-history':
+        confirmClearHistory();
+        break;
+      case 'clear-all-data':
+        confirmClearAllData();
+        break;
+      case 'reset-preferences':
+        confirmResetPreferences();
+        break;
+    }
+  }
+
+  // ... other handler functions (handleThemeChange, handleSearchModeChange, etc.)
+</script>
+
+{#if panelState.mode === 'open'}
+  <div
+    class="settings-panel__backdrop"
+    onclick={onClose}
+    aria-hidden="true"
+  ></div>
+
+  <aside
+    bind:this={panelElement}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="settings-panel-title"
+    class="settings-panel"
+  >
+    <header class="settings-panel__header">
+      <h2 id="settings-panel-title" class="settings-panel__title">
+        Settings
+      </h2>
+      <button
+        bind:this={closeButton}
+        onclick={onClose}
+        class="settings-panel__close"
+        aria-label="Close settings"
+      >
+        <CloseIcon aria-hidden="true" />
+      </button>
+    </header>
+
+    <div class="settings-panel__content">
+      <SettingsSection id="appearance" title="Appearance">
+        <ThemeSelector theme={theme} onChange={setTheme} />
+      </SettingsSection>
+
+      <SettingsSection id="search-defaults" title="Search Defaults">
+        <SearchModeSelector
+          value={preferences.searchMode}
+          onChange={handleSearchModeChange}
+        />
+        <MacroTogglesSelector
+          value={preferences.defaultMacroToggles}
+          onChange={handleMacroToggleChange}
+        />
+        <SortSelector
+          value={preferences.defaultSort}
+          onChange={handleSortChange}
+        />
+        <ResultsPerPageSelector
+          value={preferences.resultsPerPage}
+          onChange={handleResultsPerPageChange}
+        />
+      </SettingsSection>
+
+      <SettingsSection id="storage" title="Storage">
+        <StorageUsageDisplay
+          usage={storageUsage}
+          loading={storageLoading}
+        />
+        <StorageActions
+          onClearQueryCache={handleClearQueryCache}
+          onClearImageCache={handleClearImageCache}
+          onClearHistory={handleClearHistory}
+          onClearAllData={handleClearAllData}
+          isServiceWorkerAvailable={storageUsage?.serviceWorkerCache?.isAvailable ?? false}
+          isClearing={isClearing}
+        />
+      </SettingsSection>
+
+      <SettingsSection id="about" title="About">
+        <AboutInfo />
+      </SettingsSection>
+
+      <button
+        onclick={handleResetPreferences}
+        class="settings-panel__reset-button"
+      >
+        Reset All Preferences
+      </button>
+    </div>
+  </aside>
+
+  <ConfirmationDialog
+    isOpen={confirmation.isOpen}
+    title={confirmation.title}
+    message={confirmation.message}
+    confirmLabel={confirmation.confirmLabel}
+    isDestructive={confirmation.isDestructive}
+    onConfirm={handleConfirmAction}
+    onCancel={() => confirmation = { ...confirmation, isOpen: false, action: null }}
+  />
+{/if}
 ```
 
 ---
@@ -1038,17 +1139,17 @@ interface SettingsPanelProps {
   initialSection?: SettingsSectionId;
 }
 
-function SettingsPanel(props: SettingsPanelProps): JSX.Element | null;
+function SettingsPanel(props: SettingsPanelProps): void;
 ```
 
 ### 4.2 SettingsPanelProvider Component
 
 ```typescript
 interface SettingsPanelProviderProps {
-  children: ReactNode;
+  children: Snippet;
 }
 
-function SettingsPanelProvider(props: SettingsPanelProviderProps): JSX.Element;
+function SettingsPanelProvider(props: SettingsPanelProviderProps): void;
 ```
 
 ### 4.3 useSettingsPanel Hook
@@ -1068,6 +1169,29 @@ interface SettingsPanelContextValue {
 function useSettingsPanel(): SettingsPanelContextValue;
 ```
 
+In Svelte, this is implemented using `setContext` and `getContext`:
+
+```typescript
+const SETTINGS_PANEL_CONTEXT_KEY = 'settings-panel-context';
+
+function createSettingsPanelStore() {
+  const { subscribe, update } = writable({
+    isOpen: false,
+    activeSection: null as SettingsSectionId | null
+  });
+
+  return {
+    subscribe,
+    open: (section?: SettingsSectionId) => update(s => ({ ...s, isOpen: true, activeSection: section || null })),
+    close: () => update(s => ({ ...s, isOpen: false, activeSection: null })),
+    toggle: () => update(s => ({ ...s, isOpen: !s.isOpen, activeSection: null }))
+  };
+}
+
+const settingsPanelStore = createSettingsPanelStore();
+setContext(SETTINGS_PANEL_CONTEXT_KEY, settingsPanelStore);
+```
+
 ### 4.4 SettingsSection Component
 
 ```typescript
@@ -1077,10 +1201,27 @@ interface SettingsSectionProps {
   /** Section header title */
   title: string;
   /** Section content */
-  children: ReactNode;
+  children: Snippet;
 }
 
-function SettingsSection(props: SettingsSectionProps): JSX.Element;
+function SettingsSection(props: SettingsSectionProps): void;
+```
+
+**Svelte implementation:**
+
+```svelte
+<script lang="ts">
+  let { id, title, children }: SettingsSectionProps = $props();
+</script>
+
+<section id="settings-section-{id}" class="settings-section">
+  <header class="settings-section__header">
+    <h3 class="settings-section__title">{title}</h3>
+  </header>
+  <div class="settings-section__content">
+    {@render children()}
+  </div>
+</section>
 ```
 
 ### 4.5 ThemeSelector Component
@@ -1093,7 +1234,72 @@ interface ThemeSelectorProps {
   onChange: (theme: Theme) => void;
 }
 
-function ThemeSelector(props: ThemeSelectorProps): JSX.Element;
+function ThemeSelector(props: ThemeSelectorProps): void;
+```
+
+### 4.6 SearchModeSelector Component
+
+```typescript
+interface SearchModeSelectorProps {
+  /** Current search mode value */
+  value: 'single' | 'multi';
+  /** Callback fired when mode changes */
+  onChange: (mode: 'single' | 'multi') => void;
+}
+
+function SearchModeSelector(props: SearchModeSelectorProps): void;
+```
+
+### 4.7 MacroTogglesSelector Component
+
+```typescript
+interface MacroTogglesSelectorProps {
+  /** Current macro toggle states */
+  value: MacroToggleState;
+  /** Callback fired when a toggle changes */
+  onChange: (macro: keyof MacroToggleState, enabled: boolean) => void;
+}
+
+function MacroTogglesSelector(props: MacroTogglesSelectorProps): void;
+```
+
+### 4.8 SortSelector Component
+
+```typescript
+interface SortSelectorProps {
+  /** Current sort option */
+  value: SortOption;
+  /** Callback fired when sort changes */
+  onChange: (sort: SortOption) => void;
+}
+
+function SortSelector(props: SortSelectorProps): void;
+```
+
+### 4.9 ResultsPerPageSelector Component
+
+```typescript
+interface ResultsPerPageSelectorProps {
+  /** Current results per page value */
+  value: number;
+  /** Callback fired when value changes */
+  onChange: (count: ResultsPerPage) => void;
+}
+
+function ResultsPerPageSelector(props: ResultsPerPageSelectorProps): void;
+```
+
+### 4.10 StorageUsageDisplay Component
+
+```typescript
+interface StorageUsageDisplayProps {
+  /** Storage usage data, null if unavailable */
+  usage: StorageUsage | null;
+  /** Whether usage is currently loading */
+  loading: boolean;
+}
+
+function StorageUsageDisplay(props: StorageUsageDisplayProps): void;
 ```
 
 ### 4.6 SearchModeSelector Component
@@ -1204,25 +1410,37 @@ interface StorageActionsProps {
   isClearing: boolean;
 }
 
-function StorageActions(props: StorageActionsProps): JSX.Element;
+function StorageActions(props: StorageActionsProps): void;
+```
 
-/**
- * Render structure:
- * ┌─────────────────────────────────────────────┐
- * │ ┌─────────────────────────────────────────┐ │
- * │ │ 🗑️  Clear Search Cache                 │ │  <- localStorage query cache
- * │ └─────────────────────────────────────────┘ │
- * │ ┌─────────────────────────────────────────┐ │
- * │ │ 🖼️  Clear Cached Images                │ │  <- Service Worker (disabled if unavailable)
- * │ └─────────────────────────────────────────┘ │
- * │ ┌─────────────────────────────────────────┐ │
- * │ │ 📝  Clear Search History               │ │  <- localStorage history
- * │ └─────────────────────────────────────────┘ │
- * │ ┌─────────────────────────────────────────┐ │
- * │ │ ⚠️  Clear All Data                     │ │  <- Destructive, red styling
- * │ └─────────────────────────────────────────┘ │
- * └─────────────────────────────────────────────┘
- */
+### 4.12 ConfirmationDialog Component
+
+```typescript
+interface ConfirmationDialogProps {
+  /** Whether the dialog is open */
+  isOpen: boolean;
+  /** Dialog title */
+  title: string;
+  /** Dialog message/description */
+  message: string;
+  /** Label for confirm button */
+  confirmLabel: string;
+  /** Whether action is destructive (affects button styling) */
+  isDestructive: boolean;
+  /** Callback fired on confirm */
+  onConfirm: () => void;
+  /** Callback fired on cancel */
+  onCancel: () => void;
+}
+
+function ConfirmationDialog(props: ConfirmationDialogProps): void | null;
+```
+
+### 4.13 AboutInfo Component
+
+```typescript
+// No props - displays static app information
+function AboutInfo(): void;
 ```
 
 ### 4.12 ConfirmationDialog Component
@@ -1355,61 +1573,64 @@ interface ClearCacheResponse {
 
 ### 5.1 Application Root Setup
 
-```typescript
-// App.tsx
-import { SettingsPanelProvider } from './providers/SettingsPanelProvider';
-import { SettingsPanel } from './components/SettingsPanel';
+```svelte
+<!-- App.svelte -->
+<script lang="ts">
+  import { SettingsPanelProvider } from './providers/SettingsPanelProvider.svelte';
+  import { SettingsPanelContainer } from './components/SettingsPanelContainer.svelte';
+</script>
 
-function App({ children }) {
-  return (
-    <ThemeProvider>
-      <NetworkProvider>
-        <SettingsPanelProvider>
-          {children}
-          <SettingsPanelContainer />
-        </SettingsPanelProvider>
-      </NetworkProvider>
-    </ThemeProvider>
-  );
-}
+<ThemeProvider>
+  <NetworkProvider>
+    <SettingsPanelProvider>
+      {@render children()}
+      <SettingsPanelContainer />
+    </SettingsPanelProvider>
+  </NetworkProvider>
+</ThemeProvider>
 
-// SettingsPanelContainer.tsx
-function SettingsPanelContainer() {
+<!-- SettingsPanelContainer.svelte -->
+<script lang="ts">
+  import { useSettingsPanel } from './hooks/useSettingsPanel.svelte';
+  import { SettingsPanel } from './components/SettingsPanel.svelte';
+
   const { isOpen, close } = useSettingsPanel();
+</script>
 
-  return <SettingsPanel isOpen={isOpen} onClose={close} />;
-}
+<SettingsPanel isOpen={$isOpen} onClose={close} />
 ```
 
 ### 5.2 Opening Settings from Other Components
 
-```typescript
-// SidebarComponent.tsx
-function SidebarComponent() {
+```svelte
+<!-- Sidebar.svelte -->
+<script lang="ts">
+  import { useSettingsPanel } from '../hooks/useSettingsPanel.svelte';
+
   const { open } = useSettingsPanel();
+</script>
 
-  return (
-    <nav className="sidebar">
-      {/* ... other nav items ... */}
-      <button
-        onClick={() => open()}
-        className="sidebar__settings-button"
-        aria-label="Open settings"
-      >
-        <SettingsIcon aria-hidden="true" />
-        Settings
-      </button>
-    </nav>
-  );
-}
+<nav class="sidebar">
+  <!-- ... other nav items ... -->
+  <button
+    onclick={() => open()}
+    class="sidebar__settings-button"
+    aria-label="Open settings"
+  >
+    <SettingsIcon aria-hidden="true" />
+    Settings
+  </button>
+</nav>
 
-// Or from any component with keyboard shortcut
-function useSettingsKeyboardShortcut() {
+<!-- Or use keyboard shortcut in a component -->
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { useSettingsPanel } from '../hooks/useSettingsPanel.svelte';
+
   const { toggle } = useSettingsPanel();
 
-  useEffect(() => {
+  onMount(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      // Cmd/Ctrl + , to open settings (common pattern)
       if ((e.metaKey || e.ctrlKey) && e.key === ',') {
         e.preventDefault();
         toggle();
@@ -1418,325 +1639,90 @@ function useSettingsKeyboardShortcut() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggle]);
-}
+  });
+</script>
 ```
 
-### 5.3 CSS Implementation
+### 5.3 CSS Implementation (Tailwind)
 
-```css
-/* Panel backdrop */
-.settings-panel__backdrop {
-  position: fixed;
-  inset: 0;
-  background-color: var(--bg-overlay);
-  z-index: 999;
-  animation: fadeIn 200ms ease-out;
-}
+```svelte
+<!-- Panel backdrop -->
+<div
+  class="fixed inset-0 bg-black/50 z-[999] animate-fade-in"
+  onclick={onClose}
+  aria-hidden="true"
+/>
 
-/* Panel container */
-.settings-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 100%;
-  max-width: 400px;
-  background-color: var(--bg-surface);
-  box-shadow: -4px 0 16px var(--shadow-color);
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  animation: slideInRight 200ms ease-out;
-}
+<!-- Panel container -->
+<aside
+  class="fixed top-0 right-0 bottom-0 w-full max-w-md bg-surface shadow-xl z-[1000] flex flex-col animate-slide-in-right"
+>
+  <!-- Header -->
+  <header class="flex items-center justify-between px-5 py-4 border-b border-border">
+    <h2 id="settings-panel-title" class="text-lg font-semibold text-primary m-0">
+      Settings
+    </h2>
+    <button
+      class="flex items-center justify-center w-8 h-8 border-none bg-transparent rounded-md text-secondary cursor-pointer hover:bg-hover transition-colors"
+      onclick={onClose}
+      aria-label="Close settings"
+    >
+      <CloseIcon class="w-5 h-5" aria-hidden="true" />
+    </button>
+  </header>
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+  <!-- Content -->
+  <div class="flex-1 overflow-y-auto px-5 py-5">
+    <!-- Sections with Tailwind -->
+    <section class="mb-6">
+      <h3 class="text-sm font-semibold text-secondary uppercase tracking-wide m-0 mb-3">
+        Appearance
+      </h3>
+      <div class="flex flex-col gap-4">
+        <!-- Theme selector using Tailwind -->
+        <div class="flex gap-3">
+          <button
+            class="flex-1 flex flex-col items-center gap-2 p-4 border-2 border-border rounded-lg bg-transparent cursor-pointer hover:bg-hover transition-all"
+            class:border-primary={theme === 'light'}
+            class:bg-secondary={theme === 'light'}
+          >
+            <SunIcon class="w-6 h-6 text-primary" />
+            <span class="text-sm font-medium text-primary">Light</span>
+          </button>
+          <button
+            class="flex-1 flex flex-col items-center gap-2 p-4 border-2 border-border rounded-lg bg-transparent cursor-pointer hover:bg-hover transition-all"
+            class:border-primary={theme === 'dark'}
+            class:bg-secondary={theme === 'dark'}
+          >
+            <MoonIcon class="w-6 h-6 text-primary" />
+            <span class="text-sm font-medium text-primary">Dark</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</aside>
 
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
+<style>
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 
-/* Header */
-.settings-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color);
-}
+  @keyframes slide-in-right {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
 
-.settings-panel__title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
+  .animate-fade-in {
+    animation: fade-in 200ms ease-out;
+  }
 
-.settings-panel__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background-color 150ms ease;
-}
-
-.settings-panel__close:hover {
-  background-color: var(--hover-bg);
-}
-
-.settings-panel__close:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-/* Content */
-.settings-panel__content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-/* Sections */
-.settings-section {
-  margin-bottom: 24px;
-}
-
-.settings-section__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0 0 12px 0;
-}
-
-.settings-section__content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* Theme selector */
-.theme-selector {
-  display: flex;
-  gap: 12px;
-}
-
-.theme-selector__option {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  transition: border-color 150ms ease, background-color 150ms ease;
-}
-
-.theme-selector__option:hover {
-  background-color: var(--hover-bg);
-}
-
-.theme-selector__option--active {
-  border-color: var(--color-primary);
-  background-color: var(--color-secondary);
-}
-
-.theme-selector__icon {
-  width: 24px;
-  height: 24px;
-  color: var(--text-primary);
-}
-
-.theme-selector__label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-/* Toggle switch */
-.settings-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-}
-
-.settings-toggle__label {
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.settings-toggle__track {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  background-color: var(--border-color-strong);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background-color 150ms ease;
-}
-
-.settings-toggle--checked .settings-toggle__track {
-  background-color: var(--color-primary);
-}
-
-.settings-toggle__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background-color: white;
-  border-radius: 50%;
-  transition: transform 150ms ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.settings-toggle--checked .settings-toggle__thumb {
-  transform: translateX(20px);
-}
-
-/* Storage usage */
-.storage-usage {
-  padding: 16px;
-  background-color: var(--bg-input);
-  border-radius: 8px;
-}
-
-.storage-usage__bar {
-  height: 8px;
-  background-color: var(--border-color);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.storage-usage__bar-fill {
-  height: 100%;
-  background-color: var(--color-primary);
-  border-radius: 4px;
-  transition: width 300ms ease;
-}
-
-.storage-usage__bar-fill--warning {
-  background-color: var(--color-warning);
-}
-
-.storage-usage__bar-fill--critical {
-  background-color: var(--color-error);
-}
-
-.storage-usage__text {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.storage-usage__breakdown {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.storage-usage__breakdown-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.storage-usage__breakdown-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.storage-usage__breakdown-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.storage-usage__tier {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--divider-color);
-}
-
-.storage-usage__tier-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.storage-usage__unavailable {
-  font-size: 13px;
-  font-style: italic;
-  color: var(--text-muted);
-}
-
-/* Storage actions */
-.storage-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.storage-actions__button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease;
-}
-
-.storage-actions__button:hover {
-  background-color: var(--hover-bg);
-  border-color: var(--border-color-strong);
-}
-
-.storage-actions__button--destructive {
-  color: var(--color-error);
-  border-color: var(--color-error);
-}
-
-.storage-actions__button--destructive:hover {
-  background-color: rgba(220, 38, 38, 0.1);
-}
-
-/* Reset button */
-.settings-panel__reset-button {
-  width: 100%;
-  padding: 12px 16px;
-  margin-top: 24px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  font-size: 14px;
-  color: var(--text-muted);
-  cursor: pointer;
+  .animate-slide-in-right {
+    animation: slide-in-right 200ms ease-out;
+  }
+</style>
+```
   text-decoration: underline;
 }
 
@@ -1868,47 +1854,40 @@ function useSettingsKeyboardShortcut() {
 import { LocalStorageManager } from '../services/LocalStorageManager';
 
 // In SettingsPanel component:
-function SettingsPanel(props: SettingsPanelProps) {
-  const storage = LocalStorageManager.getInstance();
+let { isOpen }: SettingsPanelProps = $props();
+const storage = LocalStorageManager.getInstance();
 
-  // Load preferences
-  useEffect(() => {
-    if (props.isOpen) {
-      const result = storage.getUserPreferences();
-      if (result.success) {
-        setPreferences(result.data);
-      }
-    }
-  }, [props.isOpen]);
-
-  // Update preference example
-  const handleSearchModeChange = (mode: 'single' | 'multi') => {
-    const result = storage.updateUserPreferences({ searchMode: mode });
+$effect(() => {
+  if (isOpen) {
+    const result = storage.getUserPreferences();
     if (result.success) {
-      setPreferences(result.data);
-    } else {
-      showToast('Could not save preference', 'error');
+      preferences = result.data;
     }
-  };
+  }
+});
 
-  // Storage usage
-  const refreshStorageUsage = () => {
-    const result = storage.getStorageUsage();
-    if (result.success) {
-      setStorageUsage(result.data);
-    }
-  };
+function handleSearchModeChange(mode: 'single' | 'multi') {
+  const result = storage.updateUserPreferences({ searchMode: mode });
+  if (result.success) {
+    preferences = result.data;
+  } else {
+    showToast('Could not save preference', 'error');
+  }
+}
 
-  // Clear operations
-  const handleClearCache = async () => {
-    const result = await storage.invalidateQueryCache();
-    if (result.success) {
-      showToast('Cache cleared');
-      refreshStorageUsage();
-    }
-  };
+function refreshStorageUsage() {
+  const result = storage.getStorageUsage();
+  if (result.success) {
+    storageUsage = result.data;
+  }
+}
 
-  // ...
+async function handleClearCache() {
+  const result = await storage.invalidateQueryCache();
+  if (result.success) {
+    showToast('Cache cleared');
+    refreshStorageUsage();
+  }
 }
 ```
 
@@ -2001,47 +1980,48 @@ async function handleClearAllCaches(port: MessagePort) {
 
 ### 5.6 Integration with ThemeProvider
 
-```typescript
-// SettingsPanel uses ThemeProvider for theme settings
-import { useTheme } from '../providers/ThemeProvider';
+```svelte
+<!-- ThemeSelector.svelte -->
+<script lang="ts">
+  import { theme, setTheme } from '../stores/theme.svelte';
 
-function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
-  const { theme, setTheme } = useTheme();
+  interface ThemeSelectorProps {
+    value: Theme;
+    onChange: (theme: Theme) => void;
+  }
 
-  // Theme is managed by ThemeProvider, but we use local onChange
-  // for consistent prop API within SettingsPanel
-  const handleSelect = (newTheme: Theme) => {
-    setTheme(newTheme);  // ThemeProvider handles persistence
-    onChange(newTheme);   // Notify parent for any additional handling
-  };
+  let { value, onChange }: ThemeSelectorProps = $props();
 
-  return (
-    <div className="theme-selector" role="radiogroup" aria-label="Theme">
-      <button
-        role="radio"
-        aria-checked={theme === 'light'}
-        className={classNames('theme-selector__option', {
-          'theme-selector__option--active': theme === 'light'
-        })}
-        onClick={() => handleSelect('light')}
-      >
-        <SunIcon className="theme-selector__icon" aria-hidden="true" />
-        <span className="theme-selector__label">Light</span>
-      </button>
-      <button
-        role="radio"
-        aria-checked={theme === 'dark'}
-        className={classNames('theme-selector__option', {
-          'theme-selector__option--active': theme === 'dark'
-        })}
-        onClick={() => handleSelect('dark')}
-      >
-        <MoonIcon className="theme-selector__icon" aria-hidden="true" />
-        <span className="theme-selector__label">Dark</span>
-      </button>
-    </div>
-  );
-}
+  function handleSelect(newTheme: Theme) {
+    setTheme(newTheme);
+    onChange(newTheme);
+  }
+</script>
+
+<div class="flex gap-3" role="radiogroup" aria-label="Theme">
+  <button
+    role="radio"
+    aria-checked={value === 'light'}
+    class="flex-1 flex flex-col items-center gap-2 p-4 border-2 border-border rounded-lg cursor-pointer transition-all"
+    class:border-primary={value === 'light'}
+    class:bg-secondary={value === 'light'}
+    onclick={() => handleSelect('light')}
+  >
+    <SunIcon class="w-6 h-6 text-primary" aria-hidden="true" />
+    <span class="text-sm font-medium text-primary">Light</span>
+  </button>
+  <button
+    role="radio"
+    aria-checked={value === 'dark'}
+    class="flex-1 flex flex-col items-center gap-2 p-4 border-2 border-border rounded-lg cursor-pointer transition-all"
+    class:border-primary={value === 'dark'}
+    class:bg-secondary={value === 'dark'}
+    onclick={() => handleSelect('dark')}
+  >
+    <MoonIcon class="w-6 h-6 text-primary" aria-hidden="true" />
+    <span class="text-sm font-medium text-primary">Dark</span>
+  </button>
+</div>
 ```
 
 ---
@@ -2052,28 +2032,28 @@ function ThemeSelector({ value, onChange }: ThemeSelectorProps) {
 |:-------------|:---------------|:-------|
 | **Lazy rendering** | Panel not rendered when closed | Zero DOM cost when hidden |
 | **Data loading on open** | Preferences/usage loaded when panel opens | No startup overhead |
-| **Memoized callbacks** | `useCallback` for all handlers | Prevent unnecessary re-renders |
+| **Stable handlers** | Regular functions for all handlers | Reactive dependencies managed by Svelte |
 | **Debounced saves** | No debounce needed (discrete selections) | Immediate feedback |
 | **CSS animations** | Hardware-accelerated transforms | Smooth 60fps open/close |
 | **Confirmation dialogs** | Rendered only when needed | Minimal DOM presence |
+| **Svelte runes** | Fine-grained reactivity | Only changed parts re-render |
 
-### 6.1 Render Optimization
+### 6.1 Derived Computations
 
-```typescript
-// Memoize expensive computations
-const formattedUsage = useMemo(() => {
-  if (!storageUsage) return null;
-  return {
-    used: formatStorageSize(storageUsage.totalUsed),
-    quota: formatStorageSize(storageUsage.quota),
-    percent: Math.round(storageUsage.percentUsed)
-  };
-}, [storageUsage]);
+```svelte
+<script lang="ts">
+  let storageUsage = $state<StorageUsage | null>(null);
 
-// Memoize stable event handlers
-const handleThemeChange = useCallback((theme: Theme) => {
-  setTheme(theme);
-}, [setTheme]);
+  // Derived value - automatically updates when storageUsage changes
+  let formattedUsage = $derived.by(() => {
+    if (!storageUsage) return null;
+    return {
+      used: formatStorageSize(storageUsage.totalUsed),
+      quota: formatStorageSize(storageUsage.quota),
+      percent: Math.round(storageUsage.combinedTotal / storageUsage.localStorage?.quota * 100)
+    };
+  });
+</script>
 ```
 
 ---
@@ -2138,38 +2118,40 @@ const handleThemeChange = useCallback((theme: Theme) => {
 
 ### 7.2 Focus Management Implementation
 
-```typescript
-function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+```svelte
+<script lang="ts">
+  interface SettingsPanelProps {
+    isOpen: boolean;
+    onClose: () => void;
+  }
 
-  useEffect(() => {
+  let { isOpen, onClose }: SettingsPanelProps = $props();
+  let panelElement = $state<HTMLElement | null>(null);
+  let closeButton = $state<HTMLButtonElement | null>(null);
+  let previouslyFocused = $state<HTMLElement | null>(null);
+
+  $effect(() => {
     if (isOpen) {
-      // Store current focus
-      previouslyFocusedRef.current = document.activeElement as HTMLElement;
+      previouslyFocused = document.activeElement as HTMLElement;
 
-      // Move focus to close button after animation
       const timer = setTimeout(() => {
-        closeButtonRef.current?.focus();
+        closeButton?.focus();
       }, 200);
 
       return () => clearTimeout(timer);
     } else {
-      // Restore focus when closing
-      if (previouslyFocusedRef.current?.isConnected) {
-        previouslyFocusedRef.current.focus();
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
       }
     }
-  }, [isOpen]);
+  });
 
-  // Focus trap
-  useEffect(() => {
-    if (!isOpen || !panelRef.current) return;
+  $effect(() => {
+    if (!isOpen || !panelElement) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
+    function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Tab') {
-        const focusable = getFocusableElements(panelRef.current!);
+        const focusable = getFocusableElements(panelElement);
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
 
@@ -2181,14 +2163,18 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           first.focus();
         }
       }
-    };
+    }
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  });
 
-  // ...
-}
+  function getFocusableElements(container: HTMLElement): HTMLElement[] {
+    const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    return Array.from(container.querySelectorAll(selector))
+      .filter(el => !el.hasAttribute('disabled') && el.offsetParent !== null) as HTMLElement[];
+  }
+</script>
 ```
 
 ---
@@ -2263,6 +2249,21 @@ function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
 ---
 
 ## Changelog
+
+### 2026-01-22 (Rev 1.1)
+
+**Updated:**
+- Migrated from React to Svelte as per tech stack specification
+- Replaced React hooks (`useState`, `useEffect`, `useCallback`, `useRef`) with Svelte runes (`$state`, `$effect`, `$derived`)
+- Replaced `ReactNode` children with Svelte `Snippet` type for slot content
+- Replaced `JSX.Element` return types with `void` (Svelte components don't return JSX)
+- Updated component props interface to use `$props()` syntax
+- Replaced `createContext` with Svelte's `setContext`/`getContext` using Svelte stores
+- Updated `SettingsPanelProvider` to use Svelte context API
+- Updated all component interfaces to use Svelte patterns
+- Replaced `useTheme()` hook integration with Svelte store subscriptions
+- Updated CSS implementation to use Tailwind classes per tech stack
+- Updated integration examples to use Svelte `.svelte` file syntax
 
 ### 2026-01-22 (Rev 1.0)
 

@@ -6,18 +6,20 @@
 
 ## 1. Data Structures & Types
 
-### 1.1 Navigation Types
+### 1. Navigation Types
 
 ```typescript
+import type { Writable } from 'svelte/store';
+
 type NavigationRoute = 'search' | 'saved' | 'history' | 'profile' | 'settings';
 
 interface NavigationItem {
   route: NavigationRoute;
   label: string;
-  icon: string;               // Icon identifier for rendering
-  requiresAuth: boolean;      // Whether route requires authenticated user
-  requiresPaidTier: boolean;  // Whether route requires paid subscription
-  badge?: NavigationBadge;    // Optional notification badge
+  icon: string;
+  requiresAuth: boolean;
+  requiresPaidTier: boolean;
+  badge?: NavigationBadge;
 }
 
 interface NavigationBadge {
@@ -67,6 +69,8 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
 ### 1.2 User Summary Types
 
 ```typescript
+import { writable } from 'svelte/store';
+
 type SubscriptionTier = 'free' | 'trial' | 'paid';
 
 interface UserSummary {
@@ -76,11 +80,11 @@ interface UserSummary {
   email: string | null;
   avatarUrl: string | null;
   subscriptionTier: SubscriptionTier;
-  trialDaysRemaining: number | null;  // Only for trial tier
-  searchesRemaining: number | null;   // Only for free tier (max 3/24h)
+  trialDaysRemaining: number | null;
+  searchesRemaining: number | null;
 }
 
-const ANONYMOUS_USER: UserSummary = {
+export const userStore = writable<UserSummary>({
   isAuthenticated: false,
   userId: null,
   displayName: null,
@@ -89,35 +93,34 @@ const ANONYMOUS_USER: UserSummary = {
   subscriptionTier: 'free',
   trialDaysRemaining: null,
   searchesRemaining: 3
-};
+});
 ```
 
 ### 1.3 Sidebar State Types
 
 ```typescript
+import { writable } from 'svelte/store';
+
 type SidebarDisplayMode = 'expanded' | 'collapsed' | 'hidden';
 
 interface SidebarState {
   displayMode: SidebarDisplayMode;
   activeRoute: NavigationRoute;
-  user: UserSummary;
-  theme: 'light' | 'dark';            // Managed by ThemeProvider
-  isOnline: boolean;
-  isMobileMenuOpen: boolean;          // For responsive mobile overlay
-  isUserMenuOpen: boolean;            // Dropdown for user actions
-  pendingSyncCount: number;           // Offline changes pending sync
+  isMobileMenuOpen: boolean;
+  isUserMenuOpen: boolean;
 }
 
-const INITIAL_SIDEBAR_STATE: SidebarState = {
+export const sidebarStore = writable<SidebarState>({
   displayMode: 'expanded',
   activeRoute: 'search',
-  user: ANONYMOUS_USER,
-  theme: 'light',                     // Will be set by ThemeProvider on init
-  isOnline: true,
   isMobileMenuOpen: false,
-  isUserMenuOpen: false,
-  pendingSyncCount: 0
-};
+  isUserMenuOpen: false
+});
+
+export const activeRouteStore = writable<NavigationRoute>('search');
+export const themeStore = writable<'light' | 'dark'>('light');
+export const isOnlineStore = writable<boolean>(navigator.onLine);
+export const pendingSyncCountStore = writable<number>(0);
 ```
 
 ### 1.4 Theme Toggle Types
@@ -159,6 +162,9 @@ type QuickActionData =
 
 const MAX_QUICK_ACTIONS = 5;
 const QUICK_ACTIONS_STORAGE_KEY = 'mealswapp_quick_actions';
+
+// Using Svelte writable store for reactive updates
+export const quickActionsStore = writable<QuickAction[]>([]);
 ```
 
 ### 1.6 Responsive Breakpoint Types
@@ -249,47 +255,49 @@ const OFFLINE_MESSAGES = {
 ### 2.1 Initialization Flow
 
 ```
-ON SidebarComponent Mount:
+ON SidebarComponent Mount (onMount):
   1. Determine initial display mode based on viewport width
      1.1. Get current window.innerWidth
      1.2. Find matching breakpoint from RESPONSIVE_BREAKPOINTS
-     1.3. Set state.displayMode = matchingConfig.displayMode
+     1.3. Update $sidebarStore.displayMode
 
-  2. Get theme from ThemeProvider context
-     2.1. { theme } = useTheme()
-     2.2. state.theme = theme
-     // Note: ThemeProvider handles persistence and DOM updates
+  2. Subscribe to theme store
+     2.1. Subscribe to theme store: $themeStore
+     2.2. Update local state: state.theme = $themeStore
+     // Theme store handles persistence and DOM updates
 
   3. Load user session (if authenticated)
      3.1. Check for existing auth token in HttpOnly cookie (via API call)
      3.2. IF authenticated:
-          - Call GET /api/v1/user/me
-          - Populate state.user with response data
-          - Set state.user.isAuthenticated = true
+          - Call GET /api/v1/user/me using TanStack Query
+          - Update $userStore with response data
      3.3. ELSE:
-          - Set state.user = ANONYMOUS_USER
+          - Set $userStore = ANONYMOUS_USER
 
   4. Load quick actions from localStorage
      4.1. Read localStorage key: QUICK_ACTIONS_STORAGE_KEY
      4.2. Parse and validate JSON array
      4.3. Filter out items older than 7 days
      4.4. Keep only MAX_QUICK_ACTIONS items
+     4.5. Update $quickActionsStore
 
   5. Register event listeners
      5.1. Add resize listener: window.addEventListener('resize', handleResize)
      5.2. Add online listener: window.addEventListener('online', handleOnline)
      5.3. Add offline listener: window.addEventListener('offline', handleOffline)
-     5.4. Add click-outside listener for dropdown menus
+     5.4. Add click-outside listener for dropdown menus (via svelte:window)
 
   6. Check initial online status
-     6.1. Set state.isOnline = navigator.onLine
+     6.1. Set $isOnlineStore = navigator.onLine
      6.2. IF offline:
           - Load pending sync count from localStorage
 
   7. Determine active route from current URL
      7.1. Parse window.location.pathname
      7.2. Match against NAVIGATION_ITEMS routes
-     7.3. Set state.activeRoute = matchedRoute OR 'search'
+     7.3. Update $activeRouteStore = matchedRoute OR 'search'
+
+  RETURN cleanup function to remove event listeners on destroy
 ```
 
 ### 2.2 Navigation Handling
@@ -297,27 +305,27 @@ ON SidebarComponent Mount:
 ```
 FUNCTION handleNavigation(route: NavigationRoute):
   1. Check authentication requirement
-     IF NAVIGATION_ITEMS[route].requiresAuth AND NOT state.user.isAuthenticated:
+     IF NAVIGATION_ITEMS[route].requiresAuth AND NOT $userStore.isAuthenticated:
        1.1. Store intended route in sessionStorage: 'mealswapp_redirect_after_login'
-       1.2. Trigger login flow (emit 'auth:required' event)
+       1.2. Dispatch 'authRequired' event
        1.3. RETURN (do not navigate)
 
   2. Check subscription requirement
      IF NAVIGATION_ITEMS[route].requiresPaidTier:
-       IF state.user.subscriptionTier === 'free':
+       IF $userStore.subscriptionTier === 'free':
          2.1. Show upgrade modal
          2.2. RETURN (do not navigate)
 
   3. Update active route
-     state.activeRoute = route
+     $activeRouteStore = route
 
   4. Close mobile menu if open
-     IF state.isMobileMenuOpen:
-       state.isMobileMenuOpen = false
+     IF $sidebarStore.isMobileMenuOpen:
+       $sidebarStore.isMobileMenuOpen = false
 
   5. Navigate to route
      5.1. Push to browser history: history.pushState(null, '', `/${route}`)
-     5.2. Emit navigation event: emit('navigation:change', route)
+     5.2. Dispatch 'navigationChange' event with route
 
   6. Update document title
      document.title = `${NAVIGATION_ITEMS[route].label} | Mealswapp`
@@ -329,31 +337,27 @@ FUNCTION handleNavigation(route: NavigationRoute):
 ### 2.3 Theme Toggle Handling
 
 ```
-NOTE: Theme management is delegated to ThemeProvider (see ThemeProvider.md).
-SidebarComponent consumes theme state via useTheme() hook and provides UI controls.
+NOTE: Theme management is handled by theme store (see themeStore.ts).
+SidebarComponent subscribes to theme store and provides UI controls.
 
 FUNCTION handleThemeToggle():
-  1. Get theme context
-     { theme, toggleTheme } = useTheme()
+  1. Get current theme from store
+     currentTheme = $themeStore
 
   2. Toggle theme
-     CALL toggleTheme()
-     // ThemeProvider handles:
+     $themeStore = currentTheme === 'light' ? 'dark' : 'light'
+     // Theme store handles:
      // - CSS variable updates
      // - DOM attribute updates
      // - localStorage persistence
-     // - Event emission
+     // - Event dispatching
 
 FUNCTION handleThemeSelect(newTheme: Theme):
-  1. Get theme context
-     { setTheme } = useTheme()
+  1. Set theme store
+     $themeStore = newTheme
 
-  2. Set specific theme
-     CALL setTheme(newTheme)
-
-// Theme state is read from ThemeProvider context:
-// const { theme } = useTheme()
-// state.theme reflects this value for UI rendering
+// Theme state is accessed from store:
+// $themeStore reflects current value for UI rendering
 ```
 
 ### 2.4 Responsive Handling
@@ -370,67 +374,64 @@ FUNCTION handleResize():
          newMode = breakpoint.displayMode
          BREAK
 
-  3. IF newMode !== state.displayMode:
-     3.1. Update state: state.displayMode = newMode
+  3. IF newMode !== $sidebarStore.displayMode:
+     3.1. Update store: $sidebarStore.displayMode = newMode
      3.2. IF newMode === 'hidden':
-          - Ensure mobile menu is closed: state.isMobileMenuOpen = false
-     3.3. Emit display mode change: emit('sidebar:displayModeChange', newMode)
+           - Ensure mobile menu is closed: $sidebarStore.isMobileMenuOpen = false
+     3.3. Dispatch 'displayModeChange' event with newMode
 
-  4. Update main content margin
-     mainContent = document.getElementById('main-content')
-     IF newMode === 'expanded':
-       mainContent.style.marginLeft = `${SIDEBAR_WIDTH_EXPANDED}px`
-     ELSE IF newMode === 'collapsed':
-       mainContent.style.marginLeft = `${SIDEBAR_WIDTH_COLLAPSED}px`
-     ELSE:
-       mainContent.style.marginLeft = '0'
+  4. Update main content margin (via CSS class)
+     - Use Tailwind classes based on displayMode
+     - expanded: ml-64 (256px)
+     - collapsed: ml-16 (64px)
+     - hidden: ml-0
 ```
 
 ### 2.5 Mobile Menu Toggle
 
 ```
 FUNCTION toggleMobileMenu():
-  1. Toggle state
-     state.isMobileMenuOpen = !state.isMobileMenuOpen
+  1. Toggle store state
+     $sidebarStore.isMobileMenuOpen = !$sidebarStore.isMobileMenuOpen
 
   2. Handle body scroll
-     IF state.isMobileMenuOpen:
-       2.1. document.body.style.overflow = 'hidden'  // Prevent background scroll
+     IF $sidebarStore.isMobileMenuOpen:
+       2.1. Add 'overflow-hidden' class to body
        2.2. Set focus trap within sidebar
      ELSE:
-       2.1. document.body.style.overflow = ''
+       2.1. Remove 'overflow-hidden' class from body
        2.2. Release focus trap
        2.3. Return focus to hamburger button
 
   3. Animate menu
-     IF state.isMobileMenuOpen:
-       - Slide in from left with overlay
+     IF $sidebarStore.isMobileMenuOpen:
+       - Slide in from left with overlay (Tailwind transitions)
      ELSE:
        - Slide out to left, fade overlay
 
 FUNCTION handleMobileOverlayClick():
   1. Close mobile menu
-     state.isMobileMenuOpen = false
+     $sidebarStore.isMobileMenuOpen = false
 
   2. Restore body scroll
-     document.body.style.overflow = ''
+     Remove 'overflow-hidden' class from body
 ```
 
 ### 2.6 User Menu Handling
 
 ```
 FUNCTION toggleUserMenu():
-  1. Toggle state
-     state.isUserMenuOpen = !state.isUserMenuOpen
+  1. Toggle store state
+     $sidebarStore.isUserMenuOpen = !$sidebarStore.isUserMenuOpen
 
-  2. IF state.isUserMenuOpen:
+  2. IF $sidebarStore.isUserMenuOpen:
      2.1. Position dropdown below user avatar
      2.2. Add click-outside listener
      2.3. Focus first menu item
 
 FUNCTION handleUserMenuAction(action: UserMenuAction):
   1. Close user menu
-     state.isUserMenuOpen = false
+     $sidebarStore.isUserMenuOpen = false
 
   2. Handle action:
      CASE action === 'view_profile':
@@ -439,7 +440,7 @@ FUNCTION handleUserMenuAction(action: UserMenuAction):
 
      CASE action === 'manage_subscription':
        - Open subscription management
-       - IF state.user.subscriptionTier === 'free':
+       - IF $userStore.subscriptionTier === 'free':
          - Redirect to pricing page
        - ELSE:
          - Open Stripe customer portal (via API)
@@ -458,8 +459,8 @@ FUNCTION handleLogout():
      POST /api/v1/auth/logout
 
   2. Clear local state
-     state.user = ANONYMOUS_USER
-     state.isUserMenuOpen = false
+     $userStore = ANONYMOUS_USER
+     $sidebarStore.isUserMenuOpen = false
 
   3. Clear sensitive localStorage items
      localStorage.removeItem('mealswapp_user_preferences')
@@ -468,8 +469,8 @@ FUNCTION handleLogout():
   4. Navigate to search (public route)
      CALL handleNavigation('search')
 
-  5. Emit logout event
-     emit('auth:logout')
+  5. Dispatch logout event
+     dispatch('logout')
 ```
 
 ### 2.7 Display Mode Toggle (Manual)
@@ -477,33 +478,24 @@ FUNCTION handleLogout():
 ```
 FUNCTION toggleSidebarCollapse():
   1. Only applicable when displayMode is 'expanded' or 'collapsed'
-     IF state.displayMode === 'hidden':
+     IF $sidebarStore.displayMode === 'hidden':
        RETURN
 
   2. Toggle between expanded and collapsed
-     IF state.displayMode === 'expanded':
-       state.displayMode = 'collapsed'
+     IF $sidebarStore.displayMode === 'expanded':
+       $sidebarStore.displayMode = 'collapsed'
      ELSE:
-       state.displayMode = 'expanded'
+       $sidebarStore.displayMode = 'expanded'
 
   3. Persist preference
      localStorage.setItem('mealswapp_sidebar_collapsed',
-                          state.displayMode === 'collapsed')
+                          $sidebarStore.displayMode === 'collapsed')
 
   4. Update main content margin
-     CALL updateMainContentMargin()
+     - Handled via reactive Tailwind classes based on $sidebarStore.displayMode
 
-  5. Emit change event
-     emit('sidebar:toggle', state.displayMode)
-
-FUNCTION updateMainContentMargin():
-  mainContent = document.getElementById('main-content')
-  IF state.displayMode === 'expanded':
-    mainContent.style.marginLeft = `${SIDEBAR_WIDTH_EXPANDED}px`
-  ELSE IF state.displayMode === 'collapsed':
-    mainContent.style.marginLeft = `${SIDEBAR_WIDTH_COLLAPSED}px`
-  ELSE:
-    mainContent.style.marginLeft = '0'
+  5. Dispatch toggle event
+     dispatch('toggle', $sidebarStore.displayMode)
 ```
 
 ### 2.8 Quick Actions Handling
@@ -553,14 +545,15 @@ FUNCTION addQuickAction(action: QuickAction):
   4. Trim to max size
      actions = actions.slice(0, MAX_QUICK_ACTIONS)
 
-  5. Persist
+  5. Persist and update store
      localStorage.setItem(QUICK_ACTIONS_STORAGE_KEY, JSON.stringify(actions))
+     $quickActionsStore = actions
 
 FUNCTION handleQuickActionClick(action: QuickAction):
   1. Based on action type:
      CASE action.type === 'recent_search':
        - Navigate to search
-       - Emit event to populate search: emit('search:restore', action.data)
+       - Dispatch 'searchRestore' event with action.data
 
      CASE action.type === 'saved_item':
        - Navigate to item detail view
@@ -575,37 +568,37 @@ FUNCTION handleQuickActionClick(action: QuickAction):
 
 ```
 FUNCTION handleOffline():
-  1. Update state
-     state.isOnline = false
+  1. Update store
+     $isOnlineStore = false
 
   2. Load pending sync count
      pendingData = localStorage.getItem('mealswapp_pending_sync')
      IF pendingData:
-       state.pendingSyncCount = JSON.parse(pendingData).length
+       $pendingSyncCount = JSON.parse(pendingData).length
      ELSE:
-       state.pendingSyncCount = 0
+       $pendingSyncCount = 0
 
   3. Update navigation badges
      // History route shows pending count
      historyNav = NAVIGATION_ITEMS.find(n => n.route === 'history')
-     IF state.pendingSyncCount > 0:
-       historyNav.badge = { count: state.pendingSyncCount, type: 'warning' }
+     IF $pendingSyncCount > 0:
+       historyNav.badge = { count: $pendingSyncCount, type: 'warning' }
 
 FUNCTION handleOnline():
-  1. Update state
-     state.isOnline = true
+  1. Update store
+     $isOnlineStore = true
 
   2. Trigger background sync
-     IF state.pendingSyncCount > 0:
-       emit('sync:start')
-       // Sync handler will update pendingSyncCount on completion
+     IF $pendingSyncCount > 0:
+       dispatch('syncStart')
+       // Sync handler will update $pendingSyncCount on completion
 
   3. Clear badges after successful sync
      // Handled by sync completion event listener
 
 FUNCTION handleSyncComplete(result: { success: boolean, syncedCount: number }):
   1. IF result.success:
-     1.1. state.pendingSyncCount = 0
+     1.1. $pendingSyncCount = 0
      1.2. Clear navigation badge
      1.3. Show brief success toast: "All changes synced"
   2. ELSE:
@@ -616,7 +609,7 @@ FUNCTION handleSyncComplete(result: { success: boolean, syncedCount: number }):
 
 ```
 FUNCTION getSubscriptionStatusDisplay(): { label: string, variant: string, showUpgrade: boolean }
-  tier = state.user.subscriptionTier
+  tier = $userStore.subscriptionTier
 
   CASE tier === 'paid':
     RETURN {
@@ -626,7 +619,7 @@ FUNCTION getSubscriptionStatusDisplay(): { label: string, variant: string, showU
     }
 
   CASE tier === 'trial':
-    days = state.user.trialDaysRemaining
+    days = $userStore.trialDaysRemaining
     RETURN {
       label: `Trial: ${days} day${days !== 1 ? 's' : ''} left`,
       variant: days <= 2 ? 'warning' : 'info',
@@ -634,7 +627,7 @@ FUNCTION getSubscriptionStatusDisplay(): { label: string, variant: string, showU
     }
 
   CASE tier === 'free':
-    searches = state.user.searchesRemaining
+    searches = $userStore.searchesRemaining
     RETURN {
       label: `Free: ${searches}/3 searches`,
       variant: searches === 0 ? 'error' : 'default',
@@ -643,26 +636,26 @@ FUNCTION getSubscriptionStatusDisplay(): { label: string, variant: string, showU
 
 FUNCTION handleUpgradeClick():
   1. Track analytics event
-     emit('analytics:event', { type: 'upgrade_click', source: 'sidebar' })
+     dispatch('analyticsEvent', { type: 'upgrade_click', source: 'sidebar' })
 
   2. Navigate to pricing/upgrade page
-     IF state.user.isAuthenticated:
+     IF $userStore.isAuthenticated:
        - Navigate to: /upgrade
      ELSE:
        - Store redirect intent: sessionStorage.setItem('mealswapp_redirect_after_login', '/upgrade')
-       - Trigger login flow
+       - Dispatch 'authRequired' event
 ```
 
 ### 2.11 Theme State Synchronization
 
 ```
-NOTE: System theme detection is handled by ThemeProvider on first visit only.
-SidebarComponent does not need to listen for system theme changes.
+NOTE: System theme detection is handled by theme store on first visit only.
+SidebarComponent subscribes to theme store.
 
-ON ThemeProvider Context Change:
-  1. SidebarComponent re-renders with new theme value from useTheme()
+ON theme Store Change:
+  1. Component re-renders with new $themeStore value
   2. UI updates to reflect current theme (toggle icon, selected option)
-  3. No manual DOM manipulation needed - ThemeProvider handles it
+  3. No manual DOM manipulation needed - theme store handles it
 ```
 
 ---
@@ -672,6 +665,12 @@ ON ThemeProvider Context Change:
 ### 3.1 State Transitions Diagram
 
 ```
+NOTE: State is managed via Svelte writable stores:
+- sidebarStore: { displayMode, isMobileMenuOpen, isUserMenuOpen }
+- activeRouteStore: current navigation route
+- userStore: user session data
+- themeStore: 'light' | 'dark'
+
                                     ┌─────────────────┐
                                     │     INITIAL     │
                                     │    (Mount)      │
@@ -687,7 +686,7 @@ ON ThemeProvider Context Change:
               │                            │                            │
               ▼                            ▼                            ▼
      ┌────────────────┐          ┌────────────────┐          ┌────────────────┐
-     │   EXPANDED     │<-------->│   COLLAPSED    │          │    HIDDEN      │
+     │   EXPANDED     │<────────>│   COLLAPSED    │          │    HIDDEN      │
      │  (Full width)  │  Toggle  │  (Icons only)  │          │ (Mobile menu)  │
      └────────────────┘          └────────────────┘          └───────┬────────┘
                                                                      │
@@ -742,6 +741,8 @@ ON ThemeProvider Context Change:
 ### 3.4 Error Handling Implementation
 
 ```typescript
+import { toast } from './toastStore';
+
 interface SidebarError {
   type: 'AUTH_FETCH_FAILED' | 'LOGOUT_FAILED' | 'THEME_PERSIST_FAILED' |
         'NAVIGATION_BLOCKED' | 'SUBSCRIPTION_CHECK_FAILED' | 'SYNC_FAILED';
@@ -750,13 +751,13 @@ interface SidebarError {
   silent: boolean;
 }
 
-FUNCTION handleSidebarError(error: unknown, context: string): SidebarError
+function handleSidebarError(error: unknown, context: string): SidebarError
   1. IF context === 'auth_fetch':
      RETURN {
        type: 'AUTH_FETCH_FAILED',
        message: 'Failed to load user data',
        recoverable: true,
-       silent: true  // Don't show to user, just show anonymous state
+       silent: true
      }
 
   2. IF context === 'logout':
@@ -780,7 +781,7 @@ FUNCTION handleSidebarError(error: unknown, context: string): SidebarError
        type: 'THEME_PERSIST_FAILED',
        message: 'Could not save theme preference',
        recoverable: false,
-       silent: true  // Theme still works, just won't persist
+       silent: true
      }
 
   5. DEFAULT:
@@ -790,6 +791,15 @@ FUNCTION handleSidebarError(error: unknown, context: string): SidebarError
        recoverable: true,
        silent: false
      }
+
+function displayError(error: SidebarError): void
+  IF error.silent:
+    RETURN
+
+  IF error.recoverable:
+    toast.warning(error.message)
+  ELSE:
+    toast.error(error.message)
 ```
 
 ### 3.5 Graceful Degradation
@@ -806,27 +816,40 @@ FUNCTION handleSidebarError(error: unknown, context: string): SidebarError
 
 ## 4. Component Interfaces
 
-### 4.1 SidebarComponent Props
+### 4.1 SidebarComponent Props & Events
 
-```typescript
-type Theme = 'light' | 'dark';
+```svelte
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+  import type { NavigationRoute } from './types';
+  import { themeStore, userStore, sidebarStore, quickActionsStore } from './stores';
 
-interface SidebarComponentProps {
-  initialRoute?: NavigationRoute;
-  onNavigate?: (route: NavigationRoute) => void;
-  onThemeChange?: (theme: Theme) => void;  // Bubbled from ThemeProvider
-  onAuthRequired?: () => void;
-  onLogout?: () => void;
-  className?: string;
-}
+  export let initialRoute: NavigationRoute = 'search';
+
+  const dispatch = createEventDispatcher<{
+    navigationChange: NavigationRoute;
+    displayModeChange: string;
+    authRequired: void;
+    logout: void;
+    syncStart: void;
+    searchRestore: { query: string; mode: string };
+    analyticsEvent: { type: string; source: string };
+  }>();
+</script>
 ```
 
 ### 4.2 Internal Component Functions
 
 ```typescript
+// Svelte stores used for state management
+import { themeStore, userStore, sidebarStore, quickActionsStore, isOnlineStore, pendingSyncCountStore, activeRouteStore } from './stores';
+
+// Props
+let initialRoute: NavigationRoute = 'search';
+
 // Initialization
 function initializeSidebar(): void;
-function loadUserSession(): Promise<UserSummary>;
+async function loadUserSession(): Promise<UserSummary>;
 function loadThemePreference(): ThemeOption;
 function loadQuickActions(): QuickAction[];
 
@@ -840,22 +863,21 @@ function updateBrowserUrl(route: NavigationRoute): void;
 function handleResize(): void;
 function toggleSidebarCollapse(): void;
 function getDisplayMode(): SidebarDisplayMode;
-function updateMainContentMargin(): void;
 
 // Mobile Menu
 function toggleMobileMenu(): void;
 function handleMobileOverlayClick(): void;
 function isMobileMenuOpen(): boolean;
 
-// Theme (delegated to ThemeProvider)
+// Theme (handled by themeStore)
 function handleThemeToggle(): void;
 function handleThemeSelect(theme: Theme): void;
-// Theme state accessed via useTheme() hook
+// Theme state accessed via $themeStore
 
 // User Menu
 function toggleUserMenu(): void;
 function handleUserMenuAction(action: UserMenuAction): void;
-function handleLogout(): Promise<void>;
+async function handleLogout(): Promise<void>;
 function getUserDisplayInfo(): { name: string; avatar: string | null };
 
 // Subscription
@@ -879,24 +901,28 @@ function handleSidebarError(error: unknown, context: string): SidebarError;
 function displayError(error: SidebarError): void;
 
 // Cleanup
-function cleanup(): void;  // Remove event listeners on unmount
+function cleanup(): void;  // Remove event listeners on destroy
 ```
 
-### 4.3 Event Emitters
+### 4.3 Event Dispatchers
 
 ```typescript
-// Events emitted by SidebarComponent for parent components
-interface SidebarEvents {
-  'navigation:change': (route: NavigationRoute) => void;
-  'theme:change': (effectiveTheme: 'light' | 'dark') => void;
-  'sidebar:toggle': (displayMode: SidebarDisplayMode) => void;
-  'sidebar:displayModeChange': (displayMode: SidebarDisplayMode) => void;
-  'auth:required': () => void;
-  'auth:logout': () => void;
-  'sync:start': () => void;
-  'search:restore': (data: { query: string; mode: string }) => void;
-  'analytics:event': (event: AnalyticsEvent) => void;
-}
+// Svelte createEventDispatcher usage for parent components
+const dispatch = createEventDispatcher<{
+  'navigationChange': NavigationRoute;
+  'themeChange': 'light' | 'dark';
+  'displayModeChange': SidebarDisplayMode;
+  'authRequired': void;
+  'logout': void;
+  'syncStart': void;
+  'searchRestore': { query: string; mode: string };
+  'analyticsEvent': { type: string; source: string };
+}>();
+
+// Dispatch examples:
+// dispatch('navigationChange', route);
+// dispatch('themeChange', $themeStore);
+// dispatch('authRequired');
 ```
 
 ### 4.4 API Interface Contracts
@@ -946,21 +972,21 @@ interface ExportDataResponse {
 ## 5. UI Component Structure
 
 ```
-SidebarComponent
-├── SidebarContainer
+SidebarComponent (Svelte)
+├── SidebarContainer (div class="fixed left-0 top-0 h-full ...")
 │   │
 │   ├── Logo/Brand
 │   │   ├── LogoIcon
-│   │   └── LogoText (hidden when collapsed)
+│   │   └── LogoText (class="hidden when collapsed")
 │   │
 │   ├── NavigationList
 │   │   └── NavigationItem[] (for each route)
 │   │       ├── NavIcon
-│   │       ├── NavLabel (hidden when collapsed)
+│   │       ├── NavLabel (class="hidden when collapsed")
 │   │       ├── NavBadge (conditional)
 │   │       └── ActiveIndicator (conditional)
 │   │
-│   ├── QuickActionsSection (hidden when collapsed)
+│   ├── QuickActionsSection (class="hidden when collapsed")
 │   │   ├── SectionHeader ("Recent")
 │   │   └── QuickActionItem[]
 │   │       ├── ActionIcon
@@ -975,8 +1001,8 @@ SidebarComponent
 │   │   └── PendingSyncBadge (conditional)
 │   │
 │   ├── ThemeToggle
-│   │   ├── ThemeIcon (sun/moon based on current theme)
-│   │   └── ThemeSelector (hidden when collapsed)
+│   │   ├── ThemeIcon (sun/moon based on $themeStore)
+│   │   └── ThemeSelector (class="hidden when collapsed")
 │   │       └── ThemeOption[] (light/dark)
 │   │
 │   ├── SubscriptionStatus (conditional: when authenticated)
@@ -986,7 +1012,7 @@ SidebarComponent
 │   ├── UserSection
 │   │   ├── IF authenticated:
 │   │   │   ├── UserAvatar
-│   │   │   ├── UserName (hidden when collapsed)
+│   │   │   ├── UserName (class="hidden when collapsed")
 │   │   │   └── UserMenuDropdown (conditional: when open)
 │   │   │       └── UserMenuOption[]
 │   │   │           ├── OptionIcon
@@ -995,12 +1021,13 @@ SidebarComponent
 │   │   └── IF not authenticated:
 │   │       └── LoginButton
 │   │           ├── LoginIcon
-│   │           └── LoginLabel (hidden when collapsed)
+│   │           └── LoginLabel (class="hidden when collapsed")
 │   │
 │   └── CollapseToggle (visible when expanded/collapsed mode)
 │       └── ChevronIcon
 │
 ├── MobileOverlay (conditional: when mobile menu open)
+│   (div class="fixed inset-0 bg-black/50 z-40")
 │
 └── MobileMenuButton (conditional: when displayMode === 'hidden')
     └── HamburgerIcon / CloseIcon
@@ -1048,6 +1075,15 @@ SidebarComponent
     transition: none;
   }
 }
+```
+
+**Tailwind Classes Used:**
+- Sidebar container: `fixed left-0 top-0 h-full bg-white dark:bg-gray-900 transition-all duration-300`
+- Expanded: `w-64` (256px)
+- Collapsed: `w-16` (64px)
+- Hidden: `w-0 -translate-x-full`
+- Navigation items: `flex items-center gap-3 px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-800`
+- Mobile overlay: `fixed inset-0 bg-black/50 z-40`
 ```
 
 ---
@@ -1099,17 +1135,29 @@ ON Mouse Leave:
 
 | Optimization | Implementation | Impact |
 |:-------------|:---------------|:-------|
-| Lazy load user data | Fetch user/me only after mount | Faster initial render |
+| Lazy load user data | TanStack Query with staleTime | Faster initial render |
 | Debounced resize | 100ms debounce on resize handler | Prevent layout thrashing |
 | CSS containment | `contain: layout style` on sidebar | Isolate repaints |
 | Will-change | `will-change: transform` on mobile menu | Smoother animations |
-| Memoized nav items | Memo navigation list items | Prevent re-renders |
+| Svelte reactive statements | Use $store syntax | Efficient updates |
 | Image lazy loading | `loading="lazy"` on avatar | Faster initial paint |
 | Prefers-reduced-motion | Disable animations when preferred | Respect user settings |
 
 ---
 
 ## Changelog
+
+### 2026-01-22 (Rev 1.2)
+
+**Changed:**
+- Migrated from React-style patterns to Svelte conventions
+- Replaced `useTheme()` hook with Svelte `themeStore` subscription
+- Replaced `emit()` with Svelte `createEventDispatcher`
+- Updated state management to use Svelte stores (`sidebarStore`, `userStore`, etc.)
+- Replaced React component props with Svelte props and event dispatching
+- Updated CSS to use Tailwind classes as per tech stack
+- Changed data fetching to use TanStack Query with Svelte Query
+- Updated initialization to use `onMount` lifecycle function
 
 ### 2026-01-22 (Rev 1.1)
 

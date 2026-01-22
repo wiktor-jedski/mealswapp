@@ -9,14 +9,17 @@
 ### 1.1 Search Mode Types
 
 ```typescript
+import { writable, derived } from 'svelte/store';
+import { createQuery, createMutation } from '@tanstack/svelte-query';
+
 type SearchMode = 'single' | 'recipe' | 'diet';
 
 interface SearchModeConfig {
   mode: SearchMode;
   label: string;
   description: string;
-  maxIngredients: number;      // 1 for single, unlimited for recipe/diet
-  showIngredientList: boolean; // false for single, true for recipe/diet
+  maxIngredients: number;
+  showIngredientList: boolean;
 }
 
 const SEARCH_MODES: Record<SearchMode, SearchModeConfig> = {
@@ -44,7 +47,86 @@ const SEARCH_MODES: Record<SearchMode, SearchModeConfig> = {
 };
 ```
 
-### 1.2 Macronutrient Toggle Types
+### 1.2 State Management
+
+**Svelte Stores + TanStack Query**
+
+```typescript
+export const searchModeStore = writable<SearchMode>('single');
+
+export const macroTogglesStore = writable<MacroToggleState>({
+  protein: true,
+  carbs: true,
+  fat: true
+});
+
+export const searchInputStore = writable<SearchInputState>({
+  query: '',
+  debouncedQuery: '',
+  isFocused: false,
+  isLoading: false,
+  hasError: false,
+  errorMessage: null
+});
+
+export const autocompleteStore = writable<AutocompleteState>({
+  items: [],
+  isOpen: false,
+  highlightedIndex: -1,
+  totalCount: 0
+});
+
+export const ingredientsStore = writable<IngredientListState>({
+  ingredients: [],
+  totalMacros: { protein: 0, carbs: 0, fat: 0, calories: 0 }
+});
+
+export const tagFiltersStore = writable<TagFilterState>({
+  activeFilters: [],
+  availableCategoryTags: [],
+  availableFunctionalityTags: [],
+  isFilterPanelOpen: false
+});
+
+export const searchHistoryStore = writable<SearchHistoryItem[]>([]);
+
+export const offlineStore = writable<OfflineState>({
+  isOnline: true,
+  lastOnlineTimestamp: null,
+  cachedQueriesCount: 0,
+  showOfflineBanner: false
+});
+
+export const themeStore = writable<'light' | 'dark' | 'system'>('system');
+
+export const totalMacrosDerived = derived(
+  ingredientsStore,
+  ($ingredients) => {
+    const totals = { protein: 0, carbs: 0, fat: 0, calories: 0 };
+    for (const ingredient of $ingredients.ingredients) {
+      totals.protein += ingredient.scaledMacros.protein;
+      totals.carbs += ingredient.scaledMacros.carbs;
+      totals.fat += ingredient.scaledMacros.fat;
+    }
+    totals.calories = (totals.protein * 4) + (totals.carbs * 4) + (totals.fat * 9);
+    return totals;
+  }
+);
+
+import { QueryClient } from '@tanstack/svelte-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,
+      gcTime: 1000 * 60 * 30,
+      retry: 1
+    }
+  }
+});
+```
+
+### 1.3 Macronutrient Toggle Types
 
 ```typescript
 type MacroType = 'protein' | 'carbs' | 'fat';
@@ -251,29 +333,28 @@ ON SearchView Mount:
      1.2. Validate each item has required fields (id, query, mode, timestamp)
      1.3. Filter out items older than 30 days
      1.4. Keep only MAX_SEARCH_HISTORY_ITEMS most recent items
-     1.5. Store in state.searchHistory
+     1.5. Update searchHistoryStore with validated history
 
   2. Load theme preference
      2.1. Check localStorage for 'mealswapp_theme' key
-     2.2. If exists, set state.theme to stored value
-     2.3. If not exists, set state.theme to 'system'
-     2.4. Apply theme by calling applyTheme(state.theme)
+     2.2. If exists, update themeStore with stored value
+     2.3. If not exists, set themeStore to 'system'
+     2.4. Apply theme by calling applyTheme($themeStore)
 
   3. Initialize search mode to 'single'
-     3.1. Set state.mode = 'single'
+     3.1. Update searchModeStore to 'single'
 
   4. Enable all macro toggles
-     4.1. Set state.macroToggles = { protein: true, carbs: true, fat: true }
+     4.1. Update macroTogglesStore to { protein: true, carbs: true, fat: true }
 
   5. Register offline event listeners
      5.1. Add event listener for 'online' event -> handleOnline()
      5.2. Add event listener for 'offline' event -> handleOffline()
-     5.3. Set state.offline.isOnline = navigator.onLine
+     5.3. Update offlineStore with { isOnline: navigator.onLine, ... }
 
-  6. Load available tags from API (or cache if offline)
-     6.1. Call GET /api/v1/tags
-     6.2. Populate state.tagFilters.availableCategoryTags
-     6.3. Populate state.tagFilters.availableFunctionalityTags
+  6. Load available tags using TanStack Query (with service worker cache)
+     6.1. Execute tagsQuery via queryClient
+     6.2. On success: update tagFiltersStore with available tags
 
   7. Focus search input if no other element is focused
 ```
@@ -282,55 +363,48 @@ ON SearchView Mount:
 
 ```
 ON Search Input Change (newValue: string):
-  1. Immediately update state.searchInput.query = newValue
+  1. Immediately update searchInputStore: { query: newValue }
 
   2. Clear any existing debounce timer
 
   3. If newValue is empty:
-     3.1. Set state.searchInput.debouncedQuery = ''
-     3.2. Close autocomplete: state.autocomplete.isOpen = false
-     3.3. Clear autocomplete items: state.autocomplete.items = []
-     3.4. RETURN early (no API call)
+     3.1. Update searchInputStore: { debouncedQuery: '' }
+     3.2. Close autocomplete: autocompleteStore.update(s => ({ ...s, isOpen: false, items: [] }))
+     3.3. RETURN early (no API call)
 
   4. Start new debounce timer (150ms):
      AFTER 150ms:
-       4.1. Set state.searchInput.debouncedQuery = newValue
-       4.2. Set state.searchInput.isLoading = true
-       4.3. Call fetchAutocomplete(newValue)
+       4.1. Update searchInputStore: { debouncedQuery: newValue, isLoading: true }
+       4.2. Execute autocompleteQuery via queryClient with newValue
 
 FUNCTION fetchAutocomplete(query: string):
   1. Build request parameters:
      - query: string
-     - mode: state.mode
-     - filters: state.tagFilters.activeFilters
+     - mode: $searchModeStore
+     - filters: $tagFiltersStore.activeFilters
      - limit: MAX_AUTOCOMPLETE_ITEMS
 
-  2. Check offline status:
-     IF state.offline.isOnline === false:
-       2.1. Retrieve cached results from localStorage
+  2. Check offline status via offlineStore:
+     IF $offlineStore.isOnline === false:
+       2.1. Retrieve cached results from service worker cache
        2.2. Filter cached items matching query (case-insensitive contains)
-       2.3. Set state.autocomplete.items = filteredCachedItems
-       2.4. Set state.autocomplete.isOpen = true
-       2.5. Set state.searchInput.isLoading = false
-       2.6. RETURN
+       2.3. Update autocompleteStore with filteredCachedItems
+       2.4. Update searchInputStore: { isLoading: false }
+       2.5. RETURN
 
-  3. Try API call:
+  3. Execute TanStack Query:
      TRY:
-       3.1. response = await GET /api/v1/search/autocomplete?{params}
-       3.2. Set state.autocomplete.items = response.items
-       3.3. Set state.autocomplete.totalCount = response.totalCount
-       3.4. Set state.autocomplete.isOpen = true
-       3.5. Set state.autocomplete.highlightedIndex = -1
-       3.6. Cache results in localStorage for offline use
+       3.1. Query fetches GET /api/v1/search/autocomplete?{params}
+       3.2. On success: update autocompleteStore with response data
+       3.3. Cache results in service worker for offline use
      CATCH error:
-       3.7. IF error is NetworkError:
+       3.4. IF error is NetworkError:
             - handleOffline()
             - Retry with cached data (step 2)
-       3.8. ELSE:
-            - Set state.searchInput.hasError = true
-            - Set state.searchInput.errorMessage = mapErrorToUserMessage(error)
+       3.5. ELSE:
+            - Update searchInputStore: { hasError: true, errorMessage: mapErrorToUserMessage(error) }
      FINALLY:
-       3.9. Set state.searchInput.isLoading = false
+       3.6. Update searchInputStore: { isLoading: false }
 ```
 
 ### 2.3 Autocomplete Keyboard Navigation
@@ -1025,7 +1099,54 @@ interface SearchViewEvents {
 
 ---
 
-## 5. UI Component Structure
+---
+
+## 5. Styling with Tailwind CSS
+
+All SearchView components use Tailwind CSS for styling. Utility classes are applied directly in Svelte templates.
+
+**Tailwind Configuration:**
+```javascript
+// tailwind.config.js
+module.exports = {
+  content: ['./src/**/*.{html,js,svelte,ts}'],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          500: '#22c55e',
+          600: '#16a34a',
+          700: '#166534',
+        },
+        secondary: {
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          500: '#86efac',
+          600: '#4ade80',
+        },
+        accent: '#f97316',
+        error: '#dc2626',
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
+```
+
+**Common Tailwind Patterns:**
+- Layout: `flex`, `grid`, `flex-col`, `justify-between`, `items-center`
+- Spacing: `p-2`, `p-4`, `m-2`, `gap-2`, `space-y-4`
+- Typography: `text-sm`, `text-lg`, `font-medium`, `text-gray-700`
+- Colors: `bg-white`, `text-primary-700`, `border-gray-200`
+- Interactive: `hover:bg-gray-100`, `focus:ring-2`, `active:bg-gray-200`
+- Responsive: `md:flex-row`, `lg:grid-cols-2`
+
+## 6. UI Component Structure
 
 ```
 SearchView
@@ -1078,9 +1199,7 @@ SearchView
     └── RetryButton
 ```
 
----
-
-## 6. Accessibility Requirements
+## 7. Accessibility Requirements
 
 | Element | ARIA Attribute | Keyboard Support |
 |:--------|:---------------|:-----------------|
@@ -1107,7 +1226,7 @@ SearchView
 
 ---
 
-## 7. Performance Considerations
+## 8. Performance Considerations
 
 | Optimization | Implementation | Impact |
 |:-------------|:---------------|:-------|
@@ -1115,8 +1234,234 @@ SearchView
 | Autocomplete limit | Max 8 items displayed | Consistent render performance |
 | Virtual scrolling | Not needed (small list) | N/A |
 | Image lazy loading | `loading="lazy"` on images | Faster initial render |
-| Memoized calculations | Memo total macros, filtered tags | Prevent unnecessary recalcs |
-| localStorage caching | LRU cache for offline, max 20 queries | Offline functionality |
+| Memoized calculations | Svelte derived stores for total macros, filtered tags | Prevent unnecessary recalcs |
+| Service Worker caching | LRU cache for offline, max 20 queries | Offline functionality |
+| TanStack Query | Automatic caching, background refetch | Reduced API calls |
+
+---
+
+## 9. Testing Requirements
+
+**Test Stack:** Bun test runner + @testing-library/svelte + Playwright
+
+### Unit Tests (Bun + @testing-library/svelte)
+
+```typescript
+// search-input.test.ts
+import { describe, it, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import SearchInput from './SearchInput.svelte';
+import { searchInputStore, autocompleteStore } from './stores';
+
+describe('SearchInput', () => {
+  it('updates query on user input', async () => {
+    render(SearchInput);
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'chicken' } });
+    expect($searchInputStore.query).toBe('chicken');
+  });
+
+  it('shows loading spinner while fetching autocomplete', async () => {
+    render(SearchInput);
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'chicken' } });
+    expect(screen.getByTestId('loading-spinner')).toBeVisible();
+  });
+
+  it('displays autocomplete dropdown after successful fetch', async () => {
+    render(SearchInput);
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'chicken' } });
+    await waitFor(() => {
+      expect(screen.getByRole('listbox')).toBeVisible();
+    });
+  });
+
+  it('debounces input by 150ms before API call', async () => {
+    const timer = vi.useFakeTimers();
+    render(SearchInput);
+    const input = screen.getByRole('combobox');
+    
+    await fireEvent.input(input, { target: { value: 'c' } });
+    await fireEvent.input(input, { target: { value: 'ch' } });
+    await fireEvent.input(input, { target: { value: 'chi' } });
+    
+    timer.advanceTimersByTime(149);
+    expect($autocompleteStore.isLoading).toBe(true);
+    
+    timer.advanceTimersByTime(1);
+    expect($autocompleteStore.isLoading).toBe(false);
+    
+    timer.useRealTimers();
+  });
+
+  it('handles keyboard navigation with arrow keys', async () => {
+    render(SearchInput);
+    const input = screen.getByRole('combobox');
+    
+    await fireEvent.input(input, { target: { value: 'chicken' } });
+    await waitFor(() => screen.getByRole('listbox'));
+    
+    await fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByTestId('autocomplete-item-0')).toHaveAttribute('aria-selected', 'true');
+    
+    await fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(screen.getByTestId('autocomplete-item-0')).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+describe('MacroToggleBar', () => {
+  it('toggles macro state correctly', async () => {
+    render(MacroToggleBar);
+    const proteinToggle = screen.getByRole('checkbox', { name: /protein/i });
+    
+    await fireEvent.click(proteinToggle);
+    expect($macroTogglesStore.protein).toBe(false);
+    
+    await fireEvent.click(proteinToggle);
+    expect($macroTogglesStore.protein).toBe(true);
+  });
+
+  it('prevents disabling all macros', async () => {
+    render(MacroToggleBar);
+    const proteinToggle = screen.getByRole('checkbox', { name: /protein/i });
+    const carbsToggle = screen.getByRole('checkbox', { name: /carbs/i });
+    
+    await fireEvent.click(carbsToggle);
+    await fireEvent.click(fatToggle);
+    await fireEvent.click(proteinToggle);
+    
+    expect($macroTogglesStore.protein).toBe(true);
+    expect(screen.getByText(/at least one macronutrient/i)).toBeInTheDocument();
+  });
+});
+```
+
+### Integration Tests (Bun + @testing-library/svelte)
+
+```typescript
+// search-view.test.ts
+import { describe, it, expect, beforeEach } from 'bun:test';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
+import SearchView from './SearchView.svelte';
+import { queryClient } from './stores';
+
+describe('SearchView Integration', () => {
+  beforeEach(() => {
+    queryClient.clear();
+  });
+
+  it('completes full search flow from input to ingredient selection', async () => {
+    render(SearchView, { initialMode: 'single' });
+    
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'chicken breast' } });
+    
+    await waitFor(() => screen.getByRole('listbox'));
+    const firstItem = screen.getByTestId('autocomplete-item-0');
+    await fireEvent.click(firstItem);
+    
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect($searchInputStore.query).toBe('');
+  });
+
+  it('handles mode switching from single to recipe', async () => {
+    render(SearchView);
+    
+    const recipeButton = screen.getByRole('button', { name: /recipe/i });
+    await fireEvent.click(recipeButton);
+    
+    expect($searchModeStore).toBe('recipe');
+    expect(screen.getByTestId('ingredient-list')).toBeVisible();
+  });
+
+  it('persists search history to localStorage', async () => {
+    render(SearchView);
+    
+    const input = screen.getByRole('combobox');
+    await fireEvent.input(input, { target: { value: 'salmon' } });
+    await waitFor(() => screen.getByRole('listbox'));
+    
+    const firstItem = screen.getByTestId('autocomplete-item-0');
+    await fireEvent.click(firstItem);
+    
+    const history = JSON.parse(localStorage.getItem('mealswapp_search_history'));
+    expect(history.length).toBe(1);
+    expect(history[0].query).toBe('salmon');
+  });
+});
+```
+
+### E2E Tests (Playwright)
+
+```typescript
+// search-view.e2e.spec.ts
+import { test, expect } from '@playwright/test';
+
+test.describe('SearchView E2E', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/search');
+  });
+
+  test('user can search for food items and view alternatives', async ({ page }) => {
+    await page.fill('[role="combobox"]', 'chicken breast');
+    
+    await expect(page.locator('[role="listbox"]')).toBeVisible();
+    await expect(page.locator('[role="option"]').first()).toContainText('chicken breast');
+    
+    await page.keyboard.press('Enter');
+    
+    await expect(page).toHaveURL(/\/results/);
+    await expect(page.locator('text=Alternatives')).toBeVisible();
+  });
+
+  test('works offline with cached results', async ({ page, context }) => {
+    await page.fill('[role="combobox"]', 'apple');
+    await page.keyboard.press('Enter');
+    await page.waitForLoadState('networkidle');
+    
+    await context.setOffline(true);
+    
+    await page.goto('/search');
+    await expect(page.locator('text=offline')).toBeVisible();
+    await expect(page.locator('text=cached results')).toBeVisible();
+    
+    await context.setOffline(false);
+    await expect(page.locator('text=offline')).not.toBeVisible();
+  });
+
+  test('theme toggle persists preference', async ({ page }) => {
+    await page.click('[aria-label="Toggle theme"]');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+
+  test('keyboard navigation works through entire search flow', async ({ page }) => {
+    await page.fill('[role="combobox"]', 'rice');
+    
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('[aria-selected="true"]')).toBeVisible();
+    
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[role="listbox"]')).not.toBeVisible();
+    
+    await expect(page).toHaveURL(/\/results/);
+  });
+});
+```
+
+### Test Coverage Requirements
+
+| Component | Unit Coverage | Integration Coverage | E2E Coverage |
+|:----------|:--------------|:--------------------|:-------------|
+| SearchInput | 90% | 80% | Critical paths |
+| AutocompleteDropdown | 85% | 75% | Keyboard nav |
+| MacroToggleBar | 90% | 80% | State transitions |
+| TagFilterBar | 85% | 70% | Filter operations |
+| IngredientList | 85% | 75% | Add/remove items |
+| SearchView | N/A | 80% | Full user flows |
 
 ---
 
@@ -1131,3 +1476,10 @@ SearchView
 - Error handling specifications
 - Component interface contracts
 - Accessibility requirements
+
+**Updated (Tech Stack Compliance):**
+- Added Svelte stores + TanStack Query for state management
+- Added Tailwind CSS styling section
+- Added testing requirements (Bun test runner + @testing-library/svelte + Playwright)
+- Updated caching to use Service Worker + localStorage
+- Added performance optimization documentation
