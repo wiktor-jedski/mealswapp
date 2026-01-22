@@ -9,7 +9,7 @@ This document defines the software architecture for the Mealswapp application, d
 
 ### 1.1 Architectural Overview
 
-The Mealswapp application follows a **three-tier architecture** with a responsive web frontend, a RESTful API backend, and a persistent data layer. The system is designed for horizontal scalability, security, and future mobile platform integration.
+The Mealswapp application follows a **three-tier architecture** with a responsive Svelte web frontend, a Fiber-based Go RESTful API backend, and a persistent data layer using PostgreSQL and Redis. The system is designed for horizontal scalability, security, and future mobile platform integration.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -63,6 +63,22 @@ The Mealswapp application follows a **three-tier architecture** with a responsiv
 | **Memory (Client)** | < 50MB heap | Mobile browser optimization |
 | **Network Payload** | < 100KB initial load | Mobile data efficiency |
 
+### 1.3 Hosting Infrastructure
+
+The application is deployed on Google Cloud Platform (GCP) using managed services to minimize operational overhead:
+
+| Service | Purpose |
+| :--- | :--- |
+| **Cloud Run** | Containerized backend API deployment with automatic scaling |
+| **Cloud SQL** | Managed PostgreSQL database |
+| **Memorystore** | Managed Redis for caching and session management |
+| **Cloud Storage + Cloud CDN** | Static asset hosting (images, similarity indicators) |
+| **Cloud Monitoring** | Logging, metrics, and uptime monitoring |
+| **Secret Manager** | Secure storage of API keys, database credentials, and secrets |
+| **GitHub Actions** | CI/CD pipeline for automated testing and deployment |
+
+Container orchestration is not required as managed services handle scaling and availability.
+
 ---
 
 ## 2. Architectural Components
@@ -71,13 +87,13 @@ The Mealswapp application follows a **three-tier architecture** with a responsiv
 
 ## [ARCH-001] - Web Application Module
 
-**Description:** The responsive single-page application (SPA) that serves as the primary user interface, handling all client-side rendering, state management, local caching, and offline functionality.
+**Description:** The responsive single-page application (SPA) built with Svelte that serves as the primary user interface, handling all client-side rendering, state management with Svelte stores + TanStack Query, local caching via Service Worker + localStorage, and offline functionality.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager |
-| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer) |
+| **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager, ServiceWorker |
+| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer), TanStack Query |
 | **Traceability** | SW-REQ-001, SW-REQ-002, SW-REQ-003, SW-REQ-005, SW-REQ-007, SW-REQ-008, SW-REQ-009, SW-REQ-011, SW-REQ-012, SW-REQ-013, SW-REQ-014, SW-REQ-015, SW-REQ-018, SW-REQ-025, SW-REQ-048, SW-REQ-077, SW-REQ-085, SW-REQ-086, SW-REQ-087, SW-REQ-088, SW-REQ-089 |
 
 **Dynamic Behavior:**
@@ -180,14 +196,14 @@ The Mealswapp application follows a **three-tier architecture** with a responsiv
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service (Asynchronous Job Queue) |
-| **Static Aspects** | LPSolverWrapper, ConstraintBuilder, ObjectiveFunction, DiversityPenalizer, SolutionValidator, JobQueueManager, JobStatusTracker |
-| **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), Redis (Job Queue), ARCH-010 (API Gateway) |
+| **Static Aspects** | LPSolverWrapper (go-coinor/clp), ConstraintBuilder, ObjectiveFunction, DiversityPenalizer, SolutionValidator, JobQueueManager, JobStatusTracker |
+| **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), Redis (Job Queue via go-redis/queue or machinery), ARCH-010 (API Gateway) |
 | **Traceability** | SW-REQ-021, SW-REQ-022, SW-REQ-023, SW-REQ-030, SW-REQ-080, SW-REQ-082 |
 
 **Dynamic Behavior:**
 
-- **Job Submission:** Client submits optimization request. API returns `202 Accepted` with a `jobId` immediately, without blocking. Job is queued in Redis-backed queue (BullMQ).
-- **Asynchronous Processing:** Worker processes pick up jobs from queue. LP solving occurs off the main event loop, preventing CPU blocking under concurrent load.
+- **Job Submission:** Client submits optimization request. API returns `202 Accepted` with a `jobId` immediately, without blocking. Job is queued in Redis-backed queue (go-redis/queue or machinery).
+- **Asynchronous Processing:** Worker processes pick up jobs from queue. LP solving occurs asynchronously, preventing blocking under concurrent load.
 - **Constraint Setup:** Builds linear constraints for target Protein, Carbohydrate, and Fat values with configurable tolerance bands.
 - **Objective Minimization:** Defines calorie count as primary objective function to minimize.
 - **Diversity Weighting:** Applies penalty weights to meal IDs present in original diet to encourage diverse alternatives.
@@ -204,9 +220,9 @@ The Mealswapp application follows a **three-tier architecture** with a responsiv
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Asynchronous Job Queue with Redis-backed BullMQ and worker pool
+- *Chosen Approach:* Asynchronous Job Queue with Redis-backed go-redis/queue or machinery and worker pool
 - *Alternative Considered:* Synchronous LP execution within API request lifecycle
-- *Trade-off:* Synchronous execution would block the Node.js event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently.
+- *Trade-off:* Synchronous execution would block the Go Fiber event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently.
 
 **Reference Documentation:** 
 - 02_APPENDIX_A.md
@@ -221,7 +237,7 @@ The Mealswapp application follows a **three-tier architecture** with a responsiv
 | :--- | :--- |
 | **Type** | Module |
 | **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, UnitConverter, MacroNormalizer, RepositoryInterfaces |
-| **Dependencies** | PostgreSQL (primary datastore) |
+| **Dependencies** | PostgreSQL (primary datastore, via lib/pq or pgx) |
 | **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041 |
 
 **Dynamic Behavior:**
@@ -291,16 +307,16 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | AuthController, PasswordHasher, JWTManager, OAuthHandler, SessionManager, AccountLockoutTracker |
-| **Dependencies** | ARCH-005 (Data Repository), ARCH-013 (Security Middleware), External OAuth Providers |
+| **Static Aspects** | AuthController, PasswordHasher (Argon2), JWTManager, OAuthHandler (goth), SessionManager (Fiber session middleware), AccountLockoutTracker |
+| **Dependencies** | ARCH-005 (Data Repository), ARCH-013 (Security Middleware), External OAuth Providers (Google, Apple via github.com/markbates/goth) |
 | **Traceability** | SW-REQ-046, SW-REQ-058, SW-REQ-059, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-069, SW-REQ-070 |
 
 **Dynamic Behavior:**
 
-- **Registration:** Validates email uniqueness, hashes password with Argon2 (unique salt), sends verification email. Blocks paid features until verified.
+- **Registration:** Validates email uniqueness, hashes password with Argon2 (golang.org/x/crypto/argon2, unique salt), sends verification email. Blocks paid features until verified.
 - **Login:** Validates credentials, tracks failed attempts per account (5 max -> 15min lockout) and per IP (10 max/10min).
-- **Token Lifecycle:** Issues 15-minute access tokens and 7-day refresh tokens in HttpOnly/Secure/SameSite=Strict cookies. Rotates refresh token on use.
-- **Social Login:** Handles OAuth2 flows for Google/Apple, creates or links user accounts, grants 7-day trial on first authentication.
+- **Token Lifecycle:** Issues 15-minute access tokens and 7-day refresh tokens in HttpOnly/Secure/SameSite=Strict cookies. Manages sessions via Fiber session middleware. Rotates refresh token on use.
+- **Social Login:** Handles OAuth2 flows for Google/Apple using github.com/markbates/goth, creates or links user accounts, grants 7-day trial on first authentication.
 - **Password Reset:** Generates cryptographically random single-use tokens valid for 1 hour.
 
 **Interface Definition:**
@@ -310,7 +326,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Custom JWT-based authentication with HttpOnly cookies
+- *Chosen Approach:* Custom JWT-based authentication with HttpOnly cookies and Fiber session middleware, using github.com/markbates/goth for OAuth providers
 - *Alternative Considered:* Third-party auth service (Auth0, Firebase Auth)
 - *Trade-off:* Custom implementation provides full control over security requirements (SW-REQ-062, SW-REQ-063, SW-REQ-065) and avoids vendor lock-in. Third-party services simplify development but may not support exact lockout policies or cookie configurations required. For a subscription-based app with specific security needs, custom implementation ensures compliance.
 
@@ -543,7 +559,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Application-level API gateway (Express/Fastify middleware)
+- *Chosen Approach:* Application-level API gateway (Fiber middleware)
 - *Alternative Considered:* Dedicated API gateway service (Kong, AWS API Gateway)
 - *Trade-off:* Application-level gateway reduces infrastructure complexity and latency for current scale. Dedicated gateway would provide advanced features (API keys, analytics) but adds operational overhead. For 1000 concurrent users (SW-REQ-082), application-level gateway is sufficient and simpler to deploy.
 
@@ -560,7 +576,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 | :--- | :--- |
 | **Type** | Middleware |
 | **Static Aspects** | ServiceWorkerCache (client), LocalStorageCache (client), RedisCache (server), CacheInvalidator, LRUEvictionPolicy, UserCachePurger |
-| **Dependencies** | Redis, Browser Service Worker API, Browser localStorage API, ARCH-008 (User Profile) |
+| **Dependencies** | Redis (via github.com/redis/go-redis/v9), Browser Service Worker API, Browser localStorage API, ARCH-008 (User Profile) |
 | **Traceability** | SW-REQ-003, SW-REQ-048, SW-REQ-073, SW-REQ-080, SW-REQ-088 |
 
 **Dynamic Behavior:**
@@ -629,15 +645,17 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Middleware |
-| **Static Aspects** | EncryptionService, InputSanitizer, AuditLogger, TLSEnforcer |
+| **Static Aspects** | EncryptionService (AES-256 via crypto/aes), InputSanitizer, AuditLogger, TLSEnforcer, RateLimiter (Fiber built-in limiter), CSRFValidator (Fiber csrf middleware) |
 | **Dependencies** | All services |
 | **Traceability** | SW-REQ-059, SW-REQ-068, SW-REQ-075, SW-REQ-084 |
 
 **Dynamic Behavior:**
 
-- **Encryption at Rest:** AES-256 encryption for PII fields in database.
+- **Encryption at Rest:** AES-256 encryption (crypto/aes) for PII fields in database.
 - **Encryption in Transit:** TLS 1.3 enforced for all connections. HTTP redirects to HTTPS.
 - **Input Validation:** Sanitizes all user inputs to prevent XSS, SQL injection, and command injection.
+- **Rate Limiting:** Enforces rate limits using Fiber built-in limiter middleware.
+- **CSRF Protection:** Validates synchronizer tokens on all state-changing requests using Fiber csrf middleware.
 - **Audit Logging:** Logs all authentication events, API requests, errors, and admin actions with timestamps and user IDs.
 
 **Interface Definition:**
@@ -660,15 +678,15 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | LogAggregator, MetricsCollector, AlertManager, UptimeMonitor |
+| **Static Aspects** | LogAggregator, MetricsCollector, AlertManager, UptimeMonitor, FiberLogger (Fiber logger middleware) |
 | **Dependencies** | All services (Architectural Overhead) |
 | **Traceability** | SW-REQ-081, SW-REQ-083, SW-REQ-084 |
 
 **Dynamic Behavior:**
 
-- **Log Aggregation:** Collects structured logs from all services. Retains for minimum 90 days.
-- **Metrics Collection:** Tracks response times, error rates, concurrent users for P95 latency monitoring.
-- **Uptime Monitoring:** Continuous health checks for 99.9% availability tracking.
+- **Log Aggregation:** Collects structured logs from all services using Fiber logger middleware. Integrates with GCP Cloud Monitoring for log aggregation. Retains for minimum 90 days.
+- **Metrics Collection:** Tracks response times, error rates, concurrent users for P95 latency monitoring via GCP Cloud Monitoring.
+- **Uptime Monitoring:** Continuous health checks for 99.9% availability tracking via GCP Cloud Monitoring.
 - **Backup Verification:** Monitors daily backup completion and tests restore capability.
 
 **Interface Definition:**
@@ -678,7 +696,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Centralized logging with ELK stack or cloud-native equivalent
+- *Chosen Approach:* Centralized logging with GCP Cloud Monitoring (cloud-native equivalent)
 - *Alternative Considered:* Distributed logging with per-service log files
 - *Trade-off:* Centralized logging enables correlation across services for debugging and security auditing (SW-REQ-084). Distributed logs would be simpler but make cross-service analysis difficult. Centralized approach is essential for maintaining 99.9% availability (SW-REQ-081) through proactive monitoring.
 
@@ -783,7 +801,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 | :--- | :--- |
 | **Type** | Module |
 | **Static Aspects** | ErrorBoundary (client), GlobalExceptionHandler (server), RetryManager, ErrorMessageMapper |
-| **Dependencies** | ARCH-001 (Web Application), ARCH-010 (API Gateway) |
+| **Dependencies** | ARCH-001 (Web Application), ARCH-010 (API Gateway - Fiber) |
 | **Traceability** | SW-REQ-077, SW-REQ-078, SW-REQ-079 |
 
 **Dynamic Behavior:**
@@ -812,9 +830,9 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 
 | Interface | Protocol | Description | Security |
 | :--- | :--- | :--- | :--- |
-| **Client <-> API** | HTTPS (TLS 1.3) | RESTful API endpoints | JWT in HttpOnly cookies |
+| **Client <-> API** | HTTPS (TLS 1.3) | RESTful API endpoints via Fiber | JWT in HttpOnly cookies, Fiber CSRF middleware |
 | **API <-> Stripe** | HTTPS | Payment processing | Webhook signatures |
-| **API <-> OAuth** | OAuth 2.0 | Google/Apple login | PKCE flow |
+| **API <-> OAuth** | OAuth 2.0 | Google/Apple login via github.com/markbates/goth | PKCE flow |
 | **API <-> USDA** | HTTPS | Food data retrieval | API key |
 | **API <-> OpenFoodFacts** | HTTPS | Food data retrieval | Public API |
 
@@ -931,7 +949,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 ### 2026-01-21 (Rev 1.1)
 
 **Changed (Post-Review Remediation):**
-- **ARCH-004:** Converted from synchronous service to asynchronous job queue pattern (BullMQ/Redis) to prevent CPU blocking under concurrent load. Added job submission, polling, and WebSocket notification interfaces. Addresses performance risk for SW-REQ-080, SW-REQ-082.
+- **ARCH-004:** Converted from synchronous service to asynchronous job queue pattern (go-redis/queue or machinery/Redis) to prevent CPU blocking under concurrent load. Added job submission, polling, and WebSocket notification interfaces. Addresses performance risk for SW-REQ-080, SW-REQ-082.
 - **ARCH-011:** Replaced localStorage-only approach with Service Worker + Cache API for offline image caching. Added `UserCachePurger` for GDPR-compliant Redis cache invalidation on account deletion (SW-REQ-073).
 - **ARCH-002:** Added `FunctionalityTagWeighter` component and explicit dynamic behavior for relevance boosting based on Functionality Tag matches during replacement searches (SW-REQ-031).
 - **ARCH-003:** Added `SimilarityAssetResolver` and explicit server-hosted image URLs for similarity tier indicators. Addresses SW-REQ-018 requirement to store emojis as server images.

@@ -46,7 +46,7 @@ User Input → 150ms debounce → Cache check (ARCH-011)
 | Mechanism | Component | Impact |
 |:----------|:----------|:-------|
 | **Stateless API Design** | ARCH-010 | Any API node can handle any request; nodes are interchangeable |
-| **Redis Session Store** | ARCH-011 | Sessions stored externally; no sticky sessions required |
+| **Redis Session Store** | ARCH-011 | Sessions stored externally via github.com/redis/go-redis/v9; no sticky sessions required |
 | **Connection Pooling** | ARCH-005 | PgBouncer or equivalent prevents connection exhaustion |
 | **Health Check Endpoints** | ARCH-010 | `/health` and `/ready` endpoints for load balancer probing |
 | **Graceful Shutdown** | ARCH-010 | SIGTERM triggers drain period; in-flight requests complete before termination |
@@ -99,12 +99,12 @@ Supporting 1000 concurrent users requires preventing resource exhaustion:
 × 0.1 requests/second/user (avg)
 = 100 requests/second sustained load
 
-API Node capacity: ~200 req/s per node
+Go Fiber API Node capacity: ~500 req/s per node
 Required nodes: 1 (with 2x headroom = 2 nodes minimum)
 
 LP jobs: ~5% of requests = 5 jobs/second
-Worker capacity: ~2 jobs/second per worker
-Required workers: 3 (with headroom = 4 workers)
+Worker capacity: ~10 jobs/second per worker (Go with go-coinor/clp)
+Required workers: 1 (with headroom = 2 workers)
 ```
 
 **Monitoring:** ARCH-014 tracks concurrent connections, queue depth, and worker utilization. Auto-scaling triggers at 70% capacity.
@@ -165,19 +165,19 @@ When system resources are constrained, features degrade in this order (least cri
 | Component | Failure Scenario | Detection | Response | User Impact |
 |:----------|:-----------------|:----------|:---------|:------------|
 | **ARCH-003** (Similarity) | High latency (>5s) | Timeout monitoring | Return results without similarity scores | Results display without color indicators; "Similarity unavailable" banner |
-| **ARCH-004** (LP Optimizer) | Job timeout (>30s) | BullMQ timeout event | Mark job failed; return partial results if available | "Optimization taking longer than expected. Please try again." |
-| **ARCH-012** (External APIs) | USDA/OpenFoodFacts down | HTTP 5xx or timeout | Log warning; return empty results to admin | Admin sees "External data source unavailable"; no user impact |
-| **Redis** | Connection refused | Connection error | Fall back to direct PostgreSQL queries | Slower responses (~500ms vs ~10ms); full functionality maintained |
-| **PostgreSQL Primary** | Connection lost | Connection pool error | Automatic failover to replica (if configured) | Brief interruption (<30s); read-only mode during failover |
+| **ARCH-004** (LP Optimizer) | Job timeout (>30s) | go-redis/queue or machinery timeout event | Mark job failed; return partial results if available | "Optimization taking longer than expected. Please try again." |
+| **ARCH-012** (External APIs) | USDA/OpenFoodFacts/Resend down | HTTP 5xx or timeout | Log warning; return empty results to admin | Admin sees "External data source unavailable"; no user impact |
+| **Redis** | Connection refused | github.com/redis/go-redis/v9 connection error | Fall back to direct PostgreSQL queries (lib/pq or pgx) | Slower responses (~500ms vs ~10ms); full functionality maintained |
+| **PostgreSQL Primary** | Connection lost | Connection pool error (lib/pq or pgx) | Automatic failover to replica (if configured) | Brief interruption (<30s); read-only mode during failover |
 
 **Redis Fallback Flow:**
 ```
-Request → Check Redis
-              │
-    ┌─────────┴─────────┐
-    │ Redis OK          │ Redis DOWN
-    ▼                   ▼
-Return cached       Query PostgreSQL directly
+Request → Check Redis (github.com/redis/go-redis/v9)
+               │
+     ┌─────────┴─────────┐
+     │ Redis OK          │ Redis DOWN
+     ▼                   ▼
+Return cached       Query PostgreSQL directly (lib/pq or pgx)
                     Log degraded mode
                     Set circuit breaker (retry Redis in 30s)
 ```
@@ -190,12 +190,12 @@ Different failure types require different handling strategies:
 
 | Operation Type | Policy | Rationale |
 |:---------------|:-------|:----------|
-| **External API calls** (USDA, OpenFoodFacts) | Retry 3x with exponential backoff (1s, 2s, 4s), then fail | External services have transient failures; retries often succeed |
+| **External API calls** (USDA, OpenFoodFacts, Resend) | Retry 3x with exponential backoff (1s, 2s, 4s), then fail | External services have transient failures; retries often succeed |
 | **Database queries** | Fail fast | DB issues indicate serious problems; retrying wastes resources and delays error reporting |
 | **Stripe webhooks** | Handled by Stripe | Stripe retries automatically for up to 3 days; handler must be idempotent |
-| **LP jobs** | Timeout at 30s, no retry | LP is deterministic; if it fails once, it will fail again. User can manually retry. |
-| **Redis operations** | Fail fast, fallback to DB | Redis failures should degrade gracefully, not block requests |
-| **OAuth provider calls** | Retry 2x, then fail with user message | OAuth failures are often transient; limited retries appropriate |
+| **LP jobs** | Timeout at 30s, no retry | LP is deterministic using go-coinor/clp; if it fails once, it will fail again. User can manually retry. |
+| **Redis operations** | Fail fast, fallback to DB | Redis failures via github.com/redis/go-redis/v9 should degrade gracefully, not block requests |
+| **OAuth provider calls** | Retry 2x, then fail with user message | OAuth failures (github.com/markbates/goth) are often transient; limited retries appropriate |
 
 **Exponential Backoff Implementation:**
 ```
@@ -291,8 +291,8 @@ This section defines the deployment topology, environment configurations, and CI
 
 **Component Distribution:**
 - **API Nodes:** Run all ARCH components except ARCH-004 workers. Horizontally scalable.
-- **LP Worker Pool:** Dedicated processes for ARCH-004 job execution. Scaled based on queue depth.
-- **Redis:** Single cluster handling cache (ARCH-011), sessions (ARCH-006), and job queue (ARCH-004).
+- **LP Worker Pool:** Dedicated processes for ARCH-004 job execution using go-coinor/clp. Scaled based on queue depth.
+- **Redis:** Single cluster handling cache (ARCH-011), sessions (ARCH-006 via github.com/redis/go-redis/v9), and job queue (ARCH-004 via go-redis/queue or machinery).
 - **PostgreSQL:** Primary for writes, read replicas for query distribution.
 
 ---
@@ -308,16 +308,16 @@ This section defines the deployment topology, environment configurations, and CI
 
 | Secret | Storage | Rotation Frequency |
 |:-------|:--------|:-------------------|
-| `DATABASE_URL` | Platform secret manager | On credential rotation |
-| `REDIS_URL` | Platform secret manager | On credential rotation |
-| `JWT_SIGNING_KEY` | Platform secret manager | Quarterly (with grace period) |
-| `STRIPE_SECRET_KEY` | Platform secret manager | On compromise or annually |
-| `STRIPE_WEBHOOK_SECRET` | Platform secret manager | On endpoint recreation |
-| `OAUTH_CLIENT_SECRET` (Google/Apple) | Platform secret manager | On compromise |
+| `DATABASE_URL` | GCP Secret Manager | On credential rotation |
+| `REDIS_URL` | GCP Secret Manager | On credential rotation |
+| `JWT_SIGNING_KEY` | GCP Secret Manager | Quarterly (with grace period) |
+| `STRIPE_SECRET_KEY` | GCP Secret Manager | On compromise or annually |
+| `STRIPE_WEBHOOK_SECRET` | GCP Secret Manager | On endpoint recreation |
+| `OAUTH_CLIENT_SECRET` (Google/Apple) | GCP Secret Manager | On compromise |
 
 **Platform Secret Managers (by hosting provider):**
+- GCP: Secret Manager (primary)
 - AWS: Secrets Manager or Parameter Store
-- GCP: Secret Manager
 - Azure: Key Vault
 - Railway/Render/Fly.io: Built-in secret management
 
@@ -362,11 +362,11 @@ This section defines the deployment topology, environment configurations, and CI
 **Docker Compose Services:**
 ```yaml
 services:
-  api:           # ARCH-001 through ARCH-017 (except workers)
-  worker:        # ARCH-004 LP workers
+  api:           # Go backend (ARCH-001 through ARCH-017, except workers)
+  worker:        # ARCH-004 LP workers (Go)
   postgres:      # Primary database
-  redis:         # Cache, sessions, job queue
-  maildev:       # Email testing (ARCH-006 verification emails)
+  redis:         # Cache, sessions, job queue (github.com/redis/go-redis/v9)
+  maildev:       # Email testing (ARCH-006 verification emails via Resend)
 ```
 
 **Local Development Commands:**
@@ -375,14 +375,17 @@ services:
 docker compose up -d
 
 # Run database migrations
-docker compose exec api npm run migrate
+docker compose exec api go run migrate/main.go
 
 # Seed development data
-docker compose exec api npm run seed
+docker compose exec api go run seed/main.go
 
 # View logs
 docker compose logs -f api worker
 
-# Run tests
-docker compose exec api npm test
+# Run backend tests
+docker compose exec api go test ./...
+
+# Run frontend tests (from /home/wiktor/Work/mealswapp directory)
+cd frontend && bun test
 ```
