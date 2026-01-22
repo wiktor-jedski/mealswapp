@@ -1,12 +1,12 @@
 # [ARCH-001] - Web Application Module
 
-**Description:** The responsive single-page application (SPA) that serves as the primary user interface, handling all client-side rendering, state management, local caching, and offline functionality.
+**Description:** The responsive single-page application (SPA) built with Svelte that serves as the primary user interface, handling all client-side rendering, state management with Svelte stores + TanStack Query, local caching via Service Worker + localStorage, and offline functionality.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager |
-| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer) |
+| **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager, ServiceWorker |
+| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer), TanStack Query |
 | **Traceability** | SW-REQ-001, SW-REQ-002, SW-REQ-003, SW-REQ-005, SW-REQ-007, SW-REQ-008, SW-REQ-009, SW-REQ-011, SW-REQ-012, SW-REQ-013, SW-REQ-014, SW-REQ-015, SW-REQ-018, SW-REQ-025, SW-REQ-048, SW-REQ-077, SW-REQ-085, SW-REQ-086, SW-REQ-087, SW-REQ-088, SW-REQ-089 |
 
 **Dynamic Behavior:**

@@ -6,7 +6,7 @@
 | :--- | :--- |
 | **Type** | Middleware |
 | **Static Aspects** | ServiceWorkerCache (client), LocalStorageCache (client), RedisCache (server), CacheInvalidator, LRUEvictionPolicy, UserCachePurger |
-| **Dependencies** | Redis, Browser Service Worker API, Browser localStorage API, ARCH-008 (User Profile) |
+| **Dependencies** | Redis (via github.com/redis/go-redis/v9), Browser Service Worker API, Browser localStorage API, ARCH-008 (User Profile) |
 | **Traceability** | SW-REQ-003, SW-REQ-048, SW-REQ-073, SW-REQ-080, SW-REQ-088 |
 
 **Dynamic Behavior:**

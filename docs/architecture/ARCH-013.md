@@ -5,15 +5,17 @@
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Middleware |
-| **Static Aspects** | EncryptionService, InputSanitizer, AuditLogger, TLSEnforcer |
+| **Static Aspects** | EncryptionService (AES-256 via crypto/aes), InputSanitizer, AuditLogger, TLSEnforcer, RateLimiter (Fiber built-in limiter), CSRFValidator (Fiber csrf middleware) |
 | **Dependencies** | All services |
 | **Traceability** | SW-REQ-059, SW-REQ-068, SW-REQ-075, SW-REQ-084 |
 
 **Dynamic Behavior:**
 
-- **Encryption at Rest:** AES-256 encryption for PII fields in database.
+- **Encryption at Rest:** AES-256 encryption (crypto/aes) for PII fields in database.
 - **Encryption in Transit:** TLS 1.3 enforced for all connections. HTTP redirects to HTTPS.
 - **Input Validation:** Sanitizes all user inputs to prevent XSS, SQL injection, and command injection.
+- **Rate Limiting:** Enforces rate limits using Fiber built-in limiter middleware.
+- **CSRF Protection:** Validates synchronizer tokens on all state-changing requests using Fiber csrf middleware.
 - **Audit Logging:** Logs all authentication events, API requests, errors, and admin actions with timestamps and user IDs.
 
 **Interface Definition:**

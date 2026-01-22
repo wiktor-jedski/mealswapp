@@ -6,7 +6,7 @@
 | :--- | :--- |
 | **Type** | Module |
 | **Static Aspects** | ErrorBoundary (client), GlobalExceptionHandler (server), RetryManager, ErrorMessageMapper |
-| **Dependencies** | ARCH-001 (Web Application), ARCH-010 (API Gateway) |
+| **Dependencies** | ARCH-001 (Web Application), ARCH-010 (API Gateway - Fiber) |
 | **Traceability** | SW-REQ-077, SW-REQ-078, SW-REQ-079 |
 
 **Dynamic Behavior:**

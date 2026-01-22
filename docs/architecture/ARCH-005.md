@@ -6,7 +6,7 @@
 | :--- | :--- |
 | **Type** | Module |
 | **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, UnitConverter, MacroNormalizer, RepositoryInterfaces |
-| **Dependencies** | PostgreSQL (primary datastore) |
+| **Dependencies** | PostgreSQL (primary datastore, via lib/pq or pgx) |
 | **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041 |
 
 **Dynamic Behavior:**
