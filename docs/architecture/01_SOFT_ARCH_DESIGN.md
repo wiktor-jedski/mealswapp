@@ -1,1014 +1,922 @@
-# Software Architecture Design (SWE.2)
+# Software Architecture Design (SAD)
 **Project:** Mealswapp
-**Version:** 1.0
-**Methodology:** ASPICE 4.0
+**Process:** SWE.2 Software Architectural Design
+**Version:** 1.1 (ASPICE 4.0 Compliant)
 
-## 1. System Overview
-The Mealswapp system is designed as a **Client-Server Architecture** utilizing a **Layered Pattern**.
-- **Frontend:** A Single Page Application (SPA) facilitating responsive UI, local caching, and state management.
-- **Backend:** A RESTful API Service handling business logic, complex mathematical modeling (Linear Programming), authentication, and database abstraction.
-- **Infrastructure:** Cloud-hosted containerized environment with managed database services.
+## 1. Introduction
+
+This document defines the software architecture for the Mealswapp application, decomposing the Software Requirements Specification into software components, interfaces, and design decisions. All architectural elements trace back to one or more [SW-REQ-XXX] requirements.
+
+### 1.1 Architectural Overview
+
+The Mealswapp application follows a **three-tier architecture** with a responsive web frontend, a RESTful API backend, and a persistent data layer. The system is designed for horizontal scalability, security, and future mobile platform integration.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CLIENT TIER                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              ARCH-001: Web Application                   │    │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐   │    │
+│  │  │Search UI│ │Sidebar  │ │Results  │ │Offline Cache│   │    │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────────┘   │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                              │ HTTPS/TLS 1.3
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     SERVICE TIER                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              ARCH-010: API Gateway                       │    │
+│  │         (Rate Limiting, CSRF, Security Headers)          │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                              │                                   │
+│  ┌─────────┬─────────┬───────┴───────┬─────────┬─────────┐     │
+│  │         │         │               │         │         │     │
+│  ▼         ▼         ▼               ▼         ▼         ▼     │
+│ ┌───┐   ┌───┐     ┌───┐           ┌───┐     ┌───┐     ┌───┐   │
+│ │002│   │003│     │004│           │006│     │007│     │009│   │
+│ │Srch│  │Sim│     │LP │           │Auth│    │Sub │    │Admn│  │
+│ └───┘   └───┘     └───┘           └───┘     └───┘     └───┘   │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              ARCH-005: Data Repository                   │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     DATA TIER                                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐     │
+│  │ PostgreSQL  │  │    Redis    │  │  External APIs      │     │
+│  │  (Primary)  │  │   (Cache)   │  │  (USDA/OpenFood)    │     │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 Resource Goals
+
+| Resource | Target | Rationale |
+| :--- | :--- | :--- |
+| **API Response Time** | < 2s (P95) | SW-REQ-080 |
+| **Concurrent Users** | 1000+ | SW-REQ-082 |
+| **System Availability** | 99.9% | SW-REQ-081 |
+| **Memory (Client)** | < 50MB heap | Mobile browser optimization |
+| **Network Payload** | < 100KB initial load | Mobile data efficiency |
 
 ---
 
-### [ARCH-FE-CORE] - Single Page Application Shell
-**Description:** The main entry point of the web application. It initializes the React/Framework instance, handles global error boundaries, and manages the client-side routing.
+## 2. Architectural Components
+
+---
+
+## [ARCH-001] - Web Application Module
+
+**Description:** The responsive single-page application (SPA) that serves as the primary user interface, handling all client-side rendering, state management, local caching, and offline functionality.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Module (Application Root) |
-| **Static Aspects** | `App.js`, `Router`, `ErrorBoundary` |
-| **Dependencies** | [ARCH-FE-THEME], [ARCH-FE-AUTH], [ARCH-FE-NET] |
-| **Traceability** | [SW-REQ-014], [SW-REQ-071], [SW-REQ-077], [SW-REQ-079] |
+| **Type** | Module |
+| **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager |
+| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer) |
+| **Traceability** | SW-REQ-001, SW-REQ-002, SW-REQ-003, SW-REQ-005, SW-REQ-007, SW-REQ-008, SW-REQ-009, SW-REQ-011, SW-REQ-012, SW-REQ-013, SW-REQ-014, SW-REQ-015, SW-REQ-018, SW-REQ-025, SW-REQ-048, SW-REQ-077, SW-REQ-085, SW-REQ-086, SW-REQ-087, SW-REQ-088, SW-REQ-089 |
 
 **Dynamic Behavior:**
-- **Initialization:** On load, triggers [ARCH-FE-AUTH] to validate session.
-- **Routing:** Maps URLs to specific Views (Search, Login, Profile).
-- **Error Handling:** If a child component crashes, displays the "Graceful Degradation" UI ([SW-REQ-079]).
+
+- **Initialization:** On application load, initializes search mode to 'Single Item' and enables all macronutrient toggles. Detects system theme preference and applies user-stored preference override.
+- **Search Input:** Debounces user input by 150ms before triggering API calls. Manages focus states for keyboard navigation (Tab/Shift+Tab).
+- **Offline Detection:** Monitors browser online/offline events. Switches to cached data display and shows offline indicator when disconnected.
+- **Theme Switching:** Real-time CSS variable updates when user toggles light/dark mode. Persists selection to localStorage.
 
 **Interface Definition:**
-- `Input`: Browser URL, User Events.
-- `Output`: DOM updates, Route changes.
+
+- `Input`: User interactions (keyboard, mouse, touch), system events (online/offline), API responses (JSON)
+- `Output`: HTTP requests to API Gateway, localStorage writes, DOM updates
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Client-side routing (SPA).
-- *Alternative Considered:* Multi-page Application (Server-side rendering for every page).
-- *Trade-off:* SPA is selected to support the "App-like" feel and offline capabilities ([SW-REQ-088]) required, which is harder to achieve with traditional SSR.
+
+- *Chosen Approach:* Single-Page Application with client-side routing and state management
+- *Alternative Considered:* Server-Side Rendering (SSR) with hydration
+- *Trade-off:* SPA provides better offline capability (SW-REQ-087, SW-REQ-088) and reduces server load. SSR would improve initial load SEO but adds server complexity and breaks offline-first design. Since Mealswapp is an authenticated app (not SEO-critical), SPA is superior.
 
 ---
 
-### [ARCH-FE-THEME] - Theme & Style Manager
-**Description:** Manages the CSS variables and global context for the visual identity, including Light/Dark mode toggling and responsiveness.
+## [ARCH-002] - Search Module
+
+**Description:** Backend service responsible for processing search queries, implementing autocomplete ranking, and coordinating with the Similarity Engine for result retrieval and filtering.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Service / Context |
-| **Static Aspects** | `ThemeContext`, `GlobalStyles.css`, `TailwindConfig` |
-| **Dependencies** | None |
-| **Traceability** | [SW-REQ-015], [SW-REQ-089], [SW-REQ-007], [SW-REQ-012], [SW-REQ-018], [SW-REQ-085] |
+| **Type** | Service |
+| **Static Aspects** | SearchController, AutocompleteRanker, QueryParser, PaginationHandler, FilterProcessor, FunctionalityTagWeighter |
+| **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), ARCH-011 (Caching Layer) |
+| **Traceability** | SW-REQ-004, SW-REQ-010, SW-REQ-017, SW-REQ-019, SW-REQ-024, SW-REQ-026, SW-REQ-029, SW-REQ-031 |
 
 **Dynamic Behavior:**
-- **State Change:** Triggered by user toggle in Sidebar. Updates CSS variables for `#F7FCF7` (Light) or `#0A0F0A` (Dark) per Style Guide.
-- **Persistence:** On change, writes preference to `localStorage`.
+
+- **Query Processing:** Receives search terms, applies tag whitelist/blacklist filters, and routes to appropriate search strategy (text-based or similarity-based).
+- **Autocomplete Ranking:** Implements three-tier priority: (1) Exact match, (2) Levenshtein distance, (3) String length. Executes in < 100ms.
+- **Implicit Trigger:** Detects empty search bar with 2+ ingredients to automatically initiate similarity search.
+- **Pagination:** Returns max 10 results per page, sorted by cosine similarity descending.
+- **Functionality Tag Weighting (SW-REQ-031):** During replacement searches, applies a relevance boost multiplier to items sharing the same Functionality Tags as the source item. Sorting combines cosine similarity score with tag match weight (e.g., `finalScore = similarityScore * (1 + 0.2 * tagMatchCount)`) to prioritize contextually appropriate replacements.
 
 **Interface Definition:**
-- `Input`: User Toggle Event, System Preference (`prefers-color-scheme`).
-- `Output`: CSS Variable injection.
+
+- `Input`: SearchRequest { query: string, mode: SearchMode, filters: TagFilter[], page: number, ingredients?: string[] }
+- `Output`: SearchResponse { items: FoodItem[], totalCount: number, page: number, similarityScores: number[] }
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* CSS Variables (Custom Properties) managed by JS Context.
-- *Alternative Considered:* Hardcoded CSS classes for every element.
-- *Trade-off:* CSS Variables allow instant runtime switching without page reloads, essential for [SW-REQ-015].
+
+- *Chosen Approach:* Dedicated Search Module with in-memory ranking algorithms
+- *Alternative Considered:* Elasticsearch/Algolia for full-text search
+- *Trade-off:* Custom module provides precise control over ranking algorithm (SW-REQ-004) and cosine similarity integration. External search services would require synchronization overhead and may not support custom similarity scoring. For the current scale (1000 users), custom solution is more cost-effective and controllable.
 
 ---
 
-### [ARCH-FE-SEARCH] - Search Logic Controller
-**Description:** Handles the search bar input, debounce logic, autocomplete suggestions, result data formatting and orchestrates query execution.
+## [ARCH-003] - Similarity Engine
+
+**Description:** Core computational service that calculates cosine similarity between food items based on macronutrient vectors (Protein, Carbohydrates, Fat), applies threshold filtering, and provides visual indicator mappings.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Component Logic |
-| **Static Aspects** | `useSearch` hook, `DebounceUtil`, `ResultFormatter`, `TriggerOrchestrator` |
-| **Dependencies** | [ARCH-FE-CACHE], [ARCH-FE-NET], [ARCH-FE-LIST-MGR] |
-| **Traceability** | [SW-REQ-001], [SW-REQ-002], [SW-REQ-004], [SW-REQ-008], [SW-REQ-009], [SW-REQ-024], [SW-REQ-025], [SW-REQ-011], [SW-REQ-006] |
+| **Type** | Service |
+| **Static Aspects** | CosineSimilarityCalculator, MacroVectorNormalizer, ThresholdFilter, SimilarityIndicatorMapper, SimilarityAssetResolver |
+| **Dependencies** | ARCH-005 (Data Repository) |
+| **Traceability** | SW-REQ-016, SW-REQ-017, SW-REQ-018, SW-REQ-026, SW-REQ-027, SW-REQ-028 |
 
 **Dynamic Behavior:**
-- **Debounce:** Wraps user input in a 150ms timer. If new input arrives <150ms, reset timer ([SW-REQ-002]).
-- **Trigger:** If input stops >150ms, calls [ARCH-FE-NET].
-- **Implicit Trigger:** Monitors Ingredient List state; if count >= 2, triggers Similarity Search ([SW-REQ-024]).
-- **Data Mapping:** Parses API response to ensure Image, Name, Tags, Macros, and Similarity Score are present for the UI ([SW-REQ-011]).
-- **Implicit Orchestration:** Subscribes to `ListContext`. IF `Mode == IngredientList` AND `List.length >= 2` AND `SearchInput == Empty`, THEN automatically fire `API.findSimilarity(List)` ([SW-REQ-024]).
-- **Explicit Trigger:** Listens for "Search Button" click ([SW-REQ-025]).
-    - If `Input != Empty`: Execute Standard Text Search.
-    - If `Input == Empty` AND `List != Empty`: Force execute Similarity Search (Redundancy).
-- **Mode Handling:** If `Mode == MealList`, modifies the search payload to request aggregatable meal objects rather than ingredients ([SW-REQ-006]).
+
+- **Vector Calculation:** Normalizes macronutrient values to unit vectors. For recipes, aggregates constituent ingredient macros before normalization.
+- **Similarity Scoring:** Computes cosine similarity using dot product of normalized vectors. Filters results below 0.40 threshold.
+- **Visual Indicator Mapping (SW-REQ-018):** Assigns tier indicators based on score thresholds. Returns both color code and server-hosted image URL for the indicator icon. Indicator images are stored as static assets on the server (not client-side Unicode emojis) to ensure consistent cross-platform rendering.
+  - Green + `/assets/indicators/star.png` for >=85%
+  - Light Green + `/assets/indicators/sparkle.png` for 70-84%
+  - Yellow + `/assets/indicators/thumbs-up.png` for 55-69%
+  - Red + `/assets/indicators/thumbs-down.png` for <55%
+- **Quantity Matching:** Calculates replacement quantities to match original calorie or protein counts.
 
 **Interface Definition:**
-- `Input`: Raw text string, Keydown events, List context state.
-- `Output`: Filtered Data Array (Results), UI Expansion Events, Mode Switches.
+
+- `Input`: ComparisonRequest { sourceItem: MacroVector, targetItems: MacroVector[], matchType: 'calorie' | 'protein' }
+- `Output`: SimilarityResult { itemId: string, score: number, tier: SimilarityTier, matchingQuantity: number }[]
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Custom Hook with Debounce.
-- *Alternative Considered:* Immediate API call on every keystroke.
-- *Trade-off:* Debounce reduces server load and API costs significantly. Immediate calls would violate [SW-REQ-002].
+
+- *Chosen Approach:* Three-dimensional cosine similarity (P, C, F)
+- *Alternative Considered:* Euclidean distance in macro space, or weighted similarity including calories
+- *Trade-off:* Cosine similarity measures directional alignment of macro ratios regardless of magnitude, which aligns with nutritional replacement goals (same macro profile at any quantity). Euclidean would penalize magnitude differences inappropriately. Adding calories as 4th dimension would over-weight it since calories derive from macros.
 
 ---
 
-### [ARCH-FE-CACHE] - Local Persistence Manager
-**Description:** Wraps the Browser `localStorage` API to handle offline data, query caching, and search history.
+## [ARCH-004] - Linear Programming Optimizer
+
+**Description:** Asynchronous optimization service that uses linear programming to generate alternative diet combinations matching target macronutrient profiles while minimizing total calories. Operates as a job queue to handle CPU-intensive calculations without blocking the API.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Service (Client-Side) |
-| **Static Aspects** | `StorageManager` class |
-| **Dependencies** | None |
-| **Traceability** | [SW-REQ-003], [SW-REQ-048], [SW-REQ-088] |
+| **Type** | Service (Asynchronous Job Queue) |
+| **Static Aspects** | LPSolverWrapper, ConstraintBuilder, ObjectiveFunction, DiversityPenalizer, SolutionValidator, JobQueueManager, JobStatusTracker |
+| **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), Redis (Job Queue), ARCH-010 (API Gateway) |
+| **Traceability** | SW-REQ-021, SW-REQ-022, SW-REQ-023, SW-REQ-030, SW-REQ-080, SW-REQ-082 |
 
 **Dynamic Behavior:**
-- **Write:** When a search returns successfully, push Query+Result to a Stack (Max 20).
-- **Eviction:** LRU (Least Recently Used) logic removes oldest entry when >20 ([SW-REQ-003]).
-- **Read:** Checks existence of key before requesting network.
+
+- **Job Submission:** Client submits optimization request. API returns `202 Accepted` with a `jobId` immediately, without blocking. Job is queued in Redis-backed queue (BullMQ).
+- **Asynchronous Processing:** Worker processes pick up jobs from queue. LP solving occurs off the main event loop, preventing CPU blocking under concurrent load.
+- **Constraint Setup:** Builds linear constraints for target Protein, Carbohydrate, and Fat values with configurable tolerance bands.
+- **Objective Minimization:** Defines calorie count as primary objective function to minimize.
+- **Diversity Weighting:** Applies penalty weights to meal IDs present in original diet to encourage diverse alternatives.
+- **Multi-Solution Generation:** Iteratively solves LP with exclusion constraints to produce up to 3 distinct alternatives.
+- **Result Retrieval:** Client polls `GET /jobs/{jobId}` endpoint or subscribes via WebSocket for completion notification. Results cached in Redis with 1-hour TTL.
+- **Timeout Handling:** Jobs exceeding 30 seconds are terminated and marked as failed. Client receives partial results if available.
 
 **Interface Definition:**
-- `Input`: Key (Query String), Data (JSON).
-- `Output`: Cached JSON or `null`.
+
+- `Input`: POST /api/v1/diet/optimize -> DietOptimizationRequest { originalMeals: Meal[], targetMacros: MacroTarget, excludedIds: string[] }
+- `Output (Immediate)`: { jobId: string, status: 'queued', pollUrl: string }
+- `Output (Poll)`: GET /api/v1/jobs/{jobId} -> { status: 'queued'|'processing'|'completed'|'failed', result?: DietAlternative[], error?: string }
+- `Output (WebSocket)`: Event { jobId: string, status: 'completed', result: DietAlternative[] }
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Browser `localStorage`.
-- *Alternative Considered:* IndexedDB.
-- *Trade-off:* `localStorage` is synchronous and simpler for the small dataset defined (20 queries). IndexedDB is overkill complexity for this phase.
+
+- *Chosen Approach:* Asynchronous Job Queue with Redis-backed BullMQ and worker pool
+- *Alternative Considered:* Synchronous LP execution within API request lifecycle
+- *Trade-off:* Synchronous execution would block the Node.js event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently.
 
 ---
 
-### [ARCH-FE-NET] - Network & API Client
-**Description:** A centralized Axios/Fetch wrapper that handles HTTP requests, timeout logic, headers, and retry mechanisms.
+## [ARCH-005] - Data Repository Module
+
+**Description:** Central data access layer implementing the domain data model, handling all database operations, unit conversions, and data normalization for food items, meals, and recipes.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Module |
+| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, UnitConverter, MacroNormalizer, RepositoryInterfaces |
+| **Dependencies** | PostgreSQL (primary datastore) |
+| **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041 |
+
+**Dynamic Behavior:**
+
+- **Normalization:** All macronutrient values stored per 100g (solids) or 100ml (liquids). Conversion applied on read based on user preference.
+- **Unit Conversion:** Metric-to-Imperial conversion (g->oz, ml->fl oz) performed at repository boundary, never in storage.
+- **Recipe Aggregation:** Dynamically calculates total macros for recipe-based meals by summing constituent ingredients.
+- **Real-time Scaling:** Provides calculation methods for quantity-based macro scaling.
+
+**Interface Definition:**
+
+- `Input`: CRUD operations, unit preference context, quantity parameters
+- `Output`: Domain entities with macros in requested unit system
+
+**Data Model (Core Entities):**
+
+```
+FoodItem {
+  id: UUID
+  name: string
+  physicalState: 'solid' | 'liquid'        // SW-REQ-035
+  prepTime: minutes                         // SW-REQ-035
+  averageUnitWeight: grams                  // SW-REQ-036
+  macros: { protein, carbs, fat } per 100g  // SW-REQ-033
+  micros: { sodium, fiber, ... }            // SW-REQ-038
+  categoryTags: Tag[]                       // SW-REQ-012
+  functionalityTags: Tag[]                  // SW-REQ-037
+  imageUrl: string?
+}
+
+Meal {
+  id: UUID
+  type: 'single' | 'recipe'                 // SW-REQ-034
+  items?: FoodItem                          // single dish
+  recipe?: { item: FoodItem, qty: number }[] // recipe composition
+  physicalState: 'solid' | 'liquid'        // SW-REQ-035
+  prepTime: minutes                         // SW-REQ-035
+  averageUnitWeight: grams                  // SW-REQ-036
+  categoryTags: Tag[]                       // SW-REQ-012
+  functionalityTags: Tag[]                  // SW-REQ-037
+}
+
+SimilarityIndicatorAsset {                   // SW-REQ-018
+  tier: 'excellent' | 'good' | 'fair' | 'poor'
+  colorHex: string                           // e.g., "#22C55E" for green
+  imageUrl: string                           // Server-hosted image path
+  minScore: number                           // Lower bound threshold
+  maxScore: number                           // Upper bound threshold
+}
+```
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* PostgreSQL relational database with normalized schema
+- *Alternative Considered:* MongoDB document store for flexible food item schema
+- *Trade-off:* Relational model ensures data integrity for macronutrient calculations and enforces consistent schema across all items (critical for SW-REQ-033). Recipe composition with foreign keys prevents orphaned ingredients. PostgreSQL JSONB columns can handle variable micronutrient fields while maintaining relational benefits.
+
+---
+
+## [ARCH-006] - Authentication Module
+
+**Description:** Security service handling user authentication via email/password and social providers (Google, Apple), session management, and token lifecycle.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Service |
+| **Static Aspects** | AuthController, PasswordHasher, JWTManager, OAuthHandler, SessionManager, AccountLockoutTracker |
+| **Dependencies** | ARCH-005 (Data Repository), ARCH-013 (Security Middleware), External OAuth Providers |
+| **Traceability** | SW-REQ-046, SW-REQ-058, SW-REQ-059, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-069, SW-REQ-070 |
+
+**Dynamic Behavior:**
+
+- **Registration:** Validates email uniqueness, hashes password with Argon2 (unique salt), sends verification email. Blocks paid features until verified.
+- **Login:** Validates credentials, tracks failed attempts per account (5 max -> 15min lockout) and per IP (10 max/10min).
+- **Token Lifecycle:** Issues 15-minute access tokens and 7-day refresh tokens in HttpOnly/Secure/SameSite=Strict cookies. Rotates refresh token on use.
+- **Social Login:** Handles OAuth2 flows for Google/Apple, creates or links user accounts, grants 7-day trial on first authentication.
+- **Password Reset:** Generates cryptographically random single-use tokens valid for 1 hour.
+
+**Interface Definition:**
+
+- `Input`: Credentials (email/password or OAuth tokens), session cookies
+- `Output`: JWT tokens (access/refresh), session state, verification emails
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* Custom JWT-based authentication with HttpOnly cookies
+- *Alternative Considered:* Third-party auth service (Auth0, Firebase Auth)
+- *Trade-off:* Custom implementation provides full control over security requirements (SW-REQ-062, SW-REQ-063, SW-REQ-065) and avoids vendor lock-in. Third-party services simplify development but may not support exact lockout policies or cookie configurations required. For a subscription-based app with specific security needs, custom implementation ensures compliance.
+
+---
+
+## [ARCH-007] - Subscription Module
+
+**Description:** Service managing subscription tiers, payment processing via Stripe, entitlement enforcement, and trial period logic.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Service |
+| **Static Aspects** | SubscriptionController, StripeWebhookHandler, EntitlementManager, TrialTracker, UsageLimiter |
+| **Dependencies** | ARCH-006 (Authentication), ARCH-005 (Data Repository), Stripe API |
+| **Traceability** | SW-REQ-042, SW-REQ-044, SW-REQ-045, SW-REQ-050, SW-REQ-051, SW-REQ-052, SW-REQ-053 |
+
+**Dynamic Behavior:**
+
+- **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, single-item only. Paid/Trial: unlimited, all features.
+- **Payment Flow:** Client uses Stripe Elements (PCI-DSS compliant tokenization). Server creates Payment Intents, never handles raw card data.
+- **Webhook Processing:** Asynchronously processes payment_intent.succeeded/failed events to update entitlement status reliably.
+- **Trial Management:** Activates 7-day trial on first social login. Tracks expiration timestamp. Auto-downgrades to Free tier on expiry.
+
+**Interface Definition:**
+
+- `Input`: Subscription requests, Stripe webhook events, entitlement checks
+- `Output`: Entitlement status, payment session URLs, feature access decisions
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* Stripe with server-side webhook processing for entitlement sync
+- *Alternative Considered:* Client-side payment confirmation with polling
+- *Trade-off:* Webhook-based sync (SW-REQ-045) ensures reliable entitlement updates even if user closes browser during payment. Polling would miss events and create inconsistent states. Stripe Elements ensure PCI-DSS scope reduction (SW-REQ-044) by tokenizing at client.
+
+### Webhook Handling
+
+**Idempotency:**
+- Store `event.id` in `processed_events` table before processing
+- On duplicate webhook delivery, return 200 OK without reprocessing
+- Prevents double-crediting or duplicate entitlement updates
+
+**Retry Policy Awareness:**
+- Stripe retries failed webhooks for up to 3 days with exponential backoff
+- Handler must be idempotent to safely handle retries
+- Return 2xx status only after successful processing; 4xx/5xx triggers retry
+
+**Signature Verification:**
+- Validate `Stripe-Signature` header using webhook signing secret
+- Reject webhooks with invalid or missing signatures (return 400)
+- Prevents spoofed webhook attacks
+
+### Partial Failure Recovery
+
+**Scenario:** Payment succeeds at Stripe, but local entitlement database write fails.
+
+**Solution:**
+1. Webhook handler wraps entitlement update in database transaction
+2. On transaction failure, log event to dead-letter queue with full payload
+3. Return 500 to Stripe (triggers automatic retry)
+4. Reconciliation job runs hourly: queries Stripe API for active subscriptions, compares with local entitlements, fixes discrepancies
+
+**User-Facing Behavior:**
+- During payment processing, UI shows "Payment processing..." state
+- Entitlement confirmed only after webhook successfully processed
+- If webhook fails repeatedly, reconciliation job catches within 1 hour
+
+### Payment Flow Diagram
+
+```
+┌──────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Client  │────>│ Stripe      │────>│ ARCH-007    │────>│ ARCH-005    │
+│          │     │ Checkout    │     │ Webhook     │     │ Repository  │
+└──────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+     │                  │                   │                   │
+     │  1. Redirect     │                   │                   │
+     │─────────────────>│                   │                   │
+     │                  │                   │                   │
+     │  2. User pays    │                   │                   │
+     │                  │                   │                   │
+     │                  │ 3. payment_intent │                   │
+     │                  │    .succeeded     │                   │
+     │                  │──────────────────>│                   │
+     │                  │                   │                   │
+     │                  │                   │ 4. Verify         │
+     │                  │                   │    signature      │
+     │                  │                   │                   │
+     │                  │                   │ 5. Check          │
+     │                  │                   │    idempotency    │
+     │                  │                   │                   │
+     │                  │                   │ 6. BEGIN TXN      │
+     │                  │                   │──────────────────>│
+     │                  │                   │                   │
+     │                  │                   │ 7. Update         │
+     │                  │                   │    entitlement    │
+     │                  │                   │<──────────────────│
+     │                  │                   │                   │
+     │                  │                   │ 8. Log event      │
+     │                  │                   │──────────────────>│
+     │                  │                   │                   │
+     │                  │                   │ 9. COMMIT         │
+     │                  │                   │                   │
+     │                  │   10. HTTP 200    │                   │
+     │                  │<──────────────────│                   │
+     │                  │                   │                   │
+     │ 11. Return URL   │                   │                   │
+     │<─────────────────│                   │                   │
+     │                  │                   │                   │
+     │ 12. Fetch        │                   │                   │
+     │    entitlement   │                   │                   │
+     │─────────────────────────────────────>│                   │
+     │                  │                   │                   │
+     │ 13. Confirmed    │                   │                   │
+     │<─────────────────────────────────────│                   │
+```
+
+---
+
+## [ARCH-008] - User Profile Module
+
+**Description:** Service managing user preferences, saved data, search history, favorites, and data export/deletion for GDPR compliance.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Service |
+| **Static Aspects** | ProfileController, PreferenceManager, SavedDataRepository, DataExporter, AccountDeleter |
+| **Dependencies** | ARCH-005 (Data Repository), ARCH-006 (Authentication) |
+| **Traceability** | SW-REQ-043, SW-REQ-047, SW-REQ-048, SW-REQ-049, SW-REQ-072, SW-REQ-073, SW-REQ-074 |
+
+**Dynamic Behavior:**
+
+- **Data Isolation:** Enforces user-scoped queries for all custom items and saved data. Cross-user access prevented at repository level.
+- **Preference Propagation:** Updates to unit preferences trigger real-time recalculation across all displayed data (SW-REQ-041).
+- **Data Export:** Generates JSON and CSV exports containing all user PII, saved items, diets, and history.
+- **Account Deletion:** Permanently removes all PII and associated data from production database. Cascades to all related records.
+
+**Interface Definition:**
+
+- `Input`: User ID context, preference updates, export/delete requests
+- `Output`: User profiles, exported data files, deletion confirmations
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* Server-side profile storage with client-side history caching
+- *Alternative Considered:* Fully client-side profile storage (localStorage only)
+- *Trade-off:* Server-side storage enables cross-device sync and proper GDPR compliance (SW-REQ-072, SW-REQ-073). Pure client-side would lose data on device change and complicate data export requests. Hybrid approach uses localStorage for recent history (SW-REQ-048) while server stores persistent data.
+
+---
+
+## [ARCH-009] - Administration Module
+
+**Description:** Restricted backend service providing administrative functions for data curation, user management, and global tag management. Acts as a proxy for external data searches to enable admin-curated imports.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Service |
+| **Static Aspects** | AdminController, DataImporter, ItemCurator, TagManager, UserAdminPanel, ExternalSearchProxy |
+| **Dependencies** | ARCH-005 (Data Repository), ARCH-006 (Authentication), ARCH-012 (External Data Integration) |
+| **Traceability** | SW-REQ-054, SW-REQ-055, SW-REQ-056, SW-REQ-057 |
+
+**Dynamic Behavior:**
+
+- **Access Control:** Validates 'Admin' role on all requests. Returns 403 Forbidden for non-admin users.
+- **External Data Search (SW-REQ-055):** Admin UI provides a dedicated search interface that queries external APIs (not the local database). Flow:
+  1. Admin enters search term in "External Import" panel
+  2. `ExternalSearchProxy` routes request to ARCH-012 (External Data Integration)
+  3. ARCH-012 queries USDA and/or OpenFoodFacts APIs
+  4. Results displayed in admin UI with "Import" action for each item
+  5. Admin selects item, edits fields (name, tags, macros), and confirms import
+  6. `DataImporter` saves curated item to local database via ARCH-005
+- **Item CRUD:** Full create/update/delete capabilities for food items including macros, images, and tags.
+- **Tag Management:** Creates and manages global Category Tags and Functionality Tags used across all items.
+
+**Interface Definition:**
+
+- `Input`: Admin-authenticated requests, external search queries, item definitions
+- `Output`: External search results (uncurated), curated items (post-import), tag hierarchies, admin audit logs
+
+**Admin External Search Flow:**
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Admin UI   │────>│  ARCH-009   │────>│  ARCH-012   │────>│ USDA/OFF    │
+│ (Search)    │     │ (Proxy)     │     │ (External)  │     │ (APIs)      │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+       │                   │                   │                   │
+       │<──────────────────┴───────────────────┴───────────────────│
+       │              Normalized results for curation              │
+       │                                                           │
+       ▼                                                           │
+┌─────────────┐     ┌─────────────┐                               │
+│ Edit & Tag  │────>│  ARCH-005   │  (Save curated item)          │
+│ (Admin)     │     │ (Repository)│                               │
+└─────────────┘     └─────────────┘                               │
+```
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* Integrated admin module within main application backend
+- *Alternative Considered:* Separate admin microservice with dedicated database access
+- *Trade-off:* Integrated module simplifies deployment and shares data models with main application. Separate microservice would add network latency and deployment complexity for minimal security benefit (RBAC already enforces access). Admin operations are low-frequency and don't require independent scaling.
+
+---
+
+## [ARCH-010] - API Gateway
+
+**Description:** Entry point for all client requests, implementing routing, rate limiting, security header injection, CSRF protection, and request validation.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Middleware |
-| **Static Aspects** | `ApiClient.js`, `Interceptors` |
-| **Dependencies** | External REST API |
-| **Traceability** | [SW-REQ-077], [SW-REQ-078], [SW-REQ-087] |
+| **Static Aspects** | RouteHandler, RateLimiter, SecurityHeaderMiddleware, CSRFValidator, RequestValidator, CORSHandler |
+| **Dependencies** | All backend services |
+| **Traceability** | SW-REQ-064, SW-REQ-067, SW-REQ-068, SW-REQ-076, SW-REQ-078 |
 
 **Dynamic Behavior:**
-- **Interception:** Injects Authorization Bearer Token (JWT).
-- **Timeout:** Aborts requests >10,000ms ([SW-REQ-078]).
-- **Retry:** On network error (status 0/503), queues retry logic if configured ([SW-REQ-087]).
+
+- **Rate Limiting:** Enforces 10 failed login attempts per IP per 10-minute window. Configurable limits per endpoint.
+- **Security Headers:** Injects CSP, X-Frame-Options (DENY), X-Content-Type-Options (nosniff), Referrer-Policy, Permissions-Policy on all responses.
+- **CSRF Protection:** Validates synchronizer tokens on all state-changing requests (POST, PUT, DELETE).
+- **Timeout Management:** Enforces 10-second timeout on all API requests, returns 504 on timeout.
+- **API Versioning:** Routes requests based on version prefix (e.g., /api/v1/) for future mobile integration.
 
 **Interface Definition:**
-- `Input`: Endpoint, Method, Payload.
-- `Output`: Promise<Response> or Error (Timeout/Network).
+
+- `Input`: HTTP requests from clients
+- `Output`: Routed requests to services, HTTP responses with security headers
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Centralized Wrapper.
-- *Alternative Considered:* `fetch()` calls scattered inside components.
-- *Trade-off:* Centralization ensures consistent security headers, timeout logic, and error handling across the app.
+
+- *Chosen Approach:* Application-level API gateway (Express/Fastify middleware)
+- *Alternative Considered:* Dedicated API gateway service (Kong, AWS API Gateway)
+- *Trade-off:* Application-level gateway reduces infrastructure complexity and latency for current scale. Dedicated gateway would provide advanced features (API keys, analytics) but adds operational overhead. For 1000 concurrent users (SW-REQ-082), application-level gateway is sufficient and simpler to deploy.
 
 ---
 
-### [ARCH-BE-GATEWAY] - API Gateway & Security Controller
-**Description:** The entry point for the backend. Handles routing, rate limiting, feature gating, and request validation before passing to services.
+## [ARCH-011] - Caching Layer
+
+**Description:** Multi-tier caching system using client-side Service Worker with Cache API, localStorage for metadata, and server-side Redis to optimize performance and enable full offline functionality including images.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Middleware / Controller |
-| **Static Aspects** | `Routes.js`, `RateLimiter.middleware`, `SecurityHeaders.middleware`, `FeatureGuard.middleware` |
-| **Dependencies** | [ARCH-BE-AUTH], [ARCH-BE-SEARCH], [ARCH-BE-USER] |
-| **Traceability** | [SW-REQ-042], [SW-REQ-064], [SW-REQ-067], [SW-REQ-068], [SW-REQ-076], [SW-REQ-080], [SW-REQ-051], [SW-REQ-052], [SW-REQ-053] |
+| **Type** | Middleware |
+| **Static Aspects** | ServiceWorkerCache (client), LocalStorageCache (client), RedisCache (server), CacheInvalidator, LRUEvictionPolicy, UserCachePurger |
+| **Dependencies** | Redis, Browser Service Worker API, Browser localStorage API, ARCH-008 (User Profile) |
+| **Traceability** | SW-REQ-003, SW-REQ-048, SW-REQ-073, SW-REQ-080, SW-REQ-088 |
 
 **Dynamic Behavior:**
-- **Rate Limit:** Tracks IP in Redis. If >10 failures/10min, block 429 ([SW-REQ-064]).
-- **Business Limit:** Checks User Tier. If Free & Searches > 3, block ([SW-REQ-042]).
-- **Headers:** Injects `Content-Security-Policy`, `Strict-Transport-Security` ([SW-REQ-068]).
-- **Trial Logic:** If `(Now - FirstLogin) < 7 days && AccountType == Social`, grant Paid Access ([SW-REQ-051]).
-- **Blocking:** If `Role == Free` AND Endpoint is `/api/diet/generate`, return 403 Forbidden ([SW-REQ-053]).
+
+- **Service Worker Registration:** On first load, registers Service Worker to intercept network requests and manage Cache API storage.
+- **Image Caching:** Service Worker caches all food item images referenced in search results. Cache-first strategy serves images offline. Respects Cache-Control headers for freshness.
+- **Query Result Cache:** localStorage stores 20 most recent unique queries with JSON result metadata (LRU eviction). Stores 5 recent search queries for history display.
+- **Server Cache:** Redis caches frequently accessed food items, similarity calculations, session data, and LP job results.
+- **Cache Invalidation:** Admin data updates trigger cache invalidation for affected items across Redis. Service Worker receives push notification to purge stale image URLs.
+- **User Data Purge (GDPR):** On account deletion (SW-REQ-073), ARCH-008 triggers `UserCachePurger` which: (1) Deletes all Redis keys prefixed with user ID, (2) Invalidates user session tokens, (3) Clears server-side search history cache for user.
+- **Offline Serving:** Service Worker serves cached images and API responses when offline. Displays staleness indicator and "offline mode" banner.
 
 **Interface Definition:**
-- `Input`: HTTP Requests + User Context.
-- `Output`: JSON Responses or HTTP Errors.
+
+- `Input`: Cache keys (query hashes, item IDs, user IDs), TTL configurations, deletion events
+- `Output`: Cached data, cache miss signals, purge confirmations
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Application-level Middleware (e.g., Express/Gin Middleware).
-- *Alternative Considered:* Hardware Load Balancer rules only.
-- *Trade-off:* App-level middleware allows logic based on User ID (Free/Paid), not just IP address.
+
+- *Chosen Approach:* Three-tier caching (Service Worker + localStorage + Redis) with GDPR-aware purging
+- *Alternative Considered:* localStorage-only client caching without Service Worker
+- *Trade-off:* localStorage has a 5MB limit and cannot cache binary assets (images). SW-REQ-088 requires displaying "cached search results" offline, and SW-REQ-011 mandates images in results. Without Service Worker, offline mode would show broken image links, degrading UX. Service Worker enables full offline visual experience while localStorage handles structured query data within its size constraints.
 
 ---
 
-### [ARCH-BE-MATH] - Similarity & Optimization Engine
-**Description:** The core mathematical computation unit. Handles Vector Cosine Similarity and Linear Programming solver.
+## [ARCH-012] - External Data Integration
 
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Service |
-| **Static Aspects** | `SimilarityCalculator`, `LPSolver` (Python/C++ binding), `WeightVector` |
-| **Dependencies** | [ARCH-DB-MAIN] |
-| **Traceability** | [SW-REQ-016], [SW-REQ-017], [SW-REQ-021], [SW-REQ-022], [SW-REQ-023], [SW-REQ-026], [SW-REQ-030] |
-
-**Dynamic Behavior:**
-- **Vector Search:** Converts Item Macros [P, C, F] to vector. Calculates Cosine Similarity. Filters <0.40 ([SW-REQ-017]).
-- **Optimization:** Runs Simplex or Interior-Point algorithm to solve: Minimize(Calories) subject to Constraints(Target Macros) ([SW-REQ-021], [SW-REQ-022]).
-- **Weighted Similarity**: Accepts an optional weights vector {P: float, C: float, F: float} from the user request. Applies these weights to the item vectors before calculating Cosine Similarity, allowing users to prioritize specific macros (e.g., "Protein is 2x more important") ([SW-REQ-017]).
-- **Constraint Modeling (SW-REQ-023):** Constructs a matrix where variables are Meal Quantities and constraints are Total P, C, F.
-- **Tolerance Handling (SW-REQ-026):** Implements "Relaxed Constraints." Instead of `Sum(Protein) == Target`, it creates inequalities: `Target * 0.95 <= Sum(Protein) <= Target * 1.05`. This ±5% window ensures the solver finds valid solutions even if exact matches don't exist.
-
-**Interface Definition:**
-- `Input`: Source Diet (Array of Items), Constraints, Macro Weights.
-- `Output`: 3 Optimized Meal Sets (Arrays).
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Server-side Library (e.g., Python SciPy/PuLP).
-- *Alternative Considered:* Client-side JS Math.
-- *Trade-off:* LP solvers are computationally intensive. Server-side execution ensures consistent performance across mobile/desktop ([SW-REQ-080]) and protects the proprietary algorithm.
-
----
-
-### [ARCH-BE-SEARCH] - Search Service
-**Description:** Manages text-based queries, filtering, and data aggregation (e.g., fetching images/macros).
+**Description:** Integration layer for fetching and normalizing food data from external APIs (USDA FoodData Central, OpenFoodFacts).
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | `SearchService`, `FilterBuilder` |
-| **Dependencies** | [ARCH-DB-MAIN], [ARCH-BE-MATH] |
-| **Traceability** | [SW-REQ-010], [SW-REQ-019], [SW-REQ-027], [SW-REQ-029], [SW-REQ-031], [SW-REQ-020] |
+| **Static Aspects** | USDAClient, OpenFoodFactsClient, DataNormalizer, RateLimitHandler |
+| **Dependencies** | External APIs (USDA, OpenFoodFacts), ARCH-005 (Data Repository) |
+| **Traceability** | SW-REQ-055 |
 
 **Dynamic Behavior:**
-- **Query:** Executes Fuzzy Search on DB.
-- **Filter:** Applies Whitelist/Blacklist tags ([SW-REQ-019]).
-- **Pagination:** Limits result set to 10 offset N ([SW-REQ-010]).
-- **Enrichment:** Calls [ARCH-BE-MATH] to append similarity scores.
-- **Zero-Match Handling:** IF a text query returns 0 results:
-    1. Extract potential "Category" keywords from the search term (using simple NLP or lookup).
-    2. Automatically execute a secondary query for items with that `CategoryTag`.
-    3. Return these results with a metadata flag `is_fallback: true` ([SW-REQ-020]).
+
+- **API Fetching:** Queries external APIs based on search terms, handles pagination and rate limits.
+- **Data Normalization:** Converts external formats to internal schema, maps to standard units (per 100g/ml).
+- **Error Handling:** Graceful degradation when external APIs are unavailable (returns empty results with warning).
 
 **Interface Definition:**
-- `Input`: Search Term, Tag Filters, Pagination Offset.
-- `Output`: Paginated List of Meal Objects.
+
+- `Input`: Search queries, item identifiers
+- `Output`: Normalized FoodItem candidates for admin curation
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Database Full-Text Search + Code Filtering.
-- *Alternative Considered:* Dedicated Search Engine (ElasticSearch).
-- *Trade-off:* Given the requirement for strict mathematical filtering and LP, a combined approach is simpler for the current scale. ElasticSearch can be added later if text search latency degrades.
+
+- *Chosen Approach:* On-demand fetching with admin curation workflow
+- *Alternative Considered:* Bulk data import with scheduled synchronization
+- *Trade-off:* On-demand fetching with curation (SW-REQ-055) ensures data quality and proper functionality tagging. Bulk import would populate database faster but with uncurated, potentially inconsistent data. Quality over quantity is critical for accurate similarity matching.
 
 ---
 
-### [ARCH-BE-AUTH] - Authentication & Identity Service
-**Description:** Manages user registration, login (Social + Email), JWT issuance, password security and verification workflows.
+## [ARCH-013] - Security Middleware
+
+**Description:** Cross-cutting security services implementing encryption, input validation, and audit logging across all components.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Middleware |
+| **Static Aspects** | EncryptionService, InputSanitizer, AuditLogger, TLSEnforcer |
+| **Dependencies** | All services |
+| **Traceability** | SW-REQ-059, SW-REQ-068, SW-REQ-075, SW-REQ-084 |
+
+**Dynamic Behavior:**
+
+- **Encryption at Rest:** AES-256 encryption for PII fields in database.
+- **Encryption in Transit:** TLS 1.3 enforced for all connections. HTTP redirects to HTTPS.
+- **Input Validation:** Sanitizes all user inputs to prevent XSS, SQL injection, and command injection.
+- **Audit Logging:** Logs all authentication events, API requests, errors, and admin actions with timestamps and user IDs.
+
+**Interface Definition:**
+
+- `Input`: Raw data for encryption, user inputs for validation
+- `Output`: Encrypted data, sanitized inputs, audit log entries
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* Application-level encryption with database-native TDE as backup
+- *Alternative Considered:* Full database-level Transparent Data Encryption (TDE) only
+- *Trade-off:* Application-level encryption provides field-level control over which data is encrypted and allows encryption keys to be managed separately from database. TDE-only would encrypt entire database but not protect against application-level data leaks. Layered approach provides defense in depth.
+
+---
+
+## [ARCH-014] - Logging & Monitoring Module
+
+**Description:** Centralized logging and monitoring infrastructure for system health, performance tracking, and security auditing.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | `AuthService`, `TokenManager`, `SocialProviderInterface`, `EmailVerifier`, `IdentityManager`, `PasswordHasher`, `OAuthVerifier` |
-| **Dependencies** | [ARCH-DB-MAIN], SMTP Service |
-| **Traceability** | [SW-REQ-046], [SW-REQ-058], [SW-REQ-059], [SW-REQ-062], [SW-REQ-063], [SW-REQ-065], [SW-REQ-066], [SW-REQ-060], [SW-REQ-061], [SW-REQ-069], [SW-REQ-070], [SW-REQ-074] |
+| **Static Aspects** | LogAggregator, MetricsCollector, AlertManager, UptimeMonitor |
+| **Dependencies** | All services (Architectural Overhead) |
+| **Traceability** | SW-REQ-081, SW-REQ-083, SW-REQ-084 |
 
 **Dynamic Behavior:**
-- **Hashing:** Uses Argon2 for password storage ([SW-REQ-059]).
-- **Token Rotation:** Issues Access (15m) and Refresh (7d) tokens ([SW-REQ-063]).
-- **Lockout:** Monitors failed attempts; locks account after 5 failures ([SW-REQ-065]).
-- **Registration:** Checks DB for existing email. If found, reject ([SW-REQ-060]). If new, create pending record.
-- **Verification:** Sends Email. Blocks paid features until link clicked ([SW-REQ-070]).
-- **Reset:** Generates 1hr token. Emails link. Updates password hash ([SW-REQ-069]).
-- **Consent:** Records boolean `consent_given` and timestamp at signup ([SW-REQ-074]).
-- **Registration (SW-REQ-058/060):**
-    1. `SELECT count(*) FROM users WHERE email = ?`. If > 0, throw "Duplicate" Error.
-    2. Generate Salt (16 bytes).
-    3. Hash Password using **Argon2id** (Memory: 64MB, Iterations: 3) ([SW-REQ-059]).
-    4. Insert User with `verified = false`.
-    5. Generate unique `verification_token` (UUID) and trigger Email.
-- **Verification (SW-REQ-070):**
-    - Endpoint `/verify?token=XYZ` sets `verified = true` in DB.
-- **Social Login (SW-REQ-046):**
-    - Verifies the incoming `id_token` signature against Google/Apple public keys.
-    - If valid and email not in DB, Auto-Register.
+
+- **Log Aggregation:** Collects structured logs from all services. Retains for minimum 90 days.
+- **Metrics Collection:** Tracks response times, error rates, concurrent users for P95 latency monitoring.
+- **Uptime Monitoring:** Continuous health checks for 99.9% availability tracking.
+- **Backup Verification:** Monitors daily backup completion and tests restore capability.
 
 **Interface Definition:**
-- `Input`: Credentials (Email/Pass or OAuth Token).
-- `Output`: HttpOnly Cookies (JWT), Emails
+
+- `Input`: Log events from all services, metrics data points
+- `Output`: Aggregated dashboards, alerts, audit reports
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* JWT in HttpOnly Cookies.
-- *Alternative Considered:* JWT in LocalStorage.
-- *Trade-off:* HttpOnly Cookies prevent XSS attacks from stealing tokens, adhering to the high security priority of [SW-REQ-062].
+
+- *Chosen Approach:* Centralized logging with ELK stack or cloud-native equivalent
+- *Alternative Considered:* Distributed logging with per-service log files
+- *Trade-off:* Centralized logging enables correlation across services for debugging and security auditing (SW-REQ-084). Distributed logs would be simpler but make cross-service analysis difficult. Centralized approach is essential for maintaining 99.9% availability (SW-REQ-081) through proactive monitoring.
 
 ---
 
-### [ARCH-BE-PAY] - Payment Service Interface
-**Description:** Encapsulates Stripe interactions to manage subscriptions and payment intents without touching raw card data.
+## [ARCH-015] - Compliance Module
 
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Interface / Adapter |
-| **Static Aspects** | `StripeAdapter`, `WebhookHandler` |
-| **Dependencies** | Stripe API (External) |
-| **Traceability** | [SW-REQ-044], [SW-REQ-045], [SW-REQ-050] |
-
-**Dynamic Behavior:**
-- **Handover:** Generates `client_secret` for Frontend Stripe Element.
-- **Webhook:** Listens for `invoice.payment_succeeded`. Updates User Role in DB asynchronously ([SW-REQ-045]).
-
-**Interface Definition:**
-- `Input`: Plan ID, Webhook Event.
-- `Output`: Payment Intent Secret, DB Update.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Webhook-based synchronization.
-- *Alternative Considered:* Synchronous update after client-side success callback.
-- *Trade-off:* Webhooks are robust against browser crashes/closes during the payment redirection, ensuring [SW-REQ-045].
-
----
-
-
-### [ARCH-DB-MAIN] - Relational Database
-**Description:** The primary storage for Users, Meals, Ingredients, and Subscriptions.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Database (PostgreSQL recommended) |
-| **Static Aspects** | Schemas: `Users`, `Meals`, `Tags`, `History`, `Micronutrients` |
-| **Dependencies** | None |
-| **Traceability** | [SW-REQ-033], [SW-REQ-034], [SW-REQ-035], [SW-REQ-043], [SW-REQ-047], [SW-REQ-073], [SW-REQ-075], [SW-REQ-083], [SW-REQ-036], [SW-REQ-037], [SW-REQ-038] |
-
-**Dynamic Behavior:**
-- **Encryption:** Storage encrypted at rest (AES-256) ([SW-REQ-075]).
-- **Backup:** Automated daily snapshots ([SW-REQ-083]).
-- **Isolation:** Queries for custom items always include `WHERE user_id = X` ([SW-REQ-043]).
-- **Schema Enforcement:** `Meals` table includes columns for `unit_weight_g` ([SW-REQ-036]) and `functionality_tags` (Array/JSONB) ([SW-REQ-037]).
-- **Separation:** Micronutrients stored in separate column/table to exclude from Vector Search ([SW-REQ-038]).
-
-**Interface Definition:**
-- `Input`: SQL Queries.
-- `Output`: Result Sets.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Relational (SQL).
-- *Alternative Considered:* NoSQL (Document Store).
-- *Trade-off:* The data model relies heavily on relationships (Recipe -> Ingredients) and strict structure (Macros per 100g). SQL ensures integrity better than NoSQL here.
-
----
-
-### [ARCH-INFRA-LOG] - Centralized Logging
-**Description:** Aggregates logs from all backend services for auditing and debugging.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Infrastructure Service |
-| **Static Aspects** | Logger Interface (e.g., Winston/Zap) |
-| **Dependencies** | None |
-| **Traceability** | [SW-REQ-084] |
-
-**Dynamic Behavior:**
-- **Trigger:** On every API Request, Error, or Auth Event.
-- **Masking:** Scrub PII/Passwords before writing.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Structured Logging (JSON) to centralized collector.
-- *Alternative Considered:* Text files on server disk.
-- *Trade-off:* Centralized JSON logs allow querying and alerts, essential for meeting security audit requirements ([SW-REQ-084]).
-
----
-
-## [ARCH-FE-LIST-MGR] - List State Manager
-**Description:** A client-side state container (e.g., Redux Slice or Context) responsible for managing the user's active "Ingredient List" and "Meal List," including accumulation and aggregation logic.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Module / State Manager |
-| **Static Aspects** | `ListContext`, `AggregatorReducer` |
-| **Dependencies** | None |
-| **Traceability** | [SW-REQ-005], [SW-REQ-006] |
-
-**Dynamic Behavior:**
-- **Accumulation:** Listens for 'Enter' key events on autocomplete; pushes selected item ID and default quantity to the active array ([SW-REQ-005]).
-- **Aggregation:** When in 'Meal List' mode, groups multiple meal objects into a simplified "Day" object for diet generation ([SW-REQ-006]).
-
-**Interface Definition:**
-- `Input`: Selected Item Object, Mode (Ingredient/Meal).
-- `Output`: Updated State Array.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Global Client-Side State (Context/Redux).
-- *Alternative Considered:* Component Local State (`useState`).
-- *Trade-off:* Global state is required because the list must persist when navigating between the Search view and the Diet Generation view.
-
----
-
-## [ARCH-FE-UNIT-ENGINE] - Unit Conversion & Math Engine
-**Description:** A pure utility library responsible for all client-side numerical transformations, including metric/imperial swapping, real-time scaling, and comparative quantity math.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Service (Utility) |
-| **Static Aspects** | `UnitConverter.js`, `MacroScaler.js` |
-| **Dependencies** | [ARCH-FE-CACHE] (for User Preference) |
-| **Traceability** | [SW-REQ-020], [SW-REQ-028], [SW-REQ-032], [SW-REQ-036], [SW-REQ-039], [SW-REQ-040], [SW-REQ-041] |
-
-**Dynamic Behavior:**
-- **Reactive Scaling:** On quantity input change, multiplies base (100g) macros by `(UserQty / 100)` ([SW-REQ-020]).
-- **Contextual Display:** Checks Global Preference (`imperial` vs `metric`). If Imperial, applies `x 0.035` (solids) or `x 0.033` (liquids) ([SW-REQ-032]).
-- **Comparison:** Calculates `(TargetCal / ItemCal) * 100g` to find replacement weight ([SW-REQ-028]).
-
-**Interface Definition:**
-- `Input`: Base Value, Input Quantity, User Preference Enum.
-- `Output`: Formatted Value (String), Scaled Value (Float).
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Centralized Math Engine.
-- *Alternative Considered:* Inline calculations in UI components.
-- *Trade-off:* Centralization prevents "floating point drift" errors and ensures [SW-REQ-041] (Global update) is applied consistently across all views.
-
----
-
-## [ARCH-FE-SIDEBAR] - Sidebar & Favorites Controller
-**Description:** Manages the visibility and content of the collateral UI sidebar, including the "Favorites" list and integration with the Search History.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component / UI Controller |
-| **Static Aspects** | `SidebarContainer`, `FavoritesManager` |
-| **Dependencies** | [ARCH-FE-CACHE], [ARCH-FE-THEME], [ARCH-FE-SEARCH] |
-| **Traceability** | [SW-REQ-013], [SW-REQ-049] |
-
-**Dynamic Behavior:**
-- **Toggle:** Responds to burger-menu click to slide in/out ([SW-REQ-013]).
-- **Pinning:** On "Star" click, moves item from "History" stack to permanent "Favorites" list in LocalStorage ([SW-REQ-049]).
-
-**Interface Definition:**
-- `Input`: Toggle Events, History Data.
-- `Output`: Sidebar UI, Trigger Search Event.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Collapsible Overlay (Mobile) / Persistent Column (Desktop).
-- *Alternative Considered:* Separate "History" page.
-- *Trade-off:* Keeping it as a sidebar maintains the user's context within the Search interface, improving workflow efficiency.
-
----
-
-## [ARCH-FE-A11Y] - Accessibility & Focus Manager
-**Description:** A dedicated hook/service to manage global keyboard traps, focus navigation, and screen reader announcements.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Service (Frontend) |
-| **Static Aspects** | `useFocusTrap`, `KeyboardNavigator` |
-| **Dependencies** | DOM APIs |
-| **Traceability** | [SW-REQ-086] |
-
-**Dynamic Behavior:**
-- **Navigation:** Listens for Arrow Keys, Tab, Enter, and Esc to move focus logically between Search Results and Filters ([SW-REQ-086]).
-- **Announcements:** Injects updates into an `aria-live` region when search results load.
-
-**Interface Definition:**
-- `Input`: Keydown Events.
-- `Output`: `document.activeElement` updates.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* programmatic Focus Management.
-- *Alternative Considered:* Native Tab order only.
-- *Trade-off:* Native tab order is insufficient for complex grids like "Search Results," requiring manual arrow-key logic for WCAG compliance.
-
----
-
-## [ARCH-BE-ADMIN] - Administration Service
-**Description:** Provides the backend logic for the Admin Panel, handling CRUD operations for manual items, external imports, and tag management.
+**Description:** Service handling legal and regulatory requirements including GDPR compliance, consent management, and disclaimer display.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | `AdminController`, `ImportSanitizer` |
-| **Dependencies** | [ARCH-DB-MAIN], [ARCH-BE-AUTH] |
-| **Traceability** | [SW-REQ-054], [SW-REQ-055], [SW-REQ-056], [SW-REQ-057] |
+| **Static Aspects** | ConsentManager, DisclaimerRenderer, DataRetentionPolicy, BackupManager |
+| **Dependencies** | ARCH-005 (Data Repository), ARCH-008 (User Profile) |
+| **Traceability** | SW-REQ-071, SW-REQ-072, SW-REQ-073, SW-REQ-074, SW-REQ-083 |
 
 **Dynamic Behavior:**
-- **RBAC:** Verifies `Role == 'Admin'` before execution ([SW-REQ-054]).
-- **Import:** Fetches data from external source, maps fields to local schema, and saves ([SW-REQ-055]).
-- **Tagging:** Updates the global `Tags` table ([SW-REQ-057]).
+
+- **Consent Capture:** Blocks registration completion until Privacy Policy and ToS checkboxes are explicitly checked.
+- **Disclaimer Display:** Renders medical disclaimer on login screen and in About section.
+- **Data Retention:** Enforces 30-day backup retention with point-in-time recovery capability.
+- **Erasure Processing:** Coordinates complete data deletion across primary database and schedules backup purge.
 
 **Interface Definition:**
-- `Input`: Admin API Token, Item Data.
-- `Output`: Database Confirmation.
+
+- `Input`: Consent status, deletion requests, backup schedules
+- `Output`: Consent records, disclaimer content, backup status
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Dedicated Service.
-- *Alternative Considered:* Mixing Admin logic into Search Service.
-- *Trade-off:* Separation of concerns prevents admin-only operations (like `DELETE item`) from accidentally being exposed to public endpoints.
+
+- *Chosen Approach:* Integrated compliance module with automated retention policies
+- *Alternative Considered:* Manual compliance processes with external legal review
+- *Trade-off:* Automated compliance ensures consistent enforcement of GDPR requirements (SW-REQ-072, SW-REQ-073, SW-REQ-074) without human error. Manual processes would require dedicated staff and risk non-compliance. Automation also enables faster response to data subject requests.
 
 ---
 
-## [ARCH-BE-USER] - User Data Service
-**Description:** Manages the user's private data profile, including GDPR data export requests and account deletion cleanup.
+## [ARCH-016] - Theme & Style Module
+
+**Description:** Client-side theming system implementing the Style Guide specifications for consistent visual presentation across light and dark modes.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Service |
-| **Static Aspects** | `UserController`, `DataExporter` |
-| **Dependencies** | [ARCH-DB-MAIN] |
-| **Traceability** | [SW-REQ-072] |
+| **Type** | Module |
+| **Static Aspects** | ThemeProvider, ColorPalette, TypographySystem, LayoutGrid, ComponentStyles |
+| **Dependencies** | ARCH-001 (Web Application) |
+| **Traceability** | SW-REQ-014, SW-REQ-015, SW-REQ-085, SW-REQ-089 |
 
 **Dynamic Behavior:**
-- **Export:** Queries all tables (History, Lists, Preferences) linked to `UserID`, serializes to JSON, and initiates download ([SW-REQ-072]).
+
+- **Theme Detection:** Reads system prefers-color-scheme on load. User preference overrides system setting.
+- **Variable Switching:** Updates CSS custom properties for all color tokens when theme changes.
+- **Responsive Layout:** 12-column grid collapses to single column below 640px breakpoint.
+- **Accessibility Enforcement:** Validates all color combinations meet WCAG 2.1 AA 4.5:1 contrast ratio.
 
 **Interface Definition:**
-- `Input`: User ID.
-- `Output`: JSON Blob.
+
+- `Input`: Theme preference (system or user), viewport dimensions
+- `Output`: CSS custom property values, responsive layout classes
+
+**Color Tokens (Light Mode):**
+
+| Token | Value | Usage |
+| :--- | :--- | :--- |
+| --bg-primary | #F7FCF7 | Main background |
+| --bg-surface | #FFFFFF | Cards, containers |
+| --color-primary | #166534 | Buttons, headers |
+| --color-secondary | #DCFCE7 | Badges, highlights |
+| --color-accent | #F97316 | Special offers |
+| --color-error | #DC2626 | Validation errors |
+| --text-primary | #111827 | Body text |
+| --text-muted | #6B7280 | Secondary labels |
+
+**Color Tokens (Dark Mode):**
+
+| Token | Value | Usage |
+| :--- | :--- | :--- |
+| --bg-primary | #0A0F0A | Main background |
+| --bg-surface | #161D16 | Cards, containers |
+| --color-primary | #4ADE80 | Buttons, active states |
+| --color-secondary | #86EFAC | Secondary actions |
+| --color-accent | #FFB86C | Best match badges |
+| --color-error | #F87171 | Alerts |
+| --text-primary | #F3F4F6 | Body text |
+| --text-muted | #9CA3AF | Descriptions |
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* On-demand generation.
-- *Alternative Considered:* Pre-generated nightly exports.
-- *Trade-off:* On-demand ensures the data is real-time and reduces storage costs for stale export files.
+
+- *Chosen Approach:* CSS Custom Properties with theme provider context
+- *Alternative Considered:* CSS-in-JS with runtime theme switching (Styled Components, Emotion)
+- *Trade-off:* CSS Custom Properties provide zero-runtime theme switching with native browser support. CSS-in-JS adds JavaScript bundle size and runtime overhead. For the defined color palette (SW-REQ-089), native CSS variables are simpler and more performant.
 
 ---
 
-## [ARCH-INFRA-SCALE] - Scaling & Reliability Config
-**Description:** Defines the infrastructure-level configuration for load balancers and container orchestration to meet SLA and capacity requirements.
+## [ARCH-017] - Error Handling Module
+
+**Description:** Centralized error handling system implementing graceful degradation, user-friendly error messages, and automatic retry logic.
 
 | Attribute | Value |
 | :--- | :--- |
-| **Type** | Infrastructure / Middleware |
-| **Static Aspects** | `K8sHPA` (Horizontal Pod Autoscaler), `NginxConfig` |
-| **Dependencies** | Cloud Provider |
-| **Traceability** | [SW-REQ-081], [SW-REQ-082] |
+| **Type** | Module |
+| **Static Aspects** | ErrorBoundary (client), GlobalExceptionHandler (server), RetryManager, ErrorMessageMapper |
+| **Dependencies** | ARCH-001 (Web Application), ARCH-010 (API Gateway) |
+| **Traceability** | SW-REQ-077, SW-REQ-078, SW-REQ-079 |
 
 **Dynamic Behavior:**
-- **Autoscale:** Monitors CPU/RAM. If >70%, spins up new Container Replicas to handle >1000 concurrent users ([SW-REQ-082]).
-- **Health Check:** Liveness probes ensure failed pods are restarted to maintain 99.9% uptime ([SW-REQ-081]).
+
+- **Network Failure:** Preserves application state, displays retry option, auto-retries on connectivity restoration.
+- **Timeout Handling:** Shows timeout notification after 10 seconds, offers manual retry.
+- **Graceful Degradation:** Isolates non-critical feature failures (history sync, recommendations) from core functionality (search, auth).
+- **Error Classification:** Maps technical errors to user-friendly messages without exposing system internals.
 
 **Interface Definition:**
-- `Input`: Metrics (CPU/Memory).
-- `Output`: Replica Count.
+
+- `Input`: Error events, network status changes
+- `Output`: User-facing error messages, retry triggers, degraded feature flags
 
 **Alternative Analysis (BP6):**
-- *Chosen Approach:* Kubernetes Autoscaling.
-- *Alternative Considered:* Static Server Provisioning.
-- *Trade-off:* Static provisioning wastes money during low-traffic periods; autoscaling is cost-effective and compliant.
+
+- *Chosen Approach:* Centralized error boundary with feature-level isolation
+- *Alternative Considered:* Per-component error handling
+- *Trade-off:* Centralized handling ensures consistent user experience and prevents full application crashes (SW-REQ-079). Per-component handling would require duplicated logic and risk inconsistent error messages. Feature isolation at the boundary level provides both centralization and graceful degradation.
 
 ---
 
-## [ARCH-FE-LAYOUT] - Global Layout Orchestrator
-**Description:** Implements the application's responsive structural grid, enforcing the "Skeleton" defined in the Style Guide. It manages the positioning of the Sidebar (Left), Search (Middle), and Content Areas based on viewport breakpoints.
+## 3. Interface Definitions
 
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component / Layout Engine |
-| **Static Aspects** | `AppLayout.tsx`, `GridSystem.css` |
-| **Dependencies** | [ARCH-FE-SIDEBAR], [ARCH-FE-SEARCH] |
-| **Traceability** | [SW-REQ-089] (Style Guide Sec 4), [SW-REQ-007], [SW-REQ-013], [SW-REQ-014] |
+### 3.1 External Interfaces
 
-**Dynamic Behavior:**
-- **Breakpoint Logic:** Monitors viewport width.
-    - `< 640px` (Mobile): Switches to Single Column; Sidebar becomes an overlay drawer.
-    - `> 1024px` (Desktop): Enforces 12-column Grid; Sidebar is persistent in left columns; Max-width restricted to `1280px`.
-- **Z-Ordering:** Ensures Search Interface sits vertically on top of Macronutrient toggles ([SW-REQ-007]).
+| Interface | Protocol | Description | Security |
+| :--- | :--- | :--- | :--- |
+| **Client <-> API** | HTTPS (TLS 1.3) | RESTful API endpoints | JWT in HttpOnly cookies |
+| **API <-> Stripe** | HTTPS | Payment processing | Webhook signatures |
+| **API <-> OAuth** | OAuth 2.0 | Google/Apple login | PKCE flow |
+| **API <-> USDA** | HTTPS | Food data retrieval | API key |
+| **API <-> OpenFoodFacts** | HTTPS | Food data retrieval | Public API |
 
-**Interface Definition:**
-- `Input`: Window Resize Events.
-- `Output`: CSS Grid Class assignments.
+### 3.2 Internal Interfaces
 
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* CSS Grid + Flexbox Wrapper.
-- *Alternative Considered:* JavaScript-based window resize listeners calculating pixel widths.
-- *Trade-off:* CSS Grid is native, hardware-accelerated, and prevents layout thrashing, ensuring the responsive requirements ([SW-REQ-014]) are met performantly.
+| Interface | Type | Data Flow |
+| :--- | :--- | :--- |
+| **Search -> Similarity** | Function call | MacroVectors -> SimilarityScores |
+| **Search -> Repository** | Query interface | Filters -> FoodItems |
+| **Optimizer -> Similarity** | Function call | ItemPairs -> Scores |
+| **Auth -> Repository** | Query interface | Credentials -> Users |
+| **Subscription -> Auth** | Event | EntitlementUpdates |
 
 ---
 
-## [ARCH-FE-UI-KIT] - Atomic Design System
-**Description:** A library of reusable, standardized UI components that strictly enforce the Typography, Shape, and Interaction states defined in the Style Guide.
+## 4. Traceability Matrix
 
-| Attribute | Value |
+| Requirement | Architectural Component(s) |
 | :--- | :--- |
-| **Type** | Module / Component Library |
-| **Static Aspects** | `Button`, `Input`, `Typography`, `SkeletonLoader` |
-| **Dependencies** | [ARCH-FE-THEME] |
-| **Traceability** | [SW-REQ-089] (Style Guide Sec 3, 5), [SW-REQ-008], [SW-REQ-012] |
-
-**Dynamic Behavior:**
-- **Typography Enforcement:** Global injection of `Inter` (Body) and `Roboto Mono` (Data) fonts.
-- **Input States:** Inputs render with `#E0E0E0` border; Focus state applies Primary Color (`#166534`/`#4ADE80`) ([Style Guide Sec 5]).
-- **Loading:** Renders animated "Skeleton" blocks instead of spinners for search results ([Style Guide Sec 5]).
-
-**Interface Definition:**
-- `Input`: Props (Variant, Label, State).
-- `Output`: Rendered HTML Elements with scoped styles.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Custom Component Library.
-- *Alternative Considered:* Third-party library (e.g., Material UI, Bootstrap) out of the box.
-- *Trade-off:* A custom kit ensures exact compliance with the specific Hex codes and Border Radius (4px) defined in the Style Guide without fighting framework overrides.
+| SW-REQ-001 | ARCH-001 |
+| SW-REQ-002 | ARCH-001 |
+| SW-REQ-003 | ARCH-001, ARCH-011 |
+| SW-REQ-004 | ARCH-002 |
+| SW-REQ-005 | ARCH-001 |
+| SW-REQ-006 | ARCH-001, ARCH-002 |
+| SW-REQ-007 | ARCH-001 |
+| SW-REQ-008 | ARCH-001 |
+| SW-REQ-009 | ARCH-001 |
+| SW-REQ-010 | ARCH-002 |
+| SW-REQ-011 | ARCH-001 |
+| SW-REQ-012 | ARCH-001 |
+| SW-REQ-013 | ARCH-001 |
+| SW-REQ-014 | ARCH-001, ARCH-016 |
+| SW-REQ-015 | ARCH-001, ARCH-016 |
+| SW-REQ-016 | ARCH-003 |
+| SW-REQ-017 | ARCH-002, ARCH-003 |
+| SW-REQ-018 | ARCH-001, ARCH-003 |
+| SW-REQ-019 | ARCH-002 |
+| SW-REQ-020 | ARCH-001, ARCH-005 |
+| SW-REQ-021 | ARCH-004 |
+| SW-REQ-022 | ARCH-004 |
+| SW-REQ-023 | ARCH-004 |
+| SW-REQ-024 | ARCH-002 |
+| SW-REQ-025 | ARCH-001 |
+| SW-REQ-026 | ARCH-002, ARCH-003 |
+| SW-REQ-027 | ARCH-003 |
+| SW-REQ-028 | ARCH-003 |
+| SW-REQ-029 | ARCH-002 |
+| SW-REQ-030 | ARCH-004 |
+| SW-REQ-031 | ARCH-002 |
+| SW-REQ-032 | ARCH-005 |
+| SW-REQ-033 | ARCH-005 |
+| SW-REQ-034 | ARCH-005 |
+| SW-REQ-035 | ARCH-005 |
+| SW-REQ-036 | ARCH-005 |
+| SW-REQ-037 | ARCH-005 |
+| SW-REQ-038 | ARCH-005 |
+| SW-REQ-039 | ARCH-005 |
+| SW-REQ-040 | ARCH-005 |
+| SW-REQ-041 | ARCH-005, ARCH-008 |
+| SW-REQ-042 | ARCH-007 |
+| SW-REQ-043 | ARCH-008 |
+| SW-REQ-044 | ARCH-007 |
+| SW-REQ-045 | ARCH-007 |
+| SW-REQ-046 | ARCH-006 |
+| SW-REQ-047 | ARCH-008 |
+| SW-REQ-048 | ARCH-001, ARCH-011 |
+| SW-REQ-049 | ARCH-008 |
+| SW-REQ-050 | ARCH-007 |
+| SW-REQ-051 | ARCH-007 |
+| SW-REQ-052 | ARCH-007 |
+| SW-REQ-053 | ARCH-007 |
+| SW-REQ-054 | ARCH-009 |
+| SW-REQ-055 | ARCH-009, ARCH-012 |
+| SW-REQ-056 | ARCH-009 |
+| SW-REQ-057 | ARCH-009 |
+| SW-REQ-058 | ARCH-006 |
+| SW-REQ-059 | ARCH-006, ARCH-013 |
+| SW-REQ-060 | ARCH-006 |
+| SW-REQ-061 | ARCH-006 |
+| SW-REQ-062 | ARCH-006 |
+| SW-REQ-063 | ARCH-006 |
+| SW-REQ-064 | ARCH-006, ARCH-010 |
+| SW-REQ-065 | ARCH-006 |
+| SW-REQ-066 | ARCH-006 |
+| SW-REQ-067 | ARCH-010 |
+| SW-REQ-068 | ARCH-010, ARCH-013 |
+| SW-REQ-069 | ARCH-006 |
+| SW-REQ-070 | ARCH-006 |
+| SW-REQ-071 | ARCH-015 |
+| SW-REQ-072 | ARCH-008, ARCH-015 |
+| SW-REQ-073 | ARCH-008, ARCH-011, ARCH-015 |
+| SW-REQ-074 | ARCH-015 |
+| SW-REQ-075 | ARCH-013 |
+| SW-REQ-076 | ARCH-010 |
+| SW-REQ-077 | ARCH-001, ARCH-017 |
+| SW-REQ-078 | ARCH-010, ARCH-017 |
+| SW-REQ-079 | ARCH-017 |
+| SW-REQ-080 | ARCH-002, ARCH-011 |
+| SW-REQ-081 | ARCH-014 |
+| SW-REQ-082 | ARCH-010 |
+| SW-REQ-083 | ARCH-014, ARCH-015 |
+| SW-REQ-084 | ARCH-013, ARCH-014 |
+| SW-REQ-085 | ARCH-001, ARCH-016 |
+| SW-REQ-086 | ARCH-001 |
+| SW-REQ-087 | ARCH-001, ARCH-017 |
+| SW-REQ-088 | ARCH-001, ARCH-011 |
+| SW-REQ-089 | ARCH-001, ARCH-016 |
 
 ---
 
-## [ARCH-FE-PAGINATION] - Search Result Pagination Control
-**Description:** A stateless UI component responsible for calculating page offsets and rendering navigation controls (Next/Prev/Page Numbers) based on total result count and current limit.
+## 5. Changelog
+
+### 2026-01-21 (Rev 1.1)
+
+**Changed (Post-Review Remediation):**
+- **ARCH-004:** Converted from synchronous service to asynchronous job queue pattern (BullMQ/Redis) to prevent CPU blocking under concurrent load. Added job submission, polling, and WebSocket notification interfaces. Addresses performance risk for SW-REQ-080, SW-REQ-082.
+- **ARCH-011:** Replaced localStorage-only approach with Service Worker + Cache API for offline image caching. Added `UserCachePurger` for GDPR-compliant Redis cache invalidation on account deletion (SW-REQ-073).
+- **ARCH-002:** Added `FunctionalityTagWeighter` component and explicit dynamic behavior for relevance boosting based on Functionality Tag matches during replacement searches (SW-REQ-031).
+- **ARCH-003:** Added `SimilarityAssetResolver` and explicit server-hosted image URLs for similarity tier indicators. Addresses SW-REQ-018 requirement to store emojis as server images.
+- **ARCH-005:** Added `SimilarityIndicatorAsset` entity to data model for storing tier indicator images (SW-REQ-018).
+- **ARCH-009:** Added `ExternalSearchProxy` component and detailed flow diagram showing how admin searches external APIs (USDA/OpenFoodFacts) via ARCH-012 for data curation workflow (SW-REQ-055).
+- **Traceability Matrix:** Updated SW-REQ-073 mapping to include ARCH-011.
+
+### 2026-01-21 (Rev 1.0)
+
+**Added:**
+- Document created with 17 architectural components
+- Full traceability to 89 software requirements
+- Alternative analysis for all major design decisions
+- Resource goals and interface definitions
 
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI) |
-| **Static Aspects** | `PaginationControls.tsx`, `usePagination` |
-| **Dependencies** | [ARCH-FE-SEARCH] |
-| **Traceability** | [SW-REQ-010] |
-
-**Dynamic Behavior:**
-- **State Calculation:** Computes `TotalPages = Math.ceil(TotalCount / 10)`.
-- **Interaction:** On 'Next' click, increments internal index and emits `onPageChange(newOffset)` event to the parent controller.
-- **Disabling:** Disables 'Next' button if `CurrentPage == TotalPages` to prevent out-of-bounds requests.
-
-**Interface Definition:**
-- `Input`: Total Count (Int), Current Offset (Int), Loading State (Bool).
-- `Output`: New Offset Event.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Controlled Component.
-- *Alternative Considered:* Infinite Scroll.
-- *Trade-off:* Numbered pagination ([SW-REQ-010]) allows users to bookmark or return to specific result sets more reliably than infinite scroll, which resets on navigation.
-
----
-
-## [ARCH-FE-MEDIA-HANDLER] - Intelligent Media Resolver
-**Description:** A wrapper component for image rendering that implements the fallback logic for missing assets based on item metadata.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (Utility) |
-| **Static Aspects** | `SmartImage.tsx`, `CategoryPlaceholderMap` |
-| **Dependencies** | [ARCH-FE-THEME] |
-| **Traceability** | [SW-REQ-011], [SW-REQ-012] |
-
-**Dynamic Behavior:**
-- **Source Validation:** Attempts to load the primary `image_url` from the item record.
-- **Fallback Logic:** If `image_url` is null OR triggers an `onError` event, the component reads the Item's `CategoryTag`.
-- **Resolution:** Selects the corresponding static asset (e.g., `assets/placeholders/dairy.png`) from the `CategoryPlaceholderMap` ([SW-REQ-012]).
-
-**Interface Definition:**
-- `Input`: Image Source URL, Category Tag.
-- `Output`: Rendered `<img>` element.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Client-Side Fallback.
-- *Alternative Considered:* Server-Side Placeholder Injection.
-- *Trade-off:* Client-side handling allows the server to send `null`, reducing bandwidth if the user already has the placeholder assets cached locally.
-
----
-
-## [ARCH-FE-SCORE-INDICATOR] - Similarity Visualizer
-**Description:** Responsible for mapping the raw Cosine Similarity score to the specific visual hierarchy (Colors and Icons) defined in the requirements.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI) |
-| **Static Aspects** | `ScoreBadge.tsx`, `ScoreThresholds` |
-| **Dependencies** | [ARCH-BE-SEARCH] (for server-hosted emoji URLs) |
-| **Traceability** | [SW-REQ-018] |
-
-**Dynamic Behavior:**
-- **Thresholding:** Evaluates score `S`:
-    - `S ≥ 0.85` -> Applies Class `text-green-600` + Fetches `star_icon.png`.
-    - `0.70 ≤ S < 0.84` -> Applies Class `text-green-400` + Fetches `sparkle_icon.png`.
-    - `0.55 ≤ S < 0.69` -> Applies Class `text-yellow-500` + Fetches `thumbs_up_icon.png`.
-    - `S < 0.55` -> Applies Class `text-red-500` + Fetches `thumbs_down_icon.png`.
-- **Asset Retrieval:** Uses server-hosted URLs for icons as mandated by [SW-REQ-018] ("save emojis as images on server").
-
-**Interface Definition:**
-- `Input`: Similarity Score (Float 0.0-1.0).
-- `Output`: Styled Badge UI.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Discrete Component with Server Assets.
-- *Alternative Considered:* CSS Pseudo-elements / System Emojis.
-- *Trade-off:* Using server assets ensures cross-platform consistency (Android vs iOS emojis differ), strictly adhering to the "UI stored properly" clause of [SW-REQ-018].
-
----
-
-## [ARCH-FE-LIST-MGR] - List State & Aggregation Manager
-**Description:** A client-side state container (Context/Redux) that manages the user's active building lists. It distinguishes between "Ingredient Mode" (adding atomic items) and "Meal List Mode" (aggregating full meal objects).
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Module / State Manager |
-| **Static Aspects** | `ListContext.tsx`, `AggregationReducer.ts` |
-| **Dependencies** | None |
-| **Traceability** | [SW-REQ-005], [SW-REQ-006] |
-
-**Dynamic Behavior:**
-- **Event Listener:** Attaches a global listener for the 'Enter' key within the search context.
-- **Ingredient Mode (SW-REQ-005):** When 'Enter' is pressed on an autocomplete item, pushes the Item ID + Default Qty (100g) to the `activeIngredients` array.
-- **Meal List Mode (SW-REQ-006):** When in Meal Mode, selected items are pushed to the `activeDay` array. The manager calculates the sum of all macros in `activeDay` to represent a full day's diet.
-
-**Interface Definition:**
-- `Input`: Selected Item, Mode Enum (`Ingredient` | `Meal`).
-- `Output`: Updated State Arrays, Calculated Daily Totals.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Client-side Accumulation.
-- *Alternative Considered:* Server-side "Cart" session.
-- *Trade-off:* Client-side management allows for instant UI updates and accumulation without network latency for every item added, providing a snappier UX for building lists quickly.
-
----
-
-## [ARCH-FE-PAGINATION] - Search Result Pagination Control
-**Description:** A stateless UI component responsible for calculating page offsets and rendering navigation controls based on the total result count returned by the API.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI) |
-| **Static Aspects** | `PaginationControls.tsx`, `usePagination` hook |
-| **Dependencies** | [ARCH-FE-SEARCH] |
-| **Traceability** | [SW-REQ-010] |
-
-**Dynamic Behavior:**
-- **Offset Calculation:** Computes the API `offset` parameter: `(CurrentPage - 1) * 10`.
-- **Limit Enforcement:** Enforces the hard limit of 10 items per page view ([SW-REQ-010]).
-- **Navigation:** Emits event `onPageChange(newOffset)` which triggers [ARCH-FE-SEARCH] to re-fetch data.
-
-**Interface Definition:**
-- `Input`: Total Item Count, Current Page Index.
-- `Output`: UI Events (Next/Prev).
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Indexed Pagination.
-- *Alternative Considered:* "Load More" (Append) button.
-- *Trade-off:* Indexed pagination is required to allow users to navigate back and forth through search results without losing their place, which is critical when comparing nutritional values across many items.
-
----
-
-## [ARCH-FE-MEDIA-HANDLER] - Placeholder Resolution Service
-**Description:** A robust media handling component that intercepts image load failures and injects category-specific assets to ensure visual consistency.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (Utility) |
-| **Static Aspects** | `SmartImage.tsx`, `CategoryAssetMap.json` |
-| **Dependencies** | [ARCH-FE-THEME] |
-| **Traceability** | [SW-REQ-012] |
-
-**Dynamic Behavior:**
-- **Detection:** Checks if the item object has a null `image_url` OR listens for the DOM `onError` event on the `<img>` tag.
-- **Resolution:** If missing/error, reads the Item's `category_tag` (e.g., "dairy", "meat").
-- **Injection:** Swaps the `src` attribute with a local static asset (e.g., `/assets/placeholders/dairy_generic.png`) ([SW-REQ-012]).
-
-**Interface Definition:**
-- `Input`: Image URL (nullable), Category Tag.
-- `Output`: Valid Image Source (Remote or Local).
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Client-side Logic.
-- *Alternative Considered:* Backend Default Image URL.
-- *Trade-off:* Client-side logic reduces bandwidth (no need to download a placeholder image if it's already in the app bundle) and prevents broken images if the backend logic fails to identify a missing external image.
-
----
-
-## [ARCH-FE-PREF-WEIGHTS] - Macro Priority Controller
-**Description:** A UI/Logic component that allows users to define the relative importance of Proteins, Carbs, and Fats via sliders or input fields.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI + State) |
-| **Static Aspects** | `PrioritySliders.tsx`, `WeightContext` |
-| **Dependencies** | [ARCH-FE-CACHE] |
-| **Traceability** | [SW-REQ-017] |
-
-**Dynamic Behavior:**
-- **Capture:** Listens for slider changes (Range 0.1 - 2.0).
-- **Persistence:** Saves the preferred weight vector to `localStorage` (via [ARCH-FE-CACHE]).
-- **Injection:** Injects the current weights into every Search Request payload to trigger the Weighted Similarity logic in [ARCH-BE-MATH].
-
-**Interface Definition:**
-- `Input`: User Slider Events.
-- `Output`: Weight Vector `{p, c, f}`.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Client-side Preference Injection.
-- *Alternative Considered:* Server-side User Profile setting.
-- *Trade-off:* Keeping this in client state allows for rapid experimentation ("What if I prioritize Fat now?") without needing permanent DB writes for every adjustment.
-
----
-
-## [ARCH-FE-BADGE-SYS] - Visual Hierarchy & Badge System
-**Description:** A specialized display component responsible for rendering "Best Match" badges and visual hierarchy indicators based on strict score thresholds.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI) |
-| **Static Aspects** | `MatchBadge.tsx`, `HierarchyResolver` |
-| **Dependencies** | [ARCH-FE-THEME] |
-| **Traceability** | [SW-REQ-018], [SW-REQ-019] |
-
-**Dynamic Behavior:**
-- **Hierarchy Rendering:**
-    - If Score > 0.90: Renders "Best Match" Badge with Accent Color (Soft Amber) ([SW-REQ-018]).
-    - Else: Renders standard similarity indicators.
-- **Score Display:** Formats the raw float (e.g., `0.876`) into a readable percentage or decimal (`0.88` / `88%`) based on configuration ([SW-REQ-019]).
-
-**Interface Definition:**
-- `Input`: Similarity Score (Float).
-- `Output`: Badge UI Element.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Component-level Logic.
-- *Alternative Considered:* CSS Classes only.
-- *Trade-off:* A dedicated component is needed to handle the logic of "Best Match" exclusivity (only showing it on the top item) vs standard coloring.
-
----
-
-## [ARCH-FE-PROMO] - Engagement & Offer Controller
-**Description:** Monitors search results to inject "Special Offer" notifications or marketing prompts when high-quality matches are found.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Controller / Interceptor |
-| **Static Aspects** | `OfferTrigger.ts`, `PromoModal.tsx` |
-| **Dependencies** | [ARCH-FE-SEARCH] |
-| **Traceability** | [SW-REQ-021] |
-
-**Dynamic Behavior:**
-- **Trigger Condition:** Listens to search results. IF `BestItem.score > 0.95` AND `User.hasSeenOffer == false`, THEN trigger the "Special Offer" UI ([SW-REQ-021]).
-- **Dismissal:** Updates local session state to prevent spamming the offer on every search.
-
-**Interface Definition:**
-- `Input`: Search Result Set.
-- `Output`: UI Modal / Toast Notification.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Client-side Trigger.
-- *Alternative Considered:* Backend "Marketing" Flag in response.
-- *Trade-off:* Client-side triggers allow for UI-specific state tracking (session/local storage) to manage frequency capping without bloating the API response.
-
----
-
-## [ARCH-FE-DIET-WIZARD] - Diet Configuration Interface
-**Description:** A multi-step form wizard allowing the user to define the boundary conditions for the diet generation algorithm, including numeric macro targets and dietary exclusions.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI/Form) |
-| **Static Aspects** | `DietWizard.tsx`, `TargetValidator` |
-| **Dependencies** | [ARCH-FE-CACHE] (Last used targets) |
-| **Traceability** | [SW-REQ-022], [SW-REQ-027] |
-
-**Dynamic Behavior:**
-- **Target Capture:** Accepts user inputs for Daily Protein, Carbs, and Fat (in grams). Validates that values are positive integers ([SW-REQ-022]).
-- **Constraint Selection:** Provides toggles for Dietary Restrictions (e.g., Gluten-Free, Vegan). These are mapped to internal Tag IDs for API transmission ([SW-REQ-027]).
-- **Persistence:** Saves the configuration to `localStorage` so repeat generations don't require re-entry.
-
-**Interface Definition:**
-- `Input`: User Form Data.
-- `Output`: JSON Payload `{ targets: {p,c,f}, filters: [tags] }`.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Explicit Wizard Step.
-- *Alternative Considered:* Inferring targets from user profile stats (Height/Weight).
-- *Trade-off:* Explicit entry is chosen because users often cycle diet types (Bulking vs Cutting) rapidly; profile-based inference is too rigid for a "Meal Swapp" use case.
-
----
-
-## [ARCH-BE-DIET-SVC] - Diet Orchestration Service
-**Description:** The dedicated service layer responsible for gathering candidate meals, applying pre-optimization filters, and orchestrating the Linear Programming workflow.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Service |
-| **Static Aspects** | `DietGenerator`, `CandidateSelector` |
-| **Dependencies** | [ARCH-DB-MAIN], [ARCH-BE-MATH] |
-| **Traceability** | [SW-REQ-023], [SW-REQ-027] |
-
-**Dynamic Behavior:**
-- **Candidate Fetching:** Queries [ARCH-DB-MAIN] for a pool of "Valid Meals." Applies User Constraints (e.g., `WHERE tag NOT IN ('gluten')`) *before* optimization to reduce the solution space ([SW-REQ-027]).
-- **Orchestration:** Passes the Candidate Pool and User Targets to [ARCH-BE-MATH].
-- **Response Formatting:** Maps the Solver's mathematical output (Meal IDs) back to full Meal Objects for the client.
-
-**Interface Definition:**
-- `Input`: User Targets, Constraints.
-- `Output`: Structured Diet Plan (List of Meals).
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Dynamic Candidate Filtering.
-- *Alternative Considered:* Solving on the entire database.
-- *Trade-off:* Filtering candidates by dietary restriction *before* the math step significantly reduces CPU time and ensures strict compliance with safety requirements (Allergies).
-
----
-
-## [ARCH-FE-DIET-RESULT] - Diet Solution Viewer
-**Description:** A complex display component responsible for rendering the generated diet, breaking it down meal-by-meal, and showing the "Total vs Target" comparison.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI) |
-| **Static Aspects** | `DietBreakdown.tsx`, `MacroSummaryChart` |
-| **Dependencies** | [ARCH-FE-THEME] |
-| **Traceability** | [SW-REQ-028] |
-
-**Dynamic Behavior:**
-- **Iterative Rendering:** Maps through the returned solution array to display each meal card (Image, Name, Qty) ([SW-REQ-028]).
-- **Summary Calculation:** client-side recalculation of the total P/C/F of the solution to display a "Match Accuracy" chart (e.g., "98% of Protein Target").
-
-**Interface Definition:**
-- `Input`: Diet Plan Object.
-- `Output`: Rendered List & Charts.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* List View with Summary Header.
-- *Alternative Considered:* Calendar View.
-- *Trade-off:* The requirement focuses on a "One-Day Diet" ([SW-REQ-006]), so a vertical list is more space-efficient on mobile than a full calendar grid.
-
----
-
-## [ARCH-FE-AUTH-WIDGET] - Authentication Interface & Logic
-**Description:** The client-side controller for all user identification flows. It manages the Toggle between "Login" and "Register" forms, input validation (Password Strength), and the Social Login SDK integrations.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI + Logic) |
-| **Static Aspects** | `AuthModal.tsx`, `SocialLoginButton.tsx`, `ValidationUtils` |
-| **Dependencies** | [ARCH-FE-NET], Google/Apple SDKs |
-| **Traceability** | [SW-REQ-046], [SW-REQ-058], [SW-REQ-060], [SW-REQ-061] |
-
-**Dynamic Behavior:**
-- **Password Strength:** Real-time regex validation on the registration input. Requires: `Min 8 chars, 1 Uppercase, 1 Number`. Visual feedback provided before submission.
-- **Social Flow:**
-    1. User clicks "Continue with Google".
-    2. Component calls `GoogleAuth.signIn()`.
-    3. On success, receives `id_token`.
-    4. POSTs `id_token` to Backend `/api/auth/social`.
-- **Error Handling:** Displays specific messages for "User already exists" ([SW-REQ-060]) or "Invalid Credentials."
-
-**Interface Definition:**
-- `Input`: User Credentials or OAuth Token.
-- `Output`: Auth Success Event (triggers Router redirect).
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Dedicated Auth Widget/Modal.
-- *Alternative Considered:* Redirect to separate `/login` page.
-- *Trade-off:* Using a Modal/Widget allows the user to log in contextually (e.g., when trying to "Save" a diet) without losing their current work/search state.
-
----
-
-## [ARCH-BE-SESSION] - Token & Session Manager
-**Description:** Dedicated to the generation, validation, rotation, and invalidation of JSON Web Tokens (JWT). It isolates session security logic from identity logic.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Service / Middleware |
-| **Static Aspects** | `TokenSigner`, `RefreshRotationStrategy` |
-| **Dependencies** | Redis (Optional, for blocklist) or DB |
-| **Traceability** | [SW-REQ-062], [SW-REQ-063], [SW-REQ-066] |
-
-**Dynamic Behavior:**
-- **Minting (SW-REQ-063):**
-    - Creates `AccessToken` (Exp: 15 mins). Payload: `{uid, role}`. Signed with HS256/RS256.
-    - Creates `RefreshToken` (Exp: 7 days). Stored as Hash in DB linked to User.
-    - Sets Cookies: `HttpOnly; Secure; SameSite=Strict` ([SW-REQ-062]).
-- **Rotation:**
-    - On `/refresh` call: Validates old RefreshToken. Checks DB.
-    - If valid: **Revokes old token**, Mints NEW Access + NEW Refresh tokens (Rotation).
-    - If invalid (Reuse Attempt): **Revokes ALL tokens** for that user (Theft detection).
-- **Logout (SW-REQ-066):**
-    - Deletes RefreshToken from DB.
-    - Clears Cookies on Client Response.
-
-**Interface Definition:**
-- `Input`: User ID, Roles.
-- `Output`: Cookie Set Headers.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Refresh Token Rotation.
-- *Alternative Considered:* Long-lived Access Tokens.
-- *Trade-off:* Rotation limits the damage of a stolen refresh token to a single use and allows the server to detect token theft (reuse) immediately, significantly improving security over static tokens.
-
----
-
-## [ARCH-FE-CHECKOUT] - Payment & Subscription UI
-**Description:** A secure UI component responsible for rendering the pricing tiers and encapsulating the Stripe Elements (Input Fields). It handles the client-side tokenization of payment credentials.
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Component (UI + Security) |
-| **Static Aspects** | `CheckoutForm.tsx`, `PricingTable.tsx`, `StripeProvider` |
-| **Dependencies** | [ARCH-FE-NET], Stripe JS SDK |
-| **Traceability** | [SW-REQ-050] (Original), [SW-REQ-044] (Tokenization), [SW-REQ-043] (Checkout Integration) |
-
-**Dynamic Behavior:**
-- **Tier Selection:** Displays "Monthly ($3)" and "Yearly ($25)" options. On selection, requests a `PaymentIntent` from the backend ([SW-REQ-050]).
-- **Tokenization:** Mounts the Stripe Elements `CardElement`. On form submit, calls `stripe.confirmCardPayment()`. This sends card data directly to Stripe, never hitting the App Server ([SW-REQ-044]).
-- **Success Handling:** On promise resolution (success), displays the Success State and triggers a session refresh to update User Role.
-
-**Interface Definition:**
-- `Input`: User Selection, Card Data (Hosted Iframe).
-- `Output`: Payment Success Event.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* Stripe Elements (Client-side Tokenization).
-- *Alternative Considered:* Raw Form POST to Backend.
-- *Trade-off:* Elements is mandatory for PCI-DSS SAQ A compliance. Sending raw data to the backend would drastically increase compliance scope and security risk.
-
----
-
-## [ARCH-BE-SUB-MGR] - Subscription Lifecycle Manager
-**Description:** The domain service responsible for the business logic of subscriptions, including handling cancellations, auto-renewal monitoring, and tier transitions (e.g., Paid -> Free upon expiration).
-
-| Attribute | Value |
-| :--- | :--- |
-| **Type** | Service (Domain) |
-| **Static Aspects** | `SubscriptionService`, `PlanManager` |
-| **Dependencies** | [ARCH-DB-MAIN], [ARCH-BE-PAY] (Adapter) |
-| **Traceability** | [SW-REQ-046] (Cancellation), [SW-REQ-047] (Auto-Renewal), [SW-REQ-045] (Failure Handling) |
-
-**Dynamic Behavior:**
-- **Cancellation (SW-REQ-046):**
-    - API Endpoint `/api/subs/cancel`.
-    - Calls Stripe Adapter to set `cancel_at_period_end = true`.
-    - Updates DB status to "Pending Cancellation". Access remains active until `current_period_end`.
-- **Renewal (SW-REQ-047):**
-    - Passive: Relies on Webhooks from `[ARCH-BE-PAY]`.
-    - Active Check: If a user logs in and `subscription_end < NOW`, downgrades User Role to 'Free' immediately.
-- **Failure Handling (SW-REQ-045):**
-    - Listens for `invoice.payment_failed` webhook.
-    - Triggers "Dunning" email flow and marks DB status as "Past Due".
-
-**Interface Definition:**
-- `Input`: User Requests, Webhook Events.
-- `Output`: Subscription Status Updates.
-
-**Alternative Analysis (BP6):**
-- *Chosen Approach:* State Machine based on Webhooks.
-- *Alternative Considered:* Polling Stripe API cron job.
-- *Trade-off:* Webhook-driven architecture is real-time and avoids API rate limits, whereas polling is inefficient and can lead to sync delays where a user pays but doesn't get access immediately.
