@@ -1,6 +1,7 @@
 # Task List
 
 Valid Task statuses: OPEN, PREPARED, REJECTED, PASSED
+ID: Use growing unique integers
 
-| Component | Static Aspect | ID | Status | Retries | Description | Depends On (ID) | Testing Coverage Exceptions |
-|-----------|---------------|----|--------|---------|-------------|-----------------|-----------------------------|
+| ID | Component | Static Aspect | Status | Retries | Description | Depends On (ID) | Testing Coverage Exceptions | Verification Criteria |
+|----|-----------|---------------|--------|---------|-------------|-----------------|-----------------------------|-----------------------|
