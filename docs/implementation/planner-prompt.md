@@ -4,7 +4,7 @@ The tasks will be an input for Code Developer.
 
 # INPUT
 - [PHASE_PLAN] - read this document to understand what needs to be implemented in current phase.
-- [STATIC_ASSET_DESIGN] - read this document to understand how to implement the code.
+- [STATIC_ASSET_DESIGN] - SEARCH for this document and read this document to understand how to implement the code.
 - [TASK_LIST] - append the tasks to the list, following the format.
 
 # RULES
