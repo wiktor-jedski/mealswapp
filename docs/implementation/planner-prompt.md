@@ -14,3 +14,4 @@ The tasks will be an input for Code Developer.
 - Try to keep tasks simple and possible to implement for a junior programmer.
 - Think carefully about how tasks depend on each other.
 - The description should be brief. All the necessary information is contained in design document.
+- You DO NOT GENERATE CODE. You ONLY POPULATE THE TASK LIST.
