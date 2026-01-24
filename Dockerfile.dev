@@ -1,0 +1,44 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    wget \
+    unzip \
+    build-essential \
+    # PostgreSQL
+    postgresql \
+    postgresql-contrib \
+    # Redis
+    redis-server \
+    # Go
+    golang-go \
+    # CLP solver for LP
+    coinor-libclp-dev \
+    coinor-clp \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash
+
+# Set up environment
+ENV PATH="$PATH:/root/go/bin:/root/.bun/bin"
+ENV GOPATH="/root/go"
+
+# Environment variables for the app
+ENV DATABASE_URL="postgres://mealswapp:dev@localhost:5432/mealswapp?sslmode=disable"
+ENV REDIS_URL="redis://localhost:6379"
+ENV REPO_URL=""
+
+# Copy start script
+COPY start-services.sh /start-services.sh
+RUN chmod +x /start-services.sh
+
+WORKDIR /workspace
+
+ENTRYPOINT ["/start-services.sh"]
+CMD []
