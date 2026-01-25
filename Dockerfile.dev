@@ -37,7 +37,7 @@ RUN curl -fsSL https://opencode.ai/install | bash
 RUN curl -fsSL https://bun.sh/install | bash
 
 # Set up environment
-ENV PATH="$PATH:/root/go/bin:/home/ubuntu/.local/bin:/home/ubuntu/.bun/bin"
+ENV PATH="$PATH:/root/go/bin:/home/ubuntu/.local/bin:/home/ubuntu/.bun/bin:/home/ubuntu/.opencode/bin"
 ENV GOPATH="/root/go"
 
 # Environment variables for the app
@@ -46,9 +46,9 @@ ENV REDIS_URL="redis://localhost:6379"
 ENV REPO_URL=""
 
 # Copy start script
-COPY --chmod=755 scripts/start-services.sh /start-services.sh
+COPY --chmod=755 scripts/start_services.sh /start_services.sh
 
 WORKDIR /workspace
 
-ENTRYPOINT ["/start-services.sh"]
+ENTRYPOINT ["/start_services.sh"]
 CMD []
