@@ -1,32 +1,43 @@
-FROM ubuntu:24.04
+FROM ubuntu:latest
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # System dependencies
 RUN apt-get update && apt-get install -y \
     git \
+    gh \
+    sudo \
     curl \
     wget \
     unzip \
     build-essential \
-    # PostgreSQL
     postgresql \
     postgresql-contrib \
-    # Redis
     redis-server \
-    # Go
     golang-go \
-    # CLP solver for LP
     coinor-libclp-dev \
     coinor-clp \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
+# Set up user
+RUN mkdir -p /home/ubuntu/.local/share/opencode \
+    && chown -R ubuntu:ubuntu /home/ubuntu/.local
+RUN mkdir -p /home/ubuntu/.config/opencode \
+    && chown -R ubuntu:ubuntu /home/ubuntu/.config
+RUN usermod -aG sudo ubuntu \
+    && echo "ubuntu ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/ubuntu \
+    && chmod 0440 /etc/sudoers.d/ubuntu
+USER ubuntu
+
+# Install opencode
+RUN curl -fsSL https://opencode.ai/install | bash
+
 # Install Bun
 RUN curl -fsSL https://bun.sh/install | bash
 
 # Set up environment
-ENV PATH="$PATH:/root/go/bin:/root/.bun/bin"
+ENV PATH="$PATH:/root/go/bin:/home/ubuntu/.local/bin:/home/ubuntu/.bun/bin"
 ENV GOPATH="/root/go"
 
 # Environment variables for the app
@@ -35,8 +46,7 @@ ENV REDIS_URL="redis://localhost:6379"
 ENV REPO_URL=""
 
 # Copy start script
-COPY start-services.sh /start-services.sh
-RUN chmod +x /start-services.sh
+COPY --chmod=755 scripts/start-services.sh /start-services.sh
 
 WORKDIR /workspace
 
