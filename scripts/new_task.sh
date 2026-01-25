@@ -1,3 +1,6 @@
+PARENT="$1"
+CHILD="$2"
+
 echo "Run coding task"
 echo "$PATH"
 opencode run "create a hello world app in go and commit changes"
