@@ -6,20 +6,29 @@ PARENT="$1"
 CHILD="$2"
 TASK="$3"
 
+TARGET_DIR="/workspace"
+REQUIRED_REPO="wiktor-jedski/mealswapp"
+CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+
+if [[ "$PWD" != "$TARGET_DIR" ]]; then
+  echo "Wrong directory: need to be in /workspace"
+  exit 1
+fi
+
 echo "Starting PostgreSQL..."
 sudo service postgresql start
 
 until pg_isready -q; do
-    echo "Waiting for PostgreSQL..."
-    sleep 1
+  echo "Waiting for PostgreSQL..."
+  sleep 1
 done
 
 echo "Starting Redis..."
 sudo service redis-server start
 
 until redis-cli ping | grep -q PONG; do
-    echo "Waiting for Redis..."
-    sleep 1
+  echo "Waiting for Redis..."
+  sleep 1
 done
 
 echo "================================"
@@ -33,19 +42,26 @@ git config --global user.name "$USER_NAME"
 git config --global user.email "$USER_EMAIL"
 gh auth setup-git
 
-if [[ $TASK == "NEW" ]]; then
-    rm -rf *
-    gh repo clone wiktor-jedski/mealswapp . -- -b "$PARENT" --single-branch
-    sh scripts/new_task.sh "$PARENT" "$CHILD"
-elif [[ $TASK == "REVIEW" ]]; then
-    if [ -d ".git" ]; then
-        git pull
-    else
-        gh repo clone wiktor-jedski/mealswapp . -- -b "$PARENT"-"$CHILD" --single-branch
-    fi
-    sh scripts/reviewed_task.sh
+echo "Set up git repo"
+if [[ "$CURRENT_REMOTE" == *"$REQUIRED_REPO"* ]]; then
+  echo "Correct repo detected. Fetching..."
+  git fetch --all
+  git reset --hard origin/"$PARENT"
 else
-    echo "Error: unkown task passed"
-    exit 1
+  echo "Wrong repo or empty dir. Cleaning and cloning..."
+  ls -A1 | xargs rm -rf
+  gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT" --single-branch
+fi
+
+echo "Run chosen task"
+if [[ $TASK == "NEW" ]]; then
+  git checkout -B "$PARENT"-"$CHILD"
+  sh scripts/new_task.sh
+elif [[ $TASK == "REVIEW" ]]; then
+  # uses only PARENT as full branch name
+  sh scripts/reviewed_task.sh
+else
+  echo "Error: unkown task passed"
+  exit 1
 fi
 
