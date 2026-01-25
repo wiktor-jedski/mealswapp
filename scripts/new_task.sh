@@ -1,6 +1,5 @@
 PARENT="$1"
 CHILD="$2"
-TASK_NUMBER="$3"
 
 echo "Run coding task"
 opencode run "create a hello world app in go and commit changes"
