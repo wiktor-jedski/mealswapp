@@ -56,7 +56,7 @@ fi
 echo "Run chosen task"
 if [[ $TASK == "NEW" ]]; then
   git checkout -B "$PARENT"-"$CHILD"
-  sh scripts/new_task.sh
+  sh scripts/new_task.sh "$PARENT" "$CHILD"
 elif [[ $TASK == "REVIEW" ]]; then
   # uses only PARENT as full branch name
   sh scripts/reviewed_task.sh
