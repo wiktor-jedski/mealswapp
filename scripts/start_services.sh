@@ -50,7 +50,7 @@ if [[ "$CURRENT_REMOTE" == *"$REQUIRED_REPO"* ]]; then
 else
   echo "Wrong repo or empty dir. Cleaning and cloning..."
   ls -A1 | xargs rm -rf
-  gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT" --single-branch
+  gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT"
 fi
 
 echo "Run chosen task"
