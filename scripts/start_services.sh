@@ -58,7 +58,8 @@ if [[ $TASK == "NEW" ]]; then
   git checkout -B "$PARENT"-"$CHILD"
   sh scripts/new_task.sh "$PARENT" "$CHILD"
 elif [[ $TASK == "REVIEW" ]]; then
-  git fetch --all
+  git fetch origin --all
+  git branch -a
   git checkout "$PARENT"-"$CHILD"
   sh scripts/review_task.sh "$PARENT" "$CHILD"
 else
