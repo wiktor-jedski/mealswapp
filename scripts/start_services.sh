@@ -61,7 +61,7 @@ elif [[ $TASK == "REVIEW" ]]; then
   # uses only PARENT as full branch name
   sh scripts/reviewed_task.sh
 else
-  echo "Error: unkown task passed"
+  echo "Error: unknown task passed"
   exit 1
 fi
 

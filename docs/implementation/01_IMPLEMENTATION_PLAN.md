@@ -18,25 +18,25 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-005 (partial) - Data Repository Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **FoodItemEntity** | Food item with macros, physical state, prep time, tags | `models/food_item.go` |
-| **MealEntity** | Single dish or recipe reference | `models/meal.go` |
-| **RecipeEntity** | Ingredient composition with quantities | `models/recipe.go` |
-| **TagEntity** | Category and functionality tags | `models/tag.go` |
-| **SimilarityIndicatorAsset** | Tier images/colors for similarity display | `models/similarity_indicator.go` |
-| **RepositoryInterfaces** | Interface definitions for all repositories | `repository/interfaces.go` |
+| **FoodItemEntity** | Food item with macros, physical state, prep time, tags | `internal/models/food_item.go` |
+| **MealEntity** | Single dish or recipe reference | `internal/models/meal.go` |
+| **RecipeEntity** | Ingredient composition with quantities | `internal/models/recipe.go` |
+| **TagEntity** | Category and functionality tags | `internal/models/tag.go` |
+| **SimilarityIndicatorAsset** | Tier images/colors for similarity display | `internal/models/similarity_indicator.go` |
+| **RepositoryInterfaces** | Interface definitions for all repositories | `internal/repository/interfaces.go` |
 
 #### ARCH-013 (partial) - Security Middleware
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **EncryptionService** | AES-256 encryption via crypto/aes | `middleware/encryption.go` |
-| **InputSanitizer** | XSS, SQL injection prevention | `middleware/sanitizer.go` |
-| **TLSEnforcer** | TLS 1.3 enforcement, HTTP->HTTPS redirect | `middleware/tls.go` |
+| **EncryptionService** | AES-256 encryption via crypto/aes | `internal/middleware/encryption.go` |
+| **InputSanitizer** | XSS, SQL injection prevention | `internal/middleware/sanitizer.go` |
+| **TLSEnforcer** | TLS 1.3 enforcement, HTTP->HTTPS redirect | `internal/middleware/tls.go` |
 
 #### ARCH-014 (partial) - Logging & Monitoring Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **FiberLogger** | Fiber logger middleware integration | `middleware/logger.go` |
-| **AuditLogger** | Structured audit logging for security events | `middleware/audit.go` |
+| **FiberLogger** | Fiber logger middleware integration | `internal/middleware/logger.go` |
+| **AuditLogger** | Structured audit logging for security events | `internal/middleware/audit.go` |
 
 ### Testing
 - [ ] Database migrations run successfully
@@ -56,27 +56,27 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-006 - Authentication Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **AuthController** | HTTP handlers for auth endpoints | `auth/controller.go` |
-| **PasswordHasher** | Argon2 hashing with unique salts (golang.org/x/crypto/argon2) | `auth/password_hasher.go` |
-| **JWTManager** | JWT issue, validate, refresh (15min access, 7-day refresh) | `auth/jwt_manager.go` |
-| **OAuthHandler** | Google/Apple OAuth via github.com/markbates/goth | `auth/oauth_handler.go` |
-| **SessionManager** | Fiber session middleware integration | `auth/session_manager.go` |
-| **AccountLockoutTracker** | Track failed attempts, enforce 5-failure/15min lockout | `auth/lockout_tracker.go` |
+| **AuthController** | HTTP handlers for auth endpoints | `internal/auth/controller.go` |
+| **PasswordHasher** | Argon2 hashing with unique salts (golang.org/x/crypto/argon2) | `internal/auth/password_hasher.go` |
+| **JWTManager** | JWT issue, validate, refresh (15min access, 7-day refresh) | `internal/auth/jwt_manager.go` |
+| **OAuthHandler** | Google/Apple OAuth via github.com/markbates/goth | `internal/auth/oauth_handler.go` |
+| **SessionManager** | Fiber session middleware integration | `internal/auth/session_manager.go` |
+| **AccountLockoutTracker** | Track failed attempts, enforce 5-failure/15min lockout | `internal/auth/lockout_tracker.go` |
 
 #### ARCH-010 (partial) - API Gateway
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **RouteHandler** | Fiber route definitions and grouping | `routes/router.go` |
-| **RateLimiter** | Fiber built-in limiter (10 failed/IP/10min) | `middleware/rate_limiter.go` |
-| **SecurityHeaderMiddleware** | CSP, X-Frame-Options, X-Content-Type-Options, etc. | `middleware/headers.go` |
-| **CSRFValidator** | Fiber csrf middleware for state-changing requests | `middleware/csrf.go` |
-| **CORSHandler** | CORS configuration for allowed origins | `middleware/cors.go` |
+| **RouteHandler** | Fiber route definitions and grouping | `internal/routes/router.go` |
+| **RateLimiter** | Fiber built-in limiter (10 failed/IP/10min) | `internal/middleware/rate_limiter.go` |
+| **SecurityHeaderMiddleware** | CSP, X-Frame-Options, X-Content-Type-Options, etc. | `internal/middleware/headers.go` |
+| **CSRFValidator** | Fiber csrf middleware for state-changing requests | `internal/middleware/csrf.go` |
+| **CORSHandler** | CORS configuration for allowed origins | `internal/middleware/cors.go` |
 
 #### ARCH-005 (partial) - Data Repository (Users)
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **UserEntity** | User model with email, password hash, role, verification status | `models/user.go` |
-| **UserRepository** | User CRUD operations | `repository/user_repo.go` |
+| **UserEntity** | User model with email, password hash, role, verification status | `internal/models/user.go` |
+| **UserRepository** | User CRUD operations | `internal/repository/user_repo.go` |
 
 ### Testing
 - [ ] User registration with email validation
@@ -100,21 +100,21 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-003 - Similarity Engine
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **CosineSimilarityCalculator** | Dot product of normalized P/C/F vectors | `similarity/calculator.go` |
-| **MacroVectorNormalizer** | Normalize macros to unit vectors | `similarity/normalizer.go` |
-| **ThresholdFilter** | Exclude results with score < 0.40 | `similarity/threshold_filter.go` |
-| **SimilarityIndicatorMapper** | Map scores to tiers (excellent/good/fair/poor) | `similarity/indicator_mapper.go` |
-| **SimilarityAssetResolver** | Resolve tier to color hex and image URL | `similarity/asset_resolver.go` |
+| **CosineSimilarityCalculator** | Dot product of normalized P/C/F vectors | `internal/similarity/calculator.go` |
+| **MacroVectorNormalizer** | Normalize macros to unit vectors | `internal/similarity/normalizer.go` |
+| **ThresholdFilter** | Exclude results with score < 0.40 | `internal/similarity/threshold_filter.go` |
+| **SimilarityIndicatorMapper** | Map scores to tiers (excellent/good/fair/poor) | `internal/similarity/indicator_mapper.go` |
+| **SimilarityAssetResolver** | Resolve tier to color hex and image URL | `internal/similarity/asset_resolver.go` |
 
 #### ARCH-005 (complete) - Data Repository Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **UnitConverter** | Metric<->Imperial (g->oz: ×0.035, ml->fl oz: ×0.033) | `services/unit_converter.go` |
-| **MacroNormalizer** | Normalize all values to per 100g/100ml | `services/macro_normalizer.go` |
-| **FoodItemRepository** | FoodItem CRUD with tag associations | `repository/food_item_repo.go` |
-| **MealRepository** | Meal CRUD with recipe aggregation | `repository/meal_repo.go` |
-| **RecipeRepository** | Recipe ingredient CRUD | `repository/recipe_repo.go` |
-| **TagRepository** | Tag CRUD operations | `repository/tag_repo.go` |
+| **UnitConverter** | Metric<->Imperial (g->oz: ×0.035, ml->fl oz: ×0.033) | `internal/services/unit_converter.go` |
+| **MacroNormalizer** | Normalize all values to per 100g/100ml | `internal/services/macro_normalizer.go` |
+| **FoodItemRepository** | FoodItem CRUD with tag associations | `internal/repository/food_item_repo.go` |
+| **MealRepository** | Meal CRUD with recipe aggregation | `internal/repository/meal_repo.go` |
+| **RecipeRepository** | Recipe ingredient CRUD | `internal/repository/recipe_repo.go` |
+| **TagRepository** | Tag CRUD operations | `internal/repository/tag_repo.go` |
 
 ### Testing
 - [ ] Cosine similarity math correctness (known test vectors)
@@ -136,18 +136,18 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-002 - Search Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **SearchController** | HTTP handlers for search endpoints | `search/controller.go` |
-| **AutocompleteRanker** | Three-tier priority: exact match, Levenshtein, string length | `search/ranker.go` |
-| **QueryParser** | Parse search terms, extract filters | `search/parser.go` |
-| **FilterProcessor** | Apply tag whitelist/blacklist, prep time filters | `search/filter.go` |
-| **PaginationHandler** | Max 10 results per page, offset/limit handling | `search/pagination.go` |
-| **FunctionalityTagWeighter** | Boost score for matching functionality tags | `search/tag_weighter.go` |
+| **SearchController** | HTTP handlers for search endpoints | `internal/search/controller.go` |
+| **AutocompleteRanker** | Three-tier priority: exact match, Levenshtein, string length | `internal/search/ranker.go` |
+| **QueryParser** | Parse search terms, extract filters | `internal/search/parser.go` |
+| **FilterProcessor** | Apply tag whitelist/blacklist, prep time filters | `internal/search/filter.go` |
+| **PaginationHandler** | Max 10 results per page, offset/limit handling | `internal/search/pagination.go` |
+| **FunctionalityTagWeighter** | Boost score for matching functionality tags | `internal/search/tag_weighter.go` |
 
 #### ARCH-011 (partial) - Caching Layer (Server)
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **RedisCache** | Redis client wrapper (github.com/redis/go-redis/v9) | `cache/redis_cache.go` |
-| **CacheInvalidator** | Invalidate cache on data updates | `cache/invalidator.go` |
+| **RedisCache** | Redis client wrapper (github.com/redis/go-redis/v9) | `internal/cache/redis_cache.go` |
+| **CacheInvalidator** | Invalidate cache on data updates | `internal/cache/invalidator.go` |
 
 ### API Endpoints
 | Method | Endpoint | Handler |
@@ -234,28 +234,28 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-007 - Subscription Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **SubscriptionController** | HTTP handlers for subscription endpoints | `subscription/controller.go` |
-| **StripeWebhookHandler** | Process payment_intent.succeeded/failed events | `subscription/webhook_handler.go` |
-| **EntitlementManager** | Check/update user entitlement status | `subscription/entitlement_manager.go` |
-| **TrialTracker** | 7-day trial activation and expiration | `subscription/trial_tracker.go` |
-| **UsageLimiter** | 3 searches/24h for free tier | `subscription/usage_limiter.go` |
+| **SubscriptionController** | HTTP handlers for subscription endpoints | `internal/subscription/controller.go` |
+| **StripeWebhookHandler** | Process payment_intent.succeeded/failed events | `internal/subscription/webhook_handler.go` |
+| **EntitlementManager** | Check/update user entitlement status | `internal/subscription/entitlement_manager.go` |
+| **TrialTracker** | 7-day trial activation and expiration | `internal/subscription/trial_tracker.go` |
+| **UsageLimiter** | 3 searches/24h for free tier | `internal/subscription/usage_limiter.go` |
 
 #### ARCH-008 - User Profile Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **ProfileController** | HTTP handlers for profile endpoints | `profile/controller.go` |
-| **PreferenceManager** | Unit preferences, theme persistence | `profile/preference_manager.go` |
-| **SavedDataRepository** | Saved items, diets, favorites | `profile/saved_data_repo.go` |
-| **DataExporter** | Export user data to JSON/CSV | `profile/exporter.go` |
-| **AccountDeleter** | Cascade delete all user data | `profile/deleter.go` |
+| **ProfileController** | HTTP handlers for profile endpoints | `internal/profile/controller.go` |
+| **PreferenceManager** | Unit preferences, theme persistence | `internal/profile/preference_manager.go` |
+| **SavedDataRepository** | Saved items, diets, favorites | `internal/profile/saved_data_repo.go` |
+| **DataExporter** | Export user data to JSON/CSV | `internal/profile/exporter.go` |
+| **AccountDeleter** | Cascade delete all user data | `internal/profile/deleter.go` |
 
 #### ARCH-015 - Compliance Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **ConsentManager** | Track Privacy Policy/ToS consent | `compliance/consent_manager.go` |
-| **DisclaimerRenderer** | Medical disclaimer content | `compliance/disclaimer_renderer.go` |
-| **DataRetentionPolicy** | 30-day backup retention rules | `compliance/retention_policy.go` |
-| **BackupManager** | Daily backup coordination | `compliance/backup_manager.go` |
+| **ConsentManager** | Track Privacy Policy/ToS consent | `internal/compliance/consent_manager.go` |
+| **DisclaimerRenderer** | Medical disclaimer content | `internal/compliance/disclaimer_renderer.go` |
+| **DataRetentionPolicy** | 30-day backup retention rules | `internal/compliance/retention_policy.go` |
+| **BackupManager** | Daily backup coordination | `internal/compliance/backup_manager.go` |
 
 ### Testing
 - [ ] Stripe Elements tokenization (no raw card data on server)
@@ -281,13 +281,13 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-004 - Linear Programming Optimizer
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **LPSolverWrapper** | Wrapper for go-coinor/clp solver | `optimizer/solver.go` |
-| **ConstraintBuilder** | Build P, C, F constraints with tolerance bands | `optimizer/constraints.go` |
-| **ObjectiveFunction** | Minimize total calories | `optimizer/objective.go` |
-| **DiversityPenalizer** | Penalty weight for overlapping meal IDs | `optimizer/diversity.go` |
-| **SolutionValidator** | Validate LP solutions meet all constraints | `optimizer/validator.go` |
-| **JobQueueManager** | Redis-backed job queue (go-redis/queue or machinery) | `optimizer/job_manager.go` |
-| **JobStatusTracker** | Track job status (queued/processing/completed/failed) | `optimizer/status_tracker.go` |
+| **LPSolverWrapper** | Wrapper for go-coinor/clp solver | `internal/optimizer/solver.go` |
+| **ConstraintBuilder** | Build P, C, F constraints with tolerance bands | `internal/optimizer/constraints.go` |
+| **ObjectiveFunction** | Minimize total calories | `internal/optimizer/objective.go` |
+| **DiversityPenalizer** | Penalty weight for overlapping meal IDs | `internal/optimizer/diversity.go` |
+| **SolutionValidator** | Validate LP solutions meet all constraints | `internal/optimizer/validator.go` |
+| **JobQueueManager** | Redis-backed job queue (go-redis/queue or machinery) | `internal/optimizer/job_manager.go` |
+| **JobStatusTracker** | Track job status (queued/processing/completed/failed) | `internal/optimizer/status_tracker.go` |
 
 ### Testing
 - [ ] Job submission returns 202 immediately (non-blocking)
@@ -312,34 +312,34 @@ This plan organizes the 17 architectural components (ARCH-001 to ARCH-017) into 
 #### ARCH-009 - Administration Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **AdminController** | HTTP handlers for admin endpoints | `admin/controller.go` |
-| **DataImporter** | Save curated items from external sources | `admin/importer.go` |
-| **ItemCurator** | Edit fields (name, tags, macros) before import | `admin/curator.go` |
-| **TagManager** | CRUD for global category/functionality tags | `admin/tag_manager.go` |
-| **UserAdminPanel** | View/manage user accounts | `admin/user_panel.go` |
-| **ExternalSearchProxy** | Proxy external API searches for admin UI | `admin/search_proxy.go` |
+| **AdminController** | HTTP handlers for admin endpoints | `internal/admin/controller.go` |
+| **DataImporter** | Save curated items from external sources | `internal/admin/importer.go` |
+| **ItemCurator** | Edit fields (name, tags, macros) before import | `internal/admin/curator.go` |
+| **TagManager** | CRUD for global category/functionality tags | `internal/admin/tag_manager.go` |
+| **UserAdminPanel** | View/manage user accounts | `internal/admin/user_panel.go` |
+| **ExternalSearchProxy** | Proxy external API searches for admin UI | `internal/admin/search_proxy.go` |
 
 #### ARCH-012 - External Data Integration
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **USDAClient** | USDA FoodData Central API client | `external/usda_client.go` |
-| **OpenFoodFactsClient** | OpenFoodFacts API client | `external/openfoodfacts_client.go` |
-| **DataNormalizer** | Convert external formats to internal schema | `external/normalizer.go` |
-| **RateLimitHandler** | Respect external API rate limits | `external/rate_limit_handler.go` |
+| **USDAClient** | USDA FoodData Central API client | `internal/external/usda_client.go` |
+| **OpenFoodFactsClient** | OpenFoodFacts API client | `internal/external/openfoodfacts_client.go` |
+| **DataNormalizer** | Convert external formats to internal schema | `internal/external/normalizer.go` |
+| **RateLimitHandler** | Respect external API rate limits | `internal/external/rate_limit_handler.go` |
 
 #### ARCH-011 (complete) - Caching Layer
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **UserCachePurger** | Delete all Redis keys for user (GDPR) | `cache/user_purger.go` |
-| **LRUEvictionPolicy** | LRU eviction for query cache | `cache/lru_policy.go` |
+| **UserCachePurger** | Delete all Redis keys for user (GDPR) | `internal/cache/user_purger.go` |
+| **LRUEvictionPolicy** | LRU eviction for query cache | `internal/cache/lru_policy.go` |
 
 #### ARCH-014 (complete) - Logging & Monitoring Module
 | Static Aspect | Description | File |
 |:--------------|:------------|:-----|
-| **LogAggregator** | Aggregate logs to GCP Cloud Monitoring | `monitoring/aggregator.go` |
-| **MetricsCollector** | Track response times, error rates, concurrent users | `monitoring/metrics.go` |
-| **AlertManager** | Trigger alerts at P95 > 1.5s or 2s | `monitoring/alerts.go` |
-| **UptimeMonitor** | Synthetic health checks every 30s | `monitoring/uptime.go` |
+| **LogAggregator** | Aggregate logs to GCP Cloud Monitoring | `internal/monitoring/aggregator.go` |
+| **MetricsCollector** | Track response times, error rates, concurrent users | `internal/monitoring/metrics.go` |
+| **AlertManager** | Trigger alerts at P95 > 1.5s or 2s | `internal/monitoring/alerts.go` |
+| **UptimeMonitor** | Synthetic health checks every 30s | `internal/monitoring/uptime.go` |
 
 ### Testing
 - [ ] Admin endpoints require 'Admin' role (403 otherwise)
