@@ -5,7 +5,7 @@ ID: Use growing unique integers
 
 | ID | Component | Static Aspect | Status | Retries | Description | Depends On (ID) | Testing Coverage Exceptions | Verification Criteria |
 |----|-----------|---------------|--------|---------|-------------|-----------------|-----------------------------|-----------------------|
-| 1 | ARCH-005 | TagEntity | OPEN | 0 | Define Tag entity types (Tag, TagType) in internal/models/tag.go | - | - | File internal/models/tag.go exists with Tag and TagType types defined |
+| 1 | ARCH-005 | TagEntity | PASSED | 0 | Define Tag entity types (Tag, TagType) in internal/models/tag.go | - | - | File internal/models/tag.go exists with Tag and TagType types defined |
 | 2 | ARCH-005 | FoodItemEntity | OPEN | 0 | Define FoodItem entity types (FoodItem, PhysicalState, Macros, Micros, etc.) in internal/models/food_item.go | - | - | File internal/models/food_item.go exists with all required types defined |
 | 3 | ARCH-005 | TagEntity | OPEN | 0 | Create database migration for tags table with indexes | - | - | Migration file exists for tags table creation |
 | 4 | ARCH-005 | FoodItemEntity | OPEN | 0 | Create database migration for food_items, food_item_category_tags, food_item_functionality_tags tables with constraints and indexes | 3 | - | Migration files exist for food_items and junction tables |
