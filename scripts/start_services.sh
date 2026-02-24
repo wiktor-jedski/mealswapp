@@ -50,7 +50,7 @@ if [[ "$CURRENT_REMOTE" == *"$REQUIRED_REPO"* ]]; then
 else
   echo "Wrong repo or empty dir. Cleaning and cloning..."
   ls -A1 | xargs rm -rf
-  gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT" --single-branch
+  gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT"
 fi
 
 echo "Run chosen task"
@@ -58,8 +58,10 @@ if [[ $TASK == "NEW" ]]; then
   git checkout -B "$PARENT"-"$CHILD"
   sh scripts/new_task.sh "$PARENT" "$CHILD"
 elif [[ $TASK == "REVIEW" ]]; then
-  # uses only PARENT as full branch name
-  sh scripts/reviewed_task.sh
+  git fetch origin
+  git branch -a
+  git checkout "$PARENT"-"$CHILD"
+  sh scripts/review_task.sh "$PARENT" "$CHILD"
 else
   echo "Error: unknown task passed"
   exit 1
