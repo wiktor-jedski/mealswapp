@@ -21,6 +21,7 @@ Based on the Task Table entry, you need to search for and read:
 - Follow best code and comment practices.
 
 # OUTPUT
+0. Update Task List task status to PREPARED.
 1. Brief explanation of the implementation in the comment block.
 2. The code block.
 3. Changes added and committed with git.

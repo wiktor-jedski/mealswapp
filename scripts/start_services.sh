@@ -59,9 +59,12 @@ if [[ $TASK == "NEW" ]]; then
   sh scripts/new_task.sh "$PARENT" "$CHILD"
 elif [[ $TASK == "REVIEW" ]]; then
   git fetch origin
-  git branch -a
   git checkout "$PARENT"-"$CHILD"
   sh scripts/review_task.sh "$PARENT" "$CHILD"
+elif [[ $TASK == "REVISE" ]]; then
+  git fetch origin
+  git checkout "$PARENT"-"$CHILD"
+  sh scripts/revise_task.sh "$PARENT" "$CHILD"
 else
   echo "Error: unknown task passed"
   exit 1
