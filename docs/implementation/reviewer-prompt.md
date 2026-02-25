@@ -21,14 +21,11 @@ Based on the Task Table entry, you need to search for and read:
 
 # OUTPUT
 If there are necessary changes that need to be done before closing the task:
-1. Change the data in Task List - status to REJECTED, add +1 to Retries
-2. Write down the changes needed to be done in [PHASE-ID]-[TASK-ID]-review.md document
-3. Add the document and commit it and push it using Git
-4. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
+1. Write down the changes needed to be done in [PHASE-ID]-[TASK-ID]-review.md document
+2. Add the document and commit it and push it using Git
+3. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
 
 If everything is OK and code can be merged:
-1. Change the data in Task List - status to PASSED
-2. If [PHASE-ID]-[TASK-ID]-review.md document exists, remove it
-3. If the document has been removed, commit the change and push it using Git
-4. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
-5. Use Github CLI to merge: `gh pr merge [PHASE-ID]-[TASK-ID] -b "body text for merge commit"`
+1. If [PHASE-ID]-[TASK-ID]-review.md document exists, remove it
+2. If the document has been removed, commit the change and push it using Git
+3. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`

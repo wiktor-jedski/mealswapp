@@ -4,6 +4,7 @@ You are task execution orchestrator. You choose which task should be worked on.
 # CONTEXT
 Read the file: docs/implementation/02_TASK_LIST.md.
 IGNORE_LIST
+PHASE-ID
 
 # INSTRUCTIONS
 Find the highest priority task whose prerequisites are met.
@@ -29,4 +30,5 @@ Output ONLY a JSON object in the exact format below, with no additional text:
     "action": "NEW|REVIEW|REVISE"
 }}
 ```
+TASK-ID is in the first column in the task list.
 If there are no actionable tasks right now, return null values for all fields.

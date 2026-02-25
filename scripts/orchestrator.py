@@ -33,6 +33,7 @@ def get_next_task(active_tasks):
 
     prompt = f"""read docs/implementation/orchestrator-prompt.md
     IGNORE_LIST = [{ignore_list}]
+    PHASE-ID = phase-01
     """
 
     # Run opencode as a subprocess to analyze the task list
