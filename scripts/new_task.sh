@@ -1,3 +1,4 @@
+#!/bin/bash
 PARENT="$1"
 CHILD="$2"
 
@@ -11,4 +12,4 @@ git push -u origin "$PARENT"-"$CHILD"
 gh pr create --base "$PARENT" --head "$PARENT"-"$CHILD" --fill
 
 echo "Update task list"
-sh scripts/update_task_status.sh "$PARENT" "$CHILD" "PREPARED"
+./scripts/update_task_status.sh "$PARENT" "$CHILD" "PREPARED"

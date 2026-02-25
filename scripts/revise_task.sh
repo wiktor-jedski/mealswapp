@@ -1,3 +1,4 @@
+#!/bin/bash
 PARENT="$1"
 CHILD="$2"
 
@@ -7,4 +8,4 @@ Task ID: $CHILD\\
 Implementation phase: $PARENT"
 
 echo "Update task list"
-sh scripts/update_task_status.sh "$PARENT" "$CHILD" "PREPARED"
+./scripts/update_task_status.sh "$PARENT" "$CHILD" "PREPARED"
