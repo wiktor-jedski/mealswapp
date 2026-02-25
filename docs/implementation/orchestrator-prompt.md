@@ -15,6 +15,11 @@ Determine the required action based on the task's status:
 - If status is "REJECTED", the action is "REVISE".
 - If status is "PASSED", the task is already closed and is not valid for choosing.
 
+You should prioritize:
+1. REJECTED
+2. PREPARED
+3. OPEN
+
 # OUTPUT
 Output ONLY a JSON object in the exact format below, with no additional text:
 ```json
