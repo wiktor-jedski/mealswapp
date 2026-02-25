@@ -7,6 +7,22 @@ import re
 MAX_CONCURRENT_CONTAINERS = 4
 RUN_AGENT_SCRIPT = "./run_agent.sh"
 REPO_DIR = ".."
+MAIN_BRANCH = "phase-01"
+
+
+def sync_repo():
+    """Pulls the latest task list updates from the remote repository."""
+    print(f"🔄 Syncing latest task list from origin/{MAIN_BRANCH}...")
+    result = subprocess.run(
+        ["git", "pull", "origin", MAIN_BRANCH, "--rebase", "--autostash"],
+        cwd=REPO_DIR,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"⚠️ Warning: Failed to sync repo: {result.stderr}")
+        return False
+    return True
 
 
 def extract_json_from_output(text):
@@ -33,7 +49,7 @@ def get_next_task(active_tasks):
 
     prompt = f"""read docs/implementation/orchestrator-prompt.md
     IGNORE_LIST = [{ignore_list}]
-    PHASE-ID = phase-01
+    PHASE-ID = {MAIN_BRANCH}
     """
 
     # Run opencode as a subprocess to analyze the task list
@@ -71,8 +87,13 @@ def main():
 
         # 2. Spawn new containers if we have capacity
         if len(active_processes) < MAX_CONCURRENT_CONTAINERS:
+            sync_repo()
+
             # Fetch next task from AI
-            next_task = get_next_task(list(active_processes.keys()))
+            active_tasks = list(active_processes.keys())
+            print(f"Current active tasks: {active_tasks}")
+            next_task = get_next_task(active_tasks)
+            print(f"Agent json output: {next_task}")
 
             if next_task and next_task.get("child"):
                 parent = next_task["parent"]
