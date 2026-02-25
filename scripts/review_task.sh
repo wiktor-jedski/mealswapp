@@ -1,3 +1,4 @@
+#!/bin/bash
 PARENT="$1"
 CHILD="$2"
 
@@ -13,11 +14,11 @@ echo "$RESULT"
 if [[ "$RESULT" == "PASSED" ]]; then
   echo "Code passed review! Merging PR..."
   gh pr merge "$PARENT"-"$CHILD" --merge --delete-branch
-  sh scripts/update_task_status.sh "$PARENT" "$CHILD" "PASSED"
+  ./scripts/update_task_status.sh "$PARENT" "$CHILD" "PASSED"
   
 elif [[ "$RESULT" == "REJECTED" ]]; then
   echo "Code rejected!"
-  sh scripts/update_task_status.sh "$PARENT" "$CHILD" "REJECTED"
+  ./scripts/update_task_status.sh "$PARENT" "$CHILD" "REJECTED"
 fi
 
 rm -f REVIEW_RESULT.txt

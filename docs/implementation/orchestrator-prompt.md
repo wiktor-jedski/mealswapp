@@ -8,7 +8,7 @@ PHASE-ID
 
 # INSTRUCTIONS
 Find the highest priority task whose prerequisites are met.
-Ignore the tasks from IGNORE_LIST they are currently being processed.
+Ignore the tasks from IGNORE_LIST they are currently being processed. IGNORE_LIST has entries in following format: [PHASE-ID]-[TASK-ID] - for example, phase-01-3 has PHASE-ID = phase-01 and TASK-ID = 3
 
 Determine the required action based on the task's status:
 - If status is "OPEN", the action is "NEW".
