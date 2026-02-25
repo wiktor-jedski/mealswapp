@@ -49,7 +49,7 @@ def get_next_task(active_tasks):
 
     prompt = f"""read docs/implementation/orchestrator-prompt.md
     IGNORE_LIST = [{ignore_list}]
-    PHASE-ID = phase-01
+    PHASE-ID = {MAIN_BRANCH}
     """
 
     # Run opencode as a subprocess to analyze the task list
@@ -93,6 +93,7 @@ def main():
             active_tasks = list(active_processes.keys())
             print(f"Current active tasks: {active_tasks}")
             next_task = get_next_task(active_tasks)
+            print(f"Agent json output: {next_task}")
 
             if next_task and next_task.get("child"):
                 parent = next_task["parent"]

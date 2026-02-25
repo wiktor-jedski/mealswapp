@@ -56,15 +56,15 @@ fi
 echo "Run chosen task"
 if [[ $TASK == "NEW" ]]; then
   git checkout -B "$PARENT"-"$CHILD"
-  sh scripts/new_task.sh "$PARENT" "$CHILD"
+  bash scripts/new_task.sh "$PARENT" "$CHILD"
 elif [[ $TASK == "REVIEW" ]]; then
   git fetch origin
   git checkout "$PARENT"-"$CHILD"
-  sh scripts/review_task.sh "$PARENT" "$CHILD"
+  bash scripts/review_task.sh "$PARENT" "$CHILD"
 elif [[ $TASK == "REVISE" ]]; then
   git fetch origin
   git checkout "$PARENT"-"$CHILD"
-  sh scripts/revise_task.sh "$PARENT" "$CHILD"
+  bash scripts/revise_task.sh "$PARENT" "$CHILD"
 else
   echo "Error: unknown task passed"
   exit 1

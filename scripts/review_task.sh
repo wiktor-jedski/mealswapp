@@ -5,9 +5,10 @@ echo "Perform code review"
 opencode run "read docs/implementation/reviewer-prompt.md\\
 Task ID: $CHILD\\
 Implementation phase: $PARENT\\
-Write your final decision (exactly 'PASSED' or 'REJECTED') to a new file named REVIEW_RESULT.txt"
+Write your final decision (exactly PASSED or REJECTED) to a new file named REVIEW_RESULT.txt"
 
 RESULT=$(cat REVIEW_RESULT.txt)
+echo "$RESULT"
 
 if [[ "$RESULT" == "PASSED" ]]; then
   echo "Code passed review! Merging PR..."
