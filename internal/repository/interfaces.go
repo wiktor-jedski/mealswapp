@@ -20,7 +20,7 @@ type FoodItemRepository interface {
 }
 
 type TagRepository interface {
-	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]models.Tag, error)
+	GetByIDs(ctx context.Context, ids []string) ([]models.Tag, error)
 	GetByType(ctx context.Context, tagType models.TagType) ([]models.Tag, error)
 	GetCategoryTags(ctx context.Context) ([]models.Tag, error)
 	GetFunctionalityTags(ctx context.Context) ([]models.Tag, error)
