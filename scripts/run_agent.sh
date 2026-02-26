@@ -4,7 +4,7 @@ PARENT="$1"
 CHILD="$2"
 TASK="$3"
 
-mkdir -p logs
+mkdir -p ../logs
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="../logs/${PARENT}_${CHILD}_${TASK}_${TIMESTAMP}.log"
