@@ -53,9 +53,6 @@ else
   gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT"
 fi
 
-echo "Add permissions for scripts"
-chmod +x scripts/*.sh
-
 echo "Run chosen task"
 if [[ $TASK == "NEW" ]]; then
   git checkout -B "$PARENT"-"$CHILD"
