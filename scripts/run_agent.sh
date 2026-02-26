@@ -7,7 +7,7 @@ TASK="$3"
 mkdir -p logs
 
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="logs/${PARENT}_${CHILD}_${TASK}_${TIMESTAMP}.log"
+LOG_FILE="../logs/${PARENT}_${CHILD}_${TASK}_${TIMESTAMP}.log"
 
 echo "Spawning container. Logs are being saved to: $LOG_FILE"
 
