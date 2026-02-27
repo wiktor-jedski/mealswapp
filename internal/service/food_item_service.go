@@ -80,14 +80,10 @@ func (s *foodItemService) CreateFoodItem(ctx context.Context, input models.FoodI
 			return nil, ErrInvalidCategoryTagID
 		}
 		for _, tag := range tags {
-			tagUUID, err := uuid.Parse(tag.ID)
-			if err != nil {
-				return nil, ErrInvalidCategoryTagID
-			}
 			item.CategoryTags = append(item.CategoryTags, models.Tag{
-				ID:      tagUUID,
+				ID:      tag.ID,
 				Name:    tag.Name,
-				TagType: tag.TagType,
+				TagType: tag.Type,
 			})
 		}
 	}
@@ -105,14 +101,10 @@ func (s *foodItemService) CreateFoodItem(ctx context.Context, input models.FoodI
 			return nil, ErrInvalidFunctionalityTagID
 		}
 		for _, tag := range tags {
-			tagUUID, err := uuid.Parse(tag.ID)
-			if err != nil {
-				return nil, ErrInvalidFunctionalityTagID
-			}
 			item.FunctionalityTags = append(item.FunctionalityTags, models.Tag{
-				ID:      tagUUID,
+				ID:      tag.ID,
 				Name:    tag.Name,
-				TagType: tag.TagType,
+				TagType: tag.Type,
 			})
 		}
 	}
