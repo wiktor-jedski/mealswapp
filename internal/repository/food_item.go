@@ -143,7 +143,7 @@ func (r *foodItemRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 	return &item, nil
 }
 
-func (r *foodItemRepository) getTagsByFoodItemID(ctx context.Context, foodItemID uuid.UUID, tagType string) ([]models.Tag, error) {
+func (r *foodItemRepository) getTagsByFoodItemID(ctx context.Context, foodItemID uuid.UUID, tagType string) ([]models.FoodItemTag, error) {
 	var query string
 	var rows pgx.Rows
 	var err error
@@ -170,7 +170,7 @@ func (r *foodItemRepository) getTagsByFoodItemID(ctx context.Context, foodItemID
 	}
 	defer rows.Close()
 
-	var tags []models.Tag
+	var tags []models.FoodItemTag
 	for rows.Next() {
 		var tag models.Tag
 		err := rows.Scan(
@@ -187,7 +187,17 @@ func (r *foodItemRepository) getTagsByFoodItemID(ctx context.Context, foodItemID
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tag: %w", err)
 		}
-		tags = append(tags, tag)
+		tagID, _ := uuid.Parse(tag.ID)
+		foodItemTag := models.FoodItemTag{
+			ID:          tagID,
+			Name:        tag.Name,
+			TagType:     models.TagType(tag.Type),
+			ColorHex:    tag.ColorHex,
+			Description: tag.Description,
+			CreatedAt:   tag.CreatedAt,
+			UpdatedAt:   tag.UpdatedAt,
+		}
+		tags = append(tags, foodItemTag)
 	}
 
 	return tags, nil
