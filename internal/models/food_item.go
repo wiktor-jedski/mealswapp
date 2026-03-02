@@ -33,14 +33,7 @@ type Micros struct {
 	Additional  map[string]float64 `json:"additional,omitempty"`
 }
 
-type TagType string
-
-const (
-	TagTypeCategory      TagType = "category"
-	TagTypeFunctionality TagType = "functionality"
-)
-
-type Tag struct {
+type FoodItemTag struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	TagType     TagType   `json:"tag_type"`
@@ -58,8 +51,8 @@ type FoodItem struct {
 	AverageUnitWeight float64       `json:"average_unit_weight"`
 	Macros            Macros        `json:"macros"`
 	Micros            Micros        `json:"micros"`
-	CategoryTags      []Tag         `json:"category_tags"`
-	FunctionalityTags []Tag         `json:"functionality_tags"`
+	CategoryTags      []FoodItemTag `json:"category_tags"`
+	FunctionalityTags []FoodItemTag `json:"functionality_tags"`
 	ImageURL          *string       `json:"image_url,omitempty"`
 	CreatedAt         time.Time     `json:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`
@@ -122,8 +115,8 @@ type FoodItemResponse struct {
 	AverageUnitWeight float64       `json:"average_unit_weight"`
 	Macros            Macros        `json:"macros"`
 	Micros            Micros        `json:"micros"`
-	CategoryTags      []Tag         `json:"category_tags"`
-	FunctionalityTags []Tag         `json:"functionality_tags"`
+	CategoryTags      []FoodItemTag `json:"category_tags"`
+	FunctionalityTags []FoodItemTag `json:"functionality_tags"`
 	ImageURL          *string       `json:"image_url,omitempty"`
 	CreatedAt         time.Time     `json:"created_at"`
 	UpdatedAt         time.Time     `json:"updated_at"`

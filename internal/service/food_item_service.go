@@ -51,11 +51,11 @@ func (s *foodItemService) CreateFoodItem(ctx context.Context, input models.FoodI
 		return nil, fmt.Errorf("validation failed")
 	}
 
-	uuid := uuid.New()
+	itemUUID := uuid.New()
 	now := time.Now().UTC()
 
 	item := &models.FoodItem{
-		ID:                uuid,
+		ID:                itemUUID,
 		Name:              input.Name,
 		PhysicalState:     input.PhysicalState,
 		PrepTime:          input.PrepTime,
@@ -80,10 +80,13 @@ func (s *foodItemService) CreateFoodItem(ctx context.Context, input models.FoodI
 			return nil, ErrInvalidCategoryTagID
 		}
 		for _, tag := range tags {
-			item.CategoryTags = append(item.CategoryTags, models.Tag{
-				ID:      tag.ID,
-				Name:    tag.Name,
-				TagType: tag.Type,
+			var tagID uuid.UUID
+			fmt.Sscanf(tag.ID, "%s", &tagID)
+			item.CategoryTags = append(item.CategoryTags, models.FoodItemTag{
+				ID:       tagID,
+				Name:     tag.Name,
+				TagType:  models.TagType(tag.Type),
+				ColorHex: tag.ColorHex,
 			})
 		}
 	}
@@ -101,10 +104,12 @@ func (s *foodItemService) CreateFoodItem(ctx context.Context, input models.FoodI
 			return nil, ErrInvalidFunctionalityTagID
 		}
 		for _, tag := range tags {
-			item.FunctionalityTags = append(item.FunctionalityTags, models.Tag{
-				ID:      tag.ID,
-				Name:    tag.Name,
-				TagType: tag.Type,
+			tagID, _ := uuid.Parse(tag.ID)
+			item.FunctionalityTags = append(item.FunctionalityTags, models.FoodItemTag{
+				ID:       tagID,
+				Name:     tag.Name,
+				TagType:  models.TagType(tag.Type),
+				ColorHex: tag.ColorHex,
 			})
 		}
 	}
@@ -113,7 +118,7 @@ func (s *foodItemService) CreateFoodItem(ctx context.Context, input models.FoodI
 		return nil, fmt.Errorf("failed to create food item: %w", err)
 	}
 
-	return s.foodItemRepo.GetByID(ctx, uuid)
+	return s.foodItemRepo.GetByID(ctx, itemUUID)
 }
 
 func (s *foodItemService) GetFoodItem(ctx context.Context, id uuid.UUID, unitPref models.UnitPreference) (*models.ConvertedFoodItem, error) {

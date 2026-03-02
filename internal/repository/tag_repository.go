@@ -12,15 +12,15 @@ import (
 	"mealswapp/internal/models"
 )
 
-type TagRepository struct {
+type pgTagRepository struct {
 	db *sql.DB
 }
 
-func NewTagRepository(db *sql.DB) *TagRepository {
-	return &TagRepository{db: db}
+func NewTagRepository(db *sql.DB) TagRepository {
+	return &pgTagRepository{db: db}
 }
 
-func (r *TagRepository) Create(ctx context.Context, input models.TagCreateInput) (*models.Tag, error) {
+func (r *pgTagRepository) Create(ctx context.Context, input models.TagCreateInput) (*models.Tag, error) {
 	query := `
 		INSERT INTO tags (id, name, slug, type, description, color_hex, icon_url, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -58,7 +58,7 @@ func (r *TagRepository) Create(ctx context.Context, input models.TagCreateInput)
 	return tag, nil
 }
 
-func (r *TagRepository) Update(ctx context.Context, id string, input models.TagUpdateInput) (*models.Tag, error) {
+func (r *pgTagRepository) Update(ctx context.Context, id string, input models.TagUpdateInput) (*models.Tag, error) {
 	var updates []string
 	var args []interface{}
 	argCount := 1
@@ -113,7 +113,7 @@ func (r *TagRepository) Update(ctx context.Context, id string, input models.TagU
 	return tag, nil
 }
 
-func (r *TagRepository) Delete(ctx context.Context, id string) error {
+func (r *pgTagRepository) Delete(ctx context.Context, id string) error {
 	result, err := r.db.ExecContext(ctx, "DELETE FROM tags WHERE id = $1", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete tag: %w", err)
@@ -131,7 +131,7 @@ func (r *TagRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *TagRepository) GetByID(ctx context.Context, id string) (*models.Tag, error) {
+func (r *pgTagRepository) GetByID(ctx context.Context, id string) (*models.Tag, error) {
 	query := `
 		SELECT id, name, slug, type, description, color_hex, icon_url, created_at, updated_at
 		FROM tags WHERE id = $1
@@ -153,7 +153,7 @@ func (r *TagRepository) GetByID(ctx context.Context, id string) (*models.Tag, er
 	return tag, nil
 }
 
-func (r *TagRepository) GetBySlug(ctx context.Context, slug string) (*models.Tag, error) {
+func (r *pgTagRepository) GetBySlug(ctx context.Context, slug string) (*models.Tag, error) {
 	query := `
 		SELECT id, name, slug, type, description, color_hex, icon_url, created_at, updated_at
 		FROM tags WHERE slug = $1
@@ -175,7 +175,7 @@ func (r *TagRepository) GetBySlug(ctx context.Context, slug string) (*models.Tag
 	return tag, nil
 }
 
-func (r *TagRepository) GetByIDs(ctx context.Context, ids []string) ([]models.Tag, error) {
+func (r *pgTagRepository) GetByIDs(ctx context.Context, ids []string) ([]models.Tag, error) {
 	if len(ids) == 0 {
 		return []models.Tag{}, nil
 	}
@@ -211,7 +211,7 @@ func (r *TagRepository) GetByIDs(ctx context.Context, ids []string) ([]models.Ta
 	return tags, nil
 }
 
-func (r *TagRepository) GetByType(ctx context.Context, tagType models.TagType) ([]models.Tag, error) {
+func (r *pgTagRepository) GetByType(ctx context.Context, tagType models.TagType) ([]models.Tag, error) {
 	query := `
 		SELECT id, name, slug, type, description, color_hex, icon_url, created_at, updated_at
 		FROM tags WHERE type = $1 ORDER BY name ASC
@@ -243,7 +243,15 @@ func (r *TagRepository) GetByType(ctx context.Context, tagType models.TagType) (
 	return tags, nil
 }
 
-func (r *TagRepository) List(ctx context.Context, filter models.TagFilter) (*models.TagListResult, error) {
+func (r *pgTagRepository) GetCategoryTags(ctx context.Context) ([]models.Tag, error) {
+	return r.GetByType(ctx, models.TagTypeCategory)
+}
+
+func (r *pgTagRepository) GetFunctionalityTags(ctx context.Context) ([]models.Tag, error) {
+	return r.GetByType(ctx, models.TagTypeFunctionality)
+}
+
+func (r *pgTagRepository) List(ctx context.Context, filter models.TagFilter) (*models.TagListResult, error) {
 	baseQuery := "FROM tags WHERE 1=1"
 	var args []interface{}
 	argCount := 1
@@ -332,7 +340,7 @@ func (r *TagRepository) List(ctx context.Context, filter models.TagFilter) (*mod
 	}, nil
 }
 
-func (r *TagRepository) Exists(ctx context.Context, id string) (bool, error) {
+func (r *pgTagRepository) Exists(ctx context.Context, id string) (bool, error) {
 	var exists bool
 	err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM tags WHERE id = $1)", id).Scan(&exists)
 	if err != nil {
@@ -341,7 +349,7 @@ func (r *TagRepository) Exists(ctx context.Context, id string) (bool, error) {
 	return exists, nil
 }
 
-func (r *TagRepository) ExistsBySlug(ctx context.Context, slug string, excludeID string) (bool, error) {
+func (r *pgTagRepository) ExistsBySlug(ctx context.Context, slug string, excludeID string) (bool, error) {
 	var exists bool
 	var err error
 
@@ -357,7 +365,7 @@ func (r *TagRepository) ExistsBySlug(ctx context.Context, slug string, excludeID
 	return exists, nil
 }
 
-func (r *TagRepository) CountByType(ctx context.Context, tagType models.TagType) (int, error) {
+func (r *pgTagRepository) CountByType(ctx context.Context, tagType models.TagType) (int, error) {
 	var count int
 	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tags WHERE type = $1", tagType).Scan(&count)
 	if err != nil {
@@ -366,7 +374,7 @@ func (r *TagRepository) CountByType(ctx context.Context, tagType models.TagType)
 	return count, nil
 }
 
-func (r *TagRepository) GetTagsForFoodItem(ctx context.Context, foodItemID string) ([]models.Tag, error) {
+func (r *pgTagRepository) GetTagsForFoodItem(ctx context.Context, foodItemID string) ([]models.Tag, error) {
 	query := `
 		SELECT t.id, t.name, t.slug, t.type, t.description, t.color_hex, t.icon_url, t.created_at, t.updated_at
 		FROM tags t
@@ -401,7 +409,7 @@ func (r *TagRepository) GetTagsForFoodItem(ctx context.Context, foodItemID strin
 	return tags, nil
 }
 
-func (r *TagRepository) GetTagsForMeal(ctx context.Context, mealID string) ([]models.Tag, error) {
+func (r *pgTagRepository) GetTagsForMeal(ctx context.Context, mealID string) ([]models.Tag, error) {
 	query := `
 		SELECT t.id, t.name, t.slug, t.type, t.description, t.color_hex, t.icon_url, t.created_at, t.updated_at
 		FROM tags t
@@ -436,7 +444,7 @@ func (r *TagRepository) GetTagsForMeal(ctx context.Context, mealID string) ([]mo
 	return tags, nil
 }
 
-func (r *TagRepository) AssignTagsToFoodItem(ctx context.Context, foodItemID string, tagIDs []string) error {
+func (r *pgTagRepository) AssignTagsToFoodItem(ctx context.Context, foodItemID string, tagIDs []string) error {
 	if len(tagIDs) == 0 {
 		return nil
 	}
@@ -468,7 +476,7 @@ func (r *TagRepository) AssignTagsToFoodItem(ctx context.Context, foodItemID str
 	return nil
 }
 
-func (r *TagRepository) RemoveTagsFromFoodItem(ctx context.Context, foodItemID string, tagIDs []string) error {
+func (r *pgTagRepository) RemoveTagsFromFoodItem(ctx context.Context, foodItemID string, tagIDs []string) error {
 	if len(tagIDs) == 0 {
 		return nil
 	}
@@ -490,7 +498,7 @@ func (r *TagRepository) RemoveTagsFromFoodItem(ctx context.Context, foodItemID s
 	return nil
 }
 
-func (r *TagRepository) AssignTagsToMeal(ctx context.Context, mealID string, tagIDs []string) error {
+func (r *pgTagRepository) AssignTagsToMeal(ctx context.Context, mealID string, tagIDs []string) error {
 	if len(tagIDs) == 0 {
 		return nil
 	}
@@ -522,7 +530,7 @@ func (r *TagRepository) AssignTagsToMeal(ctx context.Context, mealID string, tag
 	return nil
 }
 
-func (r *TagRepository) RemoveTagsFromMeal(ctx context.Context, mealID string, tagIDs []string) error {
+func (r *pgTagRepository) RemoveTagsFromMeal(ctx context.Context, mealID string, tagIDs []string) error {
 	if len(tagIDs) == 0 {
 		return nil
 	}
