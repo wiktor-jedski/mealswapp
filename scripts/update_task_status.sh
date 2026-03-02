@@ -42,7 +42,6 @@ while [ $ATTEMPTS -lt 5 ]; do
     echo "⚠️ Git push failed due to concurrent update. Retrying..."
     # Discard failed local commit, reset to remote, and loop again
     git reset --hard origin/"$PARENT"
-    sleep $((RANDOM % 5 + 2)) # Random sleep to prevent race conditions
     ((ATTEMPTS++))
   fi
 done
