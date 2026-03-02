@@ -22,10 +22,7 @@ Based on the Task Table entry, you need to search for and read:
 # OUTPUT
 If there are necessary changes that need to be done before closing the task:
 1. Write down the changes needed to be done in REVIEW.md document
-2. Save changes: `git add . && git commit -m "added task review" && git push`
-3. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
+2. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
 
 If everything is OK and code can be merged:
-1. If REVIEW.md document exists, remove it
-2. If the document has been removed, save the changes: `git add . && git commit -m "removed review document" && git push`
-3. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
+1. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
