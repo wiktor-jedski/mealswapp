@@ -53,6 +53,11 @@ else
   gh repo clone "$REQUIRED_REPO" . -- -b "$PARENT"
 fi
 
+echo "Configuring Go environment..."
+export GOPATH="/tmp/go"
+export GOCACHE="/tmp/go-cache"
+mkdir -p "$GOPATH" "$GOCACHE"
+
 echo "Run chosen task"
 if [[ $TASK == "NEW" ]]; then
   git checkout -B "$PARENT"-"$CHILD"
