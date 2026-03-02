@@ -12,6 +12,8 @@ CURRENT_BRANCH=$(git branch --show-current)
 
 # Switch to the phase/main branch where the task list lives
 git checkout "$PARENT"
+git clean -fd
+git restore .
 
 # Retry loop for concurrency (max 5 attempts)
 ATTEMPTS=0
