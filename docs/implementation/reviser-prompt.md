@@ -7,7 +7,7 @@ You are given:
 1. One specific **Task ID** from the Task Table: docs/implementation/02_TASK_LIST.md
 2. Tech stack - docs/design/01_TECH_STACK.md - read the document.
 3. Implementation phase.
-4. Reviewer feedback file: [PHASE-ID]-[TASK-ID]-review.md
+4. Reviewer feedback file: REVIEW.md
 
 Based on the Task Table entry, you need to search for and read:
 1. Architecture Design - docs/architecture/[Component].md

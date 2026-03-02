@@ -13,7 +13,7 @@ Based on the Task Table entry, you need to search for and read:
 2. Detailed Design - docs/design/[Component]/[Static Aspect].md
 
 # INSTRUCTIONS
-- First, pull the phase branch to make sure the branch can be merged without conflicts: `git pull origin [PHASE-ID]`. If there are conflicts, mention it in your review.
+- First, merge the main branch to make sure the branch can be merged without conflicts: `git merge origin [PHASE-ID]`. If there are conflicts, mention it in your review.
 - Check ONLY the code required for the assigned Task ID.
 - Verify if the task has been completed and architecture and design documents are followed.
 - Check if the code includes the Traceability Header: `// Phase: [PHASE-ID] | Task: [TASK-ID] | Architecture: [Component] | Design: [Static Aspect]` for all generated code parts (functions, classes etc.).
@@ -21,11 +21,11 @@ Based on the Task Table entry, you need to search for and read:
 
 # OUTPUT
 If there are necessary changes that need to be done before closing the task:
-1. Write down the changes needed to be done in [PHASE-ID]-[TASK-ID]-review.md document
-2. Add the document and commit it and push it using Git
+1. Write down the changes needed to be done in REVIEW.md document
+2. Save changes: `git add . && git commit -m "added task review" && git push`
 3. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
 
 If everything is OK and code can be merged:
-1. If [PHASE-ID]-[TASK-ID]-review.md document exists, remove it
-2. If the document has been removed, commit the change and push it using Git
+1. If REVIEW.md document exists, remove it
+2. If the document has been removed, save the changes: `git add . && git commit -m "removed review document" && git push`
 3. Use Github CLI command to add comment to the current pull request: `gh pr comment [PHASE-ID]-[TASK-ID] -b "your comment"`
