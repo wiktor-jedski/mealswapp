@@ -513,17 +513,17 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Crucial for providing replacements that serve the same purpose in a recipe.
 ---
 
-## [SW-REQ-038] Micronutrient Storage (Non-Searchable)
-**Statement:** The software shall store micronutrient values (sodium, fiber, magnesium, vitamins) for all items without including these parameters in the Cosine Similarity calculation.
+## [SW-REQ-038] Micronutrient Storage & Algorithm Exclusion
+**Statement:** The software shall allow each item to store a variable-length collection (from 0 to *n* entries) of micronutrient key-value pairs that are explicitly excluded from the Cosine Similarity calculation.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Functional |
 | **Priority** | Low |
 | **Feasibility** | Feasible |
-| **Verification** | Unit Test (Ensure similarity logic ignores these fields) |
+| **Verification** | Unit Test (1. Ensure items can save 0, 1, and multiple micronutrients. 2. Ensure similarity scores remain identical regardless of these values). |
 
-**Notes:** These fields provide supplemental information for the user without affecting the similarity score.
+**Notes:** This data is stored as a dictionary/hash-table mapping for supplemental user information only.
 ---
 
 ## [SW-REQ-039] Metric Unit Preference Selection
@@ -1194,6 +1194,19 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Builds upon the caching mechanism defined in SW-REQ-003.
 ---
 
+## [SW-REQ-089] Micronutrient Nomenclature Standardization
+**Statement:** The software shall validate all micronutrient keys against a predefined standardized vocabulary (e.g., allowing "Sodium" but rejecting "Na") before they are stored or assigned to an item.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Functional / Data Integrity |
+| **Priority** | Medium |
+| **Feasibility** | Feasible |
+| **Verification** | Unit Test (Attempt to save valid and invalid micronutrient keys; verify invalid keys throw an error or are rejected). |
+
+**Notes:** The predefined vocabulary/dictionary of allowed micronutrients shall be maintained in a central configuration or database table to ensure data consistency across all items.
+---
+
 ## 3. Changelog
 
 ### 2026-01-18
@@ -1209,3 +1222,11 @@ This document defines the software-level requirements for the Mealswapp applicat
 * Changed
 - SW-REQ-013 - sidebar on the left side
 - SW-REQ-015 - mode toggle in sidebar
+
+### 2026-05-18
+
+* Added
+- SW-REQ-089 - micronutrient standardization
+
+* Changed
+- SW-REQ-038 - now specifically mentions the storage and algo exclusion
