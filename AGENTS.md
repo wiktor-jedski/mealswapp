@@ -1,3 +1,15 @@
+# Good practices
+
+1. **Think before you commit.** There is often more than one implementation of an idea. Ask when unsure.
+
+2. **Simplicity first.** Keep as easy to create and explain as possible. Derive quality from simple forms and actions.
+
+3. **Surgical precision.** Only touch what necessary. Delete and add exactly what needed in each step.
+
+4. **Goal-driven.** Translate fuzzy instructions into SMART goals. Make the outcomes testable.
+
+5. **Growth mindset.** There is always an opportunity to learn and grow if facing mistakes. We can create more tools and skills if necessary. Be mindful of opportunity to improve through conversation.
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
