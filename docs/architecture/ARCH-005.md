@@ -5,9 +5,9 @@
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, UnitConverter, MacroNormalizer, RepositoryInterfaces |
+| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, MicronutrientVocabulary, UnitConverter, MacroNormalizer, RepositoryInterfaces |
 | **Dependencies** | PostgreSQL (primary datastore, via lib/pq or pgx) |
-| **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041 |
+| **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041, SW-REQ-090 |
 
 **Dynamic Behavior:**
 
@@ -15,6 +15,7 @@
 - **Unit Conversion:** Metric-to-Imperial conversion (g->oz, ml->fl oz) performed at repository boundary, never in storage.
 - **Recipe Aggregation:** Dynamically calculates total macros for recipe-based meals by summing constituent ingredients.
 - **Real-time Scaling:** Provides calculation methods for quantity-based macro scaling.
+- **Micronutrient Validation:** Validates all micronutrient keys against a centrally managed vocabulary before storage. Micronutrients are persisted for display/export only and are never passed into similarity vector calculations.
 
 **Interface Definition:**
 
@@ -31,7 +32,7 @@ FoodItem {
   prepTime: minutes                         // SW-REQ-035
   averageUnitWeight: grams                  // SW-REQ-036
   macros: { protein, carbs, fat } per 100g  // SW-REQ-033
-  micros: { sodium, fiber, ... }            // SW-REQ-038
+  micros: { sodium, fiber, ... }            // SW-REQ-038, keys validated by SW-REQ-090 vocabulary
   categoryTags: Tag[]                       // SW-REQ-012
   functionalityTags: Tag[]                  // SW-REQ-037
   imageUrl: string?
@@ -55,6 +56,13 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
   imageUrl: string                           // Server-hosted image path
   minScore: number                           // Lower bound threshold
   maxScore: number                           // Upper bound threshold
+}
+
+MicronutrientVocabularyEntry {               // SW-REQ-090
+  key: string                                 // canonical key, e.g., "Sodium"
+  displayName: string
+  unit: string                                // e.g., "mg", "mcg", "g"
+  active: boolean
 }
 ```
 

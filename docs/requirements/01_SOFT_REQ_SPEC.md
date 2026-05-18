@@ -1194,7 +1194,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Builds upon the caching mechanism defined in SW-REQ-003.
 ---
 
-## [SW-REQ-089] Micronutrient Nomenclature Standardization
+## [SW-REQ-090] Micronutrient Nomenclature Standardization
 **Statement:** The software shall validate all micronutrient keys against a predefined standardized vocabulary (e.g., allowing "Sodium" but rejecting "Na") before they are stored or assigned to an item.
 
 | Attribute | Value |
@@ -1226,7 +1226,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ### 2026-05-18
 
 * Added
-- SW-REQ-089 - micronutrient standardization
+- SW-REQ-090 - micronutrient standardization
 
 * Changed
 - SW-REQ-038 - now specifically mentions the storage and algo exclusion

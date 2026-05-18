@@ -12,6 +12,7 @@
 **Dynamic Behavior:**
 
 - **Vector Calculation:** Normalizes macronutrient values to unit vectors. For recipes, aggregates constituent ingredient macros before normalization.
+- **Micronutrient Exclusion:** Ignores micronutrient key-value pairs entirely; similarity vectors contain only Protein, Carbohydrates, and Fat.
 - **Similarity Scoring:** Computes cosine similarity using dot product of normalized vectors. Filters results below 0.40 threshold.
 - **Visual Indicator Mapping (SW-REQ-018):** Assigns tier indicators based on score thresholds. Returns both color code and server-hosted image URL for the indicator icon. Indicator images are stored as static assets on the server (not client-side Unicode emojis) to ensure consistent cross-platform rendering.
   - Green + `/assets/indicators/star.png` for >=85%

@@ -168,6 +168,7 @@ Container orchestration is not required as managed services handle scaling and a
 **Dynamic Behavior:**
 
 - **Vector Calculation:** Normalizes macronutrient values to unit vectors. For recipes, aggregates constituent ingredient macros before normalization.
+- **Micronutrient Exclusion:** Ignores micronutrient key-value pairs entirely; similarity vectors contain only Protein, Carbohydrates, and Fat.
 - **Similarity Scoring:** Computes cosine similarity using dot product of normalized vectors. Filters results below 0.40 threshold.
 - **Visual Indicator Mapping (SW-REQ-018):** Assigns tier indicators based on score thresholds. Returns both color code and server-hosted image URL for the indicator icon. Indicator images are stored as static assets on the server (not client-side Unicode emojis) to ensure consistent cross-platform rendering.
   - Green + `/assets/indicators/star.png` for >=85%
@@ -236,9 +237,9 @@ Container orchestration is not required as managed services handle scaling and a
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, UnitConverter, MacroNormalizer, RepositoryInterfaces |
+| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, MicronutrientVocabulary, UnitConverter, MacroNormalizer, RepositoryInterfaces |
 | **Dependencies** | PostgreSQL (primary datastore, via lib/pq or pgx) |
-| **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041 |
+| **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041, SW-REQ-090 |
 
 **Dynamic Behavior:**
 
@@ -246,6 +247,7 @@ Container orchestration is not required as managed services handle scaling and a
 - **Unit Conversion:** Metric-to-Imperial conversion (g->oz, ml->fl oz) performed at repository boundary, never in storage.
 - **Recipe Aggregation:** Dynamically calculates total macros for recipe-based meals by summing constituent ingredients.
 - **Real-time Scaling:** Provides calculation methods for quantity-based macro scaling.
+- **Micronutrient Validation:** Validates all micronutrient keys against a centrally managed vocabulary before storage. Micronutrients are persisted for display/export only and are never passed into similarity vector calculations.
 
 **Interface Definition:**
 
@@ -262,7 +264,7 @@ FoodItem {
   prepTime: minutes                         // SW-REQ-035
   averageUnitWeight: grams                  // SW-REQ-036
   macros: { protein, carbs, fat } per 100g  // SW-REQ-033
-  micros: { sodium, fiber, ... }            // SW-REQ-038
+  micros: { sodium, fiber, ... }            // SW-REQ-038, keys validated by SW-REQ-090 vocabulary
   categoryTags: Tag[]                       // SW-REQ-012
   functionalityTags: Tag[]                  // SW-REQ-037
   imageUrl: string?
@@ -286,6 +288,13 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
   imageUrl: string                           // Server-hosted image path
   minScore: number                           // Lower bound threshold
   maxScore: number                           // Upper bound threshold
+}
+
+MicronutrientVocabularyEntry {               // SW-REQ-090
+  key: string                                 // canonical key, e.g., "Sodium"
+  displayName: string
+  unit: string                                // e.g., "mg", "mcg", "g"
+  active: boolean
 }
 ```
 
@@ -941,6 +950,7 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 | SW-REQ-087 | ARCH-001, ARCH-017 |
 | SW-REQ-088 | ARCH-001, ARCH-011 |
 | SW-REQ-089 | ARCH-001, ARCH-016 |
+| SW-REQ-090 | ARCH-005 |
 
 ---
 
@@ -964,4 +974,3 @@ SimilarityIndicatorAsset {                   // SW-REQ-018
 - Full traceability to 89 software requirements
 - Alternative analysis for all major design decisions
 - Resource goals and interface definitions
-
