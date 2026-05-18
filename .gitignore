@@ -20,6 +20,9 @@ go.work
 .svelte-kit/
 package
 
+### OpenCode ###
+auth.json
+
 ### Various ###
 *.log
 .env*
