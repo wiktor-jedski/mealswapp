@@ -1,28 +1,18 @@
-### Go ##
-# Test binary, built with `go test -c`
-*.test
+# Dependencies
+node_modules/
 
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
+# Frontend build output
+dist/
 
-# Go workspace file
-go.work
+# Local tool caches
+.bun-tmp/
+.go-cache/
 
-### Redis ###
-# Ignore redis binary dump (dump.rdb) files
-
-*.rdb
-
-### Svelte ###
-# gitignore template for the SvelteKit, frontend web component framework
-# website: https://kit.svelte.dev/
-
-.svelte-kit/
-package
-
-### OpenCode ###
+# Environment files
+.env
+.env.*
+!.env.example
 auth.json
 
-### Various ###
+# Logs
 *.log
-.env*

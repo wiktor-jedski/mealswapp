@@ -3,36 +3,45 @@ set -e
 
 TASK="$1"
 
-# Start PostgreSQL
-echo "Starting PostgreSQL..."
-service postgresql start
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    echo "Starting PostgreSQL and Redis with Docker Compose..."
+    docker compose up -d postgres redis
 
-# Wait for PostgreSQL to be ready
-until pg_isready -q; do
     echo "Waiting for PostgreSQL..."
-    sleep 1
-done
+    until docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-mealswapp}" -d "${POSTGRES_DB:-mealswapp}" >/dev/null 2>&1; do
+        sleep 1
+    done
 
-# Create dev user and database
-# echo "Setting up database..."
-# su - postgres -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='mealswapp'\" | grep -q 1 || psql -c \"CREATE USER mealswapp WITH PASSWORD 'dev' CREATEDB;\""
-# su - postgres -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='mealswapp'\" | grep -q 1 || psql -c \"CREATE DATABASE mealswapp OWNER mealswapp;\""
-
-# Start Redis
-echo "Starting Redis..."
-service redis-server start
-
-# Wait for Redis to be ready
-until redis-cli ping | grep -q PONG; do
     echo "Waiting for Redis..."
-    sleep 1
-done
+    until docker compose exec -T redis redis-cli ping | grep -q PONG; do
+        sleep 1
+    done
+else
+    echo "Docker Compose not available; falling back to local system services."
+
+    echo "Starting PostgreSQL..."
+    service postgresql start
+
+    until pg_isready -q; do
+        echo "Waiting for PostgreSQL..."
+        sleep 1
+    done
+
+    echo "Starting Redis..."
+    service redis-server start
+
+    until redis-cli ping | grep -q PONG; do
+        echo "Waiting for Redis..."
+        sleep 1
+    done
+fi
 
 echo "================================"
 echo "Development environment ready!"
 echo "PostgreSQL: localhost:5432"
 echo "Redis: localhost:6379"
-# echo "Database: mealswapp / user: mealswapp / pass: dev"
+echo "DATABASE_URL=postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
+echo "REDIS_URL=redis://localhost:6379/0"
 echo "================================"
 
 # If a task was provided, execute it

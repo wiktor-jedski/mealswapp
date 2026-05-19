@@ -1,0 +1,50 @@
+# Phase 00 Notes
+
+## 2026-05-19
+
+- Created the application layout exactly at the repository root: `frontend/`, `backend/`, `worker/`, `db/migrations/`, `deploy/`, and existing `logs/`.
+- Kept existing documentation and scripts in place. No docs or script paths were moved.
+- Added README placeholders instead of code stubs for task 1 so later scaffold tasks can create framework-specific files without having to undo placeholder source code.
+- The repository guidelines mention `scripts/check.py`, but that file is absent. Validation for task 1 was limited to direct filesystem inspection until a check script is added in task 6.
+- Scaffolded the frontend with Vite's Svelte plugin and Vitest because Bun runs `package.json` scripts directly and there is no project-specific Bun template in the spec.
+- Added Google Fonts imports for Inter and Roboto Mono as the initial font entry point. This is acceptable for local scaffold validation, but production/offline work may need self-hosting or a preload strategy.
+- Bun's native `bun test` runner does not apply Vite/Svelte transforms from `vite.config.ts`, so the bootstrap smoke test checks the Svelte source directly. The Vitest-compatible config and component testing dependencies are present for later frontend component work.
+- Verified task 2 with `bun install`, `bun test`, `bun run build`, and a local `bun run dev --host 127.0.0.1 --port 5173` response check.
+- Initialized the backend as a separate Go module at `backend/` with module path `mealswapp/backend`; the spec did not define an import path.
+- Added only health/readiness and `/api/v1/health` route stubs for the backend scaffold. Full versioned routing and envelope conventions remain assigned to task 16.
+- Go's default build cache was not writable in the sandbox, so backend validation used `GOCACHE=/home/wiktor/Work/mealswapp/backend/.go-cache`.
+- Verified task 3 with `go test ./...`, `go run ./cmd/api`, and `GET /health` returning `{"data":{"status":"ok","environment":"local"}}`.
+- Implemented the worker entry point under `backend/cmd/worker` rather than as a separate Go module in top-level `worker/`, so it can share backend config and be included by `backend/go test ./...`.
+- Worker local mode exits after no-op Redis/job hook initialization by default. `WORKER_IDLE=true` keeps it running until signal cancellation.
+- Verified task 4 with `go test ./...` and `go run ./cmd/worker`.
+- Added Compose-managed local PostgreSQL and Redis wiring because Appendix A defines Docker Compose as the development environment. The existing `scripts/start-services.sh` now falls back to system services when Docker Compose is unavailable.
+- Verified task 5 with `docker compose config`, `bash -n scripts/start-services.sh`, and a backend config test proving `DATABASE_URL` and `REDIS_URL` resolve from env.
+- Added `scripts/check.py` as the repository's single local check command because AGENTS.md referenced it but it did not exist.
+- Task 6 migration validation is currently a placeholder that verifies `db/migrations/` exists and validates ordered SQL filenames once migrations are added.
+- Verified task 6 with `python scripts/check.py`.
+- Task 7 adds a `serving_unit` field even though DESIGN-005 emphasizes physical state and per-100 storage. The task list explicitly requires serving units, so the domain model and database check constraint support `gram`, `milliliter`, `piece`, and `serving`.
+- Food item micronutrients are stored as JSONB for task 7 to match DESIGN-005's supplemental micro values. Task 11 will add canonical vocabulary validation.
+- Verified task 7 with `go test ./...`, `python scripts/check.py`, applying `0001_food_items.up.sql` to local Compose PostgreSQL, inspecting the 21 expected columns, applying `0001_food_items.down.sql`, and confirming `to_regclass('public.food_items')` returned null.
+- Task 8 implements user-owned meals with a required `user_id`, but does not add a users foreign key yet because the user/account schema starts in later authentication/profile tasks.
+- Added a minimal PostgreSQL `MealRepository` before the broad repository-interface task because task 8 specifically requires repository CRUD tests for meals with multiple ingredients.
+- Verified task 8 with `MEALSWAPP_TEST_DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go test ./internal/repositories/postgres -run TestMealRepositoryCRUDWithMultipleIngredients -count=1 -v` and `python scripts/check.py`.
+- Recipe aggregate calculation currently treats `gram` and `milliliter` quantities as direct per-100 basis values, and `piece`/`serving` quantities as `quantity * food_items.serving_size`. Task 12 can centralize and expand this conversion behavior.
+- Verified task 9 with `MEALSWAPP_TEST_DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go test ./internal/repositories/postgres -run TestRecipeRepositoryCalculatesAndPersistsTotals -count=1 -v` and `python scripts/check.py`.
+- Task 10 uses tag kinds `diet`, `allergen`, `functionality`, and `curation` from the task list. DESIGN-005 only names `category` and `functionality`, so `category` is not accepted in the Phase 01 taxonomy.
+- Verified task 10 with `MEALSWAPP_TEST_DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go test ./internal/repositories/postgres -run TestTagRepositoryAttachRemoveAndFilterFoodItems -count=1 -v` and `python scripts/check.py`.
+- Task 11 seeds a minimal canonical micronutrient vocabulary in the migration because its verification requires seeded vocabulary values. Task 15 can still add broader dev/test seed data.
+- Verified task 11 with `MEALSWAPP_TEST_DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go test ./internal/repositories/postgres -run TestMicronutrientVocabularyRepositoryValidatesSeededValues -count=1 -v` and `python scripts/check.py`.
+- Task 12 rounds conversions to three decimal places to match the numeric precision used by the Phase 01 PostgreSQL migrations.
+- Verified task 12 with `go test ./...` and `python scripts/check.py`.
+- Task 13 uses a 20% calorie tolerance for macro-derived calories. The spec requires tolerance checks but does not provide a number; this value is intentionally permissive for real-world food label rounding and can be tightened if product requirements specify it.
+- Verified task 13 with `go test ./...` and `python scripts/check.py`.
+- Task 14 adds minimal foundation tables for users, preferences, entitlements, saved data, audit logs, and import records. These are intentionally small contracts for repository coverage; later auth, subscription, saved-data, audit, and admin tasks can extend them with stricter business rules.
+- Added a transaction-aware `Store` that constructs repositories over either a `pgxpool.Pool` or transaction. This was needed to verify rollback behavior through repository methods rather than direct SQL.
+- Verified task 14 with `MEALSWAPP_TEST_DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go test ./internal/repositories/postgres -run TestRepositoryInterfacesCRUDAndTransactionRollback -count=1 -v` and `python scripts/check.py`.
+- Task 15 uses fixed UUIDs for seed fixtures so tests and later features can refer to stable IDs without external services. The admin password hash is the placeholder string `dev-only` and must not be used for production authentication.
+- Verified task 15 with `MEALSWAPP_TEST_DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go test ./internal/seed -run TestApplyIsIdempotentAndLoadsKnownFixtureIDs -count=1 -v`, running `DATABASE_URL='postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable' go run ./cmd/seed` twice, and `python scripts/check.py`.
+- Task 16 keeps root `/health` and `/ready` for load balancer compatibility while also registering versioned `/api/v1/health` and `/api/v1/ready`. Later route tasks can add domain controllers under the same route registry.
+- Task 16 response envelopes now include `success` and request ID metadata. Later error-handling tasks can expand error categories without changing the top-level envelope shape.
+- Verified task 16 with `go test ./...` and `python scripts/check.py`.
+- Task 17 adds reusable validation helpers instead of route-specific schemas because no concrete request DTOs exist yet. The helpers cover JSON decoding, required strings, UUID path params, integer query params, pagination bounds, and typed field errors.
+- Verified task 17 with handler-level validation envelope tests, `go test ./...`, and `python scripts/check.py`.
