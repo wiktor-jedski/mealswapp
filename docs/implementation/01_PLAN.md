@@ -81,6 +81,8 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Frontend tests: Svelte component state, debounce, localStorage LRU, keyboard navigation, theme persistence, responsive rendering, error/offline states.
 - E2E tests: registration/login, basic search, replacement search, paid-mode gating, saved favorites/history, admin import, account export/deletion.
 - Operational checks: python scripts/check.py, backend go test ./..., frontend bun test, Playwright suite, health/readiness, and migration up/down validation.
+- Goal: 100% line coverage by the end of each phase. Each deviation from that has to be documented in AGENTS.md and accepted.
+- After each phase suggest integration, functional, end to end and acceptance tests that have to be performed by the project owner.
 
 ## Assumptions
 
