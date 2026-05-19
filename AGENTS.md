@@ -20,7 +20,6 @@ When application code is added, follow the documented stack: Svelte frontend cod
 
 ## Build, Test, and Development Commands
 
-- `python scripts/check.py`: checks that all software requirement IDs are referenced in `docs/architecture/01_SOFT_ARCH_DESIGN.md`.
 - `bash scripts/start-services.sh`: starts local PostgreSQL and Redis services where `service` is available.
 - `python scripts/split_arch.py` and `python scripts/phase_splitter.py`: regenerate split documentation from larger planning files when those sources change.
 
