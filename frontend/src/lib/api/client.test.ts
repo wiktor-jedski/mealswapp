@@ -206,6 +206,38 @@ describe('ApiClient', () => {
     expect(job.result?.[0].meals[0].itemId).toBe('tofu');
     expect(calls[1].url).toBe('/api/v1/optimization/jobs/job-1');
   });
+
+  it('exposes admin workflow endpoints', async () => {
+    const calls: RequestRecord[] = [];
+    const client = new ApiClient({
+      fetch: recordingFetch(calls, okEnvelope({ candidates: [], page: 1, pageSize: 10 }))
+    });
+
+    await client.adminExternalSearch('tofu', 'all', 1, 10);
+    await client.adminListItems('tof', 2, 10);
+    await client.adminCreateItem({ name: 'Tofu', physicalState: 'solid', servingUnit: 'gram', servingSize: 100 });
+    await client.adminTransitionItem('food-1', 'approve');
+    await client.adminListTags('diet');
+    await client.adminAssignTag('food-1', 'tag-1');
+    await client.adminMergeTags('tag-old', 'tag-1');
+    await client.adminListUsers('user', 1, 10);
+    await client.adminDisableUser('user-1');
+    await client.adminResetUserLockout('user-1');
+    await client.adminUserAudit('user-1');
+
+    expect(calls[0].url).toBe('/api/v1/admin/external-search?query=tofu&provider=all&page=1&pageSize=10');
+    expect(calls[1].url).toBe('/api/v1/admin/items?query=tof&page=2&pageSize=10');
+    expect(calls[2].url).toBe('/api/v1/admin/items');
+    expect(calls[2].init.method).toBe('POST');
+    expect(calls[3].url).toBe('/api/v1/admin/items/food-1/approve');
+    expect(calls[4].url).toBe('/api/v1/admin/tags?kind=diet');
+    expect(calls[5].url).toBe('/api/v1/admin/items/food-1/tags');
+    expect(calls[6].url).toBe('/api/v1/admin/tags/merge');
+    expect(calls[7].url).toBe('/api/v1/admin/users?query=user&page=1&pageSize=10');
+    expect(calls[8].url).toBe('/api/v1/admin/users/user-1/disable');
+    expect(calls[9].url).toBe('/api/v1/admin/users/user-1/reset-lockout');
+    expect(calls[10].url).toBe('/api/v1/admin/users/user-1/audit?page=1&pageSize=10');
+  });
 });
 
 interface RequestRecord {

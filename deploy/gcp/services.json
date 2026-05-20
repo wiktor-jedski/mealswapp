@@ -1,0 +1,76 @@
+{
+  "projectIdSecret": "GCP_PROJECT_ID",
+  "region": "europe-west1",
+  "artifactRegistry": {
+    "repository": "mealswapp",
+    "location": "europe-west1"
+  },
+  "cloudRun": {
+    "api": {
+      "serviceName": "mealswapp-api",
+      "image": "api",
+      "port": 8080,
+      "minInstances": 1,
+      "maxInstances": 10,
+      "cpu": "1",
+      "memory": "512Mi",
+      "env": {
+        "APP_ENV": "production",
+        "API_ADDR": ":8080"
+      },
+      "secrets": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_SECRET",
+        "STRIPE_WEBHOOK_SECRET",
+        "USDA_API_KEY"
+      ],
+      "health": {
+        "startupPath": "/ready",
+        "livenessPath": "/health"
+      }
+    },
+    "worker": {
+      "serviceName": "mealswapp-worker",
+      "image": "worker",
+      "command": ["/app/worker"],
+      "minInstances": 1,
+      "maxInstances": 3,
+      "cpu": "1",
+      "memory": "512Mi",
+      "env": {
+        "APP_ENV": "production"
+      },
+      "secrets": [
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
+    }
+  },
+  "cloudSql": {
+    "instanceName": "mealswapp-postgres",
+    "databaseVersion": "POSTGRES_16",
+    "tier": "db-custom-1-3840",
+    "backupPolicyFile": "deploy/cloudsql/backup-policy.json"
+  },
+  "memorystore": {
+    "instanceName": "mealswapp-redis",
+    "memoryGb": 1,
+    "version": "REDIS_7_0"
+  },
+  "frontend": {
+    "bucket": "mealswapp-frontend",
+    "cdn": true,
+    "dockerfile": "deploy/Dockerfile.frontend"
+  },
+  "secretManager": {
+    "requiredSecrets": [
+      "DATABASE_URL",
+      "REDIS_URL",
+      "JWT_SECRET",
+      "STRIPE_WEBHOOK_SECRET",
+      "USDA_API_KEY",
+      "MONITORING_NOTIFICATION_EMAIL"
+    ]
+  }
+}

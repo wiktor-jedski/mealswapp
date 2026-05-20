@@ -123,6 +123,10 @@ func (tracker *Tracker) RecordSuccess(accountKey string, ip string) {
 	delete(tracker.ips, ip)
 }
 
+func (tracker *Tracker) ResetAccount(accountKey string) {
+	delete(tracker.accounts, accountKey)
+}
+
 func (tracker *Tracker) ipStatus(ip string, now time.Time) ipState {
 	status := tracker.ips[ip]
 	if status.resetAt.IsZero() || !now.Before(status.resetAt) {

@@ -52,6 +52,20 @@ func TestTrackerResetsOnSuccess(t *testing.T) {
 	}
 }
 
+func TestResetAccountClearsAccountLockoutOnly(t *testing.T) {
+	now := time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC)
+	tracker := NewTracker(Config{AccountFailureThreshold: 2, IPFailureThreshold: 2, Now: func() time.Time { return now }})
+
+	tracker.RecordFailure("user@example.com", "203.0.113.10")
+	tracker.RecordFailure("user@example.com", "203.0.113.10")
+	tracker.ResetAccount("user@example.com")
+	state := tracker.State("user@example.com", "203.0.113.10")
+
+	if state.AccountFailures != 0 || state.IPFailures != 2 {
+		t.Fatalf("expected account reset with IP state preserved, got %#v", state)
+	}
+}
+
 func TestTrackerLocksIPWindow(t *testing.T) {
 	now := time.Date(2026, 5, 19, 12, 0, 0, 0, time.UTC)
 	tracker := NewTracker(Config{

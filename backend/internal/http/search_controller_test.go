@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"mealswapp/backend/internal/config"
 	"mealswapp/backend/internal/http/handlers"
@@ -54,6 +55,32 @@ func TestSearchControllerHandlesSingleSearchWithPaginationAndFilters(t *testing.
 	data := dataMap(t, payload.Data)
 	if data["totalCount"].(float64) != 12 || data["page"].(float64) != 2 || data["pageSize"].(float64) != 10 {
 		t.Fatalf("unexpected search response metadata: %#v", data)
+	}
+}
+
+func TestSearchControllerP95LatencyGate(t *testing.T) {
+	service := &fakeSearchService{
+		searchResponse: handlers.SearchResponse{
+			Items:            []any{map[string]any{"id": "food-1", "name": "Tofu"}},
+			TotalCount:       1,
+			SimilarityScores: []float64{},
+		},
+	}
+	app := NewRouter(ServiceDependencies{Config: config.Config{Environment: "test"}, SearchService: service})
+	latencies := make([]time.Duration, 0, 50)
+
+	for i := 0; i < 50; i++ {
+		startedAt := time.Now()
+		res := performJSONRequest(t, app, http.MethodPost, "/api/v1/search", `{"query":"tofu","mode":"single"}`, "", true)
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("expected search 200, got %d", res.StatusCode)
+		}
+		res.Body.Close()
+		latencies = append(latencies, time.Since(startedAt))
+	}
+
+	if p95(latencies) > 2*time.Second {
+		t.Fatalf("search handler P95 exceeded 2s target: %s", p95(latencies))
 	}
 }
 
@@ -271,4 +298,25 @@ func dataMap(t *testing.T, value any) map[string]any {
 		t.Fatalf("expected object data, got %#v", value)
 	}
 	return data
+}
+
+func p95(values []time.Duration) time.Duration {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := append([]time.Duration(nil), values...)
+	for i := 1; i < len(sorted); i++ {
+		value := sorted[i]
+		j := i - 1
+		for j >= 0 && sorted[j] > value {
+			sorted[j+1] = sorted[j]
+			j--
+		}
+		sorted[j+1] = value
+	}
+	index := (95*len(sorted) + 99) / 100
+	if index < 1 {
+		index = 1
+	}
+	return sorted[index-1]
 }

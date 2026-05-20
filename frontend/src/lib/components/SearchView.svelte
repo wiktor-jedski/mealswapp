@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { createApiClient } from '../api/client';
   import type { DietOptimizationRequest, Entitlement, FoodItemViewModel, MacroValues } from '../api/types';
   import AutocompleteDropdown from './AutocompleteDropdown.svelte';
+  import OfflineBanner from './OfflineBanner.svelte';
   import OptimizationPanel from './OptimizationPanel.svelte';
   import ResultsGrid from './ResultsGrid.svelte';
   import SettingsPanel from './SettingsPanel.svelte';
@@ -11,16 +13,24 @@
   import { createSearchController, createDefaultSearchState, type SearchState } from '../search/searchState';
   import { createDefaultOptimizationState, createOptimizationController, type OptimizationState } from '../search/optimizationState';
   import { LocalStorageManager } from '../storage/localStorageManager';
+  import { purgeCachesForAccountDeletion } from '../storage/userCachePurger';
+  import { createDefaultOfflineState, createOfflineController, type OfflineState } from '../offline/offlineState';
+  import { createRetryManager } from '../errors/retryManager';
 
   let search: SearchState = $state(createDefaultSearchState());
   let autocomplete: AutocompleteState = $state(createAutocompleteState());
   let optimization: OptimizationState = $state(createDefaultOptimizationState());
+  let offline: OfflineState = $state(createDefaultOfflineState());
   let entitlement: Entitlement = $state(defaultFreeEntitlement);
   let entitlementUsage: EntitlementUsage = $state({ searchesUsed: 0 });
   let settingsOpen = $state(false);
   let entitlementView = $derived(createEntitlementViewState(entitlement, entitlementUsage));
   const api = createApiClient();
-  const controller = createSearchController({ api, localStorageManager: new LocalStorageManager() });
+  const retryManager = createRetryManager();
+  const controller = createSearchController({ api, localStorageManager: new LocalStorageManager(), retryManager });
+  const offlineController = createOfflineController({
+    target: typeof window !== 'undefined' ? window.navigator : undefined
+  });
   const autocompleteController = createAutocompleteController({
     api,
     onSelect: (option) => {
@@ -37,7 +47,24 @@
   optimizationController.subscribe((next) => {
     optimization = next;
   });
+  offlineController.subscribe((next) => {
+    offline = next;
+    controller.setOnline(next.isOnline);
+    if (!next.isOnline && next.queuedRetries === 0) {
+      offlineController.queueRetry(async () => {
+        await controller.execute();
+      });
+    }
+  });
+  if (typeof window !== 'undefined') {
+    const detachOffline = offlineController.attach();
+    onDestroy(detachOffline);
+  }
   function submitOptimization() {
+    if (!offline.isOnline) {
+      offlineController.blockMutation('Diet optimization');
+      return;
+    }
     void optimizationController.submit(buildOptimizationRequest(search.response?.items ?? []));
   }
   function buildOptimizationRequest(items: FoodItemViewModel[]): DietOptimizationRequest {
@@ -85,6 +112,16 @@
       entitlement = defaultFreeEntitlement;
     }
   }
+  async function deleteAccount() {
+    try {
+      await api.deleteAccount();
+    } finally {
+      await purgeCachesForAccountDeletion({
+        serviceWorker: typeof navigator !== 'undefined' ? navigator.serviceWorker : undefined
+      });
+      settingsOpen = false;
+    }
+  }
   if (typeof window !== 'undefined' && checkoutReturnShouldRefresh(window.location.href)) {
     void refreshEntitlement();
   } else {
@@ -93,6 +130,7 @@
 </script>
 
 <main class="min-h-screen bg-background text-text-primary">
+  <OfflineBanner state={offline} onRetry={() => controller.execute()} />
   <div class="mx-auto grid max-w-app grid-cols-1 gap-4 px-4 py-6 sm:grid-cols-12">
       <SidebarComponent
       mode={search.mode}
@@ -173,6 +211,7 @@
         onSavePreferences={() => {
           settingsOpen = false;
         }}
+        onDeleteAccount={deleteAccount}
       />
     </section>
   </div>

@@ -106,6 +106,7 @@ func (repo FoodItemRepository) Search(ctx context.Context, q repositories.FoodIt
 		SELECT id
 		FROM food_items
 		WHERE ($1 = '' OR normalized_name LIKE '%' || lower(trim($1)) || '%')
+			AND curation_state IN ('draft', 'approved')
 		ORDER BY normalized_name ASC
 		LIMIT $2 OFFSET $3
 	`, q.Text, limit, q.Offset)
@@ -131,7 +132,7 @@ func (repo FoodItemRepository) Search(ctx context.Context, q repositories.FoodIt
 	}
 
 	var total int
-	if err := repo.db.QueryRow(ctx, `SELECT count(*) FROM food_items WHERE ($1 = '' OR normalized_name LIKE '%' || lower(trim($1)) || '%')`, q.Text).Scan(&total); err != nil {
+	if err := repo.db.QueryRow(ctx, `SELECT count(*) FROM food_items WHERE ($1 = '' OR normalized_name LIKE '%' || lower(trim($1)) || '%') AND curation_state IN ('draft', 'approved')`, q.Text).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -164,9 +165,14 @@ func (repo FoodItemRepository) Update(ctx context.Context, item food.FoodItemEnt
 			image_url = $11,
 			prep_time_minutes = $12,
 			average_unit_weight_grams = $13,
+			source_provider = $14,
+			source_external_id = $15,
+			source_url = $16,
+			source_imported_at = $17,
+			curation_state = coalesce(nullif($18, ''), curation_state),
 			updated_at = now()
 		WHERE id = $1
-	`, item.ID, item.Name, item.PhysicalState, item.ServingUnit, item.ServingSize, item.CaloriesPer100, item.MacrosPer100.ProteinGrams, item.MacrosPer100.CarbsGrams, item.MacrosPer100.FatGrams, micros, nullableString(item.ImageURL), item.PrepTimeMinutes, item.AverageUnitWeightGrams)
+	`, item.ID, item.Name, item.PhysicalState, item.ServingUnit, item.ServingSize, item.CaloriesPer100, item.MacrosPer100.ProteinGrams, item.MacrosPer100.CarbsGrams, item.MacrosPer100.FatGrams, micros, nullableString(item.ImageURL), item.PrepTimeMinutes, item.AverageUnitWeightGrams, nullableString(item.Source.Provider), nullableString(item.Source.ExternalID), nullableString(item.Source.ProviderURL), item.Source.ImportedAt, item.Source.CurationState)
 	if err != nil {
 		return err
 	}

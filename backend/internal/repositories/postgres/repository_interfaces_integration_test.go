@@ -99,6 +99,13 @@ func exerciseUserRepository(t *testing.T, ctx context.Context, repo repositories
 	if user.DisplayName != "Updated User" {
 		t.Fatalf("expected updated user display name, got %q", user.DisplayName)
 	}
+	users, total, err := repo.List(ctx, repositories.PageQuery{Text: "user@example.com", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(users) != 1 || users[0].ID != id {
+		t.Fatalf("expected listed user, total=%d users=%#v", total, users)
+	}
 
 	return id
 }
@@ -300,12 +307,20 @@ func exerciseSavedDataRepository(t *testing.T, ctx context.Context, repo reposit
 func exerciseAuditLogRepository(t *testing.T, ctx context.Context, repo repositories.AuditLogRepository, userID uuid.UUID) {
 	t.Helper()
 
-	id, err := repo.Create(ctx, repositories.AuditLogEntity{ActorID: &userID, Action: "repository.test", Target: "test", Metadata: []byte(`{"ok":true}`)})
+	target := "user:" + userID.String()
+	id, err := repo.Create(ctx, repositories.AuditLogEntity{ActorID: &userID, Action: "repository.test", Target: target, Metadata: []byte(`{"ok":true}`)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repo.GetByID(ctx, id); err != nil {
 		t.Fatal(err)
+	}
+	entries, total, err := repo.ListByTarget(ctx, target, repositories.PageQuery{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(entries) != 1 || entries[0].ID != id {
+		t.Fatalf("expected audit history entry, total=%d entries=%#v", total, entries)
 	}
 	if err := repo.Delete(ctx, id); err != nil {
 		t.Fatal(err)

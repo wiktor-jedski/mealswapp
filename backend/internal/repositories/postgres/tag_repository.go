@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"mealswapp/backend/internal/domain/tag"
 	"mealswapp/backend/internal/repositories"
@@ -99,6 +100,37 @@ func (repo TagRepository) RemoveFromFoodItem(ctx context.Context, foodItemID uui
 	}
 
 	return nil
+}
+
+func (repo TagRepository) Deactivate(ctx context.Context, id uuid.UUID) error {
+	result, err := repo.db.Exec(ctx, `UPDATE tags SET active = false, updated_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+func (repo TagRepository) Merge(ctx context.Context, sourceID uuid.UUID, targetID uuid.UUID) error {
+	if sourceID == uuid.Nil || targetID == uuid.Nil || sourceID == targetID {
+		return errors.New("distinct source and target tag ids are required")
+	}
+	_, err := repo.db.Exec(ctx, `
+		INSERT INTO food_item_tags (food_item_id, tag_id)
+		SELECT food_item_id, $2
+		FROM food_item_tags
+		WHERE tag_id = $1
+		ON CONFLICT DO NOTHING
+	`, sourceID, targetID)
+	if err != nil {
+		return err
+	}
+	if _, err := repo.db.Exec(ctx, `DELETE FROM food_item_tags WHERE tag_id = $1`, sourceID); err != nil {
+		return err
+	}
+	return repo.Deactivate(ctx, sourceID)
 }
 
 func (repo TagRepository) QueryFoodItemIDs(ctx context.Context, filter FoodItemTagFilter) ([]uuid.UUID, error) {

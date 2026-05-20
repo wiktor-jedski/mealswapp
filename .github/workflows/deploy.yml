@@ -1,0 +1,85 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Validate repository
+        run: python scripts/check.py
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+
+      - name: Build and push backend image
+        run: |
+          IMAGE="europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/mealswapp/api:${{ github.sha }}"
+          docker build -f deploy/Dockerfile.backend -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Deploy API
+        run: |
+          IMAGE="europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/mealswapp/api:${{ github.sha }}"
+          gcloud run deploy mealswapp-api \
+            --image "$IMAGE" \
+            --region europe-west1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --set-env-vars APP_ENV=production,API_ADDR=:8080 \
+            --set-secrets DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest,JWT_SECRET=JWT_SECRET:latest,STRIPE_WEBHOOK_SECRET=STRIPE_WEBHOOK_SECRET:latest,USDA_API_KEY=USDA_API_KEY:latest
+
+      - name: Deploy worker
+        run: |
+          IMAGE="europe-west1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/mealswapp/api:${{ github.sha }}"
+          gcloud run deploy mealswapp-worker \
+            --image "$IMAGE" \
+            --region europe-west1 \
+            --platform managed \
+            --no-allow-unauthenticated \
+            --command /app/worker \
+            --set-env-vars APP_ENV=production \
+            --set-secrets DATABASE_URL=DATABASE_URL:latest,REDIS_URL=REDIS_URL:latest
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Upload frontend assets
+        run: |
+          gsutil -m rsync -r -d frontend/dist "gs://${{ secrets.GCP_FRONTEND_BUCKET }}"

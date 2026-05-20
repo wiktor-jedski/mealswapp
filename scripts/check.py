@@ -17,6 +17,10 @@ def main() -> int:
         ("compose", check_compose),
         ("backend", check_backend),
         ("frontend", check_frontend),
+        ("performance", check_performance),
+        ("monitoring", check_monitoring),
+        ("backups", check_backups),
+        ("deployment", check_deployment),
         ("migrations", check_migrations),
     ]
 
@@ -76,6 +80,22 @@ def check_backend() -> None:
 def check_frontend() -> None:
     run(["bun", "test"], cwd=ROOT / "frontend")
     run(["bun", "run", "build"], cwd=ROOT / "frontend")
+
+
+def check_performance() -> None:
+    run([sys.executable, "scripts/performance_gates.py"], cwd=ROOT)
+
+
+def check_monitoring() -> None:
+    run([sys.executable, "scripts/validate_monitoring.py"], cwd=ROOT)
+
+
+def check_backups() -> None:
+    run([sys.executable, "scripts/validate_backup_policy.py"], cwd=ROOT)
+
+
+def check_deployment() -> None:
+    run([sys.executable, "scripts/validate_deployment.py"], cwd=ROOT)
 
 
 def check_migrations() -> None:

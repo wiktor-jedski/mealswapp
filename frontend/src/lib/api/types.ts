@@ -227,3 +227,140 @@ export interface CuratedItemDraft {
   functionalityTagIds: UUID[];
   imageUrl?: string;
 }
+
+export type AdminCurationState = 'draft' | 'approved' | 'rejected' | 'inactive';
+export type AdminPhysicalState = 'solid' | 'liquid';
+export type AdminServingUnit = 'gram' | 'milliliter' | 'piece' | 'serving';
+
+export interface AdminFoodItem {
+  ID?: UUID;
+  id?: UUID;
+  Name?: string;
+  name?: string;
+  PhysicalState?: AdminPhysicalState;
+  physicalState?: AdminPhysicalState;
+  ServingUnit?: AdminServingUnit;
+  servingUnit?: AdminServingUnit;
+  ServingSize?: number;
+  servingSize?: number;
+  CaloriesPer100?: number;
+  caloriesPer100?: number;
+  MacrosPer100?: { ProteinGrams?: number; CarbsGrams?: number; FatGrams?: number };
+  macrosPer100?: MacroValues;
+  Micros?: Record<string, number>;
+  micros?: Record<string, number>;
+  Source?: {
+    Provider?: string;
+    ExternalID?: string;
+    ProviderURL?: string;
+    CurationState?: AdminCurationState;
+  };
+  source?: {
+    provider?: string;
+    externalId?: string;
+    providerUrl?: string;
+    curationState?: AdminCurationState;
+  };
+  ImageURL?: string;
+  imageUrl?: string;
+  Disabled?: boolean;
+  disabled?: boolean;
+}
+
+export interface AdminItemList {
+  items: AdminFoodItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ExternalDataWarning {
+  provider: string;
+  externalId?: string;
+  code: string;
+  message: string;
+}
+
+export interface NormalizedExternalCandidate {
+  provider: string;
+  externalId: string;
+  name: string;
+  physicalState?: AdminPhysicalState;
+  macrosPer100: MacroValues;
+  caloriesPer100: number;
+  micros: Record<string, number>;
+  servingSize?: number;
+  servingUnit?: AdminServingUnit;
+  imageUrl?: string;
+  warnings?: ExternalDataWarning[];
+}
+
+export interface ExternalSearchResult {
+  candidates: NormalizedExternalCandidate[];
+  warnings?: ExternalDataWarning[];
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminTag {
+  ID?: UUID;
+  id?: UUID;
+  Name?: string;
+  name?: string;
+  Kind?: TagFilterKind;
+  kind?: TagFilterKind;
+  Active?: boolean;
+  active?: boolean;
+}
+
+export interface AdminUser {
+  ID?: UUID;
+  id?: UUID;
+  Email?: string;
+  email?: string;
+  DisplayName?: string;
+  displayName?: string;
+  Role?: 'user' | 'admin';
+  role?: 'user' | 'admin';
+  Disabled?: boolean;
+  disabled?: boolean;
+}
+
+export interface AdminUserList {
+  users: AdminUser[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AdminUserDetail {
+  user: AdminUser;
+  entitlement?: {
+    Plan?: string;
+    plan?: string;
+    Status?: string;
+    status?: string;
+    ExpiresAt?: string;
+    expiresAt?: string;
+  };
+}
+
+export interface AdminAuditEntry {
+  ID?: UUID;
+  id?: UUID;
+  Action?: string;
+  action?: string;
+  Target?: string;
+  target?: string;
+  Metadata?: unknown;
+  metadata?: unknown;
+  CreatedAt?: string;
+  createdAt?: string;
+}
+
+export interface AdminAuditHistory {
+  entries: AdminAuditEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}

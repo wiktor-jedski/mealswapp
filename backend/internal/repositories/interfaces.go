@@ -19,6 +19,12 @@ type RepositoryContext struct {
 	IncludeDeleted bool
 }
 
+type PageQuery struct {
+	Text   string
+	Limit  int
+	Offset int
+}
+
 type FoodItemQuery struct {
 	Text          string
 	IncludeTagIDs []uuid.UUID
@@ -82,6 +88,7 @@ type UserEntity struct {
 type UserRepository interface {
 	Create(ctx context.Context, user UserEntity) (uuid.UUID, error)
 	GetByID(ctx context.Context, id uuid.UUID) (UserEntity, error)
+	List(ctx context.Context, query PageQuery) ([]UserEntity, int, error)
 	Update(ctx context.Context, user UserEntity) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -145,6 +152,7 @@ type AuditLogEntity struct {
 type AuditLogRepository interface {
 	Create(ctx context.Context, entry AuditLogEntity) (uuid.UUID, error)
 	GetByID(ctx context.Context, id uuid.UUID) (AuditLogEntity, error)
+	ListByTarget(ctx context.Context, target string, query PageQuery) ([]AuditLogEntity, int, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 

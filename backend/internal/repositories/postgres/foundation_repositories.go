@@ -48,6 +48,44 @@ func (repo UserRepository) GetByID(ctx context.Context, id uuid.UUID) (repositor
 	return user, err
 }
 
+func (repo UserRepository) List(ctx context.Context, query repositories.PageQuery) ([]repositories.UserEntity, int, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := repo.db.Query(ctx, `
+		SELECT id, email, display_name, password_hash, role, disabled, created_at, updated_at
+		FROM users
+		WHERE ($1 = '' OR normalized_email LIKE '%' || lower(trim($1)) || '%' OR lower(display_name) LIKE '%' || lower(trim($1)) || '%')
+		ORDER BY created_at DESC, id DESC
+		LIMIT $2 OFFSET $3
+	`, query.Text, limit, query.Offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var users []repositories.UserEntity
+	for rows.Next() {
+		var user repositories.UserEntity
+		if err := rows.Scan(&user.ID, &user.Email, &user.DisplayName, &user.PasswordHash, &user.Role, &user.Disabled, &user.CreatedAt, &user.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	var total int
+	if err := repo.db.QueryRow(ctx, `
+		SELECT count(*)
+		FROM users
+		WHERE ($1 = '' OR normalized_email LIKE '%' || lower(trim($1)) || '%' OR lower(display_name) LIKE '%' || lower(trim($1)) || '%')
+	`, query.Text).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
 func (repo UserRepository) Update(ctx context.Context, user repositories.UserEntity) error {
 	if user.ID == uuid.Nil {
 		return errors.New("user id is required")
@@ -247,6 +285,40 @@ func (repo AuditLogRepository) GetByID(ctx context.Context, id uuid.UUID) (repos
 	err := repo.db.QueryRow(ctx, `SELECT id, actor_id, action, target, metadata, created_at FROM audit_logs WHERE id = $1`, id).
 		Scan(&entry.ID, &entry.ActorID, &entry.Action, &entry.Target, &entry.Metadata, &entry.CreatedAt)
 	return entry, err
+}
+
+func (repo AuditLogRepository) ListByTarget(ctx context.Context, target string, query repositories.PageQuery) ([]repositories.AuditLogEntity, int, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := repo.db.Query(ctx, `
+		SELECT id, actor_id, action, target, metadata, created_at
+		FROM audit_logs
+		WHERE target = $1
+		ORDER BY created_at DESC, id DESC
+		LIMIT $2 OFFSET $3
+	`, target, limit, query.Offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	entries := []repositories.AuditLogEntity{}
+	for rows.Next() {
+		var entry repositories.AuditLogEntity
+		if err := rows.Scan(&entry.ID, &entry.ActorID, &entry.Action, &entry.Target, &entry.Metadata, &entry.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	var total int
+	if err := repo.db.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE target = $1`, target).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	return entries, total, nil
 }
 
 func (repo AuditLogRepository) Delete(ctx context.Context, id uuid.UUID) error {

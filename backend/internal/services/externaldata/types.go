@@ -3,12 +3,15 @@ package externaldata
 import (
 	"fmt"
 	"time"
+
+	"mealswapp/backend/internal/domain/food"
 )
 
 type Provider string
 
 const (
-	ProviderUSDA Provider = "usda"
+	ProviderUSDA          Provider = "usda"
+	ProviderOpenFoodFacts Provider = "openfoodfacts"
 )
 
 type ExternalSearchQuery struct {
@@ -27,6 +30,27 @@ type ExternalFoodRecord struct {
 	Nutrients   map[string]float64 `json:"nutrients"`
 	ImageURL    string             `json:"imageUrl,omitempty"`
 	RawPayload  []byte             `json:"rawPayload,omitempty"`
+}
+
+type NormalizedFoodCandidate struct {
+	Provider       Provider              `json:"provider"`
+	ExternalID     string                `json:"externalId"`
+	Name           string                `json:"name"`
+	PhysicalState  food.PhysicalState    `json:"physicalState,omitempty"`
+	MacrosPer100   food.MacroValues      `json:"macrosPer100"`
+	CaloriesPer100 float64               `json:"caloriesPer100"`
+	Micros         map[string]float64    `json:"micros"`
+	ServingSize    *float64              `json:"servingSize,omitempty"`
+	ServingUnit    string                `json:"servingUnit,omitempty"`
+	ImageURL       string                `json:"imageUrl,omitempty"`
+	Warnings       []ExternalDataWarning `json:"warnings,omitempty"`
+}
+
+type ExternalDataWarning struct {
+	Provider   Provider `json:"provider"`
+	ExternalID string   `json:"externalId,omitempty"`
+	Code       string   `json:"code"`
+	Message    string   `json:"message"`
 }
 
 type ProviderRateLimit struct {

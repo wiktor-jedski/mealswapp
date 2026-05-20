@@ -1,0 +1,83 @@
+{
+  "notificationChannels": [
+    {
+      "name": "staging-placeholder",
+      "type": "email",
+      "secretRef": "MONITORING_NOTIFICATION_EMAIL"
+    }
+  ],
+  "uptimeChecks": [
+    {
+      "name": "api-health",
+      "path": "/health",
+      "intervalSeconds": 30,
+      "timeoutSeconds": 5,
+      "expectedStatus": 200
+    },
+    {
+      "name": "api-readiness",
+      "path": "/ready",
+      "intervalSeconds": 30,
+      "timeoutSeconds": 5,
+      "expectedStatus": 200
+    }
+  ],
+  "alertPolicies": [
+    {
+      "name": "api-p95-latency-warning",
+      "metric": "mealswapp_http_request_latency_ms_p95",
+      "comparison": ">",
+      "threshold": 1500,
+      "durationSeconds": 300,
+      "severity": "warning"
+    },
+    {
+      "name": "api-p95-latency-critical",
+      "metric": "mealswapp_http_request_latency_ms_p95",
+      "comparison": ">",
+      "threshold": 2000,
+      "durationSeconds": 300,
+      "severity": "critical"
+    },
+    {
+      "name": "api-error-rate-critical",
+      "metric": "mealswapp_http_errors_total / mealswapp_http_requests_total",
+      "comparison": ">",
+      "threshold": 0.05,
+      "durationSeconds": 300,
+      "severity": "critical"
+    },
+    {
+      "name": "database-unhealthy-critical",
+      "metric": "mealswapp_dependency_status{name=\"database\"}",
+      "comparison": "<",
+      "threshold": 1,
+      "durationSeconds": 60,
+      "severity": "critical"
+    },
+    {
+      "name": "redis-unhealthy-warning",
+      "metric": "mealswapp_dependency_status{name=\"redis\"}",
+      "comparison": "<",
+      "threshold": 1,
+      "durationSeconds": 120,
+      "severity": "warning"
+    },
+    {
+      "name": "optimization-queue-failures-critical",
+      "metric": "mealswapp_optimization_queue_failures_total",
+      "comparison": ">",
+      "threshold": 0,
+      "durationSeconds": 300,
+      "severity": "critical"
+    },
+    {
+      "name": "stripe-webhook-failures-critical",
+      "metric": "mealswapp_stripe_webhook_failures_total",
+      "comparison": ">",
+      "threshold": 0,
+      "durationSeconds": 300,
+      "severity": "critical"
+    }
+  ]
+}

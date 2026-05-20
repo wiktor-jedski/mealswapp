@@ -1,10 +1,18 @@
 import type {
   AppError,
+  AdminAuditHistory,
+  AdminFoodItem,
+  AdminItemList,
+  AdminTag,
+  AdminUserDetail,
+  AdminUserList,
   CheckoutSession,
   CustomerPortalSession,
   DietOptimizationRequest,
   Entitlement,
   Envelope,
+  ExternalProvider,
+  ExternalSearchResult,
   OptimizationJob,
   OptimizationSubmitResponse,
   RankedAutocomplete,
@@ -46,7 +54,7 @@ export class ApiClient {
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? '/api/v1';
-    this.fetcher = options.fetch ?? fetch;
+    this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   search(request: SearchRequest): Promise<SearchResponse> {
@@ -119,6 +127,66 @@ export class ApiClient {
 
   getOptimizationJob(jobId: string): Promise<OptimizationJob> {
     return this.request<OptimizationJob>(`/optimization/jobs/${encodeURIComponent(jobId)}`);
+  }
+
+  adminExternalSearch(query: string, provider: ExternalProvider, page = 1, pageSize = 10): Promise<ExternalSearchResult> {
+    const params = new URLSearchParams({ query, provider, page: String(page), pageSize: String(pageSize) });
+    return this.request<ExternalSearchResult>(`/admin/external-search?${params.toString()}`);
+  }
+
+  adminListItems(query = '', page = 1, pageSize = 10): Promise<AdminItemList> {
+    const params = new URLSearchParams({ query, page: String(page), pageSize: String(pageSize) });
+    return this.request<AdminItemList>(`/admin/items?${params.toString()}`);
+  }
+
+  adminCreateItem(item: AdminFoodItem): Promise<AdminFoodItem> {
+    return this.request<AdminFoodItem>('/admin/items', { method: 'POST', body: JSON.stringify(item) });
+  }
+
+  adminUpdateItem(id: string, item: AdminFoodItem): Promise<AdminFoodItem> {
+    return this.request<AdminFoodItem>(`/admin/items/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(item) });
+  }
+
+  adminTransitionItem(id: string, transition: 'approve' | 'reject' | 'deactivate'): Promise<AdminFoodItem> {
+    return this.request<AdminFoodItem>(`/admin/items/${encodeURIComponent(id)}/${transition}`, { method: 'POST' });
+  }
+
+  adminListTags(kind: string): Promise<AdminTag[]> {
+    return this.request<AdminTag[]>(`/admin/tags?kind=${encodeURIComponent(kind)}`);
+  }
+
+  adminUpsertTag(tag: AdminTag): Promise<AdminTag> {
+    return this.request<AdminTag>('/admin/tags', { method: 'POST', body: JSON.stringify(tag) });
+  }
+
+  adminAssignTag(foodItemId: string, tagId: string): Promise<void> {
+    return this.request<void>(`/admin/items/${encodeURIComponent(foodItemId)}/tags`, { method: 'POST', body: JSON.stringify({ tagId }) });
+  }
+
+  adminMergeTags(sourceId: string, targetId: string): Promise<void> {
+    return this.request<void>('/admin/tags/merge', { method: 'POST', body: JSON.stringify({ sourceId, targetId }) });
+  }
+
+  adminListUsers(query = '', page = 1, pageSize = 10): Promise<AdminUserList> {
+    const params = new URLSearchParams({ query, page: String(page), pageSize: String(pageSize) });
+    return this.request<AdminUserList>(`/admin/users?${params.toString()}`);
+  }
+
+  adminGetUser(id: string): Promise<AdminUserDetail> {
+    return this.request<AdminUserDetail>(`/admin/users/${encodeURIComponent(id)}`);
+  }
+
+  adminDisableUser(id: string): Promise<AdminUserDetail['user']> {
+    return this.request<AdminUserDetail['user']>(`/admin/users/${encodeURIComponent(id)}/disable`, { method: 'POST' });
+  }
+
+  adminResetUserLockout(id: string): Promise<void> {
+    return this.request<void>(`/admin/users/${encodeURIComponent(id)}/reset-lockout`, { method: 'POST' });
+  }
+
+  adminUserAudit(id: string, page = 1, pageSize = 10): Promise<AdminAuditHistory> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return this.request<AdminAuditHistory>(`/admin/users/${encodeURIComponent(id)}/audit?${params.toString()}`);
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {

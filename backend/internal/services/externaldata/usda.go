@@ -66,7 +66,7 @@ func (client *USDAClient) RateLimit() ProviderRateLimit {
 }
 
 func (client *USDAClient) Search(ctx context.Context, query ExternalSearchQuery) ([]ExternalFoodRecord, error) {
-	if err := validateExternalQuery(query); err != nil {
+	if err := validateExternalQuery(query, ProviderUSDA); err != nil {
 		return nil, err
 	}
 
@@ -145,15 +145,15 @@ func (client *USDAClient) recordRateLimit(header http.Header) {
 	client.rateLimit = limit
 }
 
-func validateExternalQuery(query ExternalSearchQuery) error {
+func validateExternalQuery(query ExternalSearchQuery, provider Provider) error {
 	if strings.TrimSpace(query.Query) == "" {
-		return ProviderError{Provider: ProviderUSDA, Kind: ProviderErrorInvalidQuery, Message: "Search query is required"}
+		return ProviderError{Provider: provider, Kind: ProviderErrorInvalidQuery, Message: "Search query is required"}
 	}
 	if query.Page < 1 {
-		return ProviderError{Provider: ProviderUSDA, Kind: ProviderErrorInvalidQuery, Message: "Page must be positive"}
+		return ProviderError{Provider: provider, Kind: ProviderErrorInvalidQuery, Message: "Page must be positive"}
 	}
 	if query.PageSize < 1 || query.PageSize > 50 {
-		return ProviderError{Provider: ProviderUSDA, Kind: ProviderErrorInvalidQuery, Message: "Page size must be between 1 and 50"}
+		return ProviderError{Provider: provider, Kind: ProviderErrorInvalidQuery, Message: "Page size must be between 1 and 50"}
 	}
 	return nil
 }

@@ -31,6 +31,10 @@ type ServiceDependencies struct {
 	OptimizationService      handlers.OptimizationService
 	OptimizationUserResolver handlers.OptimizationUserResolver
 	AdminSummaryService      handlers.AdminSummaryService
+	ExternalSearchService    handlers.ExternalSearchService
+	ItemCuratorService       handlers.ItemCuratorService
+	TagManagerService        handlers.TagManagerService
+	UserAdminService         handlers.UserAdminService
 }
 
 type RouteDefinition struct {
@@ -62,6 +66,7 @@ func NewRouter(deps ServiceDependencies) *fiber.App {
 	app.Use(requestid.New())
 	app.Use(recover.New())
 	app.Use(gatewayContextMiddleware(10 * time.Second))
+	app.Use(middleware.TLSEnforcer(middleware.DefaultTLSPolicy(deps.Config.Environment)))
 	app.Use(middleware.RequestLogger(middleware.DefaultRequestLoggerConfig()))
 	app.Use(metrics.Middleware())
 	app.Use(middleware.SecurityHeadersMiddleware(middleware.DefaultSecurityHeaders()))
@@ -169,9 +174,27 @@ func RegisterV1Routes(app *fiber.App, deps ServiceDependencies) {
 		)
 	}
 	if deps.AuthService != nil {
-		admin := handlers.NewAdminHandler(deps.AuthService, deps.AdminSummaryService)
+		admin := handlers.NewAdminHandler(deps.AuthService, deps.AdminSummaryService, deps.ExternalSearchService, deps.ItemCuratorService, deps.TagManagerService, deps.UserAdminService)
 		routes = append(routes,
 			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/summary", Version: "v1", Handler: admin.Summary, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/external-search", Version: "v1", Handler: admin.SearchExternal, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/items", Version: "v1", Handler: admin.ListItems, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/items", Version: "v1", Handler: admin.CreateItem, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/items/:id", Version: "v1", Handler: admin.GetItem, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPatch, Path: "/admin/items/:id", Version: "v1", Handler: admin.UpdateItem, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodDelete, Path: "/admin/items/:id", Version: "v1", Handler: admin.DeleteItem, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/tags", Version: "v1", Handler: admin.ListTags, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/tags", Version: "v1", Handler: admin.UpsertTag, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/tags/merge", Version: "v1", Handler: admin.MergeTags, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/tags/:id/deactivate", Version: "v1", Handler: admin.DeactivateTag, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/items/:id/tags", Version: "v1", Handler: admin.AssignTag, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodDelete, Path: "/admin/items/:id/tags/:tagId", Version: "v1", Handler: admin.RemoveTag, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/users", Version: "v1", Handler: admin.ListUsers, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/users/:id", Version: "v1", Handler: admin.GetUser, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/users/:id/disable", Version: "v1", Handler: admin.DisableUser, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/users/:id/reset-lockout", Version: "v1", Handler: admin.ResetUserLockout, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodGet, Path: "/admin/users/:id/audit", Version: "v1", Handler: admin.UserAuditHistory, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
+			RouteDefinition{Method: fiber.MethodPost, Path: "/admin/items/:id/:transition", Version: "v1", Handler: admin.TransitionItem, Middlewares: []fiber.Handler{admin.RequireAdminMiddleware()}},
 		)
 	}
 

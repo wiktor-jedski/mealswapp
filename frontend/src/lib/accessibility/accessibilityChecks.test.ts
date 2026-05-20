@@ -79,6 +79,41 @@ describe('frontend accessibility and responsive checks', () => {
     expect(sidebar).toContain('type="checkbox"');
   });
 
+  it('keeps offline and optimization status regions announced', () => {
+    const offline = source('components/OfflineBanner.svelte');
+    const optimization = source('components/OptimizationPanel.svelte');
+
+    expect(offline).toContain('aria-live="polite"');
+    expect(offline).toContain('aria-label="Connection status"');
+    expect(optimization).toContain('aria-live="polite"');
+    expect(optimization).toContain('aria-labelledby="optimization-heading"');
+  });
+
+  it('keeps settings and account data controls labelled', () => {
+    const settings = source('components/SettingsPanel.svelte');
+
+    expect(settings).toContain('aria-labelledby="settings-heading"');
+    expect(settings).toContain('<legend class="font-mono text-xs uppercase text-text-muted">Theme</legend>');
+    expect(settings).toContain('<legend class="font-mono text-xs uppercase text-text-muted">Units</legend>');
+    expect(settings).toContain('<legend class="font-mono text-xs uppercase text-text-muted">Macros</legend>');
+    expect(settings).toContain('Confirm deletion');
+  });
+
+  it('keeps admin workflows labelled and table headers scoped', () => {
+    const admin = source('components/AdminView.svelte');
+
+    expect(admin).toContain('aria-label="Admin sections"');
+    expect(admin).toContain('aria-current=');
+    expect(admin).toContain('for="admin-external-query"');
+    expect(admin).toContain('id="admin-external-query"');
+    expect(admin).toContain('for="admin-external-provider"');
+    expect(admin).toContain('id="admin-external-provider"');
+    expect(admin).toContain('for="admin-tag-kind"');
+    expect(admin).toContain('role="alert"');
+    expect(admin).toContain('scope="col"');
+    expect(admin).toContain('aria-labelledby="import-preview-heading"');
+  });
+
   it('keeps global focus, text fitting, and reduced-motion guards in CSS', () => {
     const css = readFileSync(join(sourceRoot, '..', 'app.css'), 'utf8');
 

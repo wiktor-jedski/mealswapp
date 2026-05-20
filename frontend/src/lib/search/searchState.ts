@@ -21,6 +21,7 @@ export interface SearchState {
 export interface SearchControllerOptions {
   api: Pick<ApiClient, 'search'>;
   localStorageManager?: Pick<LocalStorageManager, 'readQuery' | 'writeQuery'>;
+  retryManager?: { run: <T>(operation: () => Promise<T>) => Promise<T>; cancel?: () => unknown };
   debounceMs?: number;
   setTimeoutFn?: (callback: () => void, delay: number) => unknown;
   clearTimeoutFn?: (timer: unknown) => void;
@@ -104,6 +105,7 @@ export function createSearchController(options: SearchControllerOptions) {
   }
 
   async function execute(): Promise<SearchState> {
+    options.retryManager?.cancel?.();
     const request = buildSearchRequest(state);
     if (!state.isOnline) {
       const cached = options.localStorageManager?.readQuery(request);
@@ -123,7 +125,7 @@ export function createSearchController(options: SearchControllerOptions) {
 
     emit({ isLoading: true, status: 'loading', error: undefined });
     try {
-      const response = await options.api.search(request);
+      const response = await (options.retryManager?.run(() => options.api.search(request)) ?? options.api.search(request));
       options.localStorageManager?.writeQuery(request, response);
       return emit({
         response,

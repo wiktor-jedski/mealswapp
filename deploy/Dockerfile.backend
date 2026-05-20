@@ -1,0 +1,20 @@
+ARG GO_VERSION=1.26.3
+FROM golang:${GO_VERSION}-alpine AS build
+WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker && \
+    CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/seed ./cmd/seed
+
+FROM alpine:3.22
+RUN addgroup -S mealswapp && adduser -S mealswapp -G mealswapp
+WORKDIR /app
+COPY --from=build /out/api /app/api
+COPY --from=build /out/worker /app/worker
+COPY --from=build /out/seed /app/seed
+USER mealswapp
+ENV API_ADDR=:8080
+EXPOSE 8080
+CMD ["/app/api"]

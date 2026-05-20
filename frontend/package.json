@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "e2e": "playwright test",
+    "e2e:list": "playwright test --list",
     "preview": "vite preview",
     "test": "vitest run",
     "check": "svelte-check --tsconfig ./tsconfig.json"
@@ -17,10 +19,12 @@
     "vite": "^5.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/svelte": "^5.2.0",
     "@tsconfig/svelte": "^5.0.4",
     "@types/bun": "^1.1.14",
+    "@vitest/coverage-v8": "^2.1.9",
     "autoprefixer": "^10.4.20",
     "jsdom": "^25.0.1",
     "postcss": "^8.4.49",
