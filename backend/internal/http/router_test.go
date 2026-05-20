@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"mealswapp/backend/internal/config"
+	"mealswapp/backend/internal/http/handlers"
 	"mealswapp/backend/internal/http/responses"
 	"mealswapp/backend/internal/http/validation"
+	"mealswapp/backend/internal/observability"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,6 +129,60 @@ func TestNotFoundEnvelope(t *testing.T) {
 	}
 }
 
+func TestReadinessReportsDependencyFailuresAndMetrics(t *testing.T) {
+	metrics := observability.NewMetricsCollector()
+	app := NewRouter(ServiceDependencies{
+		Config: config.Config{Environment: "test"},
+		ReadinessChecker: staticReadinessChecker{dependencies: []handlers.DependencyStatus{
+			{Name: "database", Healthy: false, Message: "unreachable"},
+			{Name: "redis", Healthy: true},
+		}},
+		Metrics: metrics,
+	})
+
+	res := performRequest(t, app, http.MethodGet, "/ready")
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected status 503, got %d", res.StatusCode)
+	}
+
+	payload := decodeEnvelope(t, res)
+	if payload.Success || payload.Error == nil || payload.Error.Code != "dependency_unavailable" {
+		t.Fatalf("expected dependency failure envelope, got %#v", payload)
+	}
+
+	metricsRes := performRequest(t, app, http.MethodGet, "/metrics")
+	defer metricsRes.Body.Close()
+	metricsBodyBytes, err := io.ReadAll(metricsRes.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metricsBody := string(metricsBodyBytes)
+	if !strings.Contains(metricsBody, "mealswapp_health_ready 0") || !strings.Contains(metricsBody, `mealswapp_dependency_status{name="database"} 0`) {
+		t.Fatalf("expected readiness dependency metrics, got:\n%s", metricsBody)
+	}
+}
+
+func TestSimilarityIndicatorAssetRoute(t *testing.T) {
+	app := NewRouter(ServiceDependencies{
+		Config: config.Config{Environment: "test"},
+	})
+
+	res := performRequest(t, app, http.MethodGet, "/static/similarity/green.svg")
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected asset status 200, got %d", res.StatusCode)
+	}
+	if got := res.Header.Get("Content-Type"); got != "image/svg+xml" {
+		t.Fatalf("expected svg content type, got %q", got)
+	}
+	if got := res.Header.Get("Cache-Control"); got != "public, max-age=86400, immutable" {
+		t.Fatalf("expected cache header, got %q", got)
+	}
+}
+
 func TestGatewayContextIsAttached(t *testing.T) {
 	app := fiber.New()
 	app.Use(requestid.New())
@@ -146,8 +203,16 @@ func TestGatewayContextIsAttached(t *testing.T) {
 	}
 }
 
+type staticReadinessChecker struct {
+	dependencies []handlers.DependencyStatus
+}
+
+func (checker staticReadinessChecker) Check() []handlers.DependencyStatus {
+	return checker.dependencies
+}
+
 func TestValidationErrorsUseHTTPEnvelope(t *testing.T) {
-	app := fiber.New(fiber.Config{ErrorHandler: errorHandler})
+	app := fiber.New(fiber.Config{ErrorHandler: GlobalExceptionHandler})
 	app.Use(requestid.New())
 	app.Post("/items/:id", func(ctx *fiber.Ctx) error {
 		if _, err := validation.UUIDParam(ctx, "id"); err != nil {

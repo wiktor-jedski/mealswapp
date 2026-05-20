@@ -5,14 +5,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#F7FCF7',
-        surface: '#FFFFFF',
-        primary: '#166534',
-        secondary: '#DCFCE7',
-        accent: '#F97316',
-        error: '#DC2626',
-        'text-primary': '#111827',
-        'text-muted': '#6B7280',
+        background: 'var(--color-bg-primary)',
+        surface: 'var(--color-bg-surface)',
+        primary: 'var(--color-primary)',
+        secondary: 'var(--color-secondary)',
+        accent: 'var(--color-accent)',
+        error: 'var(--color-error)',
+        'text-primary': 'var(--color-text-primary)',
+        'text-muted': 'var(--color-text-muted)',
         'dark-background': '#0A0F0A',
         'dark-surface': '#161D16',
         'dark-primary': '#4ADE80',

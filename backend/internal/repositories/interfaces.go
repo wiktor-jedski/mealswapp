@@ -128,6 +128,7 @@ type SavedDataEntity struct {
 type SavedDataRepository interface {
 	Create(ctx context.Context, saved SavedDataEntity) (uuid.UUID, error)
 	GetByID(ctx context.Context, id uuid.UUID) (SavedDataEntity, error)
+	ListByUser(ctx context.Context, userID uuid.UUID, kind string) ([]SavedDataEntity, error)
 	Update(ctx context.Context, saved SavedDataEntity) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
@@ -162,4 +163,20 @@ type ImportRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (ImportEntity, error)
 	Update(ctx context.Context, importRecord ImportEntity) error
 	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+type ConsentRecordEntity struct {
+	ID                         uuid.UUID
+	UserID                     uuid.UUID
+	PrivacyPolicyVersion       string
+	TermsVersion               string
+	NutritionDisclaimerVersion string
+	AcceptedAt                 time.Time
+	IPAddress                  string
+	UserAgent                  string
+}
+
+type ConsentRepository interface {
+	Record(ctx context.Context, record ConsentRecordEntity) (uuid.UUID, error)
+	HasRequiredConsent(ctx context.Context, userID uuid.UUID, privacyVersion string, termsVersion string, nutritionDisclaimerVersion string) (bool, error)
 }

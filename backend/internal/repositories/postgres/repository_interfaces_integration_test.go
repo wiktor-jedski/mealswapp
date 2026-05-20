@@ -39,6 +39,7 @@ func TestRepositoryInterfacesCRUDAndTransactionRollback(t *testing.T) {
 	repos := store.Repositories()
 
 	userID := exerciseUserRepository(t, ctx, repos.Users)
+	exerciseConsentRepository(t, ctx, repos.Consents, userID)
 	exercisePreferenceRepository(t, ctx, repos.Preferences, userID)
 	exerciseEntitlementRepository(t, ctx, repos.Entitlements, userID)
 	foodID := exerciseFoodItemRepository(t, ctx, repos.FoodItems)
@@ -56,10 +57,10 @@ func TestRepositoryInterfacesCRUDAndTransactionRollback(t *testing.T) {
 func resetRepositoryFoundation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 
-	for i := 6; i >= 1; i-- {
+	for i := 9; i >= 1; i-- {
 		applyMigration(t, ctx, pool, fmt.Sprintf("%04d_%s.down.sql", i, migrationNames[i]))
 	}
-	for i := 1; i <= 6; i++ {
+	for i := 1; i <= 9; i++ {
 		applyMigration(t, ctx, pool, fmt.Sprintf("%04d_%s.up.sql", i, migrationNames[i]))
 	}
 }
@@ -71,6 +72,9 @@ var migrationNames = map[int]string{
 	4: "tags",
 	5: "micronutrient_vocabulary",
 	6: "repository_foundation",
+	7: "consent_records",
+	8: "oauth_identities",
+	9: "account_tokens",
 }
 
 func exerciseUserRepository(t *testing.T, ctx context.Context, repo repositories.UserRepository) uuid.UUID {
@@ -97,6 +101,30 @@ func exerciseUserRepository(t *testing.T, ctx context.Context, repo repositories
 	}
 
 	return id
+}
+
+func exerciseConsentRepository(t *testing.T, ctx context.Context, repo ConsentRepository, userID uuid.UUID) {
+	t.Helper()
+
+	_, err := repo.Record(ctx, repositories.ConsentRecordEntity{
+		UserID:                     userID,
+		PrivacyPolicyVersion:       "privacy-v1",
+		TermsVersion:               "terms-v1",
+		NutritionDisclaimerVersion: "nutrition-v1",
+		IPAddress:                  "203.0.113.10",
+		UserAgent:                  "integration-test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hasConsent, err := repo.HasRequiredConsent(ctx, userID, "privacy-v1", "terms-v1", "nutrition-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasConsent {
+		t.Fatal("expected matching consent versions")
+	}
 }
 
 func exercisePreferenceRepository(t *testing.T, ctx context.Context, repo repositories.PreferenceRepository, userID uuid.UUID) {

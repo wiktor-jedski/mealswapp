@@ -17,6 +17,7 @@ type EntitlementRepository struct{ db DBTX }
 type SavedDataRepository struct{ db DBTX }
 type AuditLogRepository struct{ db DBTX }
 type ImportRepository struct{ db DBTX }
+type ConsentRepository struct{ db DBTX }
 
 func NewUserRepositoryWithDB(db DBTX) UserRepository             { return UserRepository{db: db} }
 func NewPreferenceRepositoryWithDB(db DBTX) PreferenceRepository { return PreferenceRepository{db: db} }
@@ -26,6 +27,7 @@ func NewEntitlementRepositoryWithDB(db DBTX) EntitlementRepository {
 func NewSavedDataRepositoryWithDB(db DBTX) SavedDataRepository { return SavedDataRepository{db: db} }
 func NewAuditLogRepositoryWithDB(db DBTX) AuditLogRepository   { return AuditLogRepository{db: db} }
 func NewImportRepositoryWithDB(db DBTX) ImportRepository       { return ImportRepository{db: db} }
+func NewConsentRepositoryWithDB(db DBTX) ConsentRepository     { return ConsentRepository{db: db} }
 
 func (repo UserRepository) Create(ctx context.Context, user repositories.UserEntity) (uuid.UUID, error) {
 	var id uuid.UUID
@@ -72,6 +74,31 @@ func (repo UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+func (repo ConsentRepository) Record(ctx context.Context, record repositories.ConsentRecordEntity) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := repo.db.QueryRow(ctx, `
+		INSERT INTO consent_records (user_id, privacy_policy_version, terms_version, nutrition_disclaimer_version, accepted_at, ip_address, user_agent)
+		VALUES ($1, $2, $3, $4, coalesce(nullif($5, '0001-01-01 00:00:00+00'::timestamptz), now()), $6, $7)
+		RETURNING id
+	`, record.UserID, record.PrivacyPolicyVersion, record.TermsVersion, record.NutritionDisclaimerVersion, record.AcceptedAt, record.IPAddress, record.UserAgent).Scan(&id)
+	return id, err
+}
+
+func (repo ConsentRepository) HasRequiredConsent(ctx context.Context, userID uuid.UUID, privacyVersion string, termsVersion string, nutritionDisclaimerVersion string) (bool, error) {
+	var exists bool
+	err := repo.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM consent_records
+			WHERE user_id = $1
+				AND privacy_policy_version = $2
+				AND terms_version = $3
+				AND nutrition_disclaimer_version = $4
+		)
+	`, userID, privacyVersion, termsVersion, nutritionDisclaimerVersion).Scan(&exists)
+	return exists, err
 }
 
 func (repo PreferenceRepository) Upsert(ctx context.Context, pref repositories.PreferenceEntity) error {
@@ -162,6 +189,29 @@ func (repo SavedDataRepository) GetByID(ctx context.Context, id uuid.UUID) (repo
 	err := repo.db.QueryRow(ctx, `SELECT id, user_id, kind, label, payload, created_at FROM saved_data WHERE id = $1`, id).
 		Scan(&saved.ID, &saved.UserID, &saved.Kind, &saved.Label, &saved.Payload, &saved.CreatedAt)
 	return saved, err
+}
+
+func (repo SavedDataRepository) ListByUser(ctx context.Context, userID uuid.UUID, kind string) ([]repositories.SavedDataEntity, error) {
+	rows, err := repo.db.Query(ctx, `
+		SELECT id, user_id, kind, label, payload, created_at
+		FROM saved_data
+		WHERE user_id = $1 AND ($2 = '' OR kind = $2)
+		ORDER BY created_at DESC, id DESC
+	`, userID, kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var savedItems []repositories.SavedDataEntity
+	for rows.Next() {
+		var saved repositories.SavedDataEntity
+		if err := rows.Scan(&saved.ID, &saved.UserID, &saved.Kind, &saved.Label, &saved.Payload, &saved.CreatedAt); err != nil {
+			return nil, err
+		}
+		savedItems = append(savedItems, saved)
+	}
+	return savedItems, rows.Err()
 }
 
 func (repo SavedDataRepository) Update(ctx context.Context, saved repositories.SavedDataEntity) error {

@@ -30,6 +30,7 @@ type RepositorySet struct {
 	SavedData               SavedDataRepository
 	AuditLogs               AuditLogRepository
 	Imports                 ImportRepository
+	Consents                ConsentRepository
 }
 
 func NewStore(pool *pgxpool.Pool) Store {
@@ -67,5 +68,6 @@ func repositorySetForDB(db DBTX, pool *pgxpool.Pool) RepositorySet {
 		SavedData:               NewSavedDataRepositoryWithDB(db),
 		AuditLogs:               NewAuditLogRepositoryWithDB(db),
 		Imports:                 NewImportRepositoryWithDB(db),
+		Consents:                NewConsentRepositoryWithDB(db),
 	}
 }

@@ -9,7 +9,9 @@ type Envelope struct {
 
 type ErrorResponse struct {
 	Code      string `json:"code"`
+	Category  string `json:"category,omitempty"`
 	Message   string `json:"message"`
+	Retryable bool   `json:"retryable"`
 	RequestID string `json:"requestId,omitempty"`
 	Fields    any    `json:"fields,omitempty"`
 }

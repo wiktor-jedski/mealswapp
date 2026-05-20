@@ -5,9 +5,17 @@
 @tailwind utilities;
 
 :root {
+  --color-bg-primary: #F7FCF7;
+  --color-bg-surface: #FFFFFF;
+  --color-primary: #166534;
+  --color-secondary: #DCFCE7;
+  --color-accent: #F97316;
+  --color-error: #DC2626;
+  --color-text-primary: #111827;
+  --color-text-muted: #4B5563;
   font-family: Inter, sans-serif;
-  color: #111827;
-  background: #F7FCF7;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -23,4 +31,27 @@ body {
 button,
 input {
   font: inherit;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
