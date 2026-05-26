@@ -1,0 +1,85 @@
+# Implements DESIGN-010 RouteHandler and DESIGN-017 GlobalExceptionHandler contracts.
+openapi: 3.1.0
+info:
+  title: Mealswapp API
+  version: 0.0.0
+  description: Phase 00 bootstrap contract. Domain APIs are added in later phases.
+servers:
+  - url: http://localhost:8080
+paths:
+  /health:
+    get:
+      summary: Process liveness check
+      responses:
+        "200":
+          description: API process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /ready:
+    get:
+      summary: Dependency readiness check
+      responses:
+        "200":
+          description: API dependencies are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "503":
+          description: One or more dependencies are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/v1/health:
+    get:
+      summary: Versioned process liveness check
+      responses:
+        "200":
+          description: API process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+  /api/v1/ready:
+    get:
+      summary: Versioned dependency readiness check
+      responses:
+        "200":
+          description: API dependencies are reachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "503":
+          description: One or more dependencies are unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+components:
+  schemas:
+    Envelope:
+      type: object
+      required:
+        - status
+        - requestId
+      properties:
+        status:
+          type: string
+        requestId:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+        error:
+          type:
+            - object
+            - "null"
+          properties:
+            code:
+              type: string
+            message:
+              type: string

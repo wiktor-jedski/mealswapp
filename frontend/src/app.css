@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/* Implements DESIGN-016 TypographySystem font defaults. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: local("Inter");
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+  src: local("Roboto Mono");
+}
+
+:root {
+  /* Implements DESIGN-016 ColorPalette light-mode tokens. */
+  color-scheme: light;
+  --color-bg: #f7f5ef;
+  --color-surface: #ffffff;
+  --color-text: #17201b;
+  --color-muted: #59655f;
+  --color-primary: #176b55;
+  --color-accent: #b13f2f;
+  --color-border: #d8d7cf;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+:root[data-theme="dark"] {
+  /* Implements DESIGN-016 ColorPalette dark-mode tokens. */
+  color-scheme: dark;
+  --color-bg: #101412;
+  --color-surface: #1a201d;
+  --color-text: #f2f0e8;
+  --color-muted: #b7c0ba;
+  --color-primary: #6fc7ab;
+  --color-accent: #ef8a76;
+  --color-border: #39423d;
+}
+
+body {
+  /* Implements DESIGN-016 ComponentStyles base page styling. */
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.font-data {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+}

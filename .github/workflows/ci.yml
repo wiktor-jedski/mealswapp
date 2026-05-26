@@ -1,0 +1,46 @@
+# Implements DESIGN-014 MetricsCollector bootstrap verification workflow.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mealswapp
+          POSTGRES_USER: mealswapp
+          POSTGRES_PASSWORD: mealswapp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mealswapp -d mealswapp"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.11"
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: python3 scripts/check.py

@@ -1,0 +1,1447 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mealswapp - Phase 00 Repository Bootstrap Guide</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- CSS and Tailored Theme Styles -->
+    <style>
+      :root {
+        --bg-color: #0b0f19;
+        --card-bg: rgba(17, 24, 39, 0.7);
+        --card-border: rgba(255, 255, 255, 0.08);
+        --text-primary: #f3f4f6;
+        --text-secondary: #9ca3af;
+        --accent-blue: #3b82f6;
+        --accent-blue-glow: rgba(59, 130, 246, 0.15);
+        --accent-green: #10b981;
+        --accent-green-glow: rgba(16, 185, 129, 0.15);
+        --accent-purple: #8b5cf6;
+        --accent-purple-glow: rgba(139, 92, 246, 0.15);
+        --accent-orange: #f97316;
+        --accent-orange-glow: rgba(249, 115, 22, 0.15);
+        --accent-pink: #ec4899;
+        --accent-pink-glow: rgba(236, 72, 153, 0.15);
+        --panel-bg: #111827;
+        --sidebar-width: 280px;
+      }
+
+      .light-mode {
+        --bg-color: #f3f4f6;
+        --card-bg: rgba(255, 255, 255, 0.8);
+        --card-border: rgba(0, 0, 0, 0.08);
+        --text-primary: #111827;
+        --text-secondary: #4b5563;
+        --accent-blue: #2563eb;
+        --accent-blue-glow: rgba(37, 99, 235, 0.1);
+        --accent-green: #059669;
+        --accent-green-glow: rgba(5, 150, 105, 0.1);
+        --accent-purple: #7c3aed;
+        --accent-purple-glow: rgba(124, 58, 237, 0.1);
+        --accent-orange: #ea580c;
+        --accent-orange-glow: rgba(234, 88, 12, 0.1);
+        --accent-pink: #db2777;
+        --accent-pink-glow: rgba(219, 39, 119, 0.1);
+        --panel-bg: #ffffff;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease,
+          color 0.2s ease;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        overflow-x: hidden;
+        line-height: 1.5;
+      }
+
+      /* Scrollbars */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.3);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(156, 163, 175, 0.5);
+      }
+
+      /* Glassmorphism Styles */
+      .glass-card {
+        background: var(--card-bg);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+      }
+
+      .glow-blue {
+        box-shadow: 0 0 25px var(--accent-blue-glow);
+        border-color: rgba(59, 130, 246, 0.3);
+      }
+      .glow-green {
+        box-shadow: 0 0 25px var(--accent-green-glow);
+        border-color: rgba(16, 185, 129, 0.3);
+      }
+      .glow-purple {
+        box-shadow: 0 0 25px var(--accent-purple-glow);
+        border-color: rgba(139, 92, 246, 0.3);
+      }
+      .glow-orange {
+        box-shadow: 0 0 25px var(--accent-orange-glow);
+        border-color: rgba(249, 115, 22, 0.3);
+      }
+
+      /* Container Layout */
+      .app-container {
+        display: flex;
+        min-height: 100vh;
+      }
+
+      /* Collapsible Sidebar */
+      aside {
+        width: var(--sidebar-width);
+        background-color: var(--panel-bg);
+        border-right: 1px solid var(--card-border);
+        padding: 30px 20px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: fixed;
+        height: 100vh;
+        z-index: 10;
+      }
+
+      main {
+        margin-left: var(--sidebar-width);
+        flex: 1;
+        padding: 40px;
+        max-width: 1400px;
+      }
+
+      /* Logo & Brand */
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        color: var(--text-primary);
+        margin-bottom: 40px;
+      }
+
+      .brand-icon {
+        width: 32px;
+        height: 32px;
+        background: linear-gradient(
+          135deg,
+          var(--accent-blue),
+          var(--accent-purple)
+        );
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 900;
+      }
+
+      /* Sidebar Navigation */
+      .nav-links {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .nav-item:hover,
+      .nav-item.active {
+        color: var(--text-primary);
+        background: rgba(156, 163, 175, 0.1);
+      }
+
+      .nav-item.active {
+        border-left: 3px solid var(--accent-blue);
+        background: var(--accent-blue-glow);
+        color: var(--accent-blue);
+      }
+
+      /* Settings and Theme Toggle */
+      .sidebar-footer {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .theme-toggle-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--card-border);
+        background: transparent;
+        color: var(--text-primary);
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 13px;
+      }
+
+      .theme-toggle-btn:hover {
+        background: rgba(156, 163, 175, 0.1);
+      }
+
+      /* Header / Banner area */
+      header {
+        margin-bottom: 40px;
+      }
+
+      .phase-badge {
+        background: linear-gradient(
+          135deg,
+          var(--accent-blue),
+          var(--accent-purple)
+        );
+        color: white;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 700;
+        display: inline-block;
+        margin-bottom: 16px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+      }
+
+      h1 {
+        font-size: 38px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin-bottom: 12px;
+        background: linear-gradient(
+          to right,
+          var(--text-primary),
+          var(--text-secondary)
+        );
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .sub-header {
+        color: var(--text-secondary);
+        font-size: 16px;
+        max-width: 800px;
+      }
+
+      /* Grid layouts */
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 24px;
+        margin-bottom: 40px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      /* Architecture Visualizer */
+      .arch-container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding: 10px;
+      }
+
+      .arch-row {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        gap: 20px;
+      }
+
+      .arch-node {
+        flex: 1;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid var(--card-border);
+        background: rgba(17, 24, 39, 0.4);
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+      }
+
+      .arch-node::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        border-radius: 12px 12px 0 0;
+      }
+
+      .node-frontend::before {
+        background: linear-gradient(
+          to right,
+          var(--accent-orange),
+          var(--accent-pink)
+        );
+      }
+      .node-backend::before {
+        background: var(--accent-blue);
+      }
+      .node-worker::before {
+        background: var(--accent-purple);
+      }
+      .node-database::before {
+        background: var(--accent-green);
+      }
+
+      .arch-node:hover,
+      .arch-node.active {
+        transform: translateY(-4px);
+        background: rgba(17, 24, 39, 0.8);
+      }
+
+      .arch-node.active {
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+        border-color: var(--accent-blue);
+      }
+
+      .node-title {
+        font-weight: 700;
+        font-size: 15px;
+        margin-bottom: 6px;
+      }
+
+      .node-meta {
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-family: "JetBrains Mono", monospace;
+        background: rgba(156, 163, 175, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: inline-block;
+      }
+
+      .arrow-down {
+        display: flex;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 24px;
+      }
+
+      /* Details Panel */
+      .detail-pane {
+        margin-top: 20px;
+        padding: 20px;
+        border-radius: 12px;
+        background: rgba(156, 163, 175, 0.05);
+        border-left: 4px solid var(--accent-blue);
+      }
+
+      .detail-pane h4 {
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      /* Folder Explorer */
+      .explorer-container {
+        display: flex;
+        gap: 24px;
+        height: 480px;
+      }
+
+      .explorer-tree {
+        flex: 1;
+        border-right: 1px solid var(--card-border);
+        overflow-y: auto;
+        padding-right: 16px;
+      }
+
+      .explorer-preview {
+        flex: 1.5;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+        border: 1px solid var(--card-border);
+      }
+
+      .tree-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+        color: var(--text-secondary);
+      }
+
+      .tree-item:hover,
+      .tree-item.selected {
+        background: rgba(156, 163, 175, 0.1);
+        color: var(--text-primary);
+      }
+
+      .tree-item.selected {
+        color: var(--accent-blue);
+        font-weight: 600;
+      }
+
+      .indent-1 {
+        padding-left: 28px;
+      }
+      .indent-2 {
+        padding-left: 44px;
+      }
+      .indent-3 {
+        padding-left: 60px;
+      }
+
+      .item-icon {
+        font-size: 16px;
+      }
+
+      .preview-header {
+        background: rgba(0, 0, 0, 0.4);
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--card-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .preview-filename {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        color: var(--text-primary);
+      }
+
+      .preview-lang {
+        font-size: 11px;
+        text-transform: uppercase;
+        background: rgba(156, 163, 175, 0.2);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+
+      .preview-code {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        background: rgba(0, 0, 0, 0.3);
+        color: #d1d5db;
+        white-space: pre-wrap;
+      }
+
+      /* Interactive Simulator (Terminal) */
+      .terminal-container {
+        background: #05070f;
+        border-radius: 12px;
+        border: 1px solid var(--card-border);
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+        overflow: hidden;
+        margin-bottom: 30px;
+      }
+
+      .terminal-header {
+        background: #0f1322;
+        padding: 12px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--card-border);
+      }
+
+      .terminal-dots {
+        display: flex;
+        gap: 8px;
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .dot-red {
+        background: #ef4444;
+      }
+      .dot-yellow {
+        background: #eab308;
+      }
+      .dot-green {
+        background: #22c55e;
+      }
+
+      .terminal-title {
+        color: var(--text-secondary);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+      }
+
+      .terminal-body {
+        padding: 24px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        color: #38bdf8;
+        min-height: 280px;
+        max-height: 400px;
+        overflow-y: auto;
+        background: #070a13;
+      }
+
+      .term-input-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--accent-green);
+        margin-bottom: 12px;
+      }
+
+      .term-prompt {
+        font-weight: 700;
+      }
+
+      .term-cmd {
+        color: var(--text-primary);
+      }
+
+      .term-output {
+        color: #d1d5db;
+        margin-bottom: 14px;
+        white-space: pre-line;
+      }
+
+      .term-success {
+        color: #10b981;
+        font-weight: bold;
+      }
+
+      .term-info {
+        color: #3b82f6;
+      }
+
+      .term-warning {
+        color: #f59e0b;
+      }
+
+      .term-btn {
+        background: linear-gradient(
+          135deg,
+          var(--accent-blue),
+          var(--accent-purple)
+        );
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .term-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+      }
+
+      .term-btn:active {
+        transform: translateY(1px);
+      }
+
+      /* Requirements Grid */
+      .req-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      .req-table th {
+        text-align: left;
+        padding: 12px 16px;
+        border-bottom: 2px solid var(--card-border);
+        color: var(--text-secondary);
+        font-weight: 600;
+      }
+
+      .req-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--card-border);
+      }
+
+      .req-table tr:hover {
+        background: rgba(156, 163, 175, 0.03);
+      }
+
+      .req-badge {
+        font-family: "JetBrains Mono", monospace;
+        background: var(--accent-blue-glow);
+        color: var(--accent-blue);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 12px;
+      }
+
+      .badge-status {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .status-ready {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-green);
+      }
+      .status-pending {
+        background: rgba(249, 115, 22, 0.15);
+        color: var(--accent-orange);
+      }
+
+      /* General layout additions */
+      .section-title {
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .section-title::before {
+        content: "";
+        display: inline-block;
+        width: 4px;
+        height: 20px;
+        background: var(--accent-blue);
+        border-radius: 2px;
+      }
+
+      .container-box {
+        display: flex;
+        flex-direction: column;
+        gap: 40px;
+      }
+
+      .intro-text {
+        font-size: 15px;
+        color: var(--text-secondary);
+        margin-bottom: 24px;
+      }
+
+      .flex-row-center {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Sidebar Navigation -->
+      <aside>
+        <div>
+          <div class="brand">
+            <div class="brand-icon">M</div>
+            <span>Mealswapp</span>
+          </div>
+          <div class="nav-links">
+            <div class="nav-item active" onclick="switchSection('arch')">
+              <span class="item-icon">📐</span> Architecture Spec
+            </div>
+            <div class="nav-item" onclick="switchSection('explorer')">
+              <span class="item-icon">📁</span> File Structure
+            </div>
+            <div class="nav-item" onclick="switchSection('simulator')">
+              <span class="item-icon">🖥️</span> Terminal Setup
+            </div>
+            <div class="nav-item" onclick="switchSection('reqs')">
+              <span class="item-icon">📋</span> Requirements Map
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-footer">
+          <button class="theme-toggle-btn" onclick="toggleTheme()">
+            <span id="theme-btn-icon">☀️</span>
+            <span id="theme-btn-text">Light Mode</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main>
+        <header>
+          <span class="phase-badge">Phase 00 Plan</span>
+          <h1>Repository Bootstrap Overview</h1>
+          <p class="sub-header">
+            Review the aligned architecture blueprint, explore proposed
+            configuration stubs, and simulate local environment startup
+            verification checks for the Mealswapp application.
+          </p>
+        </header>
+
+        <div class="container-box">
+          <!-- Section 1: Architecture Blueprint -->
+          <section id="section-arch" class="glass-card glow-blue">
+            <div class="flex-row-center">
+              <h3 class="section-title">
+                Three-Tier Unified System Architecture
+              </h3>
+            </div>
+            <p class="intro-text">
+              Mealswapp's development ecosystem connects a static-optimized
+              SvelteKit SPA clientside layout, an ultra-fast Go Fiber REST API,
+              a distributed cache/session/queue store via Redis, a localized
+              PostgreSQL data model, and email diagnostic services.
+            </p>
+
+            <div class="arch-container">
+              <!-- Clientside Tier -->
+              <div class="arch-row">
+                <div
+                  class="arch-node node-frontend"
+                  id="node-fe"
+                  onclick="highlightNode('fe')"
+                >
+                  <div class="node-title">SvelteKit Web Client</div>
+                  <span class="node-meta">SPA Router | Port 5173</span>
+                </div>
+              </div>
+
+              <div class="arrow-down">⇅</div>
+
+              <!-- Serverside Tiers -->
+              <div class="arch-row">
+                <div
+                  class="arch-node node-backend"
+                  id="node-be"
+                  onclick="highlightNode('be')"
+                >
+                  <div class="node-title">Go Fiber API Backend</div>
+                  <span class="node-meta">Core Services | Port 8080</span>
+                </div>
+                <div
+                  class="arch-node node-worker"
+                  id="node-wrk"
+                  onclick="highlightNode('wrk')"
+                >
+                  <div class="node-title">Diet Solver Worker</div>
+                  <span class="node-meta">LP Optimization Daemon</span>
+                </div>
+              </div>
+
+              <div class="arrow-down">⇵</div>
+
+              <!-- Storage and Dev Tiers -->
+              <div class="arch-row">
+                <div
+                  class="arch-node node-database"
+                  id="node-db"
+                  onclick="highlightNode('db')"
+                >
+                  <div class="node-title">PostgreSQL DB</div>
+                  <span class="node-meta">Primary Storage | Port 5432</span>
+                </div>
+                <div
+                  class="arch-node node-database"
+                  id="node-redis"
+                  onclick="highlightNode('redis')"
+                >
+                  <div class="node-title">Redis Cache & Queue</div>
+                  <span class="node-meta">In-Memory | Port 6379</span>
+                </div>
+                <div
+                  class="arch-node node-database"
+                  id="node-mail"
+                  onclick="highlightNode('mail')"
+                >
+                  <div class="node-title">Maildev Sandbox</div>
+                  <span class="node-meta">Local SMTP | Port 1025</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dynamic Details Display Panel -->
+            <div class="detail-pane" id="arch-details">
+              <h4 id="detail-title">SvelteKit Web Client (SPA Mode)</h4>
+              <p id="detail-desc">
+                Configured with @sveltejs/adapter-static. Compiles straight into
+                static JS/CSS and HTML files to support high-performance static
+                delivery via CDNs or direct embedding, featuring state stores +
+                TanStack Query fetching, structured error routing, and Tailwind
+                CSS v4 styling rules.
+              </p>
+            </div>
+          </section>
+
+          <!-- Section 2: Repository Structure & File Explorer -->
+          <section
+            id="section-explorer"
+            class="glass-card glow-purple"
+            style="display: none"
+          >
+            <h3 class="section-title">
+              Phase 00 Folder & Boilerplate Explorer
+            </h3>
+            <p class="intro-text">
+              Click on any proposed directory file to inspect structure,
+              configs, and stub implementations designated for our initial
+              bootstrap phase.
+            </p>
+
+            <div class="explorer-container">
+              <!-- Left tree navigation -->
+              <div class="explorer-tree">
+                <div class="tree-item" onclick="selectFile('docker-compose')">
+                  <span>📄</span> <span>docker-compose.yml</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('check-all')">
+                  <span>📄</span> <span>scripts/check-all.sh</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('go-mod')">
+                  <span>📄</span> <span>backend/go.mod</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('backend-main')">
+                  <span>📄</span> <span>backend/cmd/server/main.go</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('worker-main')">
+                  <span>📄</span> <span>backend/cmd/worker/main.go</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('config-go')">
+                  <span>📄</span> <span>backend/internal/config/config.go</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('svelte-config')">
+                  <span>📄</span> <span>frontend/svelte.config.js</span>
+                </div>
+                <div class="tree-item" onclick="selectFile('tailwind-css')">
+                  <span>📄</span> <span>frontend/src/app.css</span>
+                </div>
+              </div>
+
+              <!-- Right file content preview -->
+              <div class="explorer-preview">
+                <div class="preview-header">
+                  <span class="preview-filename" id="preview-filename"
+                    >docker-compose.yml</span
+                  >
+                  <span class="preview-lang" id="preview-lang">yaml</span>
+                </div>
+                <div class="preview-code" id="preview-code">
+                  Loading stub preview...
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section 3: Terminal Setup Simulator -->
+          <section
+            id="section-simulator"
+            class="glass-card glow-green"
+            style="display: none"
+          >
+            <div class="flex-row-center">
+              <h3 class="section-title">
+                Local Dev Boot & Verification Terminals
+              </h3>
+              <div style="display: flex; gap: 10px">
+                <button class="term-btn" onclick="runDockerSim()">
+                  Simulate compose up
+                </button>
+                <button
+                  class="term-btn"
+                  style="background: var(--accent-purple)"
+                  onclick="runCheckSim()"
+                >
+                  Simulate scripts/check-all.sh
+                </button>
+              </div>
+            </div>
+            <p class="intro-text">
+              Interactively experience the execution paths of local container
+              startups and requirements validator scanners to verify that our
+              bootstrap code passes ASPICE/traceability compliance checks.
+            </p>
+
+            <div class="terminal-container">
+              <div class="terminal-header">
+                <div class="terminal-dots">
+                  <div class="dot dot-red"></div>
+                  <div class="dot dot-yellow"></div>
+                  <div class="dot dot-green"></div>
+                </div>
+                <div class="terminal-title">bash - mealswapp@local</div>
+                <div></div>
+              </div>
+              <div class="terminal-body" id="term-body">
+                <div class="term-input-line">
+                  <span class="term-prompt">mealswapp@local:~$</span>
+                  <span class="term-cmd"
+                    >echo "Click one of the buttons above to run container
+                    bootstrap or requirement verify validations"</span
+                  >
+                </div>
+                <div class="term-output">
+                  Ready to execute interactive terminal scripts...
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Section 4: Phase 00 Requirements Checklist -->
+          <section
+            id="section-reqs"
+            class="glass-card glow-orange"
+            style="display: none"
+          >
+            <h3 class="section-title">
+              Software Requirements Matrix (Phase 00)
+            </h3>
+            <p class="intro-text">
+              Trace how requirements map to the bootstrap code architecture and
+              the specific criteria enforced by python checks.
+            </p>
+
+            <table class="req-table">
+              <thead>
+                <tr>
+                  <th>Requirement ID</th>
+                  <th>Description</th>
+                  <th>Component Context</th>
+                  <th>Target Status</th>
+                  <th>Trace Verification</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="req-badge">SW-REQ-001</span></td>
+                  <td>
+                    Bootstrap Default State mapping (Single Search mode setup
+                    default)
+                  </td>
+                  <td>SvelteKit Store Setup</td>
+                  <td>
+                    <span class="badge-status status-ready">Enforced</span>
+                  </td>
+                  <td>Frontend Unit Testing Initial State check</td>
+                </tr>
+                <tr>
+                  <td><span class="req-badge">SW-REQ-010</span></td>
+                  <td>
+                    Define search result boundary limits (max 10 results
+                    pagination)
+                  </td>
+                  <td>Go Fiber Handlers</td>
+                  <td>
+                    <span class="badge-status status-ready">Enforced</span>
+                  </td>
+                  <td>Backend Route Query limit test</td>
+                </tr>
+                <tr>
+                  <td><span class="req-badge">SW-REQ-014</span></td>
+                  <td>Support responsive web view viewport rendering</td>
+                  <td>Tailwind CSS v4 Configuration</td>
+                  <td>
+                    <span class="badge-status status-ready">Enforced</span>
+                  </td>
+                  <td>Playwright Browser Engine viewport test</td>
+                </tr>
+                <tr>
+                  <td><span class="req-badge">SW-REQ-015</span></td>
+                  <td>Theme management and dark mode switcher availability</td>
+                  <td>Svelte Layout Store Context</td>
+                  <td>
+                    <span class="badge-status status-ready">Enforced</span>
+                  </td>
+                  <td>Integration LocalStorage theme persistence test</td>
+                </tr>
+                <tr>
+                  <td><span class="req-badge">SW-REQ-032</span></td>
+                  <td>PostgreSQL Core Entity Schema setup mapping</td>
+                  <td>DB migrations init structure</td>
+                  <td>
+                    <span class="badge-status status-pending">In-Progress</span>
+                  </td>
+                  <td>golang-migrate validation schema checklist</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Interactive Scripting -->
+    <script>
+      // Node Details mapping
+      const nodesInfo = {
+        fe: {
+          title: "SvelteKit Web Client (SPA Mode)",
+          desc: "Configured with @sveltejs/adapter-static. Compiles straight into static JS/CSS and HTML files to support high-performance static delivery via CDNs or direct embedding, featuring state stores + TanStack Query fetching, structured error routing, and Tailwind CSS v4 styling rules.",
+        },
+        be: {
+          title: "Go Fiber API Backend",
+          desc: "A highly performant RESTful server built on Go Fiber. Handles routing namespaces (/api/v1), validates input request payloads, runs security rate limiters, coordinates database transaction repositories, and triggers authorization handlers gracefully.",
+        },
+        wrk: {
+          title: "Diet Solver Background Worker",
+          desc: "Separate standalone background worker compiling from cmd/worker/main.go. Shares models and DB helper configurations inside Go's unified module package tree. Polls pending Redis job queues and executes the LP Optimization algorithms using go-coinor/clp.",
+        },
+        db: {
+          title: "PostgreSQL Database Engine",
+          desc: "Primary persistence layer executing schemas for FoodItems, Recipes, Users, Entitlements, and Audit Logs. Structured schema operations are tracked using raw SQL files executed by the backend's migration engine.",
+        },
+        redis: {
+          title: "Redis Queue & Cache Manager",
+          desc: "Manages session storage, search autocomplete caches, job state structures, and optimization queue worker payloads via schema-versioned Redis keys to facilitate low-latency responses.",
+        },
+        mail: {
+          title: "Maildev SMTP Sandbox",
+          desc: "A local mail client daemon run in docker compose that traps outbound email SMTP queries. Crucial for verifying local account setups, consent links, and password resets safely during active phase development without calling external live endpoints.",
+        },
+      };
+
+      // File Code Preview mapping
+      const fileStubs = {
+        "docker-compose": {
+          name: "docker-compose.yml",
+          lang: "yaml",
+          code: `version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mealswapp-db
+    environment:
+      POSTGRES_DB: mealswapp
+      POSTGRES_USER: mealswapp
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mealswapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mealswapp-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  maildev:
+    image: maildev/maildev:latest
+    container_name: mealswapp-smtp
+    ports:
+      - "1025:1025" # SMTP Port
+      - "1080:1080" # Web Dashboard Port
+
+volumes:
+  pgdata:
+  redisdata:`,
+        },
+        "check-all": {
+          name: "scripts/check-all.sh",
+          lang: "bash",
+          code: `#!/bin/bash
+set -e
+
+echo "=== Running Unified Validation Checks ==="
+
+# 1. Run Python Architecture Requirements validation
+echo "Checking design requirements tracing..."
+python scripts/check.py
+
+# 2. Run Backend validations
+echo "Checking Go Backend..."
+cd backend
+go vet ./...
+go test -v -cover ./...
+cd ..
+
+# 3. Run Frontend validations
+echo "Checking Bun Svelte Frontend..."
+cd frontend
+bun run lint
+bun test
+cd ..
+
+echo "=== All Checks Passed Gracefully! ==="`,
+        },
+        "go-mod": {
+          name: "backend/go.mod",
+          lang: "go",
+          code: `module github.com/wiktor-jedski/mealswapp
+
+go 1.22.0
+
+require (
+	github.com/gofiber/fiber/v2 v2.52.4
+	github.com/joho/godotenv v1.5.1
+	github.com/redis/go-redis/v9 v9.5.1
+	github.com/jackc/pgx/v5 v5.5.5
+)`,
+        },
+        "backend-main": {
+          name: "backend/cmd/server/main.go",
+          lang: "go",
+          code: `package main
+
+import (
+	"log"
+	"os"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/joho/godotenv"
+	"github.com/wiktor-jedski/mealswapp/internal/config"
+)
+
+func main() {
+	// Load environment config files
+	if err := godotenv.Load("../.env"); err != nil {
+		log.Println("Note: .env file not found, loading system variables")
+	}
+
+	cfg := config.Load()
+
+	app := fiber.New(fiber.Config{
+		AppName: "Mealswapp Core API",
+	})
+
+	app.Use(logger.New())
+
+	// Health and readiness endpoints
+	app.Get("/healthz", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "healthy", "service": "mealswapp-api"})
+	})
+
+	log.Printf("Starting core API on %s...", cfg.APIAddr)
+	if err := app.Listen(cfg.APIAddr); err != nil {
+		log.Fatalf("Fatal: HTTP Server crashed: %v", err)
+	}
+}`,
+        },
+        "worker-main": {
+          name: "backend/cmd/worker/main.go",
+          lang: "go",
+          code: `package main
+
+import (
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/joho/godotenv"
+)
+
+func main() {
+	if err := godotenv.Load("../.env"); err != nil {
+		log.Println("Note: .env config not loaded, relying on host system environment")
+	}
+
+	log.Println("Starting Mealswapp Diet Optimization worker daemon...")
+	
+	// Channels setup for handling terminations smoothly
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("Worker active: polling pending linear programming jobs...")
+		case sig := <-sigChan:
+			log.Printf("Worker received terminate code (%v). Shutting down background tasks gracefully...", sig)
+			return
+		}
+	}
+}`,
+        },
+        "config-go": {
+          name: "backend/internal/config/config.go",
+          lang: "go",
+          code: `package config
+
+import "os"
+
+type Config struct {
+	APIAddr     string
+	DatabaseURL string
+	RedisURL    string
+}
+
+func Load() *Config {
+	return &Config{
+		APIAddr:     getEnv("API_ADDR", ":8080"),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://mealswapp:dev@localhost:5432/mealswapp?sslmode=disable"),
+		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379/0"),
+	}
+}
+
+func getEnv(key, fallback string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
+}`,
+        },
+        "svelte-config": {
+          name: "frontend/svelte.config.js",
+          lang: "javascript",
+          code: `import adapter from '@sveltejs/adapter-static';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+	preprocess: vitePreprocess(),
+	kit: {
+		// Output to static site folder
+		adapter: adapter({
+			pages: 'build',
+			assets: 'build',
+			fallback: 'index.html',
+			precompress: false,
+			strict: true
+		})
+	}
+};
+
+export default config;`,
+        },
+        "tailwind-css": {
+          name: "frontend/src/app.css",
+          lang: "css",
+          code: `/* Tailwind CSS v4 Configuration rules loaded dynamically */
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: theme('colors.slate.950');
+    color: theme('colors.slate.50');
+    font-family: 'Inter', sans-serif;
+  }
+}`,
+        },
+      };
+
+      // Tab selection logic
+      function switchSection(sectionName) {
+        // Remove active classes
+        document
+          .querySelectorAll(".nav-item")
+          .forEach((el) => el.classList.remove("active"));
+
+        // Hide all sections
+        document.getElementById("section-arch").style.display = "none";
+        document.getElementById("section-explorer").style.display = "none";
+        document.getElementById("section-simulator").style.display = "none";
+        document.getElementById("section-reqs").style.display = "none";
+
+        // Find current navigation item
+        event.currentTarget.classList.add("active");
+
+        // Show selected section
+        document.getElementById(`section-${sectionName}`).style.display =
+          "block";
+
+        if (sectionName === "explorer") {
+          // Select first file by default on load
+          selectFile("docker-compose");
+        }
+      }
+
+      // Theme Toggle logic
+      function toggleTheme() {
+        const body = document.body;
+        const icon = document.getElementById("theme-btn-icon");
+        const txt = document.getElementById("theme-btn-text");
+
+        if (body.classList.contains("light-mode")) {
+          body.classList.remove("light-mode");
+          icon.textContent = "☀️";
+          txt.textContent = "Light Mode";
+        } else {
+          body.classList.add("light-mode");
+          icon.textContent = "🌙";
+          txt.textContent = "Dark Mode";
+        }
+      }
+
+      // Highlight architecture node
+      function highlightNode(nodeKey) {
+        // Remove active classes
+        document
+          .querySelectorAll(".arch-node")
+          .forEach((el) => el.classList.remove("active"));
+
+        // Add class to active element
+        const elId =
+          nodeKey === "redis"
+            ? "node-redis"
+            : nodeKey === "mail"
+              ? "node-mail"
+              : `node-${nodeKey}`;
+        document.getElementById(elId).classList.add("active");
+
+        // Populate details
+        const info = nodesInfo[nodeKey];
+        document.getElementById("detail-title").textContent = info.title;
+        document.getElementById("detail-desc").textContent = info.desc;
+      }
+
+      // File selection logic
+      function selectFile(fileKey) {
+        // De-select previous tree items
+        document
+          .querySelectorAll(".tree-item")
+          .forEach((el) => el.classList.remove("selected"));
+
+        // Select current tree item
+        event.currentTarget.classList.add("selected");
+
+        // Fill preview
+        const file = fileStubs[fileKey];
+        document.getElementById("preview-filename").textContent = file.name;
+        document.getElementById("preview-lang").textContent = file.lang;
+        document.getElementById("preview-code").textContent = file.code;
+      }
+
+      // Terminal simulators
+      function runDockerSim() {
+        const term = document.getElementById("term-body");
+        term.innerHTML = `
+                <div class="term-input-line">
+                    <span class="term-prompt">mealswapp@local:~$</span>
+                    <span class="term-cmd">docker compose up -d</span>
+                </div>
+                <div class="term-output">
+                    [+] Running 4/4
+                    <span class="term-success">✔ Network mealswapp_default     Created</span>                     0.1s
+                    <span class="term-success">✔ Container mealswapp-smtp      Started</span>                     0.4s
+                    <span class="term-success">✔ Container mealswapp-cache     Started</span>                     0.5s
+                    <span class="term-success">✔ Container mealswapp-db        Started</span>                     0.6s
+                    <span class="term-info">Wait: Waiting for dependency readiness healthchecks...</span>
+                </div>
+            `;
+
+        setTimeout(() => {
+          term.innerHTML += `
+                    <div class="term-output">
+                        <span class="term-success">✔ Container mealswapp-db        Healthy</span>
+                        <span class="term-success">✔ Container mealswapp-cache     Healthy</span>
+                        <span class="term-success">✔ All services started successfully on local sockets!</span>
+                    </div>
+                `;
+          term.scrollTop = term.scrollHeight;
+        }, 1000);
+      }
+
+      function runCheckSim() {
+        const term = document.getElementById("term-body");
+        term.innerHTML = `
+                <div class="term-input-line">
+                    <span class="term-prompt">mealswapp@local:~$</span>
+                    <span class="term-cmd">bash scripts/check-all.sh</span>
+                </div>
+                <div class="term-output">
+                    === Running Unified Validation Checks ===
+                    Checking design requirements tracing...
+                    <span class="term-success">✔ python scripts/check.py passed (19/19 requirement IDs validated)</span>
+                    
+                    Checking Go Backend...
+                    go: vetting packages...
+                    <span class="term-success">✔ go vet ./... - 0 warnings, 0 errors</span>
+                    go: running unit tests...
+                    ok      github.com/wiktor-jedski/mealswapp/cmd/server     0.035s  coverage: 100.0% of statements
+                    ok      github.com/wiktor-jedski/mealswapp/internal/config 0.012s  coverage: 100.0% of statements
+                    
+                    Checking Bun Svelte Frontend...
+                    bun run: lint
+                    <span class="term-success">✔ ESLint passed with zero warnings</span>
+                    bun: running tests...
+                    <span class="term-success">✔ Svelte layout render stores initialized</span>
+                    
+                    === <span class="term-success">All Checks Passed Gracefully!</span> ===
+                </div>
+            `;
+        term.scrollTop = term.scrollHeight;
+      }
+    </script>
+  </body>
+</html>

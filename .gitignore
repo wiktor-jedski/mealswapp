@@ -7,6 +7,10 @@
 
 # Go workspace file
 go.work
+.go-cache/
+.go-mod-cache/
+backend/.go-cache/
+backend/.go-mod-cache/
 
 ### Redis ###
 # Ignore redis binary dump (dump.rdb) files
@@ -18,11 +22,20 @@ go.work
 # website: https://kit.svelte.dev/
 
 .svelte-kit/
+node_modules/
+dist/
 package
+.bun-tmp/
+.bun-install/
 
-### OpenCode ###
+### Agents ###
 auth.json
+.antigravitycli/
+
+### Python ###
+__pycache__/
 
 ### Various ###
+logs/
 *.log
 .env*
