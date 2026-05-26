@@ -23,6 +23,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-010, ARCH-013, ARCH-014, and ARCH-017 foundations.
 - Add versioned /api/v1/* routing, request IDs, timeouts, validation, CORS, security headers, CSRF hooks, structured errors, health/readiness, logging, and basic metrics.
+- Establish the OpenAPI source of truth and frontend type-generation command for shared gateway envelopes, health/readiness, and `AppError` contracts. The command may remain a placeholder in this phase if no domain API contracts are ready to generate yet, but its intended location, inputs, outputs, and validation path must be documented.
 - Exit criteria: all API responses use consistent envelopes/errors, protected mutations enforce middleware, health/readiness are testable.
 
 ### Phase 03: Authentication, Profile, Consent
@@ -35,6 +36,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-002, ARCH-003, and server-side ARCH-011 search cache.
 - Add search/autocomplete endpoints, query parsing, pagination limit of 10, filters, Levenshtein ranking, cosine similarity, similarity tiers/assets, Redis cache keys, and graceful similarity degradation.
+- Implement required OpenAPI-to-frontend type generation for the first domain contracts, including `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache-related response metadata. This is the latest phase where type generation may remain incomplete, because Phase 05 frontend API work consumes these generated types.
 - Exit criteria: API supports single/replacement/diet query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
 
 ### Phase 05: Frontend Search Experience
@@ -70,7 +72,8 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 ## Public APIs and Interfaces
 
 - Backend exposes versioned REST under /api/v1: auth, profile/preferences, search/autocomplete, optimization jobs, subscription/billing, saved data, admin, external search, health, and readiness.
-- Shared request/response contracts should be generated or mirrored from Go/OpenAPI into frontend types for SearchRequest, SearchResponse, AppError, Entitlement, UserProfile, OptimizationJob, and admin import types.
+- OpenAPI/type generation is planned but not required immediately for Phase 00 or Phase 01.
+- Shared request/response contracts should be generated from OpenAPI into frontend types. Phase 02 establishes the OpenAPI source of truth, type-generation command, and shared envelope/error contracts; Phase 04 must generate frontend types for `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache metadata before the Phase 05 frontend API client consumes them; later phases add generated auth/profile, entitlement, optimization, billing, saved-data, and admin import types as their APIs are implemented.
 - Redis namespaces follow ARCH-011: search, item, similarity, session, job, and user, each with schema-versioned keys.
 - Task list rows should map each task to one ARCH/DESIGN static aspect, using the phase ID in the description or traceability header.
 

@@ -1,0 +1,31 @@
+# Implements DESIGN-011 RedisCache and DESIGN-005 RepositoryInterfaces local dependencies.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mealswapp
+      POSTGRES_USER: mealswapp
+      POSTGRES_PASSWORD: mealswapp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mealswapp -d mealswapp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+    volumes:
+      - mealswapp-postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+volumes:
+  mealswapp-postgres:

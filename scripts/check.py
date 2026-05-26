@@ -1,3 +1,18 @@
+#!/usr/bin/env python3
+
+# Implements DESIGN-014 MetricsCollector bootstrap quality gate.
+
+import subprocess
+import sys
+import os
+import argparse
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+BACKEND = ROOT / "backend"
+FRONTEND = ROOT / "frontend"
+
 reqs = """[SW-REQ-001]
 [SW-REQ-002]
 [SW-REQ-003]
@@ -88,11 +103,94 @@ reqs = """[SW-REQ-001]
 [SW-REQ-088]
 [SW-REQ-089]"""
 
-with open("docs/architecture/01_SOFT_ARCH_DESIGN.md") as f:
-    text = f.read()
+def run(command: list[str], cwd: Path = ROOT) -> None:
+	print(f"+ {' '.join(command)}")
+	run_env(command, cwd=cwd)
 
-req_list = reqs.split("\n")
 
-for req in req_list:
-    if req not in text:
-        print(f"{req} MISSING")
+def run_env(command: list[str], cwd: Path = ROOT, capture: bool = False) -> subprocess.CompletedProcess[str]:
+	env = {
+		**dict(os.environ),
+		"GOCACHE": str(BACKEND / ".go-cache"),
+		"GOMODCACHE": str(BACKEND / ".go-mod-cache"),
+		"BUN_TMPDIR": str(FRONTEND / ".bun-tmp"),
+		"BUN_INSTALL": str(FRONTEND / ".bun-install"),
+	}
+	return subprocess.run(command, cwd=cwd, check=True, env=env, text=True, capture_output=capture)
+
+
+def validate_go_coverage() -> str:
+	print("+ go test ./internal/... -coverprofile=coverage.out")
+	run_env(["go", "test", "./internal/...", "-coverprofile=coverage.out"], BACKEND)
+	result = run_env(["go", "tool", "cover", "-func=coverage.out"], BACKEND, capture=True)
+	print(result.stdout, end="")
+	total_line = next(line for line in result.stdout.splitlines() if line.startswith("total:"))
+	if not total_line.rstrip().endswith("100.0%"):
+		raise SystemExit(f"Go internal coverage below 100%: {total_line}")
+	return result.stdout
+
+
+def validate_frontend_coverage() -> str:
+	print("+ bun test --coverage")
+	result = run_env(["bun", "test", "--coverage"], FRONTEND, capture=True)
+	print(result.stdout, end="")
+	print(result.stderr, end="")
+	coverage_output = f"{result.stdout}\n{result.stderr}"
+	all_files = next(line for line in coverage_output.splitlines() if line.strip().startswith("All files"))
+	columns = [part.strip() for part in all_files.split("|")]
+	if len(columns) < 3 or columns[1] != "100.00" or columns[2] != "100.00":
+		raise SystemExit(f"Frontend coverage below 100%: {all_files}")
+	return coverage_output
+
+
+def validate_requirements() -> tuple[int, int]:
+	text = (ROOT / "docs/architecture/01_SOFT_ARCH_DESIGN.md").read_text()
+	missing = []
+	total = 0
+	checked = 0
+	for req in reqs.split("\n"):
+		total += 1
+		plain_req = req.strip("[]")
+		if req in text or plain_req in text:
+			checked += 1
+		else:
+			missing.append(req)
+	if missing:
+		for req in missing:
+			print(f"{req} MISSING")
+		raise SystemExit(1)
+	return checked, total
+
+
+def main() -> int:
+	parser = argparse.ArgumentParser(description="Mealswapp aggregate quality gate script.")
+	parser.add_argument("--output", help="Path to write the HTML coverage and quality gate report.")
+	args = parser.parse_args()
+
+	checked_reqs, total_reqs = validate_requirements()
+	run(["python3", "scripts/validate-traceability.py"])
+	run(["python3", "scripts/verify-local-stack.py"])
+	run(["python3", "scripts/verify-frontend.py"])
+	run(["go", "fmt", "./..."], BACKEND)
+	run(["go", "test", "./..."], BACKEND)
+	go_coverage_stdout = validate_go_coverage()
+	run(["bun", "run", "build"], FRONTEND)
+	run(["bun", "test"], FRONTEND)
+	bun_coverage_stdout = validate_frontend_coverage()
+
+	if args.output:
+		import sys
+		sys.path.insert(0, str(ROOT / "scripts"))
+		from generate_report import build_html_report
+		build_html_report(
+			go_raw=go_coverage_stdout,
+			bun_raw=bun_coverage_stdout,
+			reqs_checked=checked_reqs,
+			reqs_total=total_reqs,
+			output_path=args.output
+		)
+	return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
