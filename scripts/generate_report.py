@@ -81,44 +81,48 @@ def parse_bun_coverage(output: str) -> dict:
         "total_lines": total_lines
     }
 
-def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: int, output_path: str) -> None:
+def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: int, output_path: str, screenshot_stem: str | None = None) -> None:
     go_data = parse_go_coverage(go_raw)
     bun_data = parse_bun_coverage(bun_raw)
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # Copy screenshots from /tmp/mealswapp-frontend-verifier to output_dir/screenshots/
-    html_dir = Path(output_path).parent
+    html_path = Path(output_path)
+    html_dir = html_path.parent
+    screenshot_stem = screenshot_stem or html_path.stem
     screenshots_dir = html_dir / "screenshots"
     screenshots_dir.mkdir(parents=True, exist_ok=True)
     
     tmp_screenshots_dir = Path("/tmp/mealswapp-frontend-verifier")
-    desktop_src = tmp_screenshots_dir / "desktop.png"
-    mobile_src = tmp_screenshots_dir / "mobile.png"
+    desktop_name = f"{screenshot_stem}-desktop.png"
+    mobile_name = f"{screenshot_stem}-mobile.png"
+    desktop_src = tmp_screenshots_dir / desktop_name
+    mobile_src = tmp_screenshots_dir / mobile_name
     
     has_screenshots = False
     if desktop_src.exists():
-        shutil.copy(desktop_src, screenshots_dir / "desktop.png")
+        shutil.copy(desktop_src, screenshots_dir / desktop_name)
         has_screenshots = True
     if mobile_src.exists():
-        shutil.copy(mobile_src, screenshots_dir / "mobile.png")
+        shutil.copy(mobile_src, screenshots_dir / mobile_name)
         has_screenshots = True
 
     screenshots_html = ""
     if has_screenshots:
-        screenshots_html = """
+        screenshots_html = f"""
         <div class="section-title">Frontend Verification Screenshots</div>
         <div class="screenshots-container">
             <div class="screenshot-card">
                 <h4>Desktop View (1280x900)</h4>
                 <div class="screenshot-frame">
-                    <img src="screenshots/desktop.png" alt="Desktop View">
+                    <img src="screenshots/{desktop_name}" alt="Desktop View">
                 </div>
             </div>
             <div class="screenshot-card mobile">
                 <h4>Mobile View (390x844)</h4>
                 <div class="screenshot-frame">
-                    <img src="screenshots/mobile.png" alt="Mobile View">
+                    <img src="screenshots/{mobile_name}" alt="Mobile View">
                 </div>
             </div>
         </div>

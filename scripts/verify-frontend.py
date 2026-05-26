@@ -3,6 +3,7 @@
 # Implements DESIGN-001 SearchView and DESIGN-016 LayoutGrid frontend UAT verification.
 
 import contextlib
+import argparse
 import os
 import shutil
 import socket
@@ -121,9 +122,9 @@ def assert_shell_dom(dom: str) -> None:
 		raise RuntimeError("rendered shell is missing the theme selector")
 
 
-def capture_screenshot(browser: str, url: str, name: str, width: int, height: int) -> Path:
-	ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-	output = ARTIFACT_DIR / name
+def capture_screenshot(browser: str, url: str, artifact_dir: Path, name: str, width: int, height: int) -> Path:
+	artifact_dir.mkdir(parents=True, exist_ok=True)
+	output = artifact_dir / name
 	run_chromium(
 		[
 			browser,
@@ -142,6 +143,13 @@ def capture_screenshot(browser: str, url: str, name: str, width: int, height: in
 
 
 def main() -> int:
+	parser = argparse.ArgumentParser(description="Verify the Mealswapp frontend shell and capture UAT screenshots.")
+	parser.add_argument("--artifact-dir", default=str(ARTIFACT_DIR), help="Directory for generated screenshots.")
+	parser.add_argument("--screenshot-stem", default="frontend-verification", help="Filename stem for screenshot artifacts.")
+	args = parser.parse_args()
+
+	artifact_dir = Path(args.artifact_dir)
+	screenshot_stem = Path(args.screenshot_stem).stem
 	port = free_port()
 	url = f"http://127.0.0.1:{port}"
 	process = start_vite(port)
@@ -149,8 +157,8 @@ def main() -> int:
 		wait_for_http(url)
 		browser = chromium()
 		assert_shell_dom(rendered_dom(browser, url))
-		desktop = capture_screenshot(browser, url, "desktop.png", 1280, 900)
-		mobile = capture_screenshot(browser, url, "mobile.png", 390, 844)
+		desktop = capture_screenshot(browser, url, artifact_dir, f"{screenshot_stem}-desktop.png", 1280, 900)
+		mobile = capture_screenshot(browser, url, artifact_dir, f"{screenshot_stem}-mobile.png", 390, 844)
 		print(f"Frontend verification passed. Screenshots: {desktop}, {mobile}")
 		return 0
 	finally:

@@ -46,6 +46,10 @@ For JSON files, do not add inline comments because they make the file invalid. I
 Testing commands for the current package layout:
 
 - Root aggregate check: `python3 scripts/check.py`
+- Root aggregate check with HTML report: `python3 scripts/check.py --output logs/check-report.html`
+- Traceability validation: `python3 scripts/validate-traceability.py`
+- Local stack verification: `python3 scripts/verify-local-stack.py`
+- Frontend UAT/screenshot verification: `python3 scripts/verify-frontend.py`
 - Backend unit tests: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./...`
 - Backend coverage: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./internal/... -coverprofile=coverage.out && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go tool cover -func=coverage.out`
 - Frontend install: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun install`
@@ -55,6 +59,8 @@ Testing commands for the current package layout:
 - Local dependencies for integration checks: `bash scripts/start-services.sh`
 - Backend migrations: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/migrate up`
 - Backend API smoke test: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/api`, then check `/health` and `/ready`.
+
+`scripts/check.py` runs requirement traceability, design traceability, local stack verification, frontend UAT/screenshot verification, backend formatting/tests/coverage, and frontend build/tests/coverage. The local stack verifier requires Docker Compose. The frontend verifier requires a local Chromium-compatible browser (`chromium`, `chromium-browser`, or `google-chrome`) and writes temporary screenshots under `/tmp/mealswapp-frontend-verifier/`. When `scripts/check.py --output <report>.html` is used, screenshots are copied next to the report under `screenshots/` using the report stem, for example `<report>-desktop.png` and `<report>-mobile.png`.
 
 Each completed phase needs to have user acceptance document in docs/implementation/implemented/{x:02d}_PHASE_UAT.md, where x is the number of the phase. The document is a recap of the changes implemented and suggests relevant acceptance tests.
 

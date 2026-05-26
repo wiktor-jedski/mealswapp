@@ -166,11 +166,12 @@ def main() -> int:
 	parser = argparse.ArgumentParser(description="Mealswapp aggregate quality gate script.")
 	parser.add_argument("--output", help="Path to write the HTML coverage and quality gate report.")
 	args = parser.parse_args()
+	screenshot_stem = Path(args.output).stem if args.output else "frontend-verification"
 
 	checked_reqs, total_reqs = validate_requirements()
 	run(["python3", "scripts/validate-traceability.py"])
 	run(["python3", "scripts/verify-local-stack.py"])
-	run(["python3", "scripts/verify-frontend.py"])
+	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
 	run(["go", "fmt", "./..."], BACKEND)
 	run(["go", "test", "./..."], BACKEND)
 	go_coverage_stdout = validate_go_coverage()
@@ -187,7 +188,8 @@ def main() -> int:
 			bun_raw=bun_coverage_stdout,
 			reqs_checked=checked_reqs,
 			reqs_total=total_reqs,
-			output_path=args.output
+			output_path=args.output,
+			screenshot_stem=screenshot_stem
 		)
 	return 0
 
