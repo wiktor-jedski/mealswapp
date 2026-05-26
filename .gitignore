@@ -20,8 +20,9 @@ go.work
 .svelte-kit/
 package
 
-### OpenCode ###
+### Agents ###
 auth.json
+.antigravitycli/
 
 ### Various ###
 *.log

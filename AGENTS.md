@@ -2,7 +2,7 @@
 
 1. **Think before you commit.** There is often more than one implementation of an idea. Ask when unsure.
 
-2. **Simplicity first.** Keep as easy to create and explain as possible. Derive quality from simple forms and actions.
+2. **Simplicity first.** Keep as easy to create and explain as possible. Derive quality from simple shapes.
 
 3. **Surgical precision.** Only touch what necessary. Delete and add exactly what needed in each step.
 
@@ -20,9 +20,7 @@ When application code is added, follow the documented stack: Svelte frontend cod
 
 ## Build, Test, and Development Commands
 
-- `python scripts/check.py`: checks that all software requirement IDs are referenced in `docs/architecture/01_SOFT_ARCH_DESIGN.md`.
 - `bash scripts/start-services.sh`: starts local PostgreSQL and Redis services where `service` is available.
-- `python scripts/split_arch.py` and `python scripts/phase_splitter.py`: regenerate split documentation from larger planning files when those sources change.
 
 Planned app commands should use `docs/design/01_TECH_STACK.md`: Bun for Svelte (`bun install`, `bun test`, `bun run dev`) and Go tooling for the backend (`go test ./...`, `go run ./cmd/...`) once package manifests exist.
 
@@ -34,7 +32,7 @@ For frontend work, follow `docs/requirements/02_STYLE_GUIDE.md`: Svelte componen
 
 ## Testing Guidelines
 
-Run `python scripts/check.py` after editing requirements or architecture docs. Future Go tests should use the standard `testing` package and `Test...` names in `*_test.go` files. Future Svelte tests should use Bun, `@testing-library/svelte`, and Playwright. Add tests near changed behavior, especially around search, auth, subscriptions, and data normalization.
+Future Go tests should use the standard `testing` package and `Test...` names in `*_test.go` files. Future Svelte tests should use Bun, `@testing-library/svelte`, and Playwright. Add tests near changed behavior, especially around search, auth, subscriptions, and data normalization.
 
 ## Commit & Pull Request Guidelines
 
