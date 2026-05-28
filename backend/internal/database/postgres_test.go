@@ -21,6 +21,7 @@ func (p *fakePool) Close() {
 	p.closed = true
 }
 
+// TestOpenRejectsInvalidURL proves that Open fails with invalid URL
 // TestOpenRejectsInvalidURL verifies DESIGN-005 RepositoryInterfaces invalid PostgreSQL URL handling.
 func TestOpenRejectsInvalidURL(t *testing.T) {
 	if _, err := Open(context.Background(), "not a postgres url"); err == nil {
@@ -28,6 +29,7 @@ func TestOpenRejectsInvalidURL(t *testing.T) {
 	}
 }
 
+// TestOpenAcceptsValidURL proves that Open creates a pg pool with valid URL.
 // TestOpenAcceptsValidURL verifies DESIGN-005 RepositoryInterfaces valid PostgreSQL URL handling.
 func TestOpenAcceptsValidURL(t *testing.T) {
 	pool, err := Open(context.Background(), "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable")
@@ -37,6 +39,7 @@ func TestOpenAcceptsValidURL(t *testing.T) {
 	pool.Close()
 }
 
+// TestPoolPingAndClose verifies that Pool delegates Ping and Close to the underlying pool
 // TestPoolPingAndClose verifies DESIGN-005 RepositoryInterfaces PostgreSQL pool wrapper behavior.
 func TestPoolPingAndClose(t *testing.T) {
 	expected := errors.New("down")

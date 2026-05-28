@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/mealswapp/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 )
 
 // TestHealthReturnsEnvelope verifies DESIGN-010 RouteHandler health envelope behavior.

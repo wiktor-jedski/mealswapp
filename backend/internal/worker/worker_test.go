@@ -7,8 +7,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mealswapp/mealswapp/backend/internal/config"
 	"github.com/redis/go-redis/v9"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 )
 
 // TestRunReturnsPingError verifies DESIGN-004 JobQueueManager Redis startup failure behavior.

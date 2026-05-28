@@ -1,4 +1,4 @@
-module github.com/mealswapp/mealswapp/backend
+module github.com/wiktor-jedski/mealswapp/backend
 
 go 1.24
 

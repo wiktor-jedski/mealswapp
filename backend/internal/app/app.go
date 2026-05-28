@@ -2,7 +2,7 @@ package app
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/mealswapp/mealswapp/backend/internal/httpapi"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 )
 
 // New constructs the backend Fiber app from HTTP API dependencies.

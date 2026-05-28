@@ -7,9 +7,11 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/mealswapp/mealswapp/backend/internal/httpapi"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 )
 
+// TestNewBuildsRouter proves that app router is built,
+// /health is reachable and returns OK health response
 // TestNewBuildsRouter verifies DESIGN-010 RouteHandler app constructor behavior.
 func TestNewBuildsRouter(t *testing.T) {
 	server := New(httpapi.Dependencies{})
