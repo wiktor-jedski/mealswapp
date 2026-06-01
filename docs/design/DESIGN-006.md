@@ -13,7 +13,8 @@
 
 ### 1. Data Structures & Types
 - `interface Credentials { email: string; password: string }`
-- `interface AuthUser { id: UUID; email: string; emailVerified: boolean; role: "user" | "admin"; passwordHash?: string; oauthProvider?: string }`
+- `interface AuthUser { id: UUID; email: string; emailVerified: boolean; role: "user" | "admin"; passwordHash?: string; passwordSalt?: string }`
+- `interface OAuthIdentity { id: UUID; userId: UUID; provider: "google" | "apple"; providerUserId: string; email: string }`
 - `interface SessionTokens { accessToken: string; refreshToken: string; accessExpiresAt: time.Time; refreshExpiresAt: time.Time }`
 - `interface LockoutState { accountFailures: number; ipFailures: number; lockedUntil?: time.Time }`
 - `interface OAuthProfile { provider: "google" | "apple"; providerUserId: string; email: string; displayName?: string }`

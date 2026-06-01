@@ -9,7 +9,6 @@ import (
 )
 
 // Run starts the Phase 00 worker lifecycle and blocks until the context is canceled.
-//
 // Implements DESIGN-004 JobQueueManager worker lifecycle placeholder.
 func Run(ctx context.Context, cfg config.Config, redisClient *redis.Client) error {
 	return runAfterPing(ctx, cfg, func(ctx context.Context) error {
@@ -18,6 +17,8 @@ func Run(ctx context.Context, cfg config.Config, redisClient *redis.Client) erro
 	})
 }
 
+// runAfterPing verifies Redis availability and waits for worker shutdown.
+// Implements DESIGN-004 JobQueueManager worker lifecycle placeholder.
 func runAfterPing(ctx context.Context, cfg config.Config, ping func(context.Context) error) error {
 	// ping context (here redis)
 	log.Printf("worker started env=%s", cfg.Environment)

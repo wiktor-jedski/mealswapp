@@ -1,0 +1,485 @@
+package repository
+
+import (
+	"context"
+	_ "embed"
+	"encoding/json"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+)
+
+// Implements DESIGN-005 FoodItemEntity search query.
+//
+//go:embed sql/food_search.sql
+var foodSearchSQL string
+
+// Implements DESIGN-005 FoodItemEntity create query.
+//
+//go:embed sql/food_create.sql
+var foodCreateSQL string
+
+// Implements DESIGN-005 FoodItemEntity update query.
+//
+//go:embed sql/food_update.sql
+var foodUpdateSQL string
+
+// Implements DESIGN-005 FoodItemEntity soft-delete query.
+//
+//go:embed sql/food_soft_delete.sql
+var foodSoftDeleteSQL string
+
+// Implements DESIGN-005 FoodItemEntity tag validation query.
+//
+//go:embed sql/food_validate_tag.sql
+var foodValidateTagSQL string
+
+// Implements DESIGN-005 FoodItemEntity clear-tags query.
+//
+//go:embed sql/food_clear_tags.sql
+var foodClearTagsSQL string
+
+// Implements DESIGN-005 FoodItemEntity attach-tag query.
+//
+//go:embed sql/food_attach_tag.sql
+var foodAttachTagSQL string
+
+// Implements DESIGN-005 FoodItemEntity get-by-id query.
+//
+//go:embed sql/food_get_by_id.sql
+var foodGetByIDSQL string
+
+// Implements DESIGN-005 FoodItemEntity hydrate-tags query.
+//
+//go:embed sql/food_list_tags.sql
+var foodListTagsSQL string
+
+// PostgresFoodItemRepository persists normalized food items in PostgreSQL.
+// Implements DESIGN-005 FoodItemEntity.
+type PostgresFoodItemRepository struct {
+	db transactionalExecutor
+}
+
+// NewPostgresFoodItemRepository creates a PostgreSQL-backed food item repository.
+// Implements DESIGN-005 FoodItemEntity.
+func NewPostgresFoodItemRepository(db transactionalExecutor) *PostgresFoodItemRepository {
+	return &PostgresFoodItemRepository{db: db}
+}
+
+// GetByID loads one food item with hydrated tags.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) GetByID(ctx context.Context, id uuid.UUID, rc RepositoryContext) (FoodItemEntity, error) {
+	item, err := r.getFoodByID(ctx, id, rc.IncludeDeleted)
+	if err != nil {
+		return FoodItemEntity{}, err
+	}
+	if err := r.hydrateFoodTags(ctx, &item); err != nil {
+		return FoodItemEntity{}, err
+	}
+	convertFoodItemForUnitSystem(&item, rc.UnitSystem)
+	return item, nil
+}
+
+// Search returns matching food items and total count for deterministic pagination.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQuery) ([]FoodItemEntity, int, error) {
+	limit := q.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := q.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	rows, err := r.db.Query(ctx, foodSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.CategoryTagIDs, q.FunctionalityIDs, limit, offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err, "search food items")
+	}
+	defer rows.Close()
+
+	items := []FoodItemEntity{}
+	total := 0
+	for rows.Next() {
+		item, rowTotal, err := scanFoodItemWithCount(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		total = rowTotal
+		if err := r.hydrateFoodTags(ctx, &item); err != nil {
+			return nil, 0, err
+		}
+		convertFoodItemForUnitSystem(&item, q.UnitSystem)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err, "iterate food items")
+	}
+	return items, total, nil
+}
+
+// Create validates and persists a food item.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEntity) (uuid.UUID, error) {
+	if err := r.validateFoodItem(ctx, item); err != nil {
+		return uuid.Nil, err
+	}
+	micros := marshalMicros(item.Micros)
+
+	var id uuid.UUID
+	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		txRepo := NewPostgresFoodItemRepository(db)
+		err := db.QueryRow(ctx, foodCreateSQL, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL)).Scan(&id)
+		if err != nil {
+			return mapPostgresError(err, "create food item")
+		}
+		return txRepo.replaceFoodTags(ctx, id, item.CategoryTags, item.FunctionalityTags)
+	})
+	return id, err
+}
+
+// Update validates and replaces a food item and its tag assignments.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEntity) error {
+	if item.ID == uuid.Nil {
+		return validationError("food item id is required")
+	}
+	if err := r.validateFoodItem(ctx, item); err != nil {
+		return err
+	}
+	micros := marshalMicros(item.Micros)
+
+	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		txRepo := NewPostgresFoodItemRepository(db)
+		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL))
+		if err != nil {
+			return mapPostgresError(err, "update food item")
+		}
+		if result.RowsAffected() == 0 {
+			return NewError(ErrorKindNotFound, "food item not found", nil)
+		}
+		return txRepo.replaceFoodTags(ctx, item.ID, item.CategoryTags, item.FunctionalityTags)
+	})
+}
+
+// Delete soft-deletes a food item.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	result, err := r.db.Exec(ctx, foodSoftDeleteSQL, id)
+	if err != nil {
+		return mapPostgresError(err, "delete food item")
+	}
+	if result.RowsAffected() == 0 {
+		return NewError(ErrorKindNotFound, "food item not found", nil)
+	}
+	return nil
+}
+
+// validateFoodItem checks food item fields before persistence.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) validateFoodItem(ctx context.Context, item FoodItemEntity) error {
+	if item.Name == "" {
+		return validationError("food item name is required")
+	}
+	if item.PrepTimeMinutes < 0 {
+		return validationError("prep time cannot be negative")
+	}
+	if err := ValidatePhysicalState(item.PhysicalState); err != nil {
+		return err
+	}
+	if err := ValidateMacrosPer100(item.MacrosPer100, item.PhysicalState); err != nil {
+		return err
+	}
+	if err := validateFoodDensity(item); err != nil {
+		return err
+	}
+	if err := r.validateFoodTags(ctx, item.CategoryTags, TagKindCategory); err != nil {
+		return err
+	}
+	if err := r.validateFoodTags(ctx, item.FunctionalityTags, TagKindFunctionality); err != nil {
+		return err
+	}
+	return r.validateMicronutrients(ctx, item.Micros)
+}
+
+// validateFoodTags verifies that food item tags exist with the required kinds.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) validateFoodTags(ctx context.Context, tags []TagEntity, kind TagKind) error {
+	for _, tag := range tags {
+		if tag.ID == uuid.Nil {
+			return validationError("tag id is required")
+		}
+		var exists bool
+		err := r.db.QueryRow(ctx, foodValidateTagSQL, tag.ID, string(kind)).Scan(&exists)
+		if err != nil {
+			return mapPostgresError(err, "validate food tag")
+		}
+		if !exists {
+			return validationError("tag does not exist for required kind")
+		}
+	}
+	return nil
+}
+
+// validateMicronutrients verifies that micronutrient keys are active vocabulary entries.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context, micros MicroValues) error {
+	repo := NewPostgresMicronutrientVocabularyRepository(r.db)
+	entries, err := repo.ListActive(ctx)
+	if err != nil {
+		return err
+	}
+	return ValidateMicronutrientKeys(micros, entries)
+}
+
+// replaceFoodTags replaces persisted tag associations for a food item.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) replaceFoodTags(ctx context.Context, foodID uuid.UUID, categoryTags []TagEntity, functionalityTags []TagEntity) error {
+	if _, err := r.db.Exec(ctx, foodClearTagsSQL, foodID); err != nil {
+		return mapPostgresError(err, "clear food tags")
+	}
+	for _, tag := range append(categoryTags, functionalityTags...) {
+		if _, err := r.db.Exec(ctx, foodAttachTagSQL, foodID, tag.ID); err != nil {
+			return mapPostgresError(err, "replace food tags")
+		}
+	}
+	return nil
+}
+
+// getFoodByID loads one food item using the provided SQL executor.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) getFoodByID(ctx context.Context, id uuid.UUID, includeDeleted bool) (FoodItemEntity, error) {
+	row := r.db.QueryRow(ctx, foodGetByIDSQL, id, includeDeleted)
+	item, err := scanFoodItem(row)
+	if err != nil {
+		if IsKind(err, ErrorKindValidation) {
+			return FoodItemEntity{}, err
+		}
+		return FoodItemEntity{}, mapPostgresError(err, "food item not found")
+	}
+	return item, nil
+}
+
+// hydrateFoodTags loads tag IDs onto food item entities.
+// Implements DESIGN-005 FoodItemEntity.
+func (r *PostgresFoodItemRepository) hydrateFoodTags(ctx context.Context, item *FoodItemEntity) error {
+	rows, err := r.db.Query(ctx, foodListTagsSQL, item.ID)
+	if err != nil {
+		return mapPostgresError(err, "load food tags")
+	}
+	defer rows.Close()
+
+	item.CategoryTags = nil
+	item.FunctionalityTags = nil
+	for rows.Next() {
+		var tag TagEntity
+		if err := rows.Scan(&tag.ID, &tag.Name, &tag.Kind, &tag.ParentID); err != nil {
+			return mapPostgresError(err, "scan food tag")
+		}
+		switch tag.Kind {
+		case TagKindCategory:
+			item.CategoryTags = append(item.CategoryTags, tag)
+		case TagKindFunctionality:
+			item.FunctionalityTags = append(item.FunctionalityTags, tag)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return mapPostgresError(err, "iterate food tags")
+	}
+	return nil
+}
+
+// foodRowScanner describes a PostgreSQL row that can populate scanned values.
+// Implements DESIGN-005 FoodItemEntity.
+type foodRowScanner interface {
+	Scan(dest ...any) error
+}
+
+// scanFoodItem reads a food item from a PostgreSQL row.
+// Implements DESIGN-005 FoodItemEntity.
+func scanFoodItem(row foodRowScanner) (FoodItemEntity, error) {
+	var item FoodItemEntity
+	var averageUnitWeight *float64
+	var averageServingVolume *float64
+	var density *float64
+	var densitySourceProvider *string
+	var densitySourceFoodID *string
+	var densitySourceKind *string
+	var microsBytes []byte
+	var imageURL *string
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.PhysicalState,
+		&item.PrepTimeMinutes,
+		&averageUnitWeight,
+		&averageServingVolume,
+		&density,
+		&densitySourceProvider,
+		&densitySourceFoodID,
+		&densitySourceKind,
+		&item.MacrosPer100.Protein,
+		&item.MacrosPer100.Carbohydrates,
+		&item.MacrosPer100.Fat,
+		&microsBytes,
+		&imageURL,
+		&item.DeletedAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return FoodItemEntity{}, err
+	}
+	if averageUnitWeight != nil {
+		item.AverageUnitWeightGrams = *averageUnitWeight
+	}
+	setFoodDensityFields(&item, averageServingVolume, density, densitySourceProvider, densitySourceFoodID, densitySourceKind)
+	if imageURL != nil {
+		item.ImageURL = *imageURL
+	}
+	if len(microsBytes) > 0 {
+		if err := json.Unmarshal(microsBytes, &item.Micros); err != nil {
+			return FoodItemEntity{}, validationError("micronutrients must be a JSON object")
+		}
+	}
+	if item.Micros == nil {
+		item.Micros = MicroValues{}
+	}
+	return item, nil
+}
+
+// scanFoodItemWithCount reads a food item and matching-row count from a PostgreSQL row.
+// Implements DESIGN-005 FoodItemEntity.
+func scanFoodItemWithCount(rows pgx.Rows) (FoodItemEntity, int, error) {
+	var item FoodItemEntity
+	var averageUnitWeight *float64
+	var averageServingVolume *float64
+	var density *float64
+	var densitySourceProvider *string
+	var densitySourceFoodID *string
+	var densitySourceKind *string
+	var microsBytes []byte
+	var imageURL *string
+	var total int
+	if err := rows.Scan(
+		&item.ID,
+		&item.Name,
+		&item.PhysicalState,
+		&item.PrepTimeMinutes,
+		&averageUnitWeight,
+		&averageServingVolume,
+		&density,
+		&densitySourceProvider,
+		&densitySourceFoodID,
+		&densitySourceKind,
+		&item.MacrosPer100.Protein,
+		&item.MacrosPer100.Carbohydrates,
+		&item.MacrosPer100.Fat,
+		&microsBytes,
+		&imageURL,
+		&item.DeletedAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+		&total,
+	); err != nil {
+		return FoodItemEntity{}, 0, mapPostgresError(err, "scan food item")
+	}
+	if averageUnitWeight != nil {
+		item.AverageUnitWeightGrams = *averageUnitWeight
+	}
+	setFoodDensityFields(&item, averageServingVolume, density, densitySourceProvider, densitySourceFoodID, densitySourceKind)
+	if imageURL != nil {
+		item.ImageURL = *imageURL
+	}
+	if len(microsBytes) > 0 {
+		if err := json.Unmarshal(microsBytes, &item.Micros); err != nil {
+			return FoodItemEntity{}, 0, validationError("micronutrients must be a JSON object")
+		}
+	}
+	if item.Micros == nil {
+		item.Micros = MicroValues{}
+	}
+	return item, total, nil
+}
+
+// convertFoodItemForUnitSystem converts display values to the requested unit system.
+// Implements DESIGN-005 FoodItemEntity.
+func convertFoodItemForUnitSystem(item *FoodItemEntity, unitSystem UnitSystem) {
+	if unitSystem != UnitSystemImperial {
+		return
+	}
+	switch item.PhysicalState {
+	case PhysicalStateSolid:
+		item.AverageUnitWeightGrams, _ = ConvertUnit(item.AverageUnitWeightGrams, "g", "oz")
+	case PhysicalStateLiquid:
+		item.AverageServingVolumeMilliliters, _ = ConvertUnit(item.AverageServingVolumeMilliliters, "ml", "fl_oz")
+	}
+}
+
+// validateFoodDensity checks optional liquid density metadata.
+// Implements DESIGN-005 FoodItemEntity.
+func validateFoodDensity(item FoodItemEntity) error {
+	if item.AverageServingVolumeMilliliters < 0 || item.DensityGramsPerMilliliter < 0 {
+		return validationError("liquid serving volume and density cannot be negative")
+	}
+	if item.PhysicalState == PhysicalStateSolid && (item.AverageServingVolumeMilliliters > 0 || item.DensityGramsPerMilliliter > 0) {
+		return validationError("liquid serving volume and density require liquid physical state")
+	}
+	if item.DensityGramsPerMilliliter == 0 {
+		if item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" || item.DensitySourceKind != "" {
+			return validationError("density provenance requires density")
+		}
+		return nil
+	}
+	if item.DensitySourceKind != "imported" && item.DensitySourceKind != "manual" && item.DensitySourceKind != "estimated" {
+		return validationError("density source kind is invalid")
+	}
+	return nil
+}
+
+// setFoodDensityFields copies nullable liquid metadata from PostgreSQL.
+// Implements DESIGN-005 FoodItemEntity.
+func setFoodDensityFields(item *FoodItemEntity, servingVolume *float64, density *float64, provider *string, foodID *string, kind *string) {
+	if servingVolume != nil {
+		item.AverageServingVolumeMilliliters = *servingVolume
+	}
+	if density != nil {
+		item.DensityGramsPerMilliliter = *density
+	}
+	if provider != nil {
+		item.DensitySourceProvider = *provider
+	}
+	if foodID != nil {
+		item.DensitySourceFoodID = *foodID
+	}
+	if kind != nil {
+		item.DensitySourceKind = *kind
+	}
+}
+
+// nullablePositiveFloat converts non-positive optional values to SQL null.
+// Implements DESIGN-005 FoodItemEntity.
+func nullablePositiveFloat(value float64) *float64 {
+	if value <= 0 {
+		return nil
+	}
+	return &value
+}
+
+// nullableString converts blank optional strings to SQL null.
+// Implements DESIGN-005 FoodItemEntity.
+func nullableString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+// marshalMicros serializes micronutrient values for PostgreSQL storage.
+// Implements DESIGN-005 FoodItemEntity.
+func marshalMicros(micros MicroValues) []byte {
+	if micros == nil {
+		micros = MicroValues{}
+	}
+	encoded, _ := json.Marshal(micros)
+	return encoded
+}

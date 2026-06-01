@@ -12,6 +12,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
 )
 
+// main starts the background worker process.
 // Implements DESIGN-004 JobQueueManager worker process bootstrap.
 func main() {
 	// load env

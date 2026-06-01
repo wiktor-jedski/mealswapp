@@ -12,6 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DESIGN_REF_RE = re.compile(r"Implements\s+(?P<refs>.*?DESIGN-\d{3}.*)")
 DESIGN_ID_RE = re.compile(r"DESIGN-\d{3}")
+GO_PACKAGE_DECLARATION_RE = re.compile(r"^(?:type|const|var|func)\s")
+GO_TYPE_DECLARATION_RE = re.compile(r"^type\s+(?P<name>[A-Za-z_]\w*)\b")
+GO_FUNC_DECLARATION_RE = re.compile(
+	r"^func(?:\s+\([^)]*\))?\s+(?P<name>[A-Za-z_]\w*)\s*\("
+)
 TRACEABLE_SUFFIXES = {
 	".go",
 	".js",
@@ -107,6 +112,56 @@ def validate_trace_comment(path: Path, text: str, designs: set[str]) -> list[str
 	return errors
 
 
+def validate_go_declaration_traces(path: Path, text: str) -> list[str]:
+	relative = rel(path)
+	if not relative.startswith("backend/") or path.suffix != ".go" or path.name.endswith("_test.go"):
+		return []
+
+	errors = []
+	lines = text.splitlines()
+	for index, line in enumerate(lines):
+		if not GO_PACKAGE_DECLARATION_RE.match(line):
+			continue
+		previous_index = index - 1
+		while previous_index >= 0 and lines[previous_index].startswith("//go:"):
+			previous_index -= 1
+		if previous_index >= 0 and lines[previous_index] == "//" and index > 0 and lines[index - 1].startswith("//go:"):
+			previous_index -= 1
+		previous = lines[previous_index] if previous_index >= 0 else ""
+		if not DESIGN_REF_RE.search(previous):
+			errors.append(
+				f"{relative}:{index + 1}: package-level Go declaration needs an adjacent "
+				"`Implements DESIGN-*` traceability comment"
+			)
+	return errors
+
+
+def validate_go_doc_comments(path: Path, text: str) -> list[str]:
+	relative = rel(path)
+	if not relative.startswith("backend/") or path.suffix != ".go" or path.name.endswith("_test.go"):
+		return []
+
+	errors = []
+	lines = text.splitlines()
+	for index, line in enumerate(lines):
+		match = GO_TYPE_DECLARATION_RE.match(line) or GO_FUNC_DECLARATION_RE.match(line)
+		if not match:
+			continue
+		name = match.group("name")
+		previous_index = index - 1
+		while previous_index >= 0 and lines[previous_index].startswith("//"):
+			comment = lines[previous_index].removeprefix("//").strip()
+			if comment.startswith(name):
+				break
+			previous_index -= 1
+		else:
+			errors.append(
+				f"{relative}:{index + 1}: Go declaration `{name}` needs a doc comment "
+				f"starting with `{name}`"
+			)
+	return errors
+
+
 def validate_json_sidecar(path: Path, text: str, designs: set[str]) -> list[str]:
 	errors = []
 	relative = rel(path)
@@ -147,6 +202,8 @@ def main() -> int:
 			continue
 		if is_traceable_source(path):
 			errors.extend(validate_trace_comment(path, text, designs))
+			errors.extend(validate_go_declaration_traces(path, text))
+			errors.extend(validate_go_doc_comments(path, text))
 		if path.suffix == ".json":
 			errors.extend(validate_json_sidecar(path, text, designs))
 

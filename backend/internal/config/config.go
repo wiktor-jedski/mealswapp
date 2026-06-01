@@ -8,6 +8,7 @@ import (
 	"slices"
 )
 
+// Implements DESIGN-010 RequestValidator local development defaults.
 const (
 	defaultHTTPPort       = "8080"
 	defaultDatabaseURL    = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
@@ -17,7 +18,6 @@ const (
 )
 
 // Config contains the environment-backed settings for the API and worker.
-//
 // Implements DESIGN-010 RequestValidator shared gateway configuration inputs.
 type Config struct {
 	HTTPPort       string
@@ -28,7 +28,6 @@ type Config struct {
 }
 
 // Load reads Mealswapp configuration from the environment and applies local defaults.
-//
 // Implements DESIGN-010 RequestValidator environment-backed config loading.
 func Load() (Config, error) {
 	cfg := Config{
@@ -58,7 +57,6 @@ func Load() (Config, error) {
 }
 
 // env returns the configured environment value or the provided fallback.
-//
 // Implements DESIGN-010 RequestValidator defaulting for local development.
 func env(key, fallback string) string {
 	value := os.Getenv(key)
@@ -69,7 +67,6 @@ func env(key, fallback string) string {
 }
 
 // requireURLScheme verifies that a configured URL has a supported scheme and host.
-//
 // Implements DESIGN-010 RequestValidator environment-backed config validation.
 func requireURLScheme(key string, value string, schemes ...string) error {
 	parsed, err := url.Parse(value)

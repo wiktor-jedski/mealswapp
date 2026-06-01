@@ -15,6 +15,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 )
 
+// main starts the HTTP API process.
 // Implements DESIGN-010 RouteHandler API process bootstrap.
 func main() {
 	// loading env variables using internal config module

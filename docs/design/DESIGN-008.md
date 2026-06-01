@@ -1,12 +1,13 @@
 ## FILE: DESIGN-008.md
 **Traceability:** ARCH-008
 
-**Static aspects covered:** ProfileController, PreferenceManager, SavedDataRepository, DataExporter, AccountDeleter.
+**Static aspects covered:** ProfileController, PreferenceManager, SavedDataRepository, SearchHistoryRepository, DataExporter, AccountDeleter.
 
 ### 0. Static Aspect Responsibilities
 - `ProfileController`: owns profile, preferences, export, deletion, saved data, and history endpoints.
 - `PreferenceManager`: owns unit, theme, and recalculation-hint behavior.
-- `SavedDataRepository`: owns user-scoped favorites, saved meals, saved diets, and search history persistence.
+- `SavedDataRepository`: owns user-scoped favorites, saved meals, and saved diets.
+- `SearchHistoryRepository`: owns optional user-scoped recent-search persistence with a bounded retention policy.
 - `DataExporter`: owns JSON/CSV export bundle generation.
 - `AccountDeleter`: owns production data deletion, account write lockout, and cache purge coordination.
 
@@ -21,7 +22,7 @@
 1. Require authenticated user context from ARCH-006 for every profile route.
 2. Read and write preferences through ARCH-005 using `user_id` predicates on every query.
 3. When unit preference changes, persist the value and return recalculation hints for currently displayed data.
-4. Save favorites, meals, diets, and history with the authenticated user ID supplied by the server, never by the client.
+4. Save favorites, meals, diets, and optional history with the authenticated user ID supplied by the server, never by the client.
 5. Data export loads profile, PII, saved data, custom items, diets, and history into an `ExportBundle`.
 6. JSON export writes a structured object; CSV export writes separate sections/files for tabular data.
 7. Account deletion builds a deletion plan, deletes production records in a transaction, and calls ARCH-011 to purge user cache keys.

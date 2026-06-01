@@ -1,0 +1,2398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mealswapp Quality Gate & Coverage Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #111827;
+            --border-color: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.15);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --mono-font: 'Roboto Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            padding: 2.5rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 2rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .header-left h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a5b4fc, var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.025em;
+        }
+
+        .header-left p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            background-color: var(--success-glow);
+            border: 1px solid var(--success);
+            color: var(--success);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
+        }
+
+        .status-pulse {
+            width: 8px;
+            height: 8px;
+            background-color: var(--success);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .grid-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            border-color: #334155;
+        }
+
+        .card-link {
+            text-decoration: none;
+            color: inherit;
+            display: contents;
+        }
+
+        .card-link:hover .card {
+            transform: translateY(-2px);
+            border-color: #334155;
+        }
+
+        .card h3 {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .card .value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .card .sub {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
+        .checklist {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .checklist li {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .checklist .check-icon {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .policy-section {
+            margin-bottom: 3rem;
+            background: linear-gradient(180deg, var(--card-bg), rgba(17, 24, 39, 0.7));
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.75rem;
+        }
+
+        .policy-section h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .policy-section p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+        }
+
+        .policy-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .policy-box {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .policy-box h4 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .policy-box ul {
+            list-style: none;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .policy-box li span {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-left: 4px solid var(--primary);
+            padding-left: 0.75rem;
+        }
+
+        .table-container {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 3rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background-color: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 1rem 1.25rem;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.01);
+        }
+
+        .file-path {
+            font-family: var(--mono-font);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .func-name code {
+            font-family: var(--mono-font);
+            color: #a5b4fc;
+            background-color: rgba(99, 102, 241, 0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .line-num {
+            font-family: var(--mono-font);
+            color: var(--text-secondary);
+        }
+
+        .coverage-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .progress-bar-bg {
+            width: 100px;
+            height: 6px;
+            background-color: var(--border-color);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 9999px;
+        }
+
+        .pct-green { background-color: var(--success); }
+        .pct-yellow { background-color: var(--warning); }
+        .pct-red { background-color: var(--danger); }
+
+        .text-green { color: var(--success) !important; }
+        .text-yellow { color: var(--warning) !important; }
+        .text-red { color: var(--danger) !important; }
+
+        .coverage-pct {
+            font-weight: 600;
+            font-family: var(--mono-font);
+            font-size: 0.85rem;
+        }
+
+        .uncovered-cell {
+            font-family: var(--mono-font);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .reqs-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .req-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .req-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .req-card.verified {
+            border-left: 3px solid var(--success);
+        }
+
+        .req-card.missing {
+            border-left: 3px solid var(--danger);
+            opacity: 0.6;
+        }
+
+        .req-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        .req-id {
+            font-family: var(--mono-font);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .req-card.verified .req-id { color: #a7f3d0; }
+        .req-card.missing .req-id { color: #fca5a5; }
+
+        .req-status {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .req-card.verified .req-status { color: var(--success); }
+        .req-card.missing .req-status { color: var(--danger); }
+
+        .req-body {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .screenshots-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        @media (max-width: 768px) {
+            .screenshots-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .screenshot-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .screenshot-card h4 {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            width: 100%;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+
+        .screenshot-frame {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.2);
+        }
+
+        .screenshot-frame img {
+            max-width: 100%;
+            max-height: 480px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .screenshot-card.mobile .screenshot-frame {
+            max-width: 280px;
+        }
+
+        .design-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .design-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .design-card {
+            display: block;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .design-card:hover {
+            transform: translateY(-2px);
+            border-color: #334155;
+        }
+
+        .design-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .design-card-title {
+            font-family: var(--mono-font);
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #a5b4fc;
+        }
+
+        .design-card-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .badge-complete {
+            background-color: var(--success-glow);
+            color: var(--success);
+        }
+
+        .badge-partial {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .badge-empty {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .design-aspect-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+        }
+
+        .aspect-tag {
+            font-family: var(--mono-font);
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .aspect-implemented {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
+        }
+
+        .aspect-missing {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            opacity: 0.6;
+        }
+
+        .design-card {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <h1>Quality Gate & Test Coverage</h1>
+                <p>Generated automatically on 2026-05-30 17:32:08</p>
+            </div>
+            <div class="status-badge">
+                <span class="status-pulse"></span>
+                <span>QUALITY GATE PASSED</span>
+            </div>
+        </header>
+
+        <div class="grid-summary">
+            <a href="#go-coverage" class="card-link">
+            <div class="card">
+                <h3>Go Internal Coverage</h3>
+                <div class="value" style="color: var(--success);">100.0%</div>
+                <div class="sub">Line coverage of internal modules</div>
+            </div>
+            </a>
+            <a href="#frontend-coverage" class="card-link">
+            <div class="card">
+                <h3>Frontend Coverage</h3>
+                <div class="value" style="color: var(--success);">100.00%</div>
+                <div class="sub">Line coverage (100.00% functions)</div>
+            </div>
+            </a>
+            <div class="card">
+                <h3>Verification Gates</h3>
+                <ul class="checklist" style="margin-top: 0.5rem;">
+                    <li><span class="check-icon">✓</span> Traceability Validator: PASSED</li>
+                    <li><span class="check-icon">✓</span> Local Stack Verifier: PASSED</li>
+                    <li><span class="check-icon">✓</span> Frontend Screenshot Verifier: PASSED</li>
+                    <li><span class="check-icon">✓</span> Requirements: PASSED (89/89)</li>
+                </ul>
+            </div>
+            <a href="#design-coverage" class="card-link">
+            <div class="card">
+                <h3>Design Static Aspects</h3>
+                <div class="value" style="color: var(--warning);">34.0%</div>
+                <div class="sub">33/97 static aspects implemented</div>
+            </div>
+            </a>
+        </div>
+
+        
+        <div class="section-title">Frontend Verification Screenshots</div>
+        <div class="screenshots-container">
+            <div class="screenshot-card">
+                <h4>Desktop View (1280x900)</h4>
+                <div class="screenshot-frame">
+                    <img src="screenshots/01_PHASE_REPORT-desktop.png" alt="Desktop View">
+                </div>
+            </div>
+            <div class="screenshot-card mobile">
+                <h4>Mobile View (390x844)</h4>
+                <div class="screenshot-frame">
+                    <img src="screenshots/01_PHASE_REPORT-mobile.png" alt="Mobile View">
+                </div>
+            </div>
+        </div>
+        
+
+        <div class="section-title" id="design-coverage">Design Static Aspects Coverage</div>
+        <div class="design-grid">
+            
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-001</span>
+                <span class="design-card-badge badge-partial">3/9</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">SearchView</span><span class="aspect-tag aspect-implemented">SidebarComponent</span><span class="aspect-tag aspect-implemented">ThemeProvider</span><span class="aspect-tag aspect-missing">ResultsGrid</span><span class="aspect-tag aspect-missing">AutocompleteDropdown</span><span class="aspect-tag aspect-missing">OfflineBanner</span><span class="aspect-tag aspect-missing">SettingsPanel</span><span class="aspect-tag aspect-missing">LocalStorageManager</span><span class="aspect-tag aspect-missing">ServiceWorker</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-002</span>
+                <span class="design-card-badge badge-empty">EMPTY</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-missing">SearchController</span><span class="aspect-tag aspect-missing">AutocompleteRanker</span><span class="aspect-tag aspect-missing">QueryParser</span><span class="aspect-tag aspect-missing">PaginationHandler</span><span class="aspect-tag aspect-missing">FilterProcessor</span><span class="aspect-tag aspect-missing">FunctionalityTagWeighter</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-003</span>
+                <span class="design-card-badge badge-empty">EMPTY</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-missing">CosineSimilarityCalculator</span><span class="aspect-tag aspect-missing">MacroVectorNormalizer</span><span class="aspect-tag aspect-missing">ThresholdFilter</span><span class="aspect-tag aspect-missing">SimilarityIndicatorMapper</span><span class="aspect-tag aspect-missing">SimilarityAssetResolver</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-004</span>
+                <span class="design-card-badge badge-partial">1/7</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">JobQueueManager</span><span class="aspect-tag aspect-missing">LPSolverWrapper</span><span class="aspect-tag aspect-missing">ConstraintBuilder</span><span class="aspect-tag aspect-missing">ObjectiveFunction</span><span class="aspect-tag aspect-missing">DiversityPenalizer</span><span class="aspect-tag aspect-missing">SolutionValidator</span><span class="aspect-tag aspect-missing">JobStatusTracker</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-005</span>
+                <span class="design-card-badge badge-complete">COMPLETE</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">FoodItemEntity</span><span class="aspect-tag aspect-implemented">MealEntity</span><span class="aspect-tag aspect-implemented">RecipeEntity</span><span class="aspect-tag aspect-implemented">TagEntity</span><span class="aspect-tag aspect-implemented">MicronutrientVocabulary</span><span class="aspect-tag aspect-implemented">UnitConverter</span><span class="aspect-tag aspect-implemented">MacroNormalizer</span><span class="aspect-tag aspect-implemented">RepositoryInterfaces</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-006</span>
+                <span class="design-card-badge badge-empty">EMPTY</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-missing">AuthController</span><span class="aspect-tag aspect-missing">PasswordHasher</span><span class="aspect-tag aspect-missing">JWTManager</span><span class="aspect-tag aspect-missing">OAuthHandler</span><span class="aspect-tag aspect-missing">SessionManager</span><span class="aspect-tag aspect-missing">AccountLockoutTracker</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-007</span>
+                <span class="design-card-badge badge-partial">4/5</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">StripeWebhookHandler</span><span class="aspect-tag aspect-implemented">EntitlementManager</span><span class="aspect-tag aspect-implemented">TrialTracker</span><span class="aspect-tag aspect-implemented">UsageLimiter</span><span class="aspect-tag aspect-missing">SubscriptionController</span></div>
+        </a>
+        
+        <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-008</span>
+                <span class="design-card-badge badge-partial">2/5</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">PreferenceManager</span><span class="aspect-tag aspect-implemented">SavedDataRepository</span><span class="aspect-tag aspect-missing">ProfileController</span><span class="aspect-tag aspect-missing">DataExporter</span><span class="aspect-tag aspect-missing">AccountDeleter</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-009</span>
+                <span class="design-card-badge badge-partial">2/6</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">AdminController</span><span class="aspect-tag aspect-implemented">DataImporter</span><span class="aspect-tag aspect-missing">ItemCurator</span><span class="aspect-tag aspect-missing">TagManager</span><span class="aspect-tag aspect-missing">UserAdminPanel</span><span class="aspect-tag aspect-missing">ExternalSearchProxy</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-010</span>
+                <span class="design-card-badge badge-partial">2/6</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">RouteHandler</span><span class="aspect-tag aspect-implemented">RequestValidator</span><span class="aspect-tag aspect-missing">RateLimiter</span><span class="aspect-tag aspect-missing">SecurityHeaderMiddleware</span><span class="aspect-tag aspect-missing">CSRFValidator</span><span class="aspect-tag aspect-missing">CORSHandler</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-011</span>
+                <span class="design-card-badge badge-partial">2/6</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">ServiceWorkerCache</span><span class="aspect-tag aspect-implemented">RedisCache</span><span class="aspect-tag aspect-missing">LocalStorageCache</span><span class="aspect-tag aspect-missing">CacheInvalidator</span><span class="aspect-tag aspect-missing">LRUEvictionPolicy</span><span class="aspect-tag aspect-missing">UserCachePurger</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-012</span>
+                <span class="design-card-badge badge-empty">EMPTY</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-missing">USDAClient</span><span class="aspect-tag aspect-missing">OpenFoodFactsClient</span><span class="aspect-tag aspect-missing">DataNormalizer</span><span class="aspect-tag aspect-missing">RateLimitHandler</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-013</span>
+                <span class="design-card-badge badge-empty">EMPTY</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-missing">EncryptionService</span><span class="aspect-tag aspect-missing">InputSanitizer</span><span class="aspect-tag aspect-missing">AuditLogger</span><span class="aspect-tag aspect-missing">TLSEnforcer</span><span class="aspect-tag aspect-missing">RateLimiter</span><span class="aspect-tag aspect-missing">CSRFValidator</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-014</span>
+                <span class="design-card-badge badge-partial">1/5</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">MetricsCollector</span><span class="aspect-tag aspect-missing">LogAggregator</span><span class="aspect-tag aspect-missing">AlertManager</span><span class="aspect-tag aspect-missing">UptimeMonitor</span><span class="aspect-tag aspect-missing">FiberLogger</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-015</span>
+                <span class="design-card-badge badge-partial">2/4</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">ConsentManager</span><span class="aspect-tag aspect-implemented">DataRetentionPolicy</span><span class="aspect-tag aspect-missing">DisclaimerRenderer</span><span class="aspect-tag aspect-missing">BackupManager</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-016</span>
+                <span class="design-card-badge badge-partial">4/5</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">ThemeProvider</span><span class="aspect-tag aspect-implemented">ColorPalette</span><span class="aspect-tag aspect-implemented">TypographySystem</span><span class="aspect-tag aspect-implemented">ComponentStyles</span><span class="aspect-tag aspect-missing">LayoutGrid</span></div>
+        </a>
+        
+        <a href="#go-coverage" class="design-card" title="View go test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">DESIGN-017</span>
+                <span class="design-card-badge badge-partial">2/4</span>
+            </div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">GlobalExceptionHandler</span><span class="aspect-tag aspect-implemented">ErrorMessageMapper</span><span class="aspect-tag aspect-missing">ErrorBoundary</span><span class="aspect-tag aspect-missing">RetryManager</span></div>
+        </a>
+        
+        </div>
+
+
+
+        <div class="section-title" id="go-coverage">Go Function Coverage Details</div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Function</th>
+                        <th>Declaration Line</th>
+                        <th>Status / Coverage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/app/app.go</td>
+            <td class="func-name"><code>New()</code></td>
+            <td class="line-num">11</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/cache/redis.go</td>
+            <td class="func-name"><code>Open()</code></td>
+            <td class="line-num">10</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
+            <td class="func-name"><code>Load()</code></td>
+            <td class="line-num">33</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
+            <td class="func-name"><code>env()</code></td>
+            <td class="line-num">63</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
+            <td class="func-name"><code>requireURLScheme()</code></td>
+            <td class="line-num">74</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/database/postgres.go</td>
+            <td class="func-name"><code>Open()</code></td>
+            <td class="line-num">24</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/database/postgres.go</td>
+            <td class="func-name"><code>Ping()</code></td>
+            <td class="line-num">35</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/database/postgres.go</td>
+            <td class="func-name"><code>Close()</code></td>
+            <td class="line-num">42</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>NewRouter()</code></td>
+            <td class="line-num">43</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>health()</code></td>
+            <td class="line-num">73</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>ready()</code></td>
+            <td class="line-num">88</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>timeoutMiddleware()</code></td>
+            <td class="line-num">146</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>writeError()</code></td>
+            <td class="line-num">158</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>requestID()</code></td>
+            <td class="line-num">182</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/migrations/migrations.go</td>
+            <td class="func-name"><code>Run()</code></td>
+            <td class="line-num">21</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>NewPostgresComplianceRepository()</code></td>
+            <td class="line-num">23</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>RecordConsent()</code></td>
+            <td class="line-num">28</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>HasRequiredConsent()</code></td>
+            <td class="line-num">47</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>RequestDeletion()</code></td>
+            <td class="line-num">71</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>UpdateDeletionStatus()</code></td>
+            <td class="line-num">102</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>ListDeletionAudit()</code></td>
+            <td class="line-num">143</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>NewPostgresAdminImportAuditRepository()</code></td>
+            <td class="line-num">177</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>UpsertCuratedImport()</code></td>
+            <td class="line-num">182</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>FindCuratedImport()</code></td>
+            <td class="line-num">205</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>PersistAuditEntry()</code></td>
+            <td class="line-num">218</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>WithAudit()</code></td>
+            <td class="line-num">237</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>ListAuditForEntity()</code></td>
+            <td class="line-num">251</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>scanDeletionRequest()</code></td>
+            <td class="line-num">280</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>scanDeletionAuditEntry()</code></td>
+            <td class="line-num">288</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>scanCuratedImport()</code></td>
+            <td class="line-num">296</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>scanAdminAuditEntry()</code></td>
+            <td class="line-num">304</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>validateConsentRecord()</code></td>
+            <td class="line-num">312</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>validDeletionStatus()</code></td>
+            <td class="line-num">325</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>validateCuratedImport()</code></td>
+            <td class="line-num">329</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>validateAdminAuditEntry()</code></td>
+            <td class="line-num">342</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>normalizedJSONPayload()</code></td>
+            <td class="line-num">358</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/compliance_repository.go</td>
+            <td class="func-name"><code>nullableJSONPayload()</code></td>
+            <td class="line-num">365</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>NewPostgresEntitlementRepository()</code></td>
+            <td class="line-num">26</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>UpsertEntitlement()</code></td>
+            <td class="line-num">31</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>GetLatest()</code></td>
+            <td class="line-num">49</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>RecordUsage()</code></td>
+            <td class="line-num">66</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>ListExpiredTrials()</code></td>
+            <td class="line-num">87</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>InsertProcessedStripeEvent()</code></td>
+            <td class="line-num">119</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>scanEntitlement()</code></td>
+            <td class="line-num">150</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>scanUsageWindow()</code></td>
+            <td class="line-num">169</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/entitlement_repository.go</td>
+            <td class="func-name"><code>validateEntitlement()</code></td>
+            <td class="line-num">177</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/errors.go</td>
+            <td class="func-name"><code>Error()</code></td>
+            <td class="line-num">30</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/errors.go</td>
+            <td class="func-name"><code>Unwrap()</code></td>
+            <td class="line-num">41</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/errors.go</td>
+            <td class="func-name"><code>NewError()</code></td>
+            <td class="line-num">49</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/errors.go</td>
+            <td class="func-name"><code>IsKind()</code></td>
+            <td class="line-num">54</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/errors.go</td>
+            <td class="func-name"><code>validationError()</code></td>
+            <td class="line-num">59</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/errors.go</td>
+            <td class="func-name"><code>unitConversionError()</code></td>
+            <td class="line-num">63</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>NewPostgresFoodItemRepository()</code></td>
+            <td class="line-num">19</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>GetByID()</code></td>
+            <td class="line-num">24</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>Search()</code></td>
+            <td class="line-num">37</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>Create()</code></td>
+            <td class="line-num">108</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>Update()</code></td>
+            <td class="line-num">133</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>Delete()</code></td>
+            <td class="line-num">166</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>validateFoodItem()</code></td>
+            <td class="line-num">181</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>validateFoodTags()</code></td>
+            <td class="line-num">203</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>validateMicronutrients()</code></td>
+            <td class="line-num">226</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>replaceFoodTags()</code></td>
+            <td class="line-num">235</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>getFoodByID()</code></td>
+            <td class="line-num">251</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>hydrateFoodTags()</code></td>
+            <td class="line-num">269</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>scanFoodItem()</code></td>
+            <td class="line-num">306</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>scanFoodItemWithCount()</code></td>
+            <td class="line-num">345</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>convertFoodItemForUnitSystem()</code></td>
+            <td class="line-num">386</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>nullablePositiveFloat()</code></td>
+            <td class="line-num">398</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>nullableString()</code></td>
+            <td class="line-num">405</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/food_repository.go</td>
+            <td class="func-name"><code>marshalMicros()</code></td>
+            <td class="line-num">412</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>NormalizeMacros()</code></td>
+            <td class="line-num">9</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>ValidatePhysicalState()</code></td>
+            <td class="line-num">23</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>ValidateMacros()</code></td>
+            <td class="line-num">33</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>ValidateMicronutrientKeys()</code></td>
+            <td class="line-num">44</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>BuildSimilarityMacroVector()</code></td>
+            <td class="line-num">60</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>ScaleMacros()</code></td>
+            <td class="line-num">65</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>invalidNumber()</code></td>
+            <td class="line-num">77</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/macros.go</td>
+            <td class="func-name"><code>round4()</code></td>
+            <td class="line-num">81</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>NewPostgresMealRepository()</code></td>
+            <td class="line-num">18</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>GetByID()</code></td>
+            <td class="line-num">23</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>Search()</code></td>
+            <td class="line-num">43</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>CalculateMacros()</code></td>
+            <td class="line-num">123</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>calculateMacros()</code></td>
+            <td class="line-num">127</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>Create()</code></td>
+            <td class="line-num">166</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>Update()</code></td>
+            <td class="line-num">191</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>Delete()</code></td>
+            <td class="line-num">225</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>validateMeal()</code></td>
+            <td class="line-num">240</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>validateIngredients()</code></td>
+            <td class="line-num">274</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>validateMealTags()</code></td>
+            <td class="line-num">301</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>ensureFoodExists()</code></td>
+            <td class="line-num">324</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>replaceIngredients()</code></td>
+            <td class="line-num">329</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>replaceMealTags()</code></td>
+            <td class="line-num">344</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>getMealByID()</code></td>
+            <td class="line-num">360</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>loadIngredients()</code></td>
+            <td class="line-num">376</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>hydrateMealTags()</code></td>
+            <td class="line-num">402</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>ingredientBasisQuantity()</code></td>
+            <td class="line-num">429</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>convertMealForUnitSystem()</code></td>
+            <td class="line-num">447</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>nullableMealName()</code></td>
+            <td class="line-num">459</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/meal_repository.go</td>
+            <td class="func-name"><code>macroValuesMatch()</code></td>
+            <td class="line-num">467</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/postgres.go</td>
+            <td class="func-name"><code>withTransaction()</code></td>
+            <td class="line-num">23</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/postgres.go</td>
+            <td class="func-name"><code>mapPostgresError()</code></td>
+            <td class="line-num">42</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/tag_repository.go</td>
+            <td class="func-name"><code>NewPostgresTagRepository()</code></td>
+            <td class="line-num">17</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/tag_repository.go</td>
+            <td class="func-name"><code>List()</code></td>
+            <td class="line-num">22</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/tag_repository.go</td>
+            <td class="func-name"><code>Upsert()</code></td>
+            <td class="line-num">49</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/tag_repository.go</td>
+            <td class="func-name"><code>IsInUse()</code></td>
+            <td class="line-num">80</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/tag_repository.go</td>
+            <td class="func-name"><code>SoftDelete()</code></td>
+            <td class="line-num">90</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/units.go</td>
+            <td class="func-name"><code>ConvertUnit()</code></td>
+            <td class="line-num">13</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/units.go</td>
+            <td class="func-name"><code>ConvertServingToBase()</code></td>
+            <td class="line-num">38</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/units.go</td>
+            <td class="func-name"><code>normalizeUnit()</code></td>
+            <td class="line-num">55</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>NewPostgresUserProfileRepository()</code></td>
+            <td class="line-num">20</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>GetOrCreate()</code></td>
+            <td class="line-num">25</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>UpdatePreferences()</code></td>
+            <td class="line-num">39</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>NewPostgresSavedDataRepository()</code></td>
+            <td class="line-num">85</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>SaveItem()</code></td>
+            <td class="line-num">90</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>RemoveItem()</code></td>
+            <td class="line-num">111</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>ListItems()</code></td>
+            <td class="line-num">129</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>AddHistory()</code></td>
+            <td class="line-num">162</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>ListHistory()</code></td>
+            <td class="line-num">185</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>validateSavedItemTarget()</code></td>
+            <td class="line-num">218</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>scanUserProfile()</code></td>
+            <td class="line-num">233</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>scanSavedItem()</code></td>
+            <td class="line-num">241</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>scanSearchHistoryEntry()</code></td>
+            <td class="line-num">249</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>validateSavedItemInput()</code></td>
+            <td class="line-num">257</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>validSavedItemKind()</code></td>
+            <td class="line-num">270</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/user_data_repository.go</td>
+            <td class="func-name"><code>savedItemKindFilter()</code></td>
+            <td class="line-num">274</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/vocabulary_repository.go</td>
+            <td class="func-name"><code>NewPostgresMicronutrientVocabularyRepository()</code></td>
+            <td class="line-num">13</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/vocabulary_repository.go</td>
+            <td class="func-name"><code>ListActive()</code></td>
+            <td class="line-num">18</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/vocabulary_repository.go</td>
+            <td class="func-name"><code>IsAllowed()</code></td>
+            <td class="line-num">45</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/repository/vocabulary_repository.go</td>
+            <td class="func-name"><code>Upsert()</code></td>
+            <td class="line-num">58</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/seed/seed.go</td>
+            <td class="func-name"><code>Run()</code></td>
+            <td class="line-num">16</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/worker/worker.go</td>
+            <td class="func-name"><code>Run()</code></td>
+            <td class="line-num">14</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/worker/worker.go</td>
+            <td class="func-name"><code>runAfterPing()</code></td>
+            <td class="line-num">21</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+        
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section-title" id="frontend-coverage">Frontend File Coverage Details</div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Functions Coverage</th>
+                        <th>Lines Coverage</th>
+                        <th>Uncovered Line Numbers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td class="file-path">src/lib/cache/service-worker.ts</td>
+            <td class="coverage-cell">
+                <span class="coverage-pct text-green">100.00%</span>
+            </td>
+            <td class="coverage-cell">
+                <span class="coverage-pct text-green">100.00%</span>
+            </td>
+            <td class="uncovered-cell">-</td>
+        </tr>
+        
+        <tr>
+            <td class="file-path">src/lib/stores/theme.ts</td>
+            <td class="coverage-cell">
+                <span class="coverage-pct text-green">100.00%</span>
+            </td>
+            <td class="coverage-cell">
+                <span class="coverage-pct text-green">100.00%</span>
+            </td>
+            <td class="uncovered-cell">-</td>
+        </tr>
+        
+                </tbody>
+            </table>
+        </div>
+
+
+    </div>
+</body>
+</html>

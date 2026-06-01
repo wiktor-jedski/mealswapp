@@ -10,6 +10,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/migrations"
 )
 
+// main runs the requested database migration direction.
 // Implements DESIGN-005 RepositoryInterfaces migration command bootstrap.
 func main() {
 	// determine direction, default up

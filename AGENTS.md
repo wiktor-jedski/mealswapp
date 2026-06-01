@@ -31,6 +31,7 @@ Keep Markdown filenames descriptive and consistent with existing prefixes, for e
 For frontend work, follow `docs/requirements/02_STYLE_GUIDE.md`: Svelte components in `frontend/src/lib/components/`, Tailwind utilities, Inter for UI text, Roboto Mono for labels/data, and WCAG AA contrast. For backend Go, use `gofmt` and lower-case package names.
 
 For backend, follow the official Go Doc comments guidelines.
+Keep backend repository persistence SQL under the colocated `backend/internal/repository/sql/` directory and embed it from Go. Do not place SQL statement strings inline in repository Go files.
 For frontend, follow the TSDoc comment specification.
 
 Additionally, code must include concise comments that identify the exact `docs/design` source being implemented, for example `// Implements DESIGN-010 RouteHandler` or `<!-- Implements DESIGN-001 SearchView -->`. Place the comment near the module, component, function, type, or generated block it applies to, and keep it specific to the relevant design file and static aspect.

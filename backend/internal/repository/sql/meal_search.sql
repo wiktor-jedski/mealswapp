@@ -1,0 +1,28 @@
+-- Implements DESIGN-005 MealEntity search query.
+SELECT m.id
+FROM meals m
+WHERE ($1::boolean OR m.deleted_at IS NULL)
+  AND (
+      $2::text = ''
+      OR lower(btrim(m.name)) LIKE lower(btrim($2)) || '%'
+  )
+  AND ($3::integer IS NULL OR m.prep_time_minutes <= $3)
+  AND (
+      coalesce(cardinality($4::uuid[]), 0) = 0
+      OR m.id IN (
+          SELECT mt.meal_id
+          FROM meal_tags mt
+          JOIN tags t ON t.id = mt.tag_id
+          WHERE t.kind = 'category' AND t.id = ANY($4::uuid[])
+      )
+  )
+  AND (
+      coalesce(cardinality($5::uuid[]), 0) = 0
+      OR m.id IN (
+          SELECT mt.meal_id
+          FROM meal_tags mt
+          JOIN tags t ON t.id = mt.tag_id
+          WHERE t.kind = 'functionality' AND t.id = ANY($5::uuid[])
+      )
+  )
+ORDER BY lower(btrim(m.name)), m.id;
