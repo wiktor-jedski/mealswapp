@@ -10,10 +10,10 @@ from pathlib import Path
 def parse_go_coverage(output: str) -> dict:
     files = []
     total_pct = "0.0%"
-    
+
     # Match: github.com/mealswapp/mealswapp/backend/internal/app/app.go:11: New 100.0%
     pattern = re.compile(r"^([^:]+):(\d+):\s+(\S+)\s+(\d+(?:\.\d+)?)%")
-    
+
     for line in output.splitlines():
         line = line.strip()
         if not line:
@@ -23,7 +23,7 @@ def parse_go_coverage(output: str) -> dict:
             if len(parts) >= 3:
                 total_pct = parts[-1]
             continue
-        
+
         match = pattern.match(line)
         if match:
             filepath, line_num, func_name, pct = match.groups()
@@ -31,14 +31,14 @@ def parse_go_coverage(output: str) -> dict:
             prefix = "github.com/mealswapp/mealswapp/backend/"
             if display_path.startswith(prefix):
                 display_path = display_path[len(prefix):]
-            
+
             files.append({
                 "file": display_path,
                 "line": int(line_num),
                 "func": func_name,
                 "coverage": float(pct)
             })
-            
+
     return {
         "files": files,
         "total": total_pct
@@ -48,7 +48,7 @@ def parse_bun_coverage(output: str) -> dict:
     files = []
     total_funcs = "0.0%"
     total_lines = "0.0%"
-    
+
     # Table structure:
     # File                             | % Funcs | % Lines | Uncovered Line #s
     # All files                        |  100.00 |  100.00 |
@@ -84,22 +84,22 @@ def parse_bun_coverage(output: str) -> dict:
 def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: int, output_path: str, screenshot_stem: str | None = None, design_implemented: dict[str, list[str]] | None = None, design_missing: dict[str, list[str]] | None = None, design_checked: int = 0, design_total: int = 0, design_aspects: dict[str, list[str]] | None = None) -> None:
     go_data = parse_go_coverage(go_raw)
     bun_data = parse_bun_coverage(bun_raw)
-    
+
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Copy screenshots from /tmp/mealswapp-frontend-verifier to output_dir/screenshots/
     html_path = Path(output_path)
     html_dir = html_path.parent
     screenshot_stem = screenshot_stem or html_path.stem
     screenshots_dir = html_dir / "screenshots"
     screenshots_dir.mkdir(parents=True, exist_ok=True)
-    
+
     tmp_screenshots_dir = Path("/tmp/mealswapp-frontend-verifier")
     desktop_name = f"{screenshot_stem}-desktop.png"
     mobile_name = f"{screenshot_stem}-mobile.png"
     desktop_src = tmp_screenshots_dir / desktop_name
     mobile_src = tmp_screenshots_dir / mobile_name
-    
+
     has_screenshots = False
     if desktop_src.exists():
         shutil.copy(desktop_src, screenshots_dir / desktop_name)
@@ -127,9 +127,9 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             </div>
         </div>
         """
-    
+
     # Requirements checklist removed
-        
+
     # Build Go rows
     go_rows = ""
     for f in go_data["files"]:
@@ -149,7 +149,7 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             </td>
         </tr>
         """
-        
+
     # Build Bun rows
     bun_rows = ""
     for f in bun_data["files"]:
@@ -867,5 +867,6 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
 </html>
 """
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    html_content = "\n".join(line.rstrip() for line in html_content.splitlines()) + "\n"
     Path(output_path).write_text(html_content)
     print(f"Coverage and Quality Gate report successfully written to {output_path}")

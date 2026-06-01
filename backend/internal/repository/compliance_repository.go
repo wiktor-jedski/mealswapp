@@ -132,6 +132,9 @@ func (r *PostgresComplianceRepository) UpdateDeletionStatus(ctx context.Context,
 		if err := db.QueryRow(ctx, deletionGetStatusSQL, requestID).Scan(&previous); err != nil {
 			return mapPostgresError(err, "load deletion request")
 		}
+		if !validDeletionTransition(previous, status) {
+			return NewError(ErrorKindConflict, "deletion status transition is invalid", nil)
+		}
 		result, err := db.Exec(ctx, deletionUpdateStatusSQL, requestID, status, note)
 		if err != nil {
 			return mapPostgresError(err, "update deletion request")
@@ -318,6 +321,21 @@ func validateConsentRecord(record ConsentRecord) error {
 // Implements DESIGN-015 DataRetentionPolicy.
 func validDeletionStatus(status string) bool {
 	return status == "pending" || status == "processing" || status == "completed" || status == "failed"
+}
+
+// validDeletionTransition reports whether the deletion workflow allows a state change.
+// Implements DESIGN-015 DataRetentionPolicy.
+func validDeletionTransition(from string, to string) bool {
+	switch from {
+	case "pending":
+		return to == "processing"
+	case "processing":
+		return to == "completed" || to == "failed"
+	case "failed":
+		return to == "processing"
+	default:
+		return false
+	}
 }
 
 // validateCuratedImport checks curated import identity, state, and payload fields.

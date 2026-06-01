@@ -241,18 +241,18 @@ def scan_implemented_aspects() -> set[str]:
 def validate_design_coverage() -> tuple[dict[str, list[str]], dict[str, list[str]], int, int]:
 	design_aspects = parse_design_docs()
 	implemented = scan_implemented_aspects()
-	
+
 	implemented_by_design: dict[str, list[str]] = {}
 	missing_by_design: dict[str, list[str]] = {}
 	total_aspects = 0
-	
+
 	for design_id, aspects in sorted(design_aspects.items()):
 		implemented_list = [a for a in aspects if a in implemented]
 		missing_list = [a for a in aspects if a not in implemented]
 		implemented_by_design[design_id] = implemented_list
 		missing_by_design[design_id] = missing_list
 		total_aspects += len(aspects)
-	
+
 	checked = sum(len(v) for v in implemented_by_design.values())
 	return implemented_by_design, missing_by_design, checked, total_aspects
 

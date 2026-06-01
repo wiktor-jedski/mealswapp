@@ -9,6 +9,7 @@ Phase 01 implements the backend repository foundation for Mealswapp:
 - Macro normalization, unit conversion, search primitives, recipe macro calculation, and deterministic seed data.
 - Development seed command at `backend/cmd/seed`.
 - Phase 01 quality reporting at `docs/implementation/implemented/01_PHASE_REPORT.html` with frontend verification screenshots in `docs/implementation/implemented/screenshots/`.
+- Post-review repairs tracked as tasks `43`-`49`: liquid density invariants, physical-state-aware recipe units, search totals past the last page, deletion transition locking, Phase 03 auth contracts, and evidence cleanup.
 
 ## Automated Verification
 
@@ -29,6 +30,16 @@ Verified result:
 - `go test ./...` passed.
 - Backend internal package coverage reported `total: ... 100.0%`.
 - Frontend build, unit tests, and coverage passed with `All files | 100.00 | 100.00`.
+- `git diff --check` passed after report generation.
+
+Focused repair coverage verifies:
+
+- Liquids are rejected without positive density and `imported`, `manual`, or `estimated` provenance kind at repository and PostgreSQL boundaries.
+- Solid ingredients reject `ml` and `fl_oz`; liquid ingredients reject `g` and `oz`.
+- Liquid recipe normalization uses `ml`, `fl_oz`, and serving volume before density converts volume to mass.
+- Food search past the final row returns an empty page with the real total.
+- Deletion requests permit only `pending -> processing`, `processing -> completed|failed`, and `failed -> processing`; rejected transitions create no audit row.
+- Phase 03-facing auth repository interfaces compile without authentication implementations.
 
 ## Project Owner Acceptance Tests
 

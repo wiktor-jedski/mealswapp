@@ -74,3 +74,5 @@ Recent commits use short summaries such as `scripts update` and `task list updat
 Do not commit real secrets. Treat `auth.json`, local service credentials, API tokens, Stripe keys, and food data provider keys as local-only configuration. Use GCP Secret Manager for deployed secrets as described in the tech stack.
 
 Do not commit generated artifacts or local caches, including `frontend/dist/`, root `dist/`, `node_modules/`, `.bun-tmp/`, `.bun-install/`, `backend/.go-cache/`, `backend/.go-mod-cache/`, and `backend/coverage.out`.
+
+Completed-phase HTML reports and their screenshots under `docs/implementation/implemented/` are intentional committed UAT evidence and are exempt from the generated-artifact rule.

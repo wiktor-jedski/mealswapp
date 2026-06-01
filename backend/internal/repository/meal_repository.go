@@ -193,9 +193,9 @@ func (r *PostgresMealRepository) calculateCompositeMacros(ctx context.Context, i
 			return MacroValues{}, false, err
 		}
 		scaled := ScaleMacros(food.MacrosPer100, basis, 100)
-		massGrams, available := ingredientMassGrams(basis, food)
-		if !available {
-			return MacroValues{}, false, nil
+		massGrams, err := ingredientMassGrams(basis, food)
+		if err != nil {
+			return MacroValues{}, false, err
 		}
 		totalMassGrams += massGrams
 		total.Protein += scaled.Protein
@@ -449,14 +449,29 @@ func (r *PostgresMealRepository) hydrateMealTags(ctx context.Context, meal *Meal
 // ingredientBasisQuantity converts an ingredient quantity to its macro-calculation basis.
 // Implements DESIGN-005 MealEntity.
 func ingredientBasisQuantity(ingredient RecipeIngredientEntity, food FoodItemEntity) (float64, error) {
+	if err := ValidatePhysicalState(food.PhysicalState); err != nil {
+		return 0, err
+	}
 	switch ingredient.Unit {
 	case "g":
+		if food.PhysicalState != PhysicalStateSolid {
+			return 0, unitConversionError("unit %q requires a solid ingredient", ingredient.Unit)
+		}
 		return ingredient.Quantity, nil
 	case "oz":
+		if food.PhysicalState != PhysicalStateSolid {
+			return 0, unitConversionError("unit %q requires a solid ingredient", ingredient.Unit)
+		}
 		return ConvertUnit(ingredient.Quantity, "oz", "g")
 	case "ml":
+		if food.PhysicalState != PhysicalStateLiquid {
+			return 0, unitConversionError("unit %q requires a liquid ingredient", ingredient.Unit)
+		}
 		return ingredient.Quantity, nil
 	case "fl_oz":
+		if food.PhysicalState != PhysicalStateLiquid {
+			return 0, unitConversionError("unit %q requires a liquid ingredient", ingredient.Unit)
+		}
 		return ConvertUnit(ingredient.Quantity, "fl_oz", "ml")
 	case "serving":
 		quantity, _, err := ConvertServingToBase(ingredient.Quantity, food.AverageUnitWeightGrams, food.AverageServingVolumeMilliliters, food.PhysicalState)
@@ -468,14 +483,14 @@ func ingredientBasisQuantity(ingredient RecipeIngredientEntity, food FoodItemEnt
 
 // ingredientMassGrams returns comparable recipe mass when normalization data exists.
 // Implements DESIGN-005 MacroNormalizer.
-func ingredientMassGrams(nativeBasis float64, food FoodItemEntity) (float64, bool) {
+func ingredientMassGrams(nativeBasis float64, food FoodItemEntity) (float64, error) {
 	if food.PhysicalState == PhysicalStateSolid {
-		return nativeBasis, true
+		return nativeBasis, nil
 	}
 	if food.DensityGramsPerMilliliter <= 0 {
-		return 0, false
+		return 0, validationError("persisted liquid ingredient density is required")
 	}
-	return nativeBasis * food.DensityGramsPerMilliliter, true
+	return nativeBasis * food.DensityGramsPerMilliliter, nil
 }
 
 // convertMealForUnitSystem converts meal display values to the requested unit system.

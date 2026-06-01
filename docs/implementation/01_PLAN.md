@@ -17,7 +17,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-005 core entities, PostgreSQL schema, migrations, repository interfaces, unit conversion, macro normalization, tag model, micronutrient vocabulary, and seed data.
 - Cover food items, meals, recipes, tags, users, preferences, entitlements, saved data, audit logs, and admin imports enough for later phases.
-- Add optional `densityGramsPerMilliliter` and density provenance for liquids. Use density when normalizing mixed solid/liquid composite meals. If required liquid density is unavailable, retain full-recipe and per-serving nutrition but exclude the meal from normalized similarity ranking.
+- Require positive `densityGramsPerMilliliter` and `densitySourceKind` for liquids. Use density when normalizing mixed solid/liquid composite meals. Missing persisted liquid density is invalid data and returns an error.
 - Exit criteria: repository tests pass for CRUD, search primitives, tag filters, unit conversion, recipe macro summation, and micronutrient validation.
 
 ### Phase 02: API Gateway, Security, Errors, Observability Baseline
@@ -70,7 +70,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, tag management, user admin actions, and audit persistence.
 - Normalize provider-specific serving-unit aliases to canonical repository units (`g`, `ml`, `oz`, `fl_oz`, or `serving`) at the external-import boundary before persistence.
 - Warn during external import when liquid macro totals per `100 ml` look suspicious, but do not reject them solely for exceeding `100 g`; without density data, that threshold is not a valid hard constraint for liquids.
-- Derive optional liquid density from trusted USDA volume portions with gram weights when available, preferring `ml`, `cup`, `tbsp`, `tsp`, then `fl_oz`. Persist density provenance including source provider, source food ID, and whether the value was imported, manually entered, or estimated. Do not silently assume `1 ml = 1 g`.
+- Derive required liquid density from trusted USDA volume portions with gram weights when available, preferring `ml`, `cup`, `tbsp`, `tsp`, then `fl_oz`. Persist whether the value was imported, manually entered, or estimated. Keep source provider and source food ID optional for manual or estimated values. Do not silently assume `1 ml = 1 g`.
 - Optimize curated-import micronutrient validation: replace per-item full active-vocabulary loading with supplied-key lookup such as `ListAllowed(ctx, keys)`, or load and reuse the active vocabulary once within an import workflow. Keep ordinary CRUD simple unless measurements justify sharing the optimized path.
 - Exit criteria: non-admin users receive 403; admins can search external sources, edit/tag/import items, and all mutations create audit entries.
 

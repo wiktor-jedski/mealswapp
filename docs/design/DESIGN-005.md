@@ -19,7 +19,7 @@
 - `interface MacroValues { protein: number; carbs: number; fat: number }`
 - `interface MicroValues { [canonicalKey: string]: number | undefined }`
 - `interface MicronutrientVocabularyEntry { key: string; displayName: string; unit: string; active: boolean }`
-- `interface FoodItemEntity { id: UUID; name: string; physicalState: PhysicalState; prepTimeMinutes: number; averageUnitWeightGrams?: number; averageServingVolumeMilliliters?: number; densityGramsPerMilliliter?: number; densitySourceProvider?: string; densitySourceFoodId?: string; densitySourceKind?: "imported" | "manual" | "estimated"; macrosPer100: MacroValues; micros: MicroValues; categoryTags: TagEntity[]; functionalityTags: TagEntity[]; imageUrl?: string }`
+- `interface FoodItemEntity { id: UUID; name: string; physicalState: PhysicalState; prepTimeMinutes: number; averageUnitWeightGrams?: number; averageServingVolumeMilliliters?: number; densityGramsPerMilliliter: number when liquid; densitySourceProvider?: string; densitySourceFoodId?: string; densitySourceKind: "imported" | "manual" | "estimated" when liquid; macrosPer100: MacroValues; micros: MicroValues; categoryTags: TagEntity[]; functionalityTags: TagEntity[]; imageUrl?: string }`
 - `interface MealEntity { id: UUID; type: "single" | "composite"; name: string; recipeItems?: RecipeIngredientEntity[]; physicalState: PhysicalState; prepTimeMinutes: number; averageUnitWeightGrams?: number; macrosPer100: MacroValues; normalizedMacrosAvailable: boolean }`
 - `interface RecipeIngredientEntity { foodItemId: UUID; quantity: number; unit: string }`
 - `interface TagEntity { id: UUID; name: string; kind: "category" | "functionality"; parentId?: UUID }`
@@ -33,11 +33,12 @@
 5. Store micronutrients as supplemental display/export data only; repository methods that build similarity inputs must return only protein, carbohydrates, and fat.
 6. Use repository methods as the only data access path for domain services.
 7. Apply user scoping in repository queries whenever custom items, saved meals, profile data, or history are requested.
-8. For composite meals, load ingredients, sum each ingredient macro after scaling by ingredient quantity, and normalize the total to the meal's per-100g basis. Convert liquid ingredient volume to mass using optional density. If required density is unavailable, mark normalized macros unavailable rather than inventing a conversion.
-9. Convert metric values to imperial only at the repository boundary when `RepositoryContext.unitSystem = "imperial"`.
-10. Use raw SQL with parameter binding through `pgx` or `lib/pq`; never concatenate user input into SQL.
-11. Maintain indexes for item name, category tags, functionality tags, micronutrient vocabulary keys, and common filter columns.
-12. Return domain entities with normalized macros, validated micronutrients, and hydrated tag lists for callers.
+8. For composite meals, load ingredients, sum each ingredient macro after scaling by ingredient quantity, and normalize the total to the meal's per-100g basis. Convert liquid ingredient volume to mass using required density. Missing persisted liquid density is invalid data and returns an error.
+9. Accept `g`, `oz`, and `serving` for solid recipe ingredients. Accept `ml`, `fl_oz`, and `serving` for liquid recipe ingredients. Reject cross-basis units.
+10. Convert metric values to imperial only at the repository boundary when `RepositoryContext.unitSystem = "imperial"`.
+11. Use raw SQL with parameter binding through `pgx` or `lib/pq`; never concatenate user input into SQL.
+12. Maintain indexes for item name, category tags, functionality tags, micronutrient vocabulary keys, and common filter columns.
+13. Return domain entities with normalized macros, validated micronutrients, and hydrated tag lists for callers.
 
 ### 3. State Management & Error Handling
 - `not_found`: repository returns typed not-found errors; controllers map to 404.

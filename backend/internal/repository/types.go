@@ -181,6 +181,29 @@ type OAuthIdentity struct {
 	CreatedAt      time.Time
 }
 
+// UserSession stores refresh-token rotation metadata for an authenticated user.
+// Implements DESIGN-006 AuthController.
+type UserSession struct {
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	RefreshTokenHash string
+	RefreshFamilyID  uuid.UUID
+	AccessExpiresAt  time.Time
+	RefreshExpiresAt time.Time
+	RevokedAt        *time.Time
+	CreatedAt        time.Time
+}
+
+// PasswordResetToken stores a hashed password-reset token.
+// Implements DESIGN-006 AuthController.
+type PasswordResetToken struct {
+	TokenHash string
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedAt time.Time
+}
+
 // UserProfile stores user-scoped preferences and profile data.
 // Implements DESIGN-008 PreferenceManager.
 type UserProfile struct {
@@ -385,6 +408,38 @@ type SavedItemRepository interface {
 type SearchHistoryRepository interface {
 	AddHistory(ctx context.Context, entry SearchHistoryEntry) (uuid.UUID, error)
 	ListHistory(ctx context.Context, userID uuid.UUID, limit int) ([]SearchHistoryEntry, error)
+}
+
+// AuthUserRepository defines Phase 03-facing user identity persistence behavior.
+// Implements DESIGN-006 AuthController.
+type AuthUserRepository interface {
+	CreateUser(ctx context.Context, user AuthUser) (uuid.UUID, error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (AuthUser, error)
+	GetUserByNormalizedEmail(ctx context.Context, normalizedEmail string) (AuthUser, error)
+	UpdateUserState(ctx context.Context, user AuthUser) error
+}
+
+// OAuthIdentityRepository defines Phase 03-facing OAuth identity persistence behavior.
+// Implements DESIGN-006 AuthController.
+type OAuthIdentityRepository interface {
+	UpsertOAuthIdentity(ctx context.Context, identity OAuthIdentity) (uuid.UUID, error)
+	GetOAuthIdentity(ctx context.Context, provider string, providerUserID string) (OAuthIdentity, error)
+}
+
+// SessionRepository defines Phase 03-facing session persistence behavior.
+// Implements DESIGN-006 AuthController.
+type SessionRepository interface {
+	CreateSession(ctx context.Context, session UserSession) (uuid.UUID, error)
+	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error)
+	RevokeSession(ctx context.Context, sessionID uuid.UUID) error
+	RevokeSessionFamily(ctx context.Context, refreshFamilyID uuid.UUID) error
+}
+
+// PasswordResetTokenRepository defines Phase 03-facing reset-token persistence behavior.
+// Implements DESIGN-006 AuthController.
+type PasswordResetTokenRepository interface {
+	CreatePasswordResetToken(ctx context.Context, token PasswordResetToken) error
+	ConsumePasswordResetToken(ctx context.Context, tokenHash string, usedAt time.Time) (PasswordResetToken, error)
 }
 
 // EntitlementRepository defines entitlement-state persistence behavior.

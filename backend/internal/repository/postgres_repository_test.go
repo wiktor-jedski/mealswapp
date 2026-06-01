@@ -5,6 +5,7 @@ package repository
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"os"
 	"path/filepath"
@@ -20,6 +21,62 @@ import (
 )
 
 const testDatabaseURL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
+
+// Implements DESIGN-005 RepositoryInterfaces integration fixtures.
+//
+//go:embed sql/testdata/advisory_lock.sql
+var testAdvisoryLockSQL string
+
+//go:embed sql/testdata/advisory_unlock.sql
+var testAdvisoryUnlockSQL string
+
+//go:embed sql/testdata/user_create.sql
+var testUserCreateSQL string
+
+//go:embed sql/testdata/oauth_user_create.sql
+var testOAuthUserCreateSQL string
+
+//go:embed sql/testdata/oauth_identity_create.sql
+var testOAuthIdentityCreateSQL string
+
+//go:embed sql/testdata/invalid_password_pair_create.sql
+var testInvalidPasswordPairCreateSQL string
+
+//go:embed sql/testdata/food_fixture_create.sql
+var testFoodFixtureCreateSQL string
+
+//go:embed sql/testdata/food_tag_fixture_create.sql
+var testFoodTagFixtureCreateSQL string
+
+//go:embed sql/testdata/inactive_vocabulary_upsert.sql
+var testInactiveVocabularyUpsertSQL string
+
+//go:embed sql/testdata/food_exists_by_name.sql
+var testFoodExistsByNameSQL string
+
+//go:embed sql/testdata/user_delete.sql
+var testUserDeleteSQL string
+
+//go:embed sql/testdata/entitlement_count_by_user.sql
+var testEntitlementCountByUserSQL string
+
+//go:embed sql/testdata/food_name_fixture_create.sql
+var testFoodNameFixtureCreateSQL string
+
+//go:embed sql/testdata/collision_food_create.sql
+var testCollisionFoodCreateSQL string
+
+//go:embed sql/testdata/collision_meal_create.sql
+var testCollisionMealCreateSQL string
+
+//go:embed sql/testdata/collision_ingredient_create.sql
+var testCollisionIngredientCreateSQL string
+
+//go:embed sql/testdata/invalid_liquid_without_density_create.sql
+var testInvalidLiquidWithoutDensityCreateSQL string
+
+//go:embed sql/testdata/invalid_liquid_without_density_kind_create.sql
+var testInvalidLiquidWithoutDensityKindCreateSQL string
 
 func openRepositoryTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -38,12 +95,12 @@ func openRepositoryTestDB(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 		t.Skipf("postgres unavailable: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `SELECT pg_advisory_lock(9010101)`); err != nil {
+	if _, err := pool.Exec(ctx, testAdvisoryLockSQL); err != nil {
 		pool.Close()
 		t.Fatalf("acquire repository test database lock: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `SELECT pg_advisory_unlock(9010101)`)
+		_, _ = pool.Exec(context.Background(), testAdvisoryUnlockSQL)
 	})
 
 	migrationDir, err := filepath.Abs("../../../database/migrations")
@@ -67,11 +124,7 @@ func openRepositoryTestDB(t *testing.T) *pgxpool.Pool {
 func createRepositoryUser(t *testing.T, ctx context.Context, db *pgxpool.Pool, email string) uuid.UUID {
 	t.Helper()
 	var id uuid.UUID
-	if err := db.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash, password_salt)
-		VALUES ($1, 'fixture-hash', 'fixture-salt')
-		RETURNING id
-	`, email).Scan(&id); err != nil {
+	if err := db.QueryRow(ctx, testUserCreateSQL, email).Scan(&id); err != nil {
 		t.Fatalf("create user %s: %v", email, err)
 	}
 	return id
@@ -82,24 +135,14 @@ func TestUserIdentitySchemaSupportsOAuthOnlyUsers(t *testing.T) {
 	ctx := context.Background()
 
 	var userID uuid.UUID
-	if err := db.QueryRow(ctx, `
-		INSERT INTO users (email)
-		VALUES ('oauth-only@example.test')
-		RETURNING id
-	`).Scan(&userID); err != nil {
+	if err := db.QueryRow(ctx, testOAuthUserCreateSQL).Scan(&userID); err != nil {
 		t.Fatalf("insert OAuth-only user: %v", err)
 	}
-	if _, err := db.Exec(ctx, `
-		INSERT INTO oauth_identities (user_id, provider, provider_user_id, email)
-		VALUES ($1, 'google', 'google-user-1', 'oauth-only@example.test')
-	`, userID); err != nil {
+	if _, err := db.Exec(ctx, testOAuthIdentityCreateSQL, userID); err != nil {
 		t.Fatalf("insert OAuth identity: %v", err)
 	}
 
-	if _, err := db.Exec(ctx, `
-		INSERT INTO users (email, password_hash)
-		VALUES ('invalid-password-pair@example.test', 'hash-without-salt')
-	`); err == nil {
+	if _, err := db.Exec(ctx, testInvalidPasswordPairCreateSQL); err == nil {
 		t.Fatal("insert user with hash but no salt error = nil, want constraint violation")
 	}
 }
@@ -163,16 +206,10 @@ func TestPostgresTagRepositoryInUseSafeguard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
-	if _, err := db.Exec(ctx, `
-		INSERT INTO food_items (id, name, physical_state, protein_per_100, carbohydrates_per_100, fat_per_100)
-		VALUES ('10000000-0000-0000-0000-000000000201', 'Tofu', 'solid', 8, 2, 4)
-	`); err != nil {
+	if _, err := db.Exec(ctx, testFoodFixtureCreateSQL); err != nil {
 		t.Fatalf("create food fixture: %v", err)
 	}
-	if _, err := db.Exec(ctx, `
-		INSERT INTO food_item_tags (food_item_id, tag_id)
-		VALUES ('10000000-0000-0000-0000-000000000201', $1)
-	`, tagID); err != nil {
+	if _, err := db.Exec(ctx, testFoodTagFixtureCreateSQL, tagID); err != nil {
 		t.Fatalf("attach tag fixture: %v", err)
 	}
 
@@ -388,11 +425,7 @@ func TestPostgresFoodItemRepositoryValidationAndConflicts(t *testing.T) {
 		{name: "missing tag", item: FoodItemEntity{Name: "Bad Tag", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, CategoryTags: []TagEntity{{ID: uuid.New(), Kind: TagKindCategory}}}, kind: ErrorKindValidation},
 		{name: "wrong tag kind", item: FoodItemEntity{Name: "Wrong Tag", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, CategoryTags: []TagEntity{{ID: functionalityID, Kind: TagKindCategory}}}, kind: ErrorKindValidation},
 	}
-	if _, err := db.Exec(ctx, `
-		INSERT INTO micronutrient_vocabulary (key, display_name, unit, active)
-		VALUES ('Legacy', 'Legacy', 'mg', false)
-		ON CONFLICT (key) DO UPDATE SET active = false
-	`); err != nil {
+	if _, err := db.Exec(ctx, testInactiveVocabularyUpsertSQL); err != nil {
 		t.Fatalf("insert inactive vocabulary: %v", err)
 	}
 	for _, tt := range invalidCases {
@@ -404,11 +437,50 @@ func TestPostgresFoodItemRepositoryValidationAndConflicts(t *testing.T) {
 	}
 
 	var invalidInserted bool
-	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM food_items WHERE name = 'Bad Tag')`).Scan(&invalidInserted); err != nil {
+	if err := db.QueryRow(ctx, testFoodExistsByNameSQL, "Bad Tag").Scan(&invalidInserted); err != nil {
 		t.Fatalf("check validation rollback: %v", err)
 	}
 	if invalidInserted {
 		t.Fatalf("invalid food item was inserted despite validation failure")
+	}
+}
+
+func TestPostgresFoodItemRepositoryRequiresLiquidDensity(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	foodRepo := NewPostgresFoodItemRepository(db)
+
+	if _, err := db.Exec(ctx, testInvalidLiquidWithoutDensityCreateSQL); err == nil {
+		t.Fatal("direct liquid insert without density error = nil, want constraint violation")
+	}
+	if _, err := db.Exec(ctx, testInvalidLiquidWithoutDensityKindCreateSQL); err == nil {
+		t.Fatal("direct liquid insert without density source kind error = nil, want constraint violation")
+	}
+
+	for _, kind := range []string{"manual", "estimated", "imported"} {
+		item := FoodItemEntity{
+			Name:                      "Liquid " + kind,
+			PhysicalState:             PhysicalStateLiquid,
+			DensityGramsPerMilliliter: 1,
+			DensitySourceKind:         kind,
+			MacrosPer100:              MacroValues{},
+		}
+		if kind == "imported" {
+			item.DensitySourceProvider = "fixture"
+			item.DensitySourceFoodID = "liquid-" + kind
+		}
+		id, err := foodRepo.Create(ctx, item)
+		if err != nil {
+			t.Fatalf("Create() %s density error = %v", kind, err)
+		}
+		item.ID = id
+		item.DensityGramsPerMilliliter = 0
+		item.DensitySourceKind = ""
+		item.DensitySourceProvider = ""
+		item.DensitySourceFoodID = ""
+		if err := foodRepo.Update(ctx, item); !IsKind(err, ErrorKindValidation) {
+			t.Fatalf("Update() %s without density error = %v, want validation", kind, err)
+		}
 	}
 }
 
@@ -473,6 +545,14 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	}
 	if total != 0 || len(items) != 0 {
 		t.Fatalf("Search() deleted exclusion total=%d items=%#v, want none", total, items)
+	}
+
+	items, total, err = foodRepo.Search(ctx, RepositoryQuery{Limit: 1, Offset: 99})
+	if err != nil {
+		t.Fatalf("Search() past final row error = %v", err)
+	}
+	if total != 1 || len(items) != 0 {
+		t.Fatalf("Search() past final row total=%d items=%#v, want empty page with total 1", total, items)
 	}
 }
 
@@ -700,7 +780,7 @@ func TestPostgresUserDataRepositories(t *testing.T) {
 		t.Fatalf("RemoveItem() missing error = %v, want not found", err)
 	}
 
-	if _, err := db.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
+	if _, err := db.Exec(ctx, testUserDeleteSQL, userID); err != nil {
 		t.Fatalf("delete user: %v", err)
 	}
 	history, err = savedRepo.ListHistory(ctx, userID, 10)
@@ -905,7 +985,7 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow(ctx, `SELECT count(*) FROM entitlements WHERE user_id = $1`, userID).Scan(&count); err != nil {
+	if err := db.QueryRow(ctx, testEntitlementCountByUserSQL, userID).Scan(&count); err != nil {
 		t.Fatalf("count entitlements: %v", err)
 	}
 	if count != 2 {
@@ -1239,21 +1319,65 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 
 	rollbackName := "Rollback Pear"
 	err = adminRepo.WithAudit(ctx, AdminAuditEntry{AdminUserID: uuid.New(), Action: "", EntityType: "food_item"}, func(tx sqlExecutor) error {
-		_, insertErr := tx.Exec(ctx, `
-			INSERT INTO food_items (name, physical_state, protein_per_100, carbohydrates_per_100, fat_per_100)
-			VALUES ($1, 'solid', 1, 1, 1)
-		`, rollbackName)
+		_, insertErr := tx.Exec(ctx, testFoodNameFixtureCreateSQL, rollbackName)
 		return insertErr
 	})
 	if !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("WithAudit() invalid audit error = %v, want validation", err)
 	}
 	var exists bool
-	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM food_items WHERE name = $1)`, rollbackName).Scan(&exists); err != nil {
+	if err := db.QueryRow(ctx, testFoodExistsByNameSQL, rollbackName).Scan(&exists); err != nil {
 		t.Fatalf("check rollback: %v", err)
 	}
 	if exists {
 		t.Fatalf("mutation committed despite audit failure")
+	}
+}
+
+func TestPostgresComplianceRepositoryDeletionTransitions(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresComplianceRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "deletion-transitions@example.test")
+
+	request, err := repo.RequestDeletion(ctx, userID)
+	if err != nil {
+		t.Fatalf("RequestDeletion() error = %v", err)
+	}
+	assertTransition := func(from string, to string, wantKind ErrorKind) {
+		t.Helper()
+		err := repo.UpdateDeletionStatus(ctx, request.ID, to, from+" to "+to)
+		if wantKind == "" && err != nil {
+			t.Fatalf("UpdateDeletionStatus(%s -> %s) error = %v", from, to, err)
+		}
+		if wantKind != "" && !IsKind(err, wantKind) {
+			t.Fatalf("UpdateDeletionStatus(%s -> %s) error = %v, want %s", from, to, err, wantKind)
+		}
+	}
+
+	assertTransition("pending", "pending", ErrorKindConflict)
+	assertTransition("pending", "completed", ErrorKindConflict)
+	assertTransition("pending", "failed", ErrorKindConflict)
+	assertTransition("pending", "processing", "")
+	assertTransition("processing", "processing", ErrorKindConflict)
+	assertTransition("processing", "pending", ErrorKindConflict)
+	assertTransition("processing", "failed", "")
+	assertTransition("failed", "failed", ErrorKindConflict)
+	assertTransition("failed", "completed", ErrorKindConflict)
+	assertTransition("failed", "pending", ErrorKindConflict)
+	assertTransition("failed", "processing", "")
+	assertTransition("processing", "completed", "")
+	assertTransition("completed", "pending", ErrorKindConflict)
+	assertTransition("completed", "processing", ErrorKindConflict)
+	assertTransition("completed", "completed", ErrorKindConflict)
+	assertTransition("completed", "failed", ErrorKindConflict)
+
+	audit, err := repo.ListDeletionAudit(ctx, request.ID)
+	if err != nil {
+		t.Fatalf("ListDeletionAudit() error = %v", err)
+	}
+	if len(audit) != 5 {
+		t.Fatalf("ListDeletionAudit() length = %d, want initial request plus four legal transitions: %#v", len(audit), audit)
 	}
 }
 
@@ -1547,6 +1671,58 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 	}
 }
 
+func TestPostgresMealRepositoryLiquidRecipeNormalizationAndUnits(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	foodRepo := NewPostgresFoodItemRepository(db)
+	mealRepo := NewPostgresMealRepository(db)
+
+	solidID, err := foodRepo.Create(ctx, FoodItemEntity{Name: "Solid Ingredient", PhysicalState: PhysicalStateSolid, AverageUnitWeightGrams: 50, MacrosPer100: MacroValues{Protein: 10}})
+	if err != nil {
+		t.Fatalf("create solid ingredient: %v", err)
+	}
+	liquidID, err := foodRepo.Create(ctx, FoodItemEntity{Name: "Liquid Ingredient", PhysicalState: PhysicalStateLiquid, AverageServingVolumeMilliliters: 125, DensityGramsPerMilliliter: 0.8, DensitySourceKind: "manual", MacrosPer100: MacroValues{Protein: 8}})
+	if err != nil {
+		t.Fatalf("create liquid ingredient: %v", err)
+	}
+
+	invalid := []RecipeIngredientEntity{
+		{FoodItemID: solidID, Quantity: 100, Unit: "ml"},
+		{FoodItemID: solidID, Quantity: 1, Unit: "fl_oz"},
+		{FoodItemID: liquidID, Quantity: 100, Unit: "g"},
+		{FoodItemID: liquidID, Quantity: 1, Unit: "oz"},
+	}
+	for _, ingredient := range invalid {
+		_, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeComposite, Name: "Invalid " + ingredient.Unit, PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{ingredient}})
+		if !IsKind(err, ErrorKindUnitConversion) {
+			t.Fatalf("Create() cross-basis %s error = %v, want unit conversion", ingredient.Unit, err)
+		}
+	}
+
+	valid := []RecipeIngredientEntity{
+		{FoodItemID: liquidID, Quantity: 100, Unit: "ml"},
+		{FoodItemID: liquidID, Quantity: 1, Unit: "fl_oz"},
+		{FoodItemID: liquidID, Quantity: 1, Unit: "serving"},
+	}
+	for _, ingredient := range valid {
+		id, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeComposite, Name: "Liquid Recipe " + ingredient.Unit, PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{ingredient}})
+		if err != nil {
+			t.Fatalf("Create() liquid %s error = %v", ingredient.Unit, err)
+		}
+		meal, err := mealRepo.GetByID(ctx, id, RepositoryContext{})
+		if err != nil {
+			t.Fatalf("GetByID() liquid %s error = %v", ingredient.Unit, err)
+		}
+		wantProtein := 10.0
+		if ingredient.Unit == "fl_oz" {
+			wantProtein = 10.0001
+		}
+		if !meal.NormalizedMacrosAvailable || meal.MacrosPer100 != (MacroValues{Protein: wantProtein}) {
+			t.Fatalf("GetByID() liquid %s meal = %#v", ingredient.Unit, meal)
+		}
+	}
+}
+
 func TestPostgresMealRepositoryValidationAndCycles(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
@@ -1584,26 +1760,17 @@ func TestPostgresMealRepositoryValidationAndCycles(t *testing.T) {
 	}
 
 	collisionID := uuid.New()
-	if _, err := db.Exec(ctx, `
-		INSERT INTO food_items (id, name, physical_state, protein_per_100, carbohydrates_per_100, fat_per_100)
-		VALUES ($1, 'Cycle Food', 'solid', 1, 1, 1);
-	`, collisionID); err != nil {
+	if _, err := db.Exec(ctx, testCollisionFoodCreateSQL, collisionID); err != nil {
 		t.Fatalf("create collision food: %v", err)
 	}
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin collision fixture: %v", err)
 	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO meals (id, type, name, physical_state)
-		VALUES ($1, 'composite', 'Cycle Recipe', 'solid')
-	`, collisionID); err != nil {
+	if _, err := tx.Exec(ctx, testCollisionMealCreateSQL, collisionID); err != nil {
 		t.Fatalf("create collision meal: %v", err)
 	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO recipe_ingredients (meal_id, food_item_id, quantity, unit, position)
-		VALUES ($1, $1, 1, 'g', 0)
-	`, collisionID); err != nil {
+	if _, err := tx.Exec(ctx, testCollisionIngredientCreateSQL, collisionID); err != nil {
 		t.Fatalf("create collision ingredient: %v", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1806,11 +1973,14 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("hydrateMealTags() rows error = %v, want connection", err)
 	}
 
-	if _, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: 1, Unit: "ml"}, FoodItemEntity{}); err != nil {
+	if _, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: 1, Unit: "ml"}, FoodItemEntity{PhysicalState: PhysicalStateLiquid}); err != nil {
 		t.Fatalf("ingredientBasisQuantity() ml error = %v", err)
 	}
-	if got, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: 1, Unit: "fl_oz"}, FoodItemEntity{}); err != nil || got != 29.5735 {
+	if got, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: 1, Unit: "fl_oz"}, FoodItemEntity{PhysicalState: PhysicalStateLiquid}); err != nil || got != 29.5735 {
 		t.Fatalf("ingredientBasisQuantity() fl_oz = %v, %v; want 29.5735 nil", got, err)
+	}
+	if _, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: 1, Unit: "g"}, FoodItemEntity{PhysicalState: "frozen"}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("ingredientBasisQuantity() invalid state error = %v, want validation", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{})
@@ -1877,6 +2047,11 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("Search() query error = %v, want connection", err)
 	}
 
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("Search() count error = %v, want connection", err)
+	}
+
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() scan error = %v, want connection", err)
@@ -1887,8 +2062,8 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("Search() rows error = %v, want connection", err)
 	}
 
-	searchValues := append(append([]any{}, foodValues...), 1)
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rowsList: []pgx.Rows{&fakeRows{next: true, values: searchValues}, nil}, queryErrs: []error{nil, queryErr}})
+	searchValues := append([]any{}, foodValues...)
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rowsList: []pgx.Rows{&fakeRows{next: true, values: searchValues}, nil}, queryErrs: []error{nil, queryErr}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{RepositoryContext: RepositoryContext{UnitSystem: UnitSystemImperial}, Limit: -1, Offset: -1}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() hydrate error = %v, want connection", err)
 	}
@@ -1896,14 +2071,15 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 	invalidSearchValues := append([]any{}, searchValues...)
 	invalidSearchValues[13] = []byte(`[`)
 	invalidSearchValues[14] = (*string)(nil)
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, values: invalidSearchValues}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rows: &fakeRows{next: true, values: invalidSearchValues}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("Search() invalid micros error = %v, want validation", err)
 	}
 
 	failedCreateTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{foodID}}, execErr: execErr}}
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: failedCreateTx})
-	if _, err := repo.Create(ctx, FoodItemEntity{Name: "Water", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{}}); !IsKind(err, ErrorKindConnection) {
+	validWater := FoodItemEntity{Name: "Water", PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "manual", MacrosPer100: MacroValues{}}
+	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Create() replace tags error = %v, want connection", err)
 	}
 	if !failedCreateTx.rolledBack {
@@ -1911,17 +2087,18 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}}}})
-	if _, err := repo.Create(ctx, FoodItemEntity{Name: "Water", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{}}); !IsKind(err, ErrorKindConnection) {
+	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Create() insert scan error = %v, want connection", err)
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErr: execErr}}})
-	if err := repo.Update(ctx, FoodItemEntity{ID: foodID, Name: "Water", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{}}); !IsKind(err, ErrorKindConnection) {
+	validWater.ID = foodID
+	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Update() exec error = %v, want connection", err)
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, execErr}}}})
-	if err := repo.Update(ctx, FoodItemEntity{ID: foodID, Name: "Water", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{}}); !IsKind(err, ErrorKindConnection) {
+	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Update() replace tags error = %v, want connection", err)
 	}
 
@@ -1969,13 +2146,12 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 	if item.Micros == nil || item.ImageURL != "" {
 		t.Fatalf("scanFoodItem() no micros item = %#v", item)
 	}
-	noMicrosSearchValues := append(append([]any{}, noMicrosValues...), 1)
-	item, _, err = scanFoodItemWithCount(&fakeRows{values: noMicrosSearchValues})
+	item, err = scanFoodItem(&fakeRows{values: noMicrosValues})
 	if err != nil {
-		t.Fatalf("scanFoodItemWithCount() no micros error = %v", err)
+		t.Fatalf("scanFoodItem() rows no micros error = %v", err)
 	}
 	if item.Micros == nil || item.ImageURL != "" {
-		t.Fatalf("scanFoodItemWithCount() no micros item = %#v", item)
+		t.Fatalf("scanFoodItem() rows no micros item = %#v", item)
 	}
 
 	convertFoodItemForUnitSystem(&item, UnitSystemImperial)

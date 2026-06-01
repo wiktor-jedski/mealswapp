@@ -98,6 +98,48 @@ func (contractSearchHistoryRepository) ListHistory(context.Context, uuid.UUID, i
 	return nil, nil
 }
 
+type contractAuthUserRepository struct{}
+
+func (contractAuthUserRepository) CreateUser(context.Context, AuthUser) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (contractAuthUserRepository) GetUserByID(context.Context, uuid.UUID) (AuthUser, error) {
+	return AuthUser{}, nil
+}
+func (contractAuthUserRepository) GetUserByNormalizedEmail(context.Context, string) (AuthUser, error) {
+	return AuthUser{}, nil
+}
+func (contractAuthUserRepository) UpdateUserState(context.Context, AuthUser) error { return nil }
+
+type contractOAuthIdentityRepository struct{}
+
+func (contractOAuthIdentityRepository) UpsertOAuthIdentity(context.Context, OAuthIdentity) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (contractOAuthIdentityRepository) GetOAuthIdentity(context.Context, string, string) (OAuthIdentity, error) {
+	return OAuthIdentity{}, nil
+}
+
+type contractSessionRepository struct{}
+
+func (contractSessionRepository) CreateSession(context.Context, UserSession) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (contractSessionRepository) GetSessionByRefreshTokenHash(context.Context, string) (UserSession, error) {
+	return UserSession{}, nil
+}
+func (contractSessionRepository) RevokeSession(context.Context, uuid.UUID) error       { return nil }
+func (contractSessionRepository) RevokeSessionFamily(context.Context, uuid.UUID) error { return nil }
+
+type contractPasswordResetTokenRepository struct{}
+
+func (contractPasswordResetTokenRepository) CreatePasswordResetToken(context.Context, PasswordResetToken) error {
+	return nil
+}
+func (contractPasswordResetTokenRepository) ConsumePasswordResetToken(context.Context, string, time.Time) (PasswordResetToken, error) {
+	return PasswordResetToken{}, nil
+}
+
 type contractEntitlementRepository struct{}
 
 func (contractEntitlementRepository) AppendEntitlement(context.Context, Entitlement) error {
@@ -178,6 +220,10 @@ var (
 	_ UserProfileRepository             = contractUserProfileRepository{}
 	_ SavedItemRepository               = contractSavedItemRepository{}
 	_ SearchHistoryRepository           = contractSearchHistoryRepository{}
+	_ AuthUserRepository                = contractAuthUserRepository{}
+	_ OAuthIdentityRepository           = contractOAuthIdentityRepository{}
+	_ SessionRepository                 = contractSessionRepository{}
+	_ PasswordResetTokenRepository      = contractPasswordResetTokenRepository{}
 	_ SavedItemRepository               = (*PostgresSavedDataRepository)(nil)
 	_ SearchHistoryRepository           = (*PostgresSavedDataRepository)(nil)
 	_ EntitlementRepository             = contractEntitlementRepository{}
@@ -420,14 +466,14 @@ func TestValidateFoodDensity(t *testing.T) {
 }
 
 func TestIngredientMassGrams(t *testing.T) {
-	if got, available := ingredientMassGrams(125, FoodItemEntity{PhysicalState: PhysicalStateSolid}); got != 125 || !available {
-		t.Fatalf("ingredientMassGrams() solid = %v, %v", got, available)
+	if got, err := ingredientMassGrams(125, FoodItemEntity{PhysicalState: PhysicalStateSolid}); got != 125 || err != nil {
+		t.Fatalf("ingredientMassGrams() solid = %v, %v", got, err)
 	}
-	if got, available := ingredientMassGrams(125, FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1.2}); got != 150 || !available {
-		t.Fatalf("ingredientMassGrams() liquid = %v, %v", got, available)
+	if got, err := ingredientMassGrams(125, FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1.2}); got != 150 || err != nil {
+		t.Fatalf("ingredientMassGrams() liquid = %v, %v", got, err)
 	}
-	if got, available := ingredientMassGrams(125, FoodItemEntity{PhysicalState: PhysicalStateLiquid}); got != 0 || available {
-		t.Fatalf("ingredientMassGrams() missing density = %v, %v", got, available)
+	if got, err := ingredientMassGrams(125, FoodItemEntity{PhysicalState: PhysicalStateLiquid}); got != 0 || !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("ingredientMassGrams() missing density = %v, %v", got, err)
 	}
 }
 
@@ -456,7 +502,7 @@ func TestRemainingRepositoryCoverageBranches(t *testing.T) {
 	}
 	liquidValues := foodFixtureValues(itemID)
 	liquidValues[2] = PhysicalStateLiquid
-	if macros, available, err := NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: liquidValues}, rows: &fakeRows{}}).calculateCompositeMacros(ctx, []RecipeIngredientEntity{{FoodItemID: itemID, Quantity: 100, Unit: "ml"}}); err != nil || available || macros != (MacroValues{}) {
+	if macros, available, err := NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: liquidValues}, rows: &fakeRows{}}).calculateCompositeMacros(ctx, []RecipeIngredientEntity{{FoodItemID: itemID, Quantity: 100, Unit: "ml"}}); !IsKind(err, ErrorKindValidation) || available || macros != (MacroValues{}) {
 		t.Fatalf("calculateCompositeMacros() missing density = %#v, %v, %v", macros, available, err)
 	}
 	if meals, total, err := NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{}}).Search(ctx, RepositoryQuery{Offset: -1}); err != nil || len(meals) != 0 || total != 0 {

@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 // Implements DESIGN-005 FoodItemEntity search query.
 //
 //go:embed sql/food_search.sql
 var foodSearchSQL string
+
+// Implements DESIGN-005 RepositoryInterfaces search count query.
+//
+//go:embed sql/food_search_count.sql
+var foodSearchCountSQL string
 
 // Implements DESIGN-005 FoodItemEntity create query.
 //
@@ -92,6 +96,11 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 		offset = 0
 	}
 
+	var total int
+	if err := r.db.QueryRow(ctx, foodSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.CategoryTagIDs, q.FunctionalityIDs).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err, "count food items")
+	}
+
 	rows, err := r.db.Query(ctx, foodSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.CategoryTagIDs, q.FunctionalityIDs, limit, offset)
 	if err != nil {
 		return nil, 0, mapPostgresError(err, "search food items")
@@ -99,13 +108,14 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 	defer rows.Close()
 
 	items := []FoodItemEntity{}
-	total := 0
 	for rows.Next() {
-		item, rowTotal, err := scanFoodItemWithCount(rows)
+		item, err := scanFoodItem(rows)
 		if err != nil {
-			return nil, 0, err
+			if IsKind(err, ErrorKindValidation) {
+				return nil, 0, err
+			}
+			return nil, 0, mapPostgresError(err, "scan food item")
 		}
-		total = rowTotal
 		if err := r.hydrateFoodTags(ctx, &item); err != nil {
 			return nil, 0, err
 		}
@@ -347,60 +357,6 @@ func scanFoodItem(row foodRowScanner) (FoodItemEntity, error) {
 	return item, nil
 }
 
-// scanFoodItemWithCount reads a food item and matching-row count from a PostgreSQL row.
-// Implements DESIGN-005 FoodItemEntity.
-func scanFoodItemWithCount(rows pgx.Rows) (FoodItemEntity, int, error) {
-	var item FoodItemEntity
-	var averageUnitWeight *float64
-	var averageServingVolume *float64
-	var density *float64
-	var densitySourceProvider *string
-	var densitySourceFoodID *string
-	var densitySourceKind *string
-	var microsBytes []byte
-	var imageURL *string
-	var total int
-	if err := rows.Scan(
-		&item.ID,
-		&item.Name,
-		&item.PhysicalState,
-		&item.PrepTimeMinutes,
-		&averageUnitWeight,
-		&averageServingVolume,
-		&density,
-		&densitySourceProvider,
-		&densitySourceFoodID,
-		&densitySourceKind,
-		&item.MacrosPer100.Protein,
-		&item.MacrosPer100.Carbohydrates,
-		&item.MacrosPer100.Fat,
-		&microsBytes,
-		&imageURL,
-		&item.DeletedAt,
-		&item.CreatedAt,
-		&item.UpdatedAt,
-		&total,
-	); err != nil {
-		return FoodItemEntity{}, 0, mapPostgresError(err, "scan food item")
-	}
-	if averageUnitWeight != nil {
-		item.AverageUnitWeightGrams = *averageUnitWeight
-	}
-	setFoodDensityFields(&item, averageServingVolume, density, densitySourceProvider, densitySourceFoodID, densitySourceKind)
-	if imageURL != nil {
-		item.ImageURL = *imageURL
-	}
-	if len(microsBytes) > 0 {
-		if err := json.Unmarshal(microsBytes, &item.Micros); err != nil {
-			return FoodItemEntity{}, 0, validationError("micronutrients must be a JSON object")
-		}
-	}
-	if item.Micros == nil {
-		item.Micros = MicroValues{}
-	}
-	return item, total, nil
-}
-
 // convertFoodItemForUnitSystem converts display values to the requested unit system.
 // Implements DESIGN-005 FoodItemEntity.
 func convertFoodItemForUnitSystem(item *FoodItemEntity, unitSystem UnitSystem) {
@@ -415,7 +371,7 @@ func convertFoodItemForUnitSystem(item *FoodItemEntity, unitSystem UnitSystem) {
 	}
 }
 
-// validateFoodDensity checks optional liquid density metadata.
+// validateFoodDensity checks required liquid density metadata.
 // Implements DESIGN-005 FoodItemEntity.
 func validateFoodDensity(item FoodItemEntity) error {
 	if item.AverageServingVolumeMilliliters < 0 || item.DensityGramsPerMilliliter < 0 {
@@ -427,6 +383,9 @@ func validateFoodDensity(item FoodItemEntity) error {
 	if item.DensityGramsPerMilliliter == 0 {
 		if item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" || item.DensitySourceKind != "" {
 			return validationError("density provenance requires density")
+		}
+		if item.PhysicalState == PhysicalStateLiquid {
+			return validationError("liquid density is required")
 		}
 		return nil
 	}
