@@ -42,6 +42,7 @@ TRACEABLE_FILES = {
 	"scripts/check.py",
 	"scripts/generate_report.py",
 	"scripts/start-services.sh",
+	"scripts/validate-task-list.py",
 	"scripts/validate-traceability.py",
 	"scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py",

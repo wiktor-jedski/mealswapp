@@ -173,7 +173,8 @@ TRACEABLE_ROOTS = {".github", "api", "backend", "database", "frontend"}
 TRACEABLE_FILES = {
 	"docker-compose.yml", "scripts/check.py", "scripts/generate_report.py",
 	"scripts/start-services.sh", "scripts/validate-traceability.py",
-	"scripts/verify-frontend.py", "scripts/verify-local-stack.py",
+	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
+	"scripts/verify-local-stack.py",
 }
 SKIP_TRACEABILITY_NAMES = {"bun.lock", "go.mod", "go.sum"}
 
@@ -265,6 +266,7 @@ def main() -> int:
 
 	checked_reqs, total_reqs = validate_requirements()
 	run(["python3", "scripts/validate-traceability.py"])
+	run(["python3", "scripts/validate-task-list.py"])
 	initially_running_services = running_compose_services()
 	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
 	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])

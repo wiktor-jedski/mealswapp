@@ -50,3 +50,18 @@ No project-owner action is required for Phase 00 at this time.
 ### Actions needed
 
 - Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period.
+
+## Phase 02
+
+### Assumptions
+
+- Add dedicated security-audit persistence for request-correlated authentication, API error, CSRF, rate-limit, and future admin events. Keep it separate from the Phase 01 admin-audit table because the event shapes and fail-closed security-mutation behavior differ.
+- Implement AES-256-GCM envelope encryption, key versions, key-loader interfaces, and a production GCP Secret Manager adapter boundary in Phase 02. Use explicit local test fixtures for development and tests. Defer wiring encryption into concrete PII repository fields until Phase 03 authentication and profile services define the plaintext service boundaries.
+- Implement local structured JSON logging, in-memory metrics test sinks, emitted metric names, probe cadence, and alert-rule configuration in Phase 02. Defer deployed GCP Cloud Monitoring resources, notification channels, backup monitoring resources, and dashboards until Phase 09 production hardening.
+- Trust proxy-provided scheme headers for TLS enforcement only when the deployed proxy trust boundary is explicitly configured. Local development keeps direct HTTP enabled.
+- Provide CSRF token generation and validation hooks in Phase 02 using test-only mutation routes for verification. Wire token issuance into browser session or authentication flows when those routes are added in Phase 03.
+
+### Actions needed
+
+- Before Phase 03 implementation, enumerate the concrete user and profile fields treated as PII and confirm which service boundaries may decrypt each field.
+- Before Phase 09 deployment work, confirm the production reverse proxy or load balancer topology so trusted forwarded-scheme handling can be configured without accepting spoofed headers from arbitrary clients.
