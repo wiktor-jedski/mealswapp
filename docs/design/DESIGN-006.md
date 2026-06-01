@@ -13,7 +13,9 @@
 
 ### 1. Data Structures & Types
 - `interface Credentials { email: string; password: string }`
-- `interface AuthUser { id: UUID; email: string; emailVerified: boolean; role: "user" | "admin"; passwordHash?: string; oauthProvider?: string }`
+- `interface AuthUser { id: UUID; email: string; emailVerified: boolean; role: "user" | "admin"; passwordHash?: string; passwordSalt?: string }`
+- `interface OAuthIdentity { id: UUID; userId: UUID; provider: "google" | "apple"; providerUserId: string; email: string }`
+- `interface UserSession { id: UUID; userId: UUID; refreshTokenHash: string; refreshFamilyId: UUID; accessExpiresAt: time.Time; refreshExpiresAt: time.Time; revokedAt?: time.Time }`
 - `interface SessionTokens { accessToken: string; refreshToken: string; accessExpiresAt: time.Time; refreshExpiresAt: time.Time }`
 - `interface LockoutState { accountFailures: number; ipFailures: number; lockedUntil?: time.Time }`
 - `interface OAuthProfile { provider: "google" | "apple"; providerUserId: string; email: string; displayName?: string }`
@@ -51,3 +53,7 @@
 - `func CompleteOAuth(ctx *fiber.Ctx, provider string) error`
 - `func CreatePasswordReset(userID UUID) (plainToken string, error error)`
 - `func ConsumePasswordReset(plainToken string, newPassword string) error`
+- `type AuthUserRepository interface { CreateUser(ctx context.Context, user AuthUser) (UUID, error); GetUserByID(ctx context.Context, id UUID) (AuthUser, error); GetUserByNormalizedEmail(ctx context.Context, normalizedEmail string) (AuthUser, error); UpdateUserState(ctx context.Context, user AuthUser) error }`
+- `type OAuthIdentityRepository interface { UpsertOAuthIdentity(ctx context.Context, identity OAuthIdentity) (UUID, error); GetOAuthIdentity(ctx context.Context, provider string, providerUserId string) (OAuthIdentity, error) }`
+- `type SessionRepository interface { CreateSession(ctx context.Context, session UserSession) (UUID, error); GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error); RevokeSession(ctx context.Context, sessionId UUID) error; RevokeSessionFamily(ctx context.Context, refreshFamilyId UUID) error }`
+- `type PasswordResetTokenRepository interface { CreatePasswordResetToken(ctx context.Context, token PasswordResetToken) error; ConsumePasswordResetToken(ctx context.Context, tokenHash string, usedAt time.Time) (PasswordResetToken, error) }`

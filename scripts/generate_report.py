@@ -10,10 +10,10 @@ from pathlib import Path
 def parse_go_coverage(output: str) -> dict:
     files = []
     total_pct = "0.0%"
-    
+
     # Match: github.com/mealswapp/mealswapp/backend/internal/app/app.go:11: New 100.0%
     pattern = re.compile(r"^([^:]+):(\d+):\s+(\S+)\s+(\d+(?:\.\d+)?)%")
-    
+
     for line in output.splitlines():
         line = line.strip()
         if not line:
@@ -23,7 +23,7 @@ def parse_go_coverage(output: str) -> dict:
             if len(parts) >= 3:
                 total_pct = parts[-1]
             continue
-        
+
         match = pattern.match(line)
         if match:
             filepath, line_num, func_name, pct = match.groups()
@@ -31,14 +31,14 @@ def parse_go_coverage(output: str) -> dict:
             prefix = "github.com/mealswapp/mealswapp/backend/"
             if display_path.startswith(prefix):
                 display_path = display_path[len(prefix):]
-            
+
             files.append({
                 "file": display_path,
                 "line": int(line_num),
                 "func": func_name,
                 "coverage": float(pct)
             })
-            
+
     return {
         "files": files,
         "total": total_pct
@@ -48,7 +48,7 @@ def parse_bun_coverage(output: str) -> dict:
     files = []
     total_funcs = "0.0%"
     total_lines = "0.0%"
-    
+
     # Table structure:
     # File                             | % Funcs | % Lines | Uncovered Line #s
     # All files                        |  100.00 |  100.00 |
@@ -81,25 +81,25 @@ def parse_bun_coverage(output: str) -> dict:
         "total_lines": total_lines
     }
 
-def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: int, output_path: str, screenshot_stem: str | None = None) -> None:
+def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: int, output_path: str, screenshot_stem: str | None = None, design_implemented: dict[str, list[str]] | None = None, design_missing: dict[str, list[str]] | None = None, design_checked: int = 0, design_total: int = 0, design_aspects: dict[str, list[str]] | None = None) -> None:
     go_data = parse_go_coverage(go_raw)
     bun_data = parse_bun_coverage(bun_raw)
-    
+
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
+
     # Copy screenshots from /tmp/mealswapp-frontend-verifier to output_dir/screenshots/
     html_path = Path(output_path)
     html_dir = html_path.parent
     screenshot_stem = screenshot_stem or html_path.stem
     screenshots_dir = html_dir / "screenshots"
     screenshots_dir.mkdir(parents=True, exist_ok=True)
-    
+
     tmp_screenshots_dir = Path("/tmp/mealswapp-frontend-verifier")
     desktop_name = f"{screenshot_stem}-desktop.png"
     mobile_name = f"{screenshot_stem}-mobile.png"
     desktop_src = tmp_screenshots_dir / desktop_name
     mobile_src = tmp_screenshots_dir / mobile_name
-    
+
     has_screenshots = False
     if desktop_src.exists():
         shutil.copy(desktop_src, screenshots_dir / desktop_name)
@@ -127,9 +127,9 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             </div>
         </div>
         """
-    
+
     # Requirements checklist removed
-        
+
     # Build Go rows
     go_rows = ""
     for f in go_data["files"]:
@@ -149,7 +149,7 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             </td>
         </tr>
         """
-        
+
     # Build Bun rows
     bun_rows = ""
     for f in bun_data["files"]:
@@ -168,6 +168,61 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             </td>
             <td class="uncovered-cell">{f["uncovered"] or "-"}</td>
         </tr>
+        """
+
+    design_coverage_pct = f"{(design_checked / design_total * 100):.1f}%" if design_total > 0 else "0.0%"
+    design_coverage_color = "var(--success)" if design_checked == design_total else "var(--warning)" if design_checked > 0 else "var(--danger)"
+
+    design_arch_map: dict[str, str] = {}
+    if design_aspects:
+        import re
+        ARCH_RE = re.compile(r"ARCH-(\d+)")
+        design_dir = Path(__file__).resolve().parents[1] / "docs" / "design"
+        for path in sorted(design_dir.glob("DESIGN-*.md")):
+            text = path.read_text()
+            match = ARCH_RE.search(text)
+            if match:
+                design_arch_map[path.stem] = match.group(1)
+
+    design_rows = ""
+    if design_implemented is None:
+        design_implemented = {}
+        design_missing = {}
+    for design_id in sorted(design_implemented.keys()):
+        implemented_list = design_implemented.get(design_id, [])
+        missing_list = design_missing.get(design_id, [])
+        total_for_design = len(implemented_list) + len(missing_list)
+        if total_for_design == 0:
+            continue
+        implemented_pct = len(implemented_list) / total_for_design * 100
+        if implemented_pct == 100:
+            badge_class = "badge-complete"
+            badge_text = "COMPLETE"
+        elif implemented_pct > 0:
+            badge_class = "badge-partial"
+            badge_text = f"{len(implemented_list)}/{total_for_design}"
+        else:
+            badge_class = "badge-empty"
+            badge_text = "EMPTY"
+
+        aspect_tags = ""
+        for asp in implemented_list:
+            aspect_tags += f'<span class="aspect-tag aspect-implemented">{asp}</span>'
+        for asp in missing_list:
+            aspect_tags += f'<span class="aspect-tag aspect-missing">{asp}</span>'
+
+        arch_num = design_arch_map.get(design_id, "0")
+        section_id = "frontend-coverage" if int(arch_num) <= 8 else "go-coverage"
+        section_label = section_id.replace("-coverage", "").replace("-", " ")
+
+        design_rows += f"""
+        <a href="#{section_id}" class="design-card" title="View {section_label} test coverage">
+            <div class="design-card-header">
+                <span class="design-card-title">{design_id}</span>
+                <span class="design-card-badge {badge_class}">{badge_text}</span>
+            </div>
+            <div class="design-aspect-list">{aspect_tags}</div>
+        </a>
         """
 
     html_content = f"""<!DOCTYPE html>
@@ -284,6 +339,17 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
         }}
 
         .card:hover {{
+            transform: translateY(-2px);
+            border-color: #334155;
+        }}
+
+        .card-link {{
+            text-decoration: none;
+            color: inherit;
+            display: contents;
+        }}
+
+        .card-link:hover .card {{
             transform: translateY(-2px);
             border-color: #334155;
         }}
@@ -611,6 +677,99 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
         .screenshot-card.mobile .screenshot-frame {{
             max-width: 280px;
         }}
+
+        .design-section {{
+            margin-bottom: 2.5rem;
+        }}
+
+        .design-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }}
+
+        .design-card {{
+            display: block;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            text-decoration: none;
+            color: inherit;
+        }}
+
+        .design-card:hover {{
+            transform: translateY(-2px);
+            border-color: #334155;
+        }}
+
+        .design-card-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }}
+
+        .design-card-title {{
+            font-family: var(--mono-font);
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #a5b4fc;
+        }}
+
+        .design-card-badge {{
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }}
+
+        .badge-complete {{
+            background-color: var(--success-glow);
+            color: var(--success);
+        }}
+
+        .badge-partial {{
+            background-color: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }}
+
+        .badge-empty {{
+            background-color: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }}
+
+        .design-aspect-list {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.5rem;
+        }}
+
+        .aspect-tag {{
+            font-family: var(--mono-font);
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }}
+
+        .aspect-implemented {{
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
+        }}
+
+        .aspect-missing {{
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            opacity: 0.6;
+        }}
+
+        .design-card {{
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }}
     </style>
 </head>
 <body>
@@ -627,16 +786,20 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
         </header>
 
         <div class="grid-summary">
+            <a href="#go-coverage" class="card-link">
             <div class="card">
                 <h3>Go Internal Coverage</h3>
                 <div class="value" style="color: var(--success);">{go_data["total"]}</div>
                 <div class="sub">Line coverage of internal modules</div>
             </div>
+            </a>
+            <a href="#frontend-coverage" class="card-link">
             <div class="card">
                 <h3>Frontend Coverage</h3>
                 <div class="value" style="color: var(--success);">{bun_data["total_lines"]}</div>
                 <div class="sub">Line coverage ({bun_data["total_funcs"]} functions)</div>
             </div>
+            </a>
             <div class="card">
                 <h3>Verification Gates</h3>
                 <ul class="checklist" style="margin-top: 0.5rem;">
@@ -646,13 +809,25 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
                     <li><span class="check-icon">✓</span> Requirements: PASSED ({reqs_checked}/{reqs_total})</li>
                 </ul>
             </div>
+            <a href="#design-coverage" class="card-link">
+            <div class="card">
+                <h3>Design Static Aspects</h3>
+                <div class="value" style="color: {design_coverage_color};">{design_coverage_pct}</div>
+                <div class="sub">{design_checked}/{design_total} static aspects implemented</div>
+            </div>
+            </a>
         </div>
 
         {screenshots_html}
 
+        <div class="section-title" id="design-coverage">Design Static Aspects Coverage</div>
+        <div class="design-grid">
+            {design_rows}
+        </div>
 
 
-        <div class="section-title">Go Function Coverage Details</div>
+
+        <div class="section-title" id="go-coverage">Go Function Coverage Details</div>
         <div class="table-container">
             <table>
                 <thead>
@@ -669,7 +844,7 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             </table>
         </div>
 
-        <div class="section-title">Frontend File Coverage Details</div>
+        <div class="section-title" id="frontend-coverage">Frontend File Coverage Details</div>
         <div class="table-container">
             <table>
                 <thead>
@@ -692,5 +867,6 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
 </html>
 """
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    html_content = "\n".join(line.rstrip() for line in html_content.splitlines()) + "\n"
     Path(output_path).write_text(html_content)
     print(f"Coverage and Quality Gate report successfully written to {output_path}")

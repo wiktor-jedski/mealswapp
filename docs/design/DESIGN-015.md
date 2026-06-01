@@ -10,7 +10,7 @@
 - `BackupManager`: owns backup status, point-in-time recovery checks, and retention enforcement coordination.
 
 ### 1. Data Structures & Types
-- `interface ConsentRecord { userId: UUID; privacyPolicyVersion: string; termsVersion: string; acceptedAt: time.Time; ip: string }`
+- `interface ConsentRecord { userId: UUID; privacyPolicyVersion: string; termsVersion: string; acceptedAt: time.Time }`
 - `interface DisclaimerContent { version: string; bodyMarkdown: string; effectiveAt: time.Time; locations: string[] }`
 - `interface RetentionPolicy { backupRetentionDays: 30; productionDeletionMode: "immediate"; backupPurgeMode: "scheduled" }`
 - `interface ErasureRequest { userId: UUID; requestedAt: time.Time; status: "pending" | "processing" | "completed" | "failed"; completedAt?: time.Time }`
@@ -18,7 +18,7 @@
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Registration cannot complete until Privacy Policy and ToS checkboxes are explicitly accepted.
-2. Persist consent version, timestamp, IP, and user ID through ARCH-005.
+2. Persist consent version, timestamp, and user ID through ARCH-005.
 3. Serve medical disclaimer content to the login screen and About section through a stable content API.
 4. On account erasure request, call ARCH-008 deletion workflow for production data.
 5. Record an erasure request and status transitions for auditability without retaining unnecessary PII.
@@ -44,3 +44,5 @@
 - `func ProcessErasure(ctx context.Context, requestID UUID) error`
 - `func EnforceBackupRetention(ctx context.Context, policy RetentionPolicy) error`
 - `func GetBackupStatus(ctx context.Context) ([]BackupStatus, error)`
+- `type ConsentRepository interface { RecordConsent(ctx context.Context, record ConsentRecord) (UUID, error); HasRequiredConsent(ctx context.Context, userID UUID, privacyVersion string, termsVersion string) (bool, error) }`
+- `type DeletionRequestRepository interface { RequestDeletion(ctx context.Context, userID UUID) (DataDeletionRequest, error); UpdateDeletionStatus(ctx context.Context, requestID UUID, status string, note string) error; ListDeletionAudit(ctx context.Context, requestID UUID) ([]DataDeletionAuditEntry, error) }`

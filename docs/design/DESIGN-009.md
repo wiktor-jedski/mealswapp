@@ -46,3 +46,5 @@
 - `func RequireAdmin(ctx *fiber.Ctx) (AdminContext, error)`
 - `func NormalizeExternalCandidate(raw ExternalCandidate) CuratedItemDraft`
 - `func PersistAuditEntry(ctx context.Context, entry AdminAuditEntry) error`
+- `type CuratedImportRepository interface { UpsertCuratedImport(ctx context.Context, item CuratedImport) (UUID, error); FindCuratedImport(ctx context.Context, provider string, externalID string) (CuratedImport, error) }`
+- `type AdminAuditRepository interface { PersistAuditEntry(ctx context.Context, entry AdminAuditEntry) (UUID, error); WithAudit(ctx context.Context, entry AdminAuditEntry, fn func(sqlExecutor) error) error; ListAuditForEntity(ctx context.Context, entityType string, entityID UUID) ([]AdminAuditEntry, error) }`

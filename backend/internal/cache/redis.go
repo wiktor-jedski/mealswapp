@@ -5,7 +5,6 @@ import (
 )
 
 // Open creates a Redis client from the configured Redis URL.
-//
 // Implements DESIGN-011 RedisCache connection factory.
 func Open(redisURL string) (*redis.Client, error) {
 	options, err := redis.ParseURL(redisURL)

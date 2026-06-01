@@ -3,6 +3,7 @@
 # Implements DESIGN-011 RedisCache and DESIGN-005 RepositoryInterfaces local stack verification.
 
 import contextlib
+import argparse
 import json
 import os
 import socket
@@ -151,6 +152,9 @@ def assert_endpoint(base_url: str, path: str) -> None:
 
 
 def main() -> int:
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--keep-services", action="store_true", help="leave services started by this command running")
+	args = parser.parse_args()
 	if not can_use_docker_compose():
 		raise SystemExit("docker compose is required for local stack verification")
 
@@ -177,8 +181,9 @@ def main() -> int:
 	finally:
 		if api_process is not None:
 			stop_process(api_process)
-		for service in sorted(started_services):
-			run(["docker", "compose", "stop", service])
+		if not args.keep_services:
+			for service in sorted(started_services):
+				run(["docker", "compose", "stop", service])
 
 
 if __name__ == "__main__":

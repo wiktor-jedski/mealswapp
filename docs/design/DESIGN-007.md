@@ -13,10 +13,10 @@
 ### 1. Data Structures & Types
 - `type SubscriptionTier = "free" | "trial" | "paid"`
 - `interface Entitlement { userId: UUID; tier: SubscriptionTier; status: "active" | "expired" | "past_due" | "cancelled"; searchLimitPer24h: number; allowedModes: SearchMode[]; expiresAt?: time.Time; stripeCustomerId?: string; stripeSubscriptionId?: string }`
-- `interface UsageWindow { userId: UUID; startedAt: time.Time; searchCount: number }`
+- `interface UsageWindow { userId: UUID; feature: string; startedAt: time.Time; searchCount: number }`
 - `interface PaymentIntentRequest { userId: UUID; priceId: string; successUrl: string; cancelUrl: string }`
 - `interface StripeWebhookEvent { id: string; type: string; payload: []byte; signature: string; receivedAt: time.Time }`
-- `interface ProcessedEvent { eventId: string; processedAt: time.Time; outcome: "success" | "duplicate" | "failed" }`
+- `interface ProcessedEvent { eventId: string; eventType: string; processedAt: time.Time; outcome: "success" | "duplicate" | "failed"; payload: []byte }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Entitlement checks load the user's active tier from ARCH-005 before protected feature execution.
@@ -50,3 +50,7 @@
 - `func StartTrial(ctx context.Context, userID UUID) (Entitlement, error)`
 - `func ExpireTrials(ctx context.Context, now time.Time) error`
 - `func ReconcileStripeEntitlements(ctx context.Context) error`
+- `type EntitlementRepository interface { AppendEntitlement(ctx context.Context, entitlement Entitlement) error; GetLatest(ctx context.Context, userID UUID) (Entitlement, error) }`
+- `type UsageRepository interface { RecordUsage(ctx context.Context, userID UUID, feature string, occurredAt time.Time) (UsageWindow, error); GetUsageSince(ctx context.Context, userID UUID, feature string, since time.Time) (UsageWindow, error) }`
+- `type TrialRepository interface { ListExpiredTrials(ctx context.Context, now time.Time) ([]Entitlement, error) }`
+- `type StripeEventRepository interface { InsertProcessedStripeEvent(ctx context.Context, event ProcessedEvent) (bool, error) }`

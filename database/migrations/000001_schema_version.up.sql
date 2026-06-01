@@ -1,4 +1,4 @@
--- Implements DESIGN-005 RepositoryInterfaces migration bookkeeping.
+-- Implements DESIGN-005 RepositoryInterfaces.
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version bigint PRIMARY KEY,
     applied_at timestamptz NOT NULL DEFAULT now()

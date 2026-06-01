@@ -17,6 +17,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-005 core entities, PostgreSQL schema, migrations, repository interfaces, unit conversion, macro normalization, tag model, micronutrient vocabulary, and seed data.
 - Cover food items, meals, recipes, tags, users, preferences, entitlements, saved data, audit logs, and admin imports enough for later phases.
+- Require positive `densityGramsPerMilliliter` and `densitySourceKind` for liquids. Use density when normalizing mixed solid/liquid composite meals. Missing persisted liquid density is invalid data and returns an error.
 - Exit criteria: repository tests pass for CRUD, search primitives, tag filters, unit conversion, recipe macro summation, and micronutrient validation.
 
 ### Phase 02: API Gateway, Security, Errors, Observability Baseline
@@ -30,12 +31,17 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-006, ARCH-008, and ARCH-015 minimum account flows.
 - Add registration with consent, login/logout, refresh, password hashing, lockout, password reset, email verification hooks, profile/preferences, saved data, export, and account deletion coordination.
+- Harden account-deletion processing before exposing it: enforce the selected status-transition rules, lock request rows during transitions, and add a worker claim query using `FOR UPDATE SKIP LOCKED` or an equivalent concurrency-safe approach.
+- For account deletion, classify sanitized failures as transient, permanent, or unknown. Retry transient failures automatically with exponential backoff up to 3 attempts. Require admin-triggered retry after investigation for permanent, unknown, or exhausted failures, and alert when requests fail or exhaust retries.
+- Retain a minimal pseudonymous deletion receipt after account erasure: random receipt ID, request and completion timestamps, final outcome, and sanitized failure category when applicable. Do not retain the deleted user ID, email, or account data. Use a provisional three-year retention period pending pre-production legal review.
 - Exit criteria: authenticated session lifecycle works end to end; profile preferences persist; consent blocks registration when missing.
 
 ### Phase 04: Search, Similarity, Cache Core
 
 - Implement ARCH-002, ARCH-003, and server-side ARCH-011 search cache.
 - Add search/autocomplete endpoints, query parsing, pagination limit of 10, filters, Levenshtein ranking, cosine similarity, similarity tiers/assets, Redis cache keys, and graceful similarity degradation.
+- Add named dietary rules as search constraints composed from ingredient-tag inclusions and exclusions, for example allowing fish while excluding meat for `pescatarian`. Keep ingredient classification tag-based.
+- Persist completed authenticated-user searches only after valid results are returned. Retain duplicate searches, cap history at the latest 100 rows per user, expose clear-history behavior, and do not persist anonymous searches.
 - Implement required OpenAPI-to-frontend type generation for the first domain contracts, including `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache-related response metadata. This is the latest phase where type generation may remain incomplete, because Phase 05 frontend API work consumes these generated types.
 - Exit criteria: API supports single/replacement/diet query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
 
@@ -55,12 +61,17 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-004.
 - Add Redis-backed optimization jobs, LP constraint/objective construction, worker process, status polling, 30-second solver timeout, infeasible handling, and up to 3 alternatives.
+- Add the dedicated saved-diet persistence model and enable `saved_items` rows with kind `saved_diet`; until this phase, repositories must reject attempts to save that reserved kind.
 - Exit criteria: API returns 202 with job ID, worker stores completed/failed results, and LP tests validate macro tolerance, exclusions, diversity penalty, and timeout behavior.
 
 ### Phase 08: Admin Curation and External Data
 
 - Implement ARCH-009 and ARCH-012.
 - Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, tag management, user admin actions, and audit persistence.
+- Normalize provider-specific serving-unit aliases to canonical repository units (`g`, `ml`, `oz`, `fl_oz`, or `serving`) at the external-import boundary before persistence.
+- Warn during external import when liquid macro totals per `100 ml` look suspicious, but do not reject them solely for exceeding `100 g`; without density data, that threshold is not a valid hard constraint for liquids.
+- Derive required liquid density from trusted USDA volume portions with gram weights when available, preferring `ml`, `cup`, `tbsp`, `tsp`, then `fl_oz`. Persist whether the value was imported, manually entered, or estimated. Keep source provider and source food ID optional for manual or estimated values. Do not silently assume `1 ml = 1 g`.
+- Optimize curated-import micronutrient validation: replace per-item full active-vocabulary loading with supplied-key lookup such as `ListAllowed(ctx, keys)`, or load and reuse the active vocabulary once within an import workflow. Keep ordinary CRUD simple unless measurements justify sharing the optimized path.
 - Exit criteria: non-admin users receive 403; admins can search external sources, edit/tag/import items, and all mutations create audit entries.
 
 ### Phase 09: Offline, Degradation, Accessibility, Production Hardening
