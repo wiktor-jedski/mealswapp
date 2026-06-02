@@ -6,6 +6,8 @@ info:
   description: Shared gateway source of truth. Domain contracts extend this document in later phases.
 servers:
   - url: http://localhost:8080
+# Public gateway operations opt out explicitly; protected domain operations override this.
+security: []
 paths:
   /health:
     get:

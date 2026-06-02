@@ -24,6 +24,11 @@ When application code is added, follow the documented stack: Svelte frontend cod
 
 Planned app commands should use `docs/design/01_TECH_STACK.md`: Bun for Svelte from `frontend/` (`bun install`, `bun test`, `bun run dev`) and Go tooling from `backend/` (`go test ./...`, `go run ./cmd/...`) once package manifests exist.
 
+Installed development tooling:
+
+- `golang-security` agent skill: use for backend security-sensitive work, especially authentication, authorization, OAuth, cookies, PII handling, and dependency review.
+- Redocly CLI: lint the OpenAPI source of truth with `npx --no-install redocly lint api/openapi.yaml`.
+
 ## Coding Style & Naming Conventions
 
 Keep Markdown filenames descriptive and consistent with existing prefixes, for example `ARCH-018.md` or `03_NEW_PLAN.md`. Use requirement IDs exactly as written (`SW-REQ-001`) so scripts can validate traceability. Python helper scripts should stay small, readable, and use snake_case names.
@@ -54,6 +59,10 @@ Testing commands for the current package layout:
 - Frontend UAT/screenshot verification: `python3 scripts/verify-frontend.py`
 - Backend unit tests: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./...`
 - Backend coverage: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./internal/... -coverprofile=coverage.out && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go tool cover -func=coverage.out`
+- Backend static analysis: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go vet ./...`
+- Backend vulnerability scan: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...`
+- Backend race detection: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test -race ./...`
+- OpenAPI lint: `npx --no-install redocly lint api/openapi.yaml`
 - Frontend install: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun install`
 - Frontend build: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run build`
 - Frontend unit tests: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun test`

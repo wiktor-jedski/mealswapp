@@ -270,12 +270,17 @@ def main() -> int:
 	checked_reqs, total_reqs = validate_requirements()
 	run(["python3", "scripts/validate-traceability.py"])
 	run(["python3", "scripts/validate-task-list.py"])
+	# Implements DESIGN-010 RouteHandler contract and backend quality gates.
+	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
+	run(["go", "vet", "./..."], BACKEND)
+	run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)
 	initially_running_services = running_compose_services()
 	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
 	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
 	run(["go", "fmt", "./..."], BACKEND)
 	try:
 		run(["go", "test", "./...", "-count=1"], BACKEND)
+		run(["go", "test", "-race", "./...", "-count=1"], BACKEND)
 		go_coverage_stdout = validate_go_coverage()
 	finally:
 		started_services = {"postgres", "redis"} - initially_running_services
