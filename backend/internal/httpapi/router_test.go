@@ -27,6 +27,12 @@ func (s *auditSink) Audit(_ context.Context, entry security.AuditLogEntry) error
 	return nil
 }
 
+type failingAuditSink struct{}
+
+func (failingAuditSink) Audit(context.Context, security.AuditLogEntry) error {
+	return errors.New("audit down")
+}
+
 type failingObservabilitySink struct{}
 
 func (failingObservabilitySink) Log(context.Context, observability.LogEvent) error {
@@ -163,7 +169,7 @@ func TestCORSTLSAndNotFoundErrors(t *testing.T) {
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("forbidden origin = %d", resp.StatusCode)
 	}
-	cfg.EnforceTLS, cfg.TrustedProxy = true, true
+	cfg.EnforceTLS = true
 	app = mustNewRouter(t, Dependencies{Config: cfg})
 	resp, _ = app.Test(httptest.NewRequest(fiber.MethodGet, "/health", nil))
 	resp.Body.Close()
@@ -174,8 +180,16 @@ func TestCORSTLSAndNotFoundErrors(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	resp, _ = app.Test(req)
 	resp.Body.Close()
-	if resp.StatusCode != fiber.StatusNotFound || resp.Header.Get("Strict-Transport-Security") == "" {
-		t.Fatalf("https not found = %d, %v", resp.StatusCode, resp.Header)
+	if resp.StatusCode != fiber.StatusPermanentRedirect {
+		t.Fatalf("spoofed forwarded scheme = %d, %v", resp.StatusCode, resp.Header)
+	}
+	previousRequestIsTLS := requestIsTLS
+	requestIsTLS = func(*fiber.Ctx) bool { return true }
+	t.Cleanup(func() { requestIsTLS = previousRequestIsTLS })
+	resp, _ = app.Test(httptest.NewRequest(fiber.MethodGet, "/health", nil))
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || resp.Header.Get("Strict-Transport-Security") == "" {
+		t.Fatalf("https health = %d, %v", resp.StatusCode, resp.Header)
 	}
 }
 
@@ -423,7 +437,7 @@ func TestRouteTemplateFallsBackForUnmatchedContext(t *testing.T) {
 
 func TestInvalidJSONAndReadySuccess(t *testing.T) {
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), PostgresPing: func(context.Context) error { return nil }, Routes: []RouteDefinition{{
-		Method: fiber.MethodPost, Path: "/json", Validate: ValidateJSON(func(map[string]any) error { return nil }), Handler: func(ctx *fiber.Ctx) error { return ctx.SendStatus(fiber.StatusNoContent) },
+		Method: fiber.MethodPost, Path: "/json", ExemptCSRF: true, Validate: ValidateJSON(func(map[string]any) error { return nil }), Handler: func(ctx *fiber.Ctx) error { return ctx.SendStatus(fiber.StatusNoContent) },
 	}}})
 	resp, _ := app.Test(httptest.NewRequest(fiber.MethodGet, "/ready", nil))
 	resp.Body.Close()
@@ -461,6 +475,50 @@ func TestRouterRejectsInvalidConfigAndLimitsByIP(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != fiber.StatusTooManyRequests {
 		t.Fatalf("second = %d", resp.StatusCode)
+	}
+}
+
+func TestRequiredMutationAuditFailsClosedAndReadsEmitCompletionAudit(t *testing.T) {
+	called := false
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Audit: failingAuditSink{}, Routes: []RouteDefinition{{
+		Method: fiber.MethodPost, Path: "/sensitive", ExemptCSRF: true, RequiresAudit: true,
+		Handler: func(ctx *fiber.Ctx) error {
+			called = true
+			return ctx.SendStatus(fiber.StatusNoContent)
+		},
+	}}})
+	resp, _ := app.Test(httptest.NewRequest(fiber.MethodPost, "/api/v1/sensitive", nil))
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusServiceUnavailable || called {
+		t.Fatalf("sensitive mutation = %d, called=%v", resp.StatusCode, called)
+	}
+
+	audit := &auditSink{}
+	app = mustNewRouter(t, Dependencies{Config: testConfig(), Audit: audit, Routes: []RouteDefinition{{
+		Method: fiber.MethodPost, Path: "/sensitive", ExemptCSRF: true, RequiresAudit: true,
+		Handler: func(ctx *fiber.Ctx) error {
+			return ctx.SendStatus(fiber.StatusNoContent)
+		},
+	}}})
+	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/sensitive", nil)
+	req.Header.Set("X-Test-User-ID", "invalid")
+	resp, _ = app.Test(req)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("invalid audit user = %d", resp.StatusCode)
+	}
+	resp, _ = app.Test(httptest.NewRequest(fiber.MethodPost, "/api/v1/sensitive", nil))
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusNoContent || len(audit.entries) < 2 {
+		t.Fatalf("audited mutation = %d, %+v", resp.StatusCode, audit.entries)
+	}
+
+	audit = &auditSink{}
+	app = mustNewRouter(t, Dependencies{Config: testConfig(), Audit: audit})
+	resp, _ = app.Test(httptest.NewRequest(fiber.MethodGet, "/health", nil))
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || len(audit.entries) != 1 || audit.entries[0].Action != "api.request" {
+		t.Fatalf("read audit = %d, %+v", resp.StatusCode, audit.entries)
 	}
 }
 
@@ -518,12 +576,25 @@ func TestQueryPathValidationAndProtectedMutationGuard(t *testing.T) {
 	mustNewRouter(t, Dependencies{Config: testConfig(), Routes: []RouteDefinition{{Method: fiber.MethodDelete, Path: "/unsafe", RequiresAuth: true, Handler: func(ctx *fiber.Ctx) error { return nil }}}})
 }
 
+func TestMutationRoutesRequireExactlyOneCSRFPolicy(t *testing.T) {
+	for _, route := range []RouteDefinition{
+		{Method: fiber.MethodPost, Path: "/missing", Handler: func(ctx *fiber.Ctx) error { return nil }},
+		{Method: fiber.MethodPost, Path: "/contradictory", RequiresCSRF: true, ExemptCSRF: true, Handler: func(ctx *fiber.Ctx) error { return nil }},
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("accepted mutation policy: %+v", route)
+				}
+			}()
+			mustNewRouter(t, Dependencies{Config: testConfig(), Routes: []RouteDefinition{route}})
+		}()
+	}
+}
+
 func TestLimiterResetRepositoryClassificationAndLogLevels(t *testing.T) {
-	now := time.Now()
-	limiter := NewRateLimiter()
-	limiter.now = func() time.Time { return now }
 	app := fiber.New(fiber.Config{ErrorHandler: writeError})
-	app.Use(limiter.Handler(RateLimitRule{Scope: "ip", MaxRequests: 1, WindowSeconds: 1}))
+	app.Use(rateLimitHandler(RateLimitRule{Scope: "ip", MaxRequests: 1, WindowSeconds: 1}))
 	app.Get("/", func(ctx *fiber.Ctx) error { return ctx.SendStatus(fiber.StatusNoContent) })
 	resp, _ := app.Test(httptest.NewRequest(fiber.MethodGet, "/", nil))
 	resp.Body.Close()
@@ -532,7 +603,7 @@ func TestLimiterResetRepositoryClassificationAndLogLevels(t *testing.T) {
 	if resp.StatusCode != fiber.StatusTooManyRequests {
 		t.Fatalf("limited = %d", resp.StatusCode)
 	}
-	now = now.Add(2 * time.Second)
+	time.Sleep(1100 * time.Millisecond)
 	resp, _ = app.Test(httptest.NewRequest(fiber.MethodGet, "/", nil))
 	resp.Body.Close()
 	if resp.StatusCode != fiber.StatusNoContent {
@@ -550,5 +621,11 @@ func TestLimiterResetRepositoryClassificationAndLogLevels(t *testing.T) {
 	}
 	if logLevel(200) != "info" || logLevel(400) != "warn" || logLevel(500) != "error" || !isMutation(fiber.MethodPatch) || isMutation(fiber.MethodGet) {
 		t.Fatal("severity or mutation mapping mismatch")
+	}
+	if got := ClassifyServerError(context.DeadlineExceeded); got.HTTPStatus != fiber.StatusGatewayTimeout {
+		t.Fatalf("deadline classification = %+v", got)
+	}
+	if got := ClassifyServerError(fiber.NewError(fiber.StatusTeapot, "short and stout")); got.HTTPStatus != fiber.StatusTeapot {
+		t.Fatalf("fiber classification = %+v", got)
 	}
 }

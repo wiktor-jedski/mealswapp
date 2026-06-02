@@ -10,10 +10,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/google/uuid"
@@ -26,6 +26,10 @@ import (
 // observabilityFallbackWriter reports sink failures without calling the failed sink again.
 // Implements DESIGN-014 LogAggregator.
 var observabilityFallbackWriter io.Writer = os.Stderr
+
+// requestIsTLS is replaceable in tests because Fiber's in-memory transport has no TLS connection state.
+// Implements DESIGN-013 TLSEnforcer.
+var requestIsTLS = func(ctx *fiber.Ctx) bool { return ctx.Context().IsTLS() }
 
 // Dependencies provides infrastructure and cross-cutting services to the HTTP router.
 // Implements DESIGN-010 RouteHandler dependency boundary.
@@ -77,17 +81,18 @@ type Envelope struct {
 // RouteDefinition describes a versioned service route and required gateway hooks.
 // Implements DESIGN-010 RouteHandler.
 type RouteDefinition struct {
-	Method       string
-	Path         string
-	Handler      fiber.Handler
-	RequiresAuth bool
-	RequiresCSRF bool
-	ExemptCSRF   bool
-	Validate     fiber.Handler
-	RateLimit    *RateLimitRule
+	Method        string
+	Path          string
+	Handler       fiber.Handler
+	RequiresAuth  bool
+	RequiresCSRF  bool
+	ExemptCSRF    bool
+	RequiresAudit bool
+	Validate      fiber.Handler
+	RateLimit     *RateLimitRule
 }
 
-// RateLimitRule configures a scoped fixed-window request limit.
+// RateLimitRule configures a scoped Fiber request limit.
 // Implements DESIGN-010 RateLimiter.
 type RateLimitRule struct {
 	Scope         string
@@ -95,47 +100,19 @@ type RateLimitRule struct {
 	WindowSeconds int
 }
 
-// rateLimitEntry stores one fixed-window counter.
+// rateLimitHandler enforces one endpoint rate-limit rule with Fiber middleware.
 // Implements DESIGN-010 RateLimiter.
-type rateLimitEntry struct {
-	count   int
-	expires time.Time
-}
-
-// RateLimiter stores scoped fixed-window counters.
-// Implements DESIGN-010 RateLimiter.
-type RateLimiter struct {
-	mu      sync.Mutex
-	now     func() time.Time
-	entries map[string]rateLimitEntry
-}
-
-// NewRateLimiter creates an in-process Phase 02 limiter.
-// Implements DESIGN-010 RateLimiter.
-func NewRateLimiter() *RateLimiter {
-	return &RateLimiter{now: time.Now, entries: map[string]rateLimitEntry{}}
-}
-
-// Handler enforces one endpoint rate-limit rule.
-// Implements DESIGN-010 RateLimiter.
-func (l *RateLimiter) Handler(rule RateLimitRule) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
-		key := rateLimitKey(ctx, rule.Scope)
-		now := l.now()
-		l.mu.Lock()
-		entry := l.entries[key]
-		if !entry.expires.After(now) {
-			entry = rateLimitEntry{expires: now.Add(time.Duration(rule.WindowSeconds) * time.Second)}
-		}
-		entry.count++
-		l.entries[key] = entry
-		l.mu.Unlock()
-		if entry.count > rule.MaxRequests {
-			ctx.Set("Retry-After", strconv.Itoa(max(1, int(time.Until(entry.expires).Seconds()))))
+func rateLimitHandler(rule RateLimitRule) fiber.Handler {
+	return limiter.New(limiter.Config{
+		Max:        rule.MaxRequests,
+		Expiration: time.Duration(rule.WindowSeconds) * time.Second,
+		KeyGenerator: func(ctx *fiber.Ctx) string {
+			return rateLimitKey(ctx, rule.Scope)
+		},
+		LimitReached: func(ctx *fiber.Ctx) error {
 			return AppError{HTTPStatus: fiber.StatusTooManyRequests, Category: "auth", Code: "rate_limited", Message: "too many requests", Retryable: true}
-		}
-		return ctx.Next()
-	}
+		},
+	})
 }
 
 // FailedLoginRule returns the Phase 03 reusable brute-force limit.
@@ -171,16 +148,16 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	v1.Get("/health", health)
 	v1.Get("/ready", ready(deps))
 	v1.Get("/auth/csrf-token", csrfToken)
-	registerV1Routes(v1, deps, NewRateLimiter())
+	registerV1Routes(v1, deps)
 	return app, nil
 }
 
 // registerV1Routes composes route-specific gateway hooks.
 // Implements DESIGN-010 RouteHandler.
-func registerV1Routes(group fiber.Router, deps Dependencies, limiter *RateLimiter) {
+func registerV1Routes(group fiber.Router, deps Dependencies) {
 	for _, route := range deps.Routes {
-		if route.RequiresAuth && isMutation(route.Method) && !route.RequiresCSRF && !route.ExemptCSRF {
-			panic("protected mutations must require CSRF or declare an exemption")
+		if isMutation(route.Method) && route.RequiresCSRF == route.ExemptCSRF {
+			panic("mutations must declare exactly one CSRF policy")
 		}
 		handlers := []fiber.Handler{}
 		if route.RequiresAuth {
@@ -193,7 +170,10 @@ func registerV1Routes(group fiber.Router, deps Dependencies, limiter *RateLimite
 			handlers = append(handlers, route.Validate)
 		}
 		if route.RateLimit != nil {
-			handlers = append(handlers, limiter.Handler(*route.RateLimit))
+			handlers = append(handlers, rateLimitHandler(*route.RateLimit))
+		}
+		if route.RequiresAudit {
+			handlers = append(handlers, requireAudit(deps.Audit))
 		}
 		handlers = append(handlers, route.Handler)
 		group.Add(route.Method, route.Path, handlers...)
@@ -216,7 +196,7 @@ func gatewayContext(timeout time.Duration) fiber.Handler {
 		ctx.SetUserContext(userCtx)
 		ctx.Locals("gateway", GatewayContext{RequestID: requestID(ctx), StartedAt: started, Deadline: started.Add(timeout)})
 		err := ctx.Next()
-		if errors.Is(userCtx.Err(), context.DeadlineExceeded) {
+		if errors.Is(userCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
 			return AppError{HTTPStatus: fiber.StatusGatewayTimeout, Category: "timeout", Code: "request_timeout", Message: "request timed out", Retryable: true}
 		}
 		return err
@@ -267,12 +247,27 @@ func tlsEnforcer(cfg config.Config) fiber.Handler {
 		if !cfg.EnforceTLS {
 			return ctx.Next()
 		}
-		scheme := ctx.Protocol()
-		if cfg.TrustedProxy && ctx.Get("X-Forwarded-Proto") != "" {
-			scheme = ctx.Get("X-Forwarded-Proto")
-		}
-		if scheme != "https" {
+		if !requestIsTLS(ctx) {
 			return ctx.Redirect("https://"+ctx.Hostname()+ctx.OriginalURL(), fiber.StatusPermanentRedirect)
+		}
+		return ctx.Next()
+	}
+}
+
+// requireAudit fails closed before dispatching security-sensitive mutations.
+// Implements DESIGN-013 AuditLogger.
+func requireAudit(audit security.AuditLogger) fiber.Handler {
+	return func(ctx *fiber.Ctx) error {
+		userID, err := auditUserID(ctx)
+		if err != nil {
+			return AppError{HTTPStatus: fiber.StatusUnauthorized, Category: "auth", Code: "unauthorized", Message: "authentication required", Cause: err}
+		}
+		err = security.RecordAuditRequired(ctx.UserContext(), audit, security.AuditLogEntry{
+			RequestID: requestID(ctx), UserID: userID, Action: "api.mutation", Resource: routeTemplate(ctx),
+			Outcome: "attempt", IP: ctx.IP(), UserAgent: ctx.Get("User-Agent"), CreatedAt: time.Now(),
+		})
+		if err != nil {
+			return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "dependency_unavailable", Message: "service temporarily unavailable", Retryable: true, Cause: err}
 		}
 		return ctx.Next()
 	}
@@ -382,6 +377,15 @@ func instrument(deps Dependencies) fiber.Handler {
 			}
 			security.RecordAuditBestEffort(ctx.UserContext(), deps.Audit, security.AuditLogEntry{RequestID: requestID(ctx), UserID: userID, Action: "api.error", Resource: routeTemplate(ctx), Outcome: "failure", IP: ctx.IP(), UserAgent: ctx.Get("User-Agent"), CreatedAt: time.Now()})
 		}
+		userID, userIDErr := auditUserID(ctx)
+		if userIDErr != nil {
+			reportObservabilityFailure("audit user ID", userIDErr)
+		}
+		outcome := "success"
+		if status >= 400 {
+			outcome = "failure"
+		}
+		security.RecordAuditBestEffort(ctx.UserContext(), deps.Audit, security.AuditLogEntry{RequestID: requestID(ctx), UserID: userID, Action: "api.request", Resource: routeTemplate(ctx), Outcome: outcome, IP: ctx.IP(), UserAgent: ctx.Get("User-Agent"), CreatedAt: time.Now()})
 		labels := map[string]string{"route": routeTemplate(ctx), "status": strconv.Itoa(status)}
 		recordMetric(ctx, deps.Metrics, "http_request_latency_seconds", time.Since(started).Seconds(), "seconds", labels)
 		recordMetric(ctx, deps.Metrics, "http_response_total", 1, "responses", labels)
@@ -467,6 +471,8 @@ func ClassifyServerError(err error) AppError {
 		return AppError{HTTPStatus: fiberErr.Code, Category: "validation", Code: http.StatusText(fiberErr.Code), Message: fiberErr.Message}
 	}
 	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return AppError{HTTPStatus: fiber.StatusGatewayTimeout, Category: "timeout", Code: "request_timeout", Message: "request timed out", Retryable: true}
 	case repository.IsKind(err, repository.ErrorKindValidation):
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
 	case repository.IsKind(err, repository.ErrorKindNotFound):

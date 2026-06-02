@@ -61,6 +61,11 @@ Browser clients obtain a session-bound CSRF synchronizer token with
 the token for the `X-CSRF-Token` header. The matching CSRF and session cookies
 are HttpOnly and must be sent by the browser with credentials enabled.
 
+Phase 02 rejects `MEALSWAPP_TRUST_PROXY=true` and does not consume
+`X-Forwarded-Proto`. Phase 09 owns restricted trusted ingress and TLS 1.3 edge
+enforcement. Gateway deadlines are cooperative: handlers and dependencies must
+honor request-context cancellation and return propagated deadline errors.
+
 ## Worker
 
 ```sh

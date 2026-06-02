@@ -550,7 +550,7 @@
         <header>
             <div class="header-left">
                 <h1>Quality Gate & Test Coverage</h1>
-                <p>Generated automatically on 2026-06-01 22:43:19</p>
+                <p>Generated automatically on 2026-06-02 18:03:38</p>
             </div>
             <div class="status-badge">
                 <span class="status-pulse"></span>
@@ -579,14 +579,14 @@
                     <li><span class="check-icon">✓</span> Traceability Validator: PASSED</li>
                     <li><span class="check-icon">✓</span> Local Stack Verifier: PASSED</li>
                     <li><span class="check-icon">✓</span> Frontend Screenshot Verifier: PASSED</li>
-                    <li><span class="check-icon">✓</span> Requirements: PASSED (89/89)</li>
+                    <li><span class="check-icon">✓</span> Requirements: PASSED (91/91)</li>
                 </ul>
             </div>
             <a href="#design-coverage" class="card-link">
             <div class="card">
                 <h3>Design Static Aspects</h3>
-                <div class="value" style="color: var(--warning);">51.0%</div>
-                <div class="sub">50/98 static aspects implemented</div>
+                <div class="value" style="color: var(--warning);">52.0%</div>
+                <div class="sub">51/98 static aspects implemented</div>
             </div>
             </a>
         </div>
@@ -655,9 +655,9 @@
         <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
             <div class="design-card-header">
                 <span class="design-card-title">DESIGN-006</span>
-                <span class="design-card-badge badge-partial">2/6</span>
+                <span class="design-card-badge badge-partial">3/6</span>
             </div>
-            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">AuthController</span><span class="aspect-tag aspect-implemented">OAuthHandler</span><span class="aspect-tag aspect-missing">PasswordHasher</span><span class="aspect-tag aspect-missing">JWTManager</span><span class="aspect-tag aspect-missing">SessionManager</span><span class="aspect-tag aspect-missing">AccountLockoutTracker</span></div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">AuthController</span><span class="aspect-tag aspect-implemented">OAuthHandler</span><span class="aspect-tag aspect-implemented">SessionManager</span><span class="aspect-tag aspect-missing">PasswordHasher</span><span class="aspect-tag aspect-missing">JWTManager</span><span class="aspect-tag aspect-missing">AccountLockoutTracker</span></div>
         </a>
 
         <a href="#frontend-coverage" class="design-card" title="View frontend test coverage">
@@ -713,7 +713,7 @@
                 <span class="design-card-title">DESIGN-013</span>
                 <span class="design-card-badge badge-complete">COMPLETE</span>
             </div>
-            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">EncryptionService</span><span class="aspect-tag aspect-implemented">InputSanitizer</span><span class="aspect-tag aspect-implemented">AuditLogger</span><span class="aspect-tag aspect-implemented">TLSEnforcer</span><span class="aspect-tag aspect-implemented">RateLimiter</span><span class="aspect-tag aspect-implemented">CSRFValidator</span></div>
+            <div class="design-aspect-list"><span class="aspect-tag aspect-implemented">EncryptionService</span><span class="aspect-tag aspect-implemented">InputNormalizer</span><span class="aspect-tag aspect-implemented">AuditLogger</span><span class="aspect-tag aspect-implemented">TLSEnforcer</span><span class="aspect-tag aspect-implemented">RateLimiter</span><span class="aspect-tag aspect-implemented">CSRFValidator</span></div>
         </a>
 
         <a href="#go-coverage" class="design-card" title="View go test coverage">
@@ -792,7 +792,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
             <td class="func-name"><code>Load()</code></td>
-            <td class="line-num">42</td>
+            <td class="line-num">43</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -804,7 +804,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
             <td class="func-name"><code>splitCSV()</code></td>
-            <td class="line-num">94</td>
+            <td class="line-num">101</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -816,7 +816,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
             <td class="func-name"><code>env()</code></td>
-            <td class="line-num">106</td>
+            <td class="line-num">113</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -828,7 +828,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/config/config.go</td>
             <td class="func-name"><code>requireURLScheme()</code></td>
-            <td class="line-num">116</td>
+            <td class="line-num">123</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -910,9 +910,81 @@
         </tr>
 
         <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/csrf.go</td>
+            <td class="func-name"><code>NewCSRFManager()</code></td>
+            <td class="line-num">30</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/csrf.go</td>
+            <td class="func-name"><code>IssueToken()</code></td>
+            <td class="line-num">61</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/csrf.go</td>
+            <td class="func-name"><code>Validate()</code></td>
+            <td class="line-num">70</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/csrf.go</td>
+            <td class="func-name"><code>RegenerateAuthorizationState()</code></td>
+            <td class="line-num">76</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/csrf.go</td>
+            <td class="func-name"><code>InvalidateAuthorizationState()</code></td>
+            <td class="line-num">86</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/csrf.go</td>
+            <td class="func-name"><code>csrfToken()</code></td>
+            <td class="line-num">96</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>Error()</code></td>
-            <td class="line-num">64</td>
+            <td class="line-num">70</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -923,20 +995,8 @@
 
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>NewRateLimiter()</code></td>
-            <td class="line-num">113</td>
-            <td class="coverage-cell">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
-                </div>
-                <span class="coverage-pct text-green">100.0%</span>
-            </td>
-        </tr>
-
-        <tr>
-            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>Handler()</code></td>
-            <td class="line-num">119</td>
+            <td class="func-name"><code>rateLimitHandler()</code></td>
+            <td class="line-num">105</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -948,7 +1008,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>FailedLoginRule()</code></td>
-            <td class="line-num">141</td>
+            <td class="line-num">120</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -960,7 +1020,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>NewRouter()</code></td>
-            <td class="line-num">147</td>
+            <td class="line-num">126</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -972,7 +1032,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>registerV1Routes()</code></td>
-            <td class="line-num">175</td>
+            <td class="line-num">157</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -984,7 +1044,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>isMutation()</code></td>
-            <td class="line-num">200</td>
+            <td class="line-num">185</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -996,7 +1056,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>gatewayContext()</code></td>
-            <td class="line-num">206</td>
+            <td class="line-num">191</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1008,7 +1068,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>securityHeaders()</code></td>
-            <td class="line-num">223</td>
+            <td class="line-num">208</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1020,7 +1080,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>cors()</code></td>
-            <td class="line-num">239</td>
+            <td class="line-num">224</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1032,7 +1092,19 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>tlsEnforcer()</code></td>
-            <td class="line-num">260</td>
+            <td class="line-num">245</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>requireAudit()</code></td>
+            <td class="line-num">259</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1055,44 +1127,8 @@
 
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>csrfValidator()</code></td>
-            <td class="line-num">287</td>
-            <td class="coverage-cell">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
-                </div>
-                <span class="coverage-pct text-green">100.0%</span>
-            </td>
-        </tr>
-
-        <tr>
-            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>GenerateCSRFToken()</code></td>
-            <td class="line-num">300</td>
-            <td class="coverage-cell">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
-                </div>
-                <span class="coverage-pct text-green">100.0%</span>
-            </td>
-        </tr>
-
-        <tr>
-            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>validCSRFToken()</code></td>
-            <td class="line-num">312</td>
-            <td class="coverage-cell">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
-                </div>
-                <span class="coverage-pct text-green">100.0%</span>
-            </td>
-        </tr>
-
-        <tr>
-            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>ValidateJSON()</code></td>
-            <td class="line-num">326</td>
+            <td class="line-num">291</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1104,7 +1140,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>ValidateQuery()</code></td>
-            <td class="line-num">341</td>
+            <td class="line-num">306</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1116,7 +1152,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>ValidatePath()</code></td>
-            <td class="line-num">354</td>
+            <td class="line-num">319</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1128,7 +1164,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>health()</code></td>
-            <td class="line-num">365</td>
+            <td class="line-num">330</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1140,7 +1176,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>ready()</code></td>
-            <td class="line-num">371</td>
+            <td class="line-num">336</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1152,7 +1188,19 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>instrument()</code></td>
-            <td class="line-num">396</td>
+            <td class="line-num">365</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>auditUserID()</code></td>
+            <td class="line-num">410</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1164,7 +1212,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>logLevel()</code></td>
-            <td class="line-num">426</td>
+            <td class="line-num">424</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1176,7 +1224,19 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>recordMetric()</code></td>
-            <td class="line-num">438</td>
+            <td class="line-num">437</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
+            <td class="func-name"><code>reportObservabilityFailure()</code></td>
+            <td class="line-num">447</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1188,7 +1248,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>writeError()</code></td>
-            <td class="line-num">446</td>
+            <td class="line-num">453</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1200,7 +1260,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>ClassifyServerError()</code></td>
-            <td class="line-num">454</td>
+            <td class="line-num">461</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1212,18 +1272,6 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
             <td class="func-name"><code>requestID()</code></td>
-            <td class="line-num">481</td>
-            <td class="coverage-cell">
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
-                </div>
-                <span class="coverage-pct text-green">100.0%</span>
-            </td>
-        </tr>
-
-        <tr>
-            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>routeTemplate()</code></td>
             <td class="line-num">490</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
@@ -1235,8 +1283,8 @@
 
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>rateLimitKey()</code></td>
-            <td class="line-num">496</td>
+            <td class="func-name"><code>routeTemplate()</code></td>
+            <td class="line-num">499</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -1247,8 +1295,8 @@
 
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/httpapi/router.go</td>
-            <td class="func-name"><code>boolFloat()</code></td>
-            <td class="line-num">508</td>
+            <td class="func-name"><code>rateLimitKey()</code></td>
+            <td class="line-num">509</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2759,8 +2807,8 @@
 
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/audit.go</td>
-            <td class="func-name"><code>AuditMutation()</code></td>
-            <td class="line-num">29</td>
+            <td class="func-name"><code>RecordAuditRequired()</code></td>
+            <td class="line-num">32</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2771,8 +2819,8 @@
 
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/audit.go</td>
-            <td class="func-name"><code>AuditRead()</code></td>
-            <td class="line-num">38</td>
+            <td class="func-name"><code>RecordAuditBestEffort()</code></td>
+            <td class="line-num">41</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2784,7 +2832,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/encryption.go</td>
             <td class="func-name"><code>NewEncryptionService()</code></td>
-            <td class="line-num">37</td>
+            <td class="line-num">36</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2796,7 +2844,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/encryption.go</td>
             <td class="func-name"><code>EncryptPII()</code></td>
-            <td class="line-num">43</td>
+            <td class="line-num">42</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2808,7 +2856,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/encryption.go</td>
             <td class="func-name"><code>DecryptPII()</code></td>
-            <td class="line-num">61</td>
+            <td class="line-num">60</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2820,7 +2868,7 @@
         <tr>
             <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/encryption.go</td>
             <td class="func-name"><code>newGCM()</code></td>
-            <td class="line-num">78</td>
+            <td class="line-num">74</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
@@ -2830,9 +2878,21 @@
         </tr>
 
         <tr>
-            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/sanitizer.go</td>
-            <td class="func-name"><code>SanitizeInput()</code></td>
-            <td class="line-num">19</td>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/normalizer.go</td>
+            <td class="func-name"><code>NormalizeInput()</code></td>
+            <td class="line-num">29</td>
+            <td class="coverage-cell">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>
+                </div>
+                <span class="coverage-pct text-green">100.0%</span>
+            </td>
+        </tr>
+
+        <tr>
+            <td class="file-path">github.com/wiktor-jedski/mealswapp/backend/internal/security/normalizer.go</td>
+            <td class="func-name"><code>normalizeEmail()</code></td>
+            <td class="line-num">40</td>
             <td class="coverage-cell">
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill pct-green" style="width: 100.0%"></div>

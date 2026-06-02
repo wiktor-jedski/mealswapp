@@ -119,6 +119,14 @@ func TestLoadRejectsEmptyAllowedOrigins(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsTrustedProxyUntilIngressExists verifies DESIGN-013 TLSEnforcer deployment deferral.
+func TestLoadRejectsTrustedProxyUntilIngressExists(t *testing.T) {
+	t.Setenv("MEALSWAPP_TRUST_PROXY", "true")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted trusted-proxy mode before Phase 09 ingress enforcement")
+	}
+}
+
 // TestLoadAcceptsHSTSMaxAgeOverride verifies DESIGN-010 SecurityHeaderMiddleware HSTS configuration.
 func TestLoadAcceptsHSTSMaxAgeOverride(t *testing.T) {
 	t.Setenv("MEALSWAPP_HSTS_MAX_AGE", "0")

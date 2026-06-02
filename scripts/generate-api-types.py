@@ -24,6 +24,8 @@ export type ErrorCategory =
 \t| "dependency"
 \t| "unknown";
 
+// Implements DESIGN-017 ErrorMessageMapper AppError contract.
+/** User-safe classified server error returned by the API gateway. */
 export interface AppError {
 \tcategory: ErrorCategory;
 \tcode: string;
@@ -32,6 +34,8 @@ export interface AppError {
 \trequestId?: string;
 }
 
+// Implements DESIGN-017 GlobalExceptionHandler response envelope.
+/** Shared API response wrapper with request correlation metadata. */
 export interface Envelope<TData extends Record<string, unknown> = Record<string, unknown>> {
 \tstatus: string;
 \trequestId: string;
@@ -39,14 +43,20 @@ export interface Envelope<TData extends Record<string, unknown> = Record<string,
 \terror?: AppError | null;
 }
 
+// Implements DESIGN-014 UptimeMonitor liveness contract.
+/** Process liveness payload. */
 export interface HealthData extends Record<string, unknown> {
 \tservice: string;
 }
 
+// Implements DESIGN-014 UptimeMonitor readiness contract.
+/** Dependency-readiness payload. */
 export interface ReadinessData extends Record<string, unknown> {
 \tchecks: Record<string, string>;
 }
 
+// Implements DESIGN-006 AuthController CSRF token-delivery contract.
+/** Session-bound synchronizer token delivered to SPA clients. */
 export interface CSRFTokenData extends Record<string, unknown> {
 \tcsrfToken: string;
 }

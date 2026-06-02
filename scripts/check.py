@@ -102,7 +102,9 @@ reqs = """[SW-REQ-001]
 [SW-REQ-086]
 [SW-REQ-087]
 [SW-REQ-088]
-[SW-REQ-089]"""
+[SW-REQ-089]
+[SW-REQ-090]
+[SW-REQ-091]"""
 
 def run(command: list[str], cwd: Path = ROOT) -> None:
 	print(f"+ {' '.join(command)}")

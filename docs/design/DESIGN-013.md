@@ -18,7 +18,7 @@
 - `interface AuditLogEntry { requestId: string; userId?: UUID; action: string; resource: string; outcome: "success" | "failure"; ip: string; userAgent: string; createdAt: time.Time }`
 - `interface RateLimitDecision { allowed: boolean; retryAfterSeconds?: number; key: string }`
 - `interface CSRFTokenPair { cookieToken: string; formToken: string; expiresAt: time.Time }`
-- `interface TLSPolicy { minVersion: "1.3"; redirectHTTP: boolean; hstsMaxAgeSeconds: number; trustForwardedProto: boolean; trustedProxyIngressOnly: boolean }`
+- `interface TLSPolicy { minVersion: "1.3"; redirectHTTP: boolean; hstsMaxAgeSeconds: number; trustForwardedProto: false }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Load encryption keys from GCP Secret Manager at process start; identify active key by version.
@@ -26,10 +26,10 @@
 3. Decrypt only at service boundaries that need plaintext; never log plaintext PII.
 4. Normalize string inputs using typed field-specific rules. Phase 02 supports email trimming and validation; add rules when later domain controllers introduce fields.
 5. Use parameterized SQL in ARCH-005 as the primary SQL injection defense.
-6. Enforce TLS 1.3 and redirect HTTP to HTTPS in deployed environments. Trust forwarded scheme headers only when deployment ingress restricts direct application access to the configured reverse proxy or load balancer.
+6. Redirect HTTP to HTTPS in deployed environments without consuming forwarded scheme headers. Defer TLS 1.3 edge termination and trusted forwarded-header support until Phase 09 deploys and verifies a restricted ingress boundary.
 7. Apply Fiber limiter middleware using IP, user, or endpoint scoped keys.
-8. Validate CSRF synchronizer tokens for state-changing requests.
-9. Write structured audit logs for auth events, API requests, errors, and admin actions.
+8. Validate Fiber CSRF synchronizer tokens for state-changing requests unless the route declares an explicit exemption.
+9. Write structured audit logs for auth events, every API request, errors, and admin actions. Persist an audit before dispatching flagged security-sensitive mutations.
 
 ### 3. State Management & Error Handling
 - `encrypted`: field stored as envelope.

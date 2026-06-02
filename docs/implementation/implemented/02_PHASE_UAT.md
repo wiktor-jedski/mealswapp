@@ -1,64 +1,60 @@
-# Phase 02 UAT: API Gateway, Security, Errors, and Observability Baseline
+# Phase 02 UAT: API Gateway Repair
 
 ## Scope
 
-Phase 02 implements tasks 50-72 and the foundations described by `DESIGN-010`, `DESIGN-013`, `DESIGN-014`, and `DESIGN-017`.
+Phase 02 covers tasks `50`-`82`. The repaired gateway uses Fiber CSRF and limiter
+middleware, session-bound SPA CSRF token delivery, explicit mutation CSRF
+policies, cooperative request deadlines, and request-correlated security audits.
+Flagged sensitive mutations persist an audit before handler dispatch. Low-risk
+reads remain available during audit outages.
 
-- Versioned `/api/v1` route registration, request IDs, 10-second deadlines, timeout cancellation, CORS, security headers, deployed TLS redirects, CSRF hooks, request validation hooks, and scoped rate limits.
-- Safe `AppError` envelopes, panic recovery, request-correlated structured logs, basic metrics, readiness dependency metrics, and P95 alert-rule defaults.
-- AES-256-GCM PII envelope encryption with versioned key-loader interfaces.
-- PostgreSQL security-audit persistence through migration `000012_security_audit`.
-- OpenAPI gateway source of truth and generated frontend contracts at `frontend/src/lib/api/generated.ts`.
+Phase 02 redirects deployed HTTP traffic to HTTPS but rejects
+`MEALSWAPP_TRUST_PROXY=true` and ignores `X-Forwarded-Proto`. Phase 09 owns TLS
+1.3 edge enforcement and restricted trusted ingress.
 
 ## Automated Evidence
 
 Run from the repository root:
 
 ```sh
-python3 scripts/check.py
-python3 scripts/validate-traceability.py
+git diff --check
 python3 scripts/validate-task-list.py
+python3 scripts/validate-traceability.py
 cd frontend && bun run check:api-types
+cd ..
+python3 scripts/check.py --output docs/implementation/implemented/02_PHASE_REPORT.html
 ```
 
-The aggregate gate verifies migration up/down/up behavior, root and versioned liveness/readiness probes, browser screenshots, Go formatting, backend tests, backend 100% line coverage, frontend build, generated-type drift detection, frontend tests, and frontend 100% line coverage.
+The aggregate gate verifies migrations, probes, screenshots, formatting,
+backend tests and 100% coverage, frontend build and 100% coverage, generated
+API-type drift, requirement coverage including `SW-REQ-090` and `SW-REQ-091`,
+and traceability.
 
 ## Project-Owner Checks
 
-### Integration
+1. Start services and the API with `bash scripts/start-services.sh`, then run
+   migrations and `go run ./cmd/api` from `backend/`.
+2. Request `/health`, `/ready`, `/api/v1/health`, and `/api/v1/ready`; confirm
+   envelopes contain `requestId` and browser security headers.
+3. Request `GET /api/v1/auth/csrf-token`; confirm the body contains `csrfToken`
+   and cookies are HttpOnly with `SameSite=Strict`.
+4. Run `cd backend && go test ./internal/httpapi/...`; confirm protected
+   mutations reject missing, stale, and cross-session tokens, audit outages
+   block flagged mutations before dispatch, reads continue, limiter responses
+   contain `Retry-After`, and cooperative timeouts return structured `504`.
+5. Run the API with deployed TLS redirects enabled and send HTTP requests with
+   spoofed `X-Forwarded-Proto: https`; confirm requests still redirect.
 
-1. Start services and the API:
+## Deferred Work
 
-```sh
-bash scripts/start-services.sh
-cd backend && go run ./cmd/migrate up && go run ./cmd/api
-```
+- Phase 03 account handlers must call the authorization-state rotation and
+  invalidation helpers on login, refresh, password-reset completion, and logout.
+- Before horizontal scaling, move Fiber session storage to the documented Redis
+  session namespace.
+- Phase 09 must deploy and verify restricted ingress before adding trusted
+  forwarded-scheme support or enabling TLS 1.3 edge enforcement.
 
-2. Verify probes:
+## Acceptance
 
-```sh
-curl -i http://localhost:8080/health
-curl -i http://localhost:8080/ready
-curl -i http://localhost:8080/api/v1/health
-curl -i http://localhost:8080/api/v1/ready
-```
-
-3. Confirm each response has `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy`, and a JSON `requestId`.
-
-### Functional
-
-- Run `cd backend && go test ./internal/httpapi/...` to verify CORS rejection, CSRF acceptance and expiry, validation rejection, scoped rate limiting, timeout cancellation, panic recovery, security headers, request logging, and metrics.
-- Run `cd backend && go test ./internal/security/... ./internal/repository/...` to verify encryption key rotation, tamper rejection, email normalization, fail-closed audit mutation policy, and security-audit persistence.
-
-### End To End
-
-- Domain mutation workflows are intentionally deferred until Phase 03 and later phases. Repeat protected-route browser checks when authentication routes are exposed.
-
-### Acceptance
-
-- Confirm production proxy topology before enabling `MEALSWAPP_TRUST_PROXY=true`.
-- Confirm the Phase 03 PII field inventory and authorized decrypting service boundaries before wiring encrypted fields into account workflows.
-
-## Deferred Deployment Work
-
-Phase 09 owns deployed GCP Cloud Monitoring resources, notification channels, dashboards, backup monitoring, and trusted reverse-proxy configuration. Phase 04 extends OpenAPI generation with search contracts before Phase 05 consumes them.
+Accept Phase 02 after the automated gate passes and the project-owner checks
+confirm the repaired gateway behavior.

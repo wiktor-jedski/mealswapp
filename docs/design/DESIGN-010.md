@@ -12,7 +12,7 @@
 - `CORSHandler`: owns allowed origins, methods, headers, and credential behavior.
 
 ### 1. Data Structures & Types
-- `interface RouteDefinition { method: string; path: string; version: "v1"; handler: fiber.Handler; middlewares: fiber.Handler[] }`
+- `interface RouteDefinition { method: string; path: string; version: "v1"; handler: fiber.Handler; requiresCSRF: boolean; exemptCSRF: boolean; requiresAudit: boolean; middlewares: fiber.Handler[] }`
 - `interface RateLimitRule { keyScope: "ip" | "user" | "endpoint"; maxRequests: number; windowSeconds: number }`
 - `interface RequestValidationRule { route: string; bodySchema?: string; querySchema?: string; requiresCSRF: boolean; requiresAuth: boolean }`
 - `interface GatewayContext { requestId: string; userId?: UUID; startedAt: time.Time; deadline: time.Time }`
@@ -23,11 +23,11 @@
 2. Route only versioned paths such as `/api/v1/search`, `/api/v1/auth/login`, and `/api/v1/jobs/:id`.
 3. For every request, attach `GatewayContext` with a 10-second deadline.
 4. Apply CORS rules before auth but after request ID assignment.
-5. Validate CSRF synchronizer token for POST, PUT, PATCH, and DELETE routes.
+5. Require every POST, PUT, PATCH, and DELETE route to declare exactly one CSRF policy: synchronizer-token validation or an explicit exemption.
 6. Enforce endpoint-specific rate limits, including failed login limits per IP.
 7. Validate request bodies and query parameters before calling service handlers.
 8. Route valid requests to backend service controllers by direct function call.
-9. On timeout, cancel request context and return 504 with security headers still attached.
+9. On timeout, cancel request context and return 504 with security headers still attached. Handlers and dependencies must cooperatively return propagated deadline errors.
 
 ### 3. State Management & Error Handling
 - `accepted`: request passed gateway checks and is routed.

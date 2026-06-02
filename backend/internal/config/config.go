@@ -59,6 +59,9 @@ func Load() (Config, error) {
 	if cfg.TrustedProxy, err = strconv.ParseBool(env("MEALSWAPP_TRUST_PROXY", "false")); err != nil {
 		return Config{}, errors.New("MEALSWAPP_TRUST_PROXY must be a boolean")
 	}
+	if cfg.TrustedProxy {
+		return Config{}, errors.New("MEALSWAPP_TRUST_PROXY=true is deferred until Phase 09 trusted ingress enforcement")
+	}
 	if cfg.EnforceTLS, err = strconv.ParseBool(env("MEALSWAPP_ENFORCE_TLS", "false")); err != nil {
 		return Config{}, errors.New("MEALSWAPP_ENFORCE_TLS must be a boolean")
 	}
