@@ -14,6 +14,11 @@ Copy `.env.example` into a local `.env` if shell-based loading is preferred. The
 - `MEALSWAPP_DATABASE_URL=postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable`
 - `MEALSWAPP_REDIS_URL=redis://localhost:6379/0`
 - `MEALSWAPP_FRONTEND_ORIGIN=http://localhost:5173`
+- `MEALSWAPP_ALLOWED_ORIGINS=http://localhost:5173`
+- `MEALSWAPP_API_TIMEOUT=10s`
+- `MEALSWAPP_ENFORCE_TLS=false`
+- `MEALSWAPP_TRUST_PROXY=false`
+- `MEALSWAPP_TLS_MIN_VERSION=1.3`
 
 ## Local Services
 
@@ -51,6 +56,16 @@ Health endpoints:
 - `GET http://localhost:8080/api/v1/health`
 - `GET http://localhost:8080/api/v1/ready`
 
+Browser clients obtain a session-bound CSRF synchronizer token with
+`GET http://localhost:8080/api/v1/auth/csrf-token`. The response body provides
+the token for the `X-CSRF-Token` header. The matching CSRF and session cookies
+are HttpOnly and must be sent by the browser with credentials enabled.
+
+Phase 02 rejects `MEALSWAPP_TRUST_PROXY=true` and does not consume
+`X-Forwarded-Proto`. Phase 09 owns restricted trusted ingress and TLS 1.3 edge
+enforcement. Gateway deadlines are cooperative: handlers and dependencies must
+honor request-context cancellation and return propagated deadline errors.
+
 ## Worker
 
 ```sh
@@ -66,8 +81,22 @@ The Phase 00 worker starts, checks Redis connectivity, and waits for shutdown. J
 python3 scripts/check.py
 ```
 
-The aggregate check validates requirement traceability, formats and tests Go code, builds the frontend package, and runs Bun tests from `frontend/`.
+The aggregate check validates requirement and design traceability, checks generated API types, formats and tests Go code, builds the frontend package, and runs Bun tests from `frontend/`.
 
 ## API Contract
 
-The bootstrap OpenAPI document lives at `api/openapi.yaml`. It currently covers health and readiness endpoints. Type generation is intentionally deferred until domain API contracts are introduced.
+The OpenAPI source of truth lives at `api/openapi.yaml`. It covers shared gateway envelopes, `AppError`, health, readiness, request IDs, retry metadata, and future cookie-auth plus CSRF hooks.
+
+Generate or verify frontend contracts:
+
+```sh
+cd frontend
+bun run generate:api-types
+bun run check:api-types
+```
+
+Generated shared types live at `frontend/src/lib/api/generated.ts`. Phase 04 extends the same OpenAPI input with search-domain contracts before the Phase 05 API client consumes them.
+
+## Observability Baseline
+
+Phase 02 emits structured request logs with request ID, route template, method, status, and latency. Metrics cover request latency, concurrent requests, and PostgreSQL or Redis dependency health. Deployed monitoring should probe `/health` and `/ready` every 30 seconds and configure P95 latency warnings above 1.5 seconds and critical alerts above 2 seconds. GCP resources, notification channels, dashboards, and backup monitoring are deferred to Phase 09.

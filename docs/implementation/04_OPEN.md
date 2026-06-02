@@ -50,3 +50,22 @@ No project-owner action is required for Phase 00 at this time.
 ### Actions needed
 
 - Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period.
+
+## Phase 02
+
+### Assumptions
+
+- Add dedicated security-audit persistence for request-correlated authentication, API error, CSRF, rate-limit, and future admin events. Keep it separate from the Phase 01 admin-audit table because the event shapes and fail-closed security-mutation behavior differ.
+- Implement AES-256-GCM envelope encryption, key versions, key-loader interfaces, and a production GCP Secret Manager adapter boundary in Phase 02. Use explicit local test fixtures for development and tests. Defer wiring encryption into concrete PII repository fields until Phase 03 authentication and profile services define the plaintext service boundaries.
+- Implement local structured JSON logging, in-memory metrics test sinks, emitted metric names, probe cadence, and alert-rule configuration in Phase 02. Defer deployed GCP Cloud Monitoring resources, notification channels, backup monitoring resources, and dashboards until Phase 09 production hardening.
+- Resolved: Phase 02 rejects `MEALSWAPP_TRUST_PROXY=true` and ignores `X-Forwarded-Proto`. Phase 09 must deploy and verify restricted trusted ingress before forwarded-scheme handling can be implemented.
+- Resolved: Phase 02 uses Fiber v2 CSRF middleware, binds tokens to Fiber sessions, and exposes `GET /api/v1/auth/csrf-token` for safe SPA token delivery. Every mutation route must explicitly choose CSRF protection or an exemption.
+- Accepted: Phase 02 request deadlines are cooperative. Handlers and dependencies must honor context cancellation and propagate deadline errors. Non-cooperative handlers are defects.
+
+### Actions needed
+
+- Before Phase 03 implementation, enumerate the concrete user and profile fields treated as PII and confirm which service boundaries may decrypt each field.
+- Before Phase 09 deployment work, confirm the production reverse proxy or load balancer topology and implement the SW-REQ-091 ingress restriction so trusted forwarded-scheme handling cannot accept spoofed headers from arbitrary clients.
+
+- Fiber session storage remains in-process for the CSRF foundation. Before horizontally scaled deployment, wire the Fiber session store to the documented Redis session namespace so CSRF state is shared between API instances.
+- Login, refresh, password-reset completion, and logout handlers are not implemented yet. Their future authorization-state transitions must call `RegenerateAuthorizationState` or `InvalidateAuthorizationState` before returning success.

@@ -5,14 +5,15 @@
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Middleware |
-| **Static Aspects** | EncryptionService (AES-256 via crypto/aes), InputSanitizer, AuditLogger, TLSEnforcer, RateLimiter (Fiber built-in limiter), CSRFValidator (Fiber csrf middleware) |
+| **Static Aspects** | EncryptionService (AES-256 via crypto/aes), InputNormalizer, AuditLogger, TLSEnforcer, RateLimiter (Fiber built-in limiter), CSRFValidator (Fiber csrf middleware) |
 | **Dependencies** | All services |
-| **Traceability** | SW-REQ-059, SW-REQ-068, SW-REQ-075, SW-REQ-084 |
+| **Traceability** | SW-REQ-059, SW-REQ-068, SW-REQ-075, SW-REQ-084, SW-REQ-091 |
 
 **Dynamic Behavior:**
 
 - **Encryption at Rest:** AES-256 encryption (crypto/aes) for PII fields in database.
 - **Encryption in Transit:** TLS 1.3 enforced for all connections. HTTP redirects to HTTPS.
+- **Trusted Proxy Boundary:** When forwarded scheme headers are trusted, deployment ingress permits traffic to the application instance only from the configured reverse proxy or load balancer.
 - **Input Validation:** Sanitizes all user inputs to prevent XSS, SQL injection, and command injection.
 - **Rate Limiting:** Enforces rate limits using Fiber built-in limiter middleware.
 - **CSRF Protection:** Validates synchronizer tokens on all state-changing requests using Fiber csrf middleware.
@@ -21,7 +22,7 @@
 **Interface Definition:**
 
 - `Input`: Raw data for encryption, user inputs for validation
-- `Output`: Encrypted data, sanitized inputs, audit log entries
+- `Output`: Encrypted data, normalized inputs, audit log entries
 
 **Alternative Analysis (BP6):**
 

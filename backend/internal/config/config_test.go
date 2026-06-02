@@ -25,6 +25,9 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	if cfg.Environment != defaultEnvironment {
 		t.Fatalf("Environment = %q, want %q", cfg.Environment, defaultEnvironment)
 	}
+	if cfg.HSTSMaxAge != defaultHSTSMaxAge {
+		t.Fatalf("HSTSMaxAge = %d, want %d", cfg.HSTSMaxAge, defaultHSTSMaxAge)
+	}
 }
 
 // TestLoadRequiresProductionDependencyURLs proves that config will not load
@@ -86,5 +89,58 @@ func TestLoadRejectsInvalidFrontendOrigin(t *testing.T) {
 
 	if _, err := Load(); err == nil {
 		t.Fatal("Load() error = nil, want frontend origin validation error")
+	}
+}
+
+// TestLoadRejectsInvalidGatewaySettings verifies DESIGN-010 RequestValidator gateway value validation.
+func TestLoadRejectsInvalidGatewaySettings(t *testing.T) {
+	for key, value := range map[string]string{
+		"MEALSWAPP_API_TIMEOUT":     "bad",
+		"MEALSWAPP_TRUST_PROXY":     "bad",
+		"MEALSWAPP_ENFORCE_TLS":     "bad",
+		"MEALSWAPP_HSTS_MAX_AGE":    "-1",
+		"MEALSWAPP_ALLOWED_ORIGINS": "bad",
+		"MEALSWAPP_TLS_MIN_VERSION": "1.2",
+	} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load() accepted %s=%q", key, value)
+			}
+		})
+	}
+}
+
+// TestLoadRejectsEmptyAllowedOrigins verifies DESIGN-010 CORSHandler origin-list validation.
+func TestLoadRejectsEmptyAllowedOrigins(t *testing.T) {
+	t.Setenv("MEALSWAPP_ALLOWED_ORIGINS", ", ")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted an empty allowed-origin list")
+	}
+}
+
+// TestLoadRejectsTrustedProxyUntilIngressExists verifies DESIGN-013 TLSEnforcer deployment deferral.
+func TestLoadRejectsTrustedProxyUntilIngressExists(t *testing.T) {
+	t.Setenv("MEALSWAPP_TRUST_PROXY", "true")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted trusted-proxy mode before Phase 09 ingress enforcement")
+	}
+}
+
+// TestLoadAcceptsHSTSMaxAgeOverride verifies DESIGN-010 SecurityHeaderMiddleware HSTS configuration.
+func TestLoadAcceptsHSTSMaxAgeOverride(t *testing.T) {
+	t.Setenv("MEALSWAPP_HSTS_MAX_AGE", "0")
+	cfg, err := Load()
+	if err != nil || cfg.HSTSMaxAge != 0 {
+		t.Fatalf("Load() = %+v, %v", cfg, err)
+	}
+}
+
+// TestLoadAcceptsMultipleOrigins verifies DESIGN-010 CORSHandler origin-list parsing.
+func TestLoadAcceptsMultipleOrigins(t *testing.T) {
+	t.Setenv("MEALSWAPP_ALLOWED_ORIGINS", "https://one.test, https://two.test")
+	cfg, err := Load()
+	if err != nil || len(cfg.AllowedOrigins) != 2 {
+		t.Fatalf("Load() = %+v, %v", cfg, err)
 	}
 }

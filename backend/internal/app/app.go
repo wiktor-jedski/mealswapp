@@ -7,6 +7,6 @@ import (
 
 // New constructs the backend Fiber app from HTTP API dependencies.
 // Implements DESIGN-010 RouteHandler app constructor seam.
-func New(deps httpapi.Dependencies) *fiber.App {
+func New(deps httpapi.Dependencies) (*fiber.App, error) {
 	return httpapi.NewRouter(deps)
 }

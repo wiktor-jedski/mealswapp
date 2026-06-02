@@ -6,8 +6,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "generate:api-types": "python3 ../scripts/generate-api-types.py",
+    "check:api-types": "python3 ../scripts/generate-api-types.py --check",
     "test": "bun test",
-    "check": "bun run build && bun test"
+    "check": "bun run check:api-types && bun run build && bun test"
   },
   "dependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.1",

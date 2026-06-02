@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type fakePool struct {
@@ -20,6 +23,22 @@ func (p *fakePool) Ping(context.Context) error {
 func (p *fakePool) Close() {
 	p.closed = true
 }
+
+func (p *fakePool) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	return pgconn.NewCommandTag("UPDATE 1"), p.pingErr
+}
+
+func (p *fakePool) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	return nil, p.pingErr
+}
+
+func (p *fakePool) QueryRow(context.Context, string, ...any) pgx.Row {
+	return fakeRow{}
+}
+
+type fakeRow struct{}
+
+func (fakeRow) Scan(...any) error { return nil }
 
 // TestOpenRejectsInvalidURL proves that Open fails with invalid URL
 // TestOpenRejectsInvalidURL verifies DESIGN-005 RepositoryInterfaces invalid PostgreSQL URL handling.
@@ -53,5 +72,14 @@ func TestPoolPingAndClose(t *testing.T) {
 	pool.Close()
 	if !fake.closed {
 		t.Fatal("Close() did not close underlying pool")
+	}
+	if _, err := pool.Exec(context.Background(), "sql"); !errors.Is(err, expected) {
+		t.Fatalf("Exec() error = %v", err)
+	}
+	if _, err := pool.Query(context.Background(), "sql"); !errors.Is(err, expected) {
+		t.Fatalf("Query() error = %v", err)
+	}
+	if err := pool.QueryRow(context.Background(), "sql").Scan(); err != nil {
+		t.Fatalf("QueryRow().Scan() error = %v", err)
 	}
 }

@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -11,6 +13,9 @@ import (
 type pool interface {
 	Ping(context.Context) error
 	Close()
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
 // Pool wraps the PostgreSQL connection pool used by repositories and readiness checks.
@@ -39,4 +44,22 @@ func (p *Pool) Ping(ctx context.Context) error {
 // Implements DESIGN-005 RepositoryInterfaces database resource cleanup.
 func (p *Pool) Close() {
 	p.pool.Close()
+}
+
+// Exec executes repository SQL against the shared pool.
+// Implements DESIGN-005 RepositoryInterfaces PostgreSQL execution boundary.
+func (p *Pool) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+	return p.pool.Exec(ctx, sql, arguments...)
+}
+
+// Query executes repository row-set SQL against the shared pool.
+// Implements DESIGN-005 RepositoryInterfaces PostgreSQL execution boundary.
+func (p *Pool) Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error) {
+	return p.pool.Query(ctx, sql, arguments...)
+}
+
+// QueryRow executes repository single-row SQL against the shared pool.
+// Implements DESIGN-005 RepositoryInterfaces PostgreSQL execution boundary.
+func (p *Pool) QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row {
+	return p.pool.QueryRow(ctx, sql, arguments...)
 }

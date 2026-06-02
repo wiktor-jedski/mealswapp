@@ -1,9 +1,9 @@
-# Implements DESIGN-010 RouteHandler and DESIGN-017 GlobalExceptionHandler contracts.
+# Implements DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
 openapi: 3.1.0
 info:
   title: Mealswapp API
-  version: 0.0.0
-  description: Phase 00 bootstrap contract. Domain APIs are added in later phases.
+  version: 0.3.0
+  description: Shared gateway source of truth. Domain contracts extend this document in later phases.
 servers:
   - url: http://localhost:8080
 paths:
@@ -12,60 +12,85 @@ paths:
       summary: Process liveness check
       responses:
         "200":
-          description: API process is alive.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+          $ref: "#/components/responses/Success"
   /ready:
     get:
       summary: Dependency readiness check
       responses:
         "200":
-          description: API dependencies are reachable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+          $ref: "#/components/responses/Success"
         "503":
-          description: One or more dependencies are unavailable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+          $ref: "#/components/responses/Error"
   /api/v1/health:
     get:
       summary: Versioned process liveness check
       responses:
         "200":
-          description: API process is alive.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+          $ref: "#/components/responses/Success"
   /api/v1/ready:
     get:
       summary: Versioned dependency readiness check
       responses:
         "200":
-          description: API dependencies are reachable.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Envelope"
+          $ref: "#/components/responses/Success"
         "503":
-          description: One or more dependencies are unavailable.
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/csrf-token:
+    get:
+      summary: Obtain a session-bound CSRF synchronizer token for SPA mutation requests
+      responses:
+        "200":
+          description: CSRF token delivery envelope. The HttpOnly CSRF cookie is set separately.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                $ref: "#/components/schemas/CSRFTokenEnvelope"
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+  responses:
+    Success:
+      description: Successful gateway envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    Error:
+      description: User-safe gateway error. Includes 403, 429 with Retry-After, 503, and 504 responses.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
   schemas:
+    AppError:
+      type: object
+      required: [category, code, message, retryable]
+      properties:
+        category:
+          type: string
+          enum: [validation, auth, entitlement, network, timeout, server, dependency, unknown]
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+        requestId:
+          type: string
     Envelope:
       type: object
-      required:
-        - status
-        - requestId
+      required: [status, requestId]
       properties:
         status:
           type: string
@@ -75,11 +100,20 @@ components:
           type: object
           additionalProperties: true
         error:
-          type:
-            - object
-            - "null"
+          oneOf:
+            - $ref: "#/components/schemas/AppError"
+            - type: "null"
+    CSRFTokenEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [csrfToken]
           properties:
-            code:
-              type: string
-            message:
+            csrfToken:
               type: string

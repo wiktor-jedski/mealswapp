@@ -102,7 +102,9 @@ reqs = """[SW-REQ-001]
 [SW-REQ-086]
 [SW-REQ-087]
 [SW-REQ-088]
-[SW-REQ-089]"""
+[SW-REQ-089]
+[SW-REQ-090]
+[SW-REQ-091]"""
 
 def run(command: list[str], cwd: Path = ROOT) -> None:
 	print(f"+ {' '.join(command)}")
@@ -172,8 +174,10 @@ TRACEABLE_SUFFIXES = {".go", ".js", ".ts", ".svelte", ".css", ".html", ".yaml", 
 TRACEABLE_ROOTS = {".github", "api", "backend", "database", "frontend"}
 TRACEABLE_FILES = {
 	"docker-compose.yml", "scripts/check.py", "scripts/generate_report.py",
+	"scripts/generate-api-types.py",
 	"scripts/start-services.sh", "scripts/validate-traceability.py",
-	"scripts/verify-frontend.py", "scripts/verify-local-stack.py",
+	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
+	"scripts/verify-local-stack.py",
 }
 SKIP_TRACEABILITY_NAMES = {"bun.lock", "go.mod", "go.sum"}
 
@@ -265,6 +269,7 @@ def main() -> int:
 
 	checked_reqs, total_reqs = validate_requirements()
 	run(["python3", "scripts/validate-traceability.py"])
+	run(["python3", "scripts/validate-task-list.py"])
 	initially_running_services = running_compose_services()
 	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
 	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
@@ -277,6 +282,7 @@ def main() -> int:
 		if started_services:
 			run(["docker", "compose", "stop", *sorted(started_services)])
 	run(["bun", "run", "build"], FRONTEND)
+	run(["bun", "run", "check:api-types"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
 
