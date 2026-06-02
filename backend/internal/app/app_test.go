@@ -5,8 +5,10 @@ package app
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 )
 
@@ -14,7 +16,10 @@ import (
 // /health is reachable and returns OK health response
 // TestNewBuildsRouter verifies DESIGN-010 RouteHandler app constructor behavior.
 func TestNewBuildsRouter(t *testing.T) {
-	server := New(httpapi.Dependencies{})
+	server, err := New(httpapi.Dependencies{Config: config.Config{APITimeout: time.Second, AllowedOrigins: []string{"http://localhost:5173"}}})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
 
 	resp, err := server.Test(httptest.NewRequest(fiber.MethodGet, "/health", nil))
 	if err != nil {

@@ -13,6 +13,8 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/database"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
 // main starts the HTTP API process.
@@ -44,6 +46,7 @@ func main() {
 
 	// initiating the app that can use PostgresPing
 	// and RedisPing to check for readiness
+	observabilitySink := observability.JSONSink{Writer: os.Stdout}
 	deps := httpapi.Dependencies{
 		Config: cfg,
 		PostgresPing: func(ctx context.Context) error {
@@ -52,8 +55,14 @@ func main() {
 		RedisPing: func(ctx context.Context) error {
 			return redisClient.Ping(ctx).Err()
 		},
+		Audit:   repository.NewPostgresSecurityAuditRepository(pg),
+		Logs:    observabilitySink,
+		Metrics: observabilitySink,
 	}
-	server := app.New(deps)
+	server, err := app.New(deps)
+	if err != nil {
+		log.Fatalf("build server: %v", err)
+	}
 
 	// error channel
 	// if server breaks, then it passes the error

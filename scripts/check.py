@@ -172,6 +172,7 @@ TRACEABLE_SUFFIXES = {".go", ".js", ".ts", ".svelte", ".css", ".html", ".yaml", 
 TRACEABLE_ROOTS = {".github", "api", "backend", "database", "frontend"}
 TRACEABLE_FILES = {
 	"docker-compose.yml", "scripts/check.py", "scripts/generate_report.py",
+	"scripts/generate-api-types.py",
 	"scripts/start-services.sh", "scripts/validate-traceability.py",
 	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py",
@@ -279,6 +280,7 @@ def main() -> int:
 		if started_services:
 			run(["docker", "compose", "stop", *sorted(started_services)])
 	run(["bun", "run", "build"], FRONTEND)
+	run(["bun", "run", "check:api-types"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
 

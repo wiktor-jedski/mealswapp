@@ -58,10 +58,22 @@ No project-owner action is required for Phase 00 at this time.
 - Add dedicated security-audit persistence for request-correlated authentication, API error, CSRF, rate-limit, and future admin events. Keep it separate from the Phase 01 admin-audit table because the event shapes and fail-closed security-mutation behavior differ.
 - Implement AES-256-GCM envelope encryption, key versions, key-loader interfaces, and a production GCP Secret Manager adapter boundary in Phase 02. Use explicit local test fixtures for development and tests. Defer wiring encryption into concrete PII repository fields until Phase 03 authentication and profile services define the plaintext service boundaries.
 - Implement local structured JSON logging, in-memory metrics test sinks, emitted metric names, probe cadence, and alert-rule configuration in Phase 02. Defer deployed GCP Cloud Monitoring resources, notification channels, backup monitoring resources, and dashboards until Phase 09 production hardening.
-- Trust proxy-provided scheme headers for TLS enforcement only when the deployed proxy trust boundary is explicitly configured. Local development keeps direct HTTP enabled.
+- SW-REQ-091 requires proxy-provided scheme headers to be trusted for TLS enforcement only when deployed ingress restricts direct application access to the configured reverse proxy or load balancer. Local development keeps direct HTTP enabled with trusted-proxy mode disabled.
 - Provide CSRF token generation and validation hooks in Phase 02 using test-only mutation routes for verification. Wire token issuance into browser session or authentication flows when those routes are added in Phase 03.
+- Resolved: Phase 03 tasks 73-75 replace the custom Phase 02 CSRF hook with Fiber v2 CSRF middleware, bind tokens to Fiber sessions, and expose `GET /api/v1/auth/csrf-token` for safe SPA token delivery. Future pre-authentication auth routes must explicitly choose CSRF protection or an exemption when they are added.
 
 ### Actions needed
 
 - Before Phase 03 implementation, enumerate the concrete user and profile fields treated as PII and confirm which service boundaries may decrypt each field.
-- Before Phase 09 deployment work, confirm the production reverse proxy or load balancer topology so trusted forwarded-scheme handling can be configured without accepting spoofed headers from arbitrary clients.
+- Before Phase 09 deployment work, confirm the production reverse proxy or load balancer topology and implement the SW-REQ-091 ingress restriction so trusted forwarded-scheme handling cannot accept spoofed headers from arbitrary clients.
+
+## Phase 03
+
+### Assumptions
+
+- Fiber session storage remains in-process for the CSRF foundation. Before horizontally scaled deployment, wire the Fiber session store to the documented Redis session namespace so CSRF state is shared between API instances.
+- Login, refresh, password-reset completion, and logout handlers are not implemented yet. Their future authorization-state transitions must call `RegenerateAuthorizationState` or `InvalidateAuthorizationState` before returning success.
+
+### Testing coverage deviations
+
+- None. `python3 scripts/check.py --output docs/implementation/implemented/03_PHASE_REPORT.html` passes with 100% backend internal-package and frontend source coverage.

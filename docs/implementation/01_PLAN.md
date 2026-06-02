@@ -31,6 +31,8 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-006, ARCH-008, and ARCH-015 minimum account flows.
 - Add registration with consent, login/logout, refresh, password hashing, lockout, password reset, email verification hooks, profile/preferences, saved data, export, and account deletion coordination.
+- Replace the Phase 02 `X-Test-User-ID` protected-route placeholder with verified JWT-cookie authentication. Derive authenticated user UUIDs only from validated token claims for authorization, audit metadata, and user-scoped rate limits; never trust client-supplied identity headers.
+- Extend `InputNormalizer` with typed field-specific rules as account and profile controllers introduce new string inputs. Keep email normalization from Phase 02 and add only the fields used by these flows.
 - Harden account-deletion processing before exposing it: enforce the selected status-transition rules, lock request rows during transitions, and add a worker claim query using `FOR UPDATE SKIP LOCKED` or an equivalent concurrency-safe approach.
 - For account deletion, classify sanitized failures as transient, permanent, or unknown. Retry transient failures automatically with exponential backoff up to 3 attempts. Require admin-triggered retry after investigation for permanent, unknown, or exhausted failures, and alert when requests fail or exhaust retries.
 - Retain a minimal pseudonymous deletion receipt after account erasure: random receipt ID, request and completion timestamps, final outcome, and sanitized failure category when applicable. Do not retain the deleted user ID, email, or account data. Use a provisional three-year retention period pending pre-production legal review.
@@ -40,6 +42,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-002, ARCH-003, and server-side ARCH-011 search cache.
 - Add search/autocomplete endpoints, query parsing, pagination limit of 10, filters, Levenshtein ranking, cosine similarity, similarity tiers/assets, Redis cache keys, and graceful similarity degradation.
+- Extend `InputNormalizer` with typed search-query normalization when the search controller is added.
 - Add named dietary rules as search constraints composed from ingredient-tag inclusions and exclusions, for example allowing fish while excluding meat for `pescatarian`. Keep ingredient classification tag-based.
 - Persist completed authenticated-user searches only after valid results are returned. Retain duplicate searches, cap history at the latest 100 rows per user, expose clear-history behavior, and do not persist anonymous searches.
 - Implement required OpenAPI-to-frontend type generation for the first domain contracts, including `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache-related response metadata. This is the latest phase where type generation may remain incomplete, because Phase 05 frontend API work consumes these generated types.
@@ -68,6 +71,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-009 and ARCH-012.
 - Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, tag management, user admin actions, and audit persistence.
+- Extend `InputNormalizer` with typed rules for admin-authored names and provider text introduced by curation flows.
 - Normalize provider-specific serving-unit aliases to canonical repository units (`g`, `ml`, `oz`, `fl_oz`, or `serving`) at the external-import boundary before persistence.
 - Warn during external import when liquid macro totals per `100 ml` look suspicious, but do not reject them solely for exceeding `100 g`; without density data, that threshold is not a valid hard constraint for liquids.
 - Derive required liquid density from trusted USDA volume portions with gram weights when available, preferring `ml`, `cup`, `tbsp`, `tsp`, then `fl_oz`. Persist whether the value was imported, manually entered, or estimated. Keep source provider and source food ID optional for manual or estimated values. Do not silently assume `1 ml = 1 g`.
@@ -78,7 +82,8 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Complete client ARCH-011 service worker behavior plus cross-cutting requirements.
 - Add offline cached search/image behavior, stale indicators, retry manager integration, accessibility pass, Playwright browser coverage, monitoring alerts, backup/retention checks, and deployment config for GCP services.
-- Exit criteria: offline cached searches render, connection loss preserves state, WCAG/keyboard checks pass, performance and readiness gates are documented.
+- Enforce SW-REQ-091: when trusted forwarded-scheme handling is enabled, restrict direct application ingress to the configured reverse proxy or load balancer and verify that arbitrary public clients cannot reach the application instance or spoof `X-Forwarded-Proto`.
+- Exit criteria: offline cached searches render, connection loss preserves state, WCAG/keyboard checks pass, performance and readiness gates are documented, and trusted-proxy deployment tests pass before enabling `MEALSWAPP_TRUST_PROXY=true`.
 
 ## Public APIs and Interfaces
 

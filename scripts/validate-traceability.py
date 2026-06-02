@@ -40,6 +40,7 @@ TRACEABLE_ROOTS = {
 TRACEABLE_FILES = {
 	"docker-compose.yml",
 	"scripts/check.py",
+	"scripts/generate-api-types.py",
 	"scripts/generate_report.py",
 	"scripts/start-services.sh",
 	"scripts/validate-task-list.py",

@@ -6,6 +6,9 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Implements DESIGN-010 RequestValidator local development defaults.
@@ -15,6 +18,8 @@ const (
 	defaultRedisURL       = "redis://localhost:6379/0"
 	defaultEnvironment    = "development"
 	defaultFrontendOrigin = "http://localhost:5173"
+	defaultAPITimeout     = 10 * time.Second
+	defaultHSTSMaxAge     = 31536000
 )
 
 // Config contains the environment-backed settings for the API and worker.
@@ -25,6 +30,12 @@ type Config struct {
 	RedisURL       string
 	Environment    string
 	FrontendOrigin string
+	AllowedOrigins []string
+	APITimeout     time.Duration
+	TrustedProxy   bool
+	EnforceTLS     bool
+	HSTSMaxAge     int
+	TLSMinVersion  string
 }
 
 // Load reads Mealswapp configuration from the environment and applies local defaults.
@@ -37,11 +48,32 @@ func Load() (Config, error) {
 		Environment:    env("MEALSWAPP_ENV", defaultEnvironment),
 		FrontendOrigin: env("MEALSWAPP_FRONTEND_ORIGIN", defaultFrontendOrigin),
 	}
+	cfg.AllowedOrigins = splitCSV(env("MEALSWAPP_ALLOWED_ORIGINS", cfg.FrontendOrigin))
+	if len(cfg.AllowedOrigins) == 0 {
+		return Config{}, errors.New("MEALSWAPP_ALLOWED_ORIGINS must contain at least one origin")
+	}
+	var err error
+	if cfg.APITimeout, err = time.ParseDuration(env("MEALSWAPP_API_TIMEOUT", defaultAPITimeout.String())); err != nil || cfg.APITimeout <= 0 {
+		return Config{}, errors.New("MEALSWAPP_API_TIMEOUT must be a positive duration")
+	}
+	if cfg.TrustedProxy, err = strconv.ParseBool(env("MEALSWAPP_TRUST_PROXY", "false")); err != nil {
+		return Config{}, errors.New("MEALSWAPP_TRUST_PROXY must be a boolean")
+	}
+	if cfg.EnforceTLS, err = strconv.ParseBool(env("MEALSWAPP_ENFORCE_TLS", "false")); err != nil {
+		return Config{}, errors.New("MEALSWAPP_ENFORCE_TLS must be a boolean")
+	}
+	if cfg.HSTSMaxAge, err = strconv.Atoi(env("MEALSWAPP_HSTS_MAX_AGE", strconv.Itoa(defaultHSTSMaxAge))); err != nil || cfg.HSTSMaxAge < 0 {
+		return Config{}, errors.New("MEALSWAPP_HSTS_MAX_AGE must be a non-negative integer")
+	}
+	if cfg.TLSMinVersion = env("MEALSWAPP_TLS_MIN_VERSION", "1.3"); cfg.TLSMinVersion != "1.3" {
+		return Config{}, errors.New("MEALSWAPP_TLS_MIN_VERSION must be 1.3")
+	}
 
 	if cfg.Environment == "production" {
 		if os.Getenv("MEALSWAPP_DATABASE_URL") == "" || os.Getenv("MEALSWAPP_REDIS_URL") == "" {
 			return Config{}, errors.New("production requires MEALSWAPP_DATABASE_URL and MEALSWAPP_REDIS_URL")
 		}
+		cfg.EnforceTLS = true
 	}
 	if err := requireURLScheme("MEALSWAPP_DATABASE_URL", cfg.DatabaseURL, "postgres", "postgresql"); err != nil {
 		return Config{}, err
@@ -52,8 +84,25 @@ func Load() (Config, error) {
 	if err := requireURLScheme("MEALSWAPP_FRONTEND_ORIGIN", cfg.FrontendOrigin, "http", "https"); err != nil {
 		return Config{}, err
 	}
+	for _, origin := range cfg.AllowedOrigins {
+		if err := requireURLScheme("MEALSWAPP_ALLOWED_ORIGINS", origin, "http", "https"); err != nil {
+			return Config{}, err
+		}
+	}
 
 	return cfg, nil
+}
+
+// splitCSV parses comma-separated gateway settings.
+// Implements DESIGN-010 RequestValidator allowed-origin parsing.
+func splitCSV(value string) []string {
+	values := []string{}
+	for item := range strings.SplitSeq(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			values = append(values, item)
+		}
+	}
+	return values
 }
 
 // env returns the configured environment value or the provided fallback.

@@ -40,7 +40,7 @@
 - `panic_recovered`: return 500, log stack internally, expose generic message.
 
 ### 4. Component Interfaces
-- `func NewRouter(deps ServiceDependencies) *fiber.App`
+- `func NewRouter(deps ServiceDependencies) (*fiber.App, error)`
 - `func RegisterV1Routes(app *fiber.App, deps ServiceDependencies)`
 - `func SecurityHeadersMiddleware(config SecurityHeaders) fiber.Handler`
 - `func TimeoutMiddleware(timeout time.Duration) fiber.Handler`

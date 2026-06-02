@@ -1207,6 +1207,19 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** The predefined vocabulary/dictionary of allowed micronutrients shall be maintained in a central configuration or database table to ensure data consistency across all items.
 ---
 
+## [SW-REQ-091] Trusted Proxy Ingress Restriction
+**Statement:** WHEN proxy-provided forwarding headers are trusted for deployed TLS enforcement, THEN the software deployment shall restrict direct application ingress to the configured trusted reverse proxy or load balancer so arbitrary public clients cannot reach the application instance directly or spoof forwarding headers.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Security / Deployment |
+| **Priority** | High |
+| **Feasibility** | Feasible |
+| **Verification** | Deployment Security Test (Attempt direct application access and spoofed `X-Forwarded-Proto`; verify that only trusted-proxy traffic reaches the application instance). |
+
+**Notes:** Applies when trusted-proxy mode is enabled. Local development may keep direct HTTP access enabled with trusted-proxy mode disabled.
+---
+
 ## 3. Changelog
 
 ### 2026-01-18
@@ -1230,3 +1243,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 
 * Changed
 - SW-REQ-038 - now specifically mentions the storage and algo exclusion
+
+### 2026-06-02
+
+* Added
+- SW-REQ-091 - trusted proxy ingress restriction
