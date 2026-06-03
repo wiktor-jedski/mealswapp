@@ -7,13 +7,13 @@ VALUES
 ON CONFLICT (key) DO UPDATE
 SET display_name = EXCLUDED.display_name, unit = EXCLUDED.unit, active = EXCLUDED.active;
 
--- Implements DESIGN-005 TagEntity deterministic development fixtures.
-INSERT INTO tags (id, name, kind)
+-- Implements DESIGN-005 ClassificationEntity deterministic development fixtures.
+INSERT INTO classifications (id, name, kind)
 VALUES
-    ('20000000-0000-0000-0000-000000000001', 'Fruit', 'category'),
-    ('20000000-0000-0000-0000-000000000002', 'Protein', 'category'),
-    ('20000000-0000-0000-0000-000000000101', 'Quick', 'functionality'),
-    ('20000000-0000-0000-0000-000000000102', 'Breakfast', 'functionality')
+    ('20000000-0000-0000-0000-000000000001', 'Fruit', 'food_category'),
+    ('20000000-0000-0000-0000-000000000002', 'Protein', 'food_category'),
+    ('20000000-0000-0000-0000-000000000101', 'Quick', 'culinary_role'),
+    ('20000000-0000-0000-0000-000000000102', 'Breakfast', 'culinary_role')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 -- Implements DESIGN-005 FoodItemEntity deterministic development fixtures.
@@ -36,7 +36,7 @@ SET name = EXCLUDED.name, physical_state = EXCLUDED.physical_state,
     fat_per_100 = EXCLUDED.fat_per_100, micronutrients = EXCLUDED.micronutrients,
     image_url = EXCLUDED.image_url, deleted_at = NULL;
 
-INSERT INTO food_item_tags (food_item_id, tag_id)
+INSERT INTO food_item_classifications (food_item_id, classification_id)
 VALUES
     ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001'),
     ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000101'),
@@ -66,7 +66,7 @@ VALUES
     ('22000000-0000-0000-0000-000000000002', '21000000-0000-0000-0000-000000000001', 150, 'g', 0),
     ('22000000-0000-0000-0000-000000000002', '21000000-0000-0000-0000-000000000002', 125, 'ml', 1);
 
-INSERT INTO meal_tags (meal_id, tag_id)
+INSERT INTO meal_classifications (meal_id, classification_id)
 VALUES
     ('22000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000101'),
     ('22000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000102')
@@ -90,7 +90,7 @@ SET display_name = EXCLUDED.display_name, unit_system = EXCLUDED.unit_system,
 
 -- Implements DESIGN-007 EntitlementManager deterministic development fixtures.
 INSERT INTO entitlements (user_id, tier, status, search_limit_per_24h, allowed_modes)
-SELECT '23000000-0000-0000-0000-000000000001', 'free', 'active', 3, ARRAY['single']
+SELECT '23000000-0000-0000-0000-000000000001', 'free', 'active', 3, ARRAY['catalog']
 WHERE NOT EXISTS (
     SELECT 1 FROM entitlements
     WHERE user_id = '23000000-0000-0000-0000-000000000001' AND tier = 'free' AND status = 'active'

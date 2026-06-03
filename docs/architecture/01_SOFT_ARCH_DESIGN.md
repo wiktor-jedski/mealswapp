@@ -87,7 +87,7 @@ Container orchestration is not required as managed services handle scaling and a
 
 ## [ARCH-001] - Web Application Module
 
-**Description:** The responsive single-page application (SPA) built with Svelte that serves as the primary user interface, handling all client-side rendering, state management with Svelte stores + TanStack Query, local caching via Service Worker + localStorage, and offline functionality.
+**Description:** The responsive single-page application (SPA) built with Svelte that serves as the primary user interface, handling all client-side rendering, state management with Svelte stores + TanStack Query, local caching via Service Worker + localStorage, and offline culinary_role.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -98,7 +98,7 @@ Container orchestration is not required as managed services handle scaling and a
 
 **Dynamic Behavior:**
 
-- **Initialization:** On application load, initializes search mode to 'Single Item' and enables all macronutrient toggles. Detects system theme preference and applies user-stored preference override.
+- **Initialization:** On application load, initializes search mode to 'Catalog' and enables all macronutrient toggles. Detects system theme preference and applies user-stored preference override.
 - **Search Input:** Debounces user input by 150ms before triggering API calls. Manages focus states for keyboard navigation (Tab/Shift+Tab).
 - **Offline Detection:** Monitors browser online/offline events. Switches to cached data display and shows offline indicator when disconnected.
 - **Theme Switching:** Real-time CSS variable updates when user toggles light/dark mode. Persists selection to localStorage.
@@ -126,22 +126,22 @@ Container orchestration is not required as managed services handle scaling and a
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | SearchController, AutocompleteRanker, QueryParser, PaginationHandler, FilterProcessor, FunctionalityTagWeighter |
+| **Static Aspects** | SearchController, AutocompleteRanker, QueryParser, PaginationHandler, FilterProcessor, CulinaryRoleWeighter |
 | **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), ARCH-011 (Caching Layer) |
 | **Traceability** | SW-REQ-004, SW-REQ-010, SW-REQ-017, SW-REQ-019, SW-REQ-024, SW-REQ-026, SW-REQ-029, SW-REQ-031 |
 
 **Dynamic Behavior:**
 
-- **Query Processing:** Receives search terms, applies tag whitelist/blacklist filters, and routes to appropriate search strategy (text-based or similarity-based).
+- **Query Processing:** Receives search terms, applies Search filters and Exclusion Rules, and routes to Catalog Search, Substitution Search, or Daily Daily Diet Alternative Search.
 - **Autocomplete Ranking:** Implements three-tier priority: (1) Exact match, (2) Levenshtein distance, (3) String length. Executes in < 100ms.
-- **Implicit Trigger:** Detects empty search bar with 2+ ingredients to automatically initiate similarity search.
-- **Pagination:** Returns max 10 results per page, sorted by cosine similarity descending.
-- **Functionality Tag Weighting (SW-REQ-031):** During replacement searches, applies a relevance boost multiplier to items sharing the same Functionality Tags as the source item. Sorting combines cosine similarity score with tag match weight (e.g., `finalScore = similarityScore * (1 + 0.2 * tagMatchCount)`) to prioritize contextually appropriate replacements.
+- **Substitution Trigger:** Detects empty search bar with one or more Substitution Inputs to automatically initiate Substitution Search.
+- **Pagination:** Returns max 10 results per page, sorted by Nutritional Similarity descending for Substitution Search.
+- **Culinary Role Weighting (SW-REQ-031):** During single-input Substitution Searches, applies a relevance boost multiplier to Food Objects sharing Culinary Roles with the Substitution Input. Sorting combines Nutritional Similarity with Culinary Role match weight (e.g., `finalScore = similarityScore * (1 + 0.2 * culinaryRoleMatchCount)`) to prioritize contextually appropriate Substitutes. Multiple-input Substitution Searches combine inputs into one Macro Profile and skip per-input Culinary Role weighting.
 
 **Interface Definition:**
 
-- `Input`: SearchRequest { query: string, mode: SearchMode, filters: TagFilter[], page: number, ingredients?: string[] }
-- `Output`: SearchResponse { items: FoodItem[], totalCount: number, page: number, similarityScores: number[] }
+- `Input`: SearchRequest { query: string, mode: SearchMode, filters: SearchFilter[], page: number, substitutionInputs?: SubstitutionInput[] }
+- `Output`: SearchResponse { items: FoodObject[], totalCount: number, page: number, similarityScores: number[] }
 
 **Alternative Analysis (BP6):**
 
@@ -237,7 +237,7 @@ Container orchestration is not required as managed services handle scaling and a
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, MicronutrientVocabulary, UnitConverter, MacroNormalizer, RepositoryInterfaces |
+| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, ClassificationEntity, MicronutrientVocabulary, UnitConverter, MacroNormalizer, RepositoryInterfaces |
 | **Dependencies** | PostgreSQL (primary datastore, via lib/pq or pgx) |
 | **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041, SW-REQ-090 |
 
@@ -265,21 +265,21 @@ FoodItem {
   averageUnitWeight: grams                  // SW-REQ-036
   macros: { protein, carbs, fat } per 100g  // SW-REQ-033
   micros: { sodium, fiber, ... }            // SW-REQ-038, keys validated by SW-REQ-090 vocabulary
-  categoryTags: Tag[]                       // SW-REQ-012
-  functionalityTags: Tag[]                  // SW-REQ-037
+  foodCategories: Classification[]                       // SW-REQ-012
+  culinaryRoles: Classification[]                  // SW-REQ-037
   imageUrl: string?
 }
 
 Meal {
   id: UUID
-  type: 'single' | 'recipe'                 // SW-REQ-034
+  type: 'catalog' | 'recipe'                 // SW-REQ-034
   items?: FoodItem                          // single dish
   recipe?: { item: FoodItem, qty: number }[] // recipe composition
   physicalState: 'solid' | 'liquid'        // SW-REQ-035
   prepTime: minutes                         // SW-REQ-035
   averageUnitWeight: grams                  // SW-REQ-036
-  categoryTags: Tag[]                       // SW-REQ-012
-  functionalityTags: Tag[]                  // SW-REQ-037
+  foodCategories: Classification[]                       // SW-REQ-012
+  culinaryRoles: Classification[]                  // SW-REQ-037
 }
 
 SimilarityIndicatorAsset {                   // SW-REQ-018
@@ -357,7 +357,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 **Dynamic Behavior:**
 
-- **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, single-item only. Paid/Trial: unlimited, all features.
+- **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, Catalog Search and single-input Substitution Search only. Paid/Trial: unlimited, all features.
 - **Payment Flow:** Client uses Stripe Elements (PCI-DSS compliant tokenization). Server creates Payment Intents, never handles raw card data.
 - **Webhook Processing:** Asynchronously processes payment_intent.succeeded/failed events to update entitlement status reliably.
 - **Trial Management:** Activates 7-day trial on first social login. Tracks expiration timestamp. Auto-downgrades to Free tier on expiry.
@@ -489,7 +489,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 ## [ARCH-009] - Administration Module
 
-**Description:** Restricted backend service providing administrative functions for data curation, user management, and global tag management. Acts as a proxy for external data searches to enable admin-curated imports.
+**Description:** Restricted backend service providing administrative functions for data curation, user management, and global classification management. Acts as a proxy for external data searches to enable admin-curated imports.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -506,15 +506,15 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
   2. `ExternalSearchProxy` routes request to ARCH-012 (External Data Integration)
   3. ARCH-012 queries USDA and/or OpenFoodFacts APIs
   4. Results displayed in admin UI with "Import" action for each item
-  5. Admin selects item, edits fields (name, tags, macros), and confirms import
+  5. Admin selects item, edits fields (name, classifications, macros), and confirms import
   6. `DataImporter` saves curated item to local database via ARCH-005
-- **Item CRUD:** Full create/update/delete capabilities for food items including macros, images, and tags.
-- **Tag Management:** Creates and manages global Category Tags and Functionality Tags used across all items.
+- **Item CRUD:** Full create/update/delete capabilities for food items including macros, images, and classifications.
+- **Classification Management:** Creates and manages global Food Categories and Culinary Roles used across Food Objects.
 
 **Interface Definition:**
 
 - `Input`: Admin-authenticated requests, external search queries, item definitions
-- `Output`: External search results (uncurated), curated items (post-import), tag hierarchies, admin audit logs
+- `Output`: External search results (uncurated), curated items (post-import), classification hierarchies, admin audit logs
 
 **Admin External Search Flow:**
 
@@ -529,7 +529,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
        │                                                           │
        ▼                                                           │
 ┌─────────────┐     ┌─────────────┐                               │
-│ Edit & Tag  │────>│  ARCH-005   │  (Save curated item)          │
+│ Edit & Classification  │────>│  ARCH-005   │  (Save curated item)          │
 │ (Admin)     │     │ (Repository)│                               │
 └─────────────┘     └─────────────┘                               │
 ```
@@ -579,7 +579,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 ## [ARCH-011] - Caching Layer
 
-**Description:** Multi-tier caching system using client-side Service Worker with Cache API, localStorage for metadata, and server-side Redis to optimize performance and enable full offline functionality including images.
+**Description:** Multi-tier caching system using client-side Service Worker with Cache API, localStorage for metadata, and server-side Redis to optimize performance and enable full offline culinary_role including images.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -640,7 +640,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 - *Chosen Approach:* On-demand fetching with admin curation workflow
 - *Alternative Considered:* Bulk data import with scheduled synchronization
-- *Trade-off:* On-demand fetching with curation (SW-REQ-055) ensures data quality and proper functionality tagging. Bulk import would populate database faster but with uncurated, potentially inconsistent data. Quality over quantity is critical for accurate similarity matching.
+- *Trade-off:* On-demand fetching with curation (SW-REQ-055) ensures data quality and proper culinary_role tagging. Bulk import would populate database faster but with uncurated, potentially inconsistent data. Quality over quantity is critical for accurate similarity matching.
 
 **Reference Documentation:** 
 - 02_APPENDIX_A.md
@@ -818,7 +818,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 - **Network Failure:** Preserves application state, displays retry option, auto-retries on connectivity restoration.
 - **Timeout Handling:** Shows timeout notification after 10 seconds, offers manual retry.
-- **Graceful Degradation:** Isolates non-critical feature failures (history sync, recommendations) from core functionality (search, auth).
+- **Graceful Degradation:** Isolates non-critical feature failures (history sync, recommendations) from core culinary_role (search, auth).
 - **Error Classification:** Maps technical errors to user-friendly messages without exposing system internals.
 
 **Interface Definition:**
@@ -963,7 +963,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 **Changed (Post-Review Remediation):**
 - **ARCH-004:** Converted from synchronous service to asynchronous job queue pattern (go-redis/queue or machinery/Redis) to prevent CPU blocking under concurrent load. Added job submission, polling, and WebSocket notification interfaces. Addresses performance risk for SW-REQ-080, SW-REQ-082.
 - **ARCH-011:** Replaced localStorage-only approach with Service Worker + Cache API for offline image caching. Added `UserCachePurger` for GDPR-compliant Redis cache invalidation on account deletion (SW-REQ-073).
-- **ARCH-002:** Added `FunctionalityTagWeighter` component and explicit dynamic behavior for relevance boosting based on Functionality Tag matches during replacement searches (SW-REQ-031).
+- **ARCH-002:** Added `CulinaryRoleWeighter` component and explicit dynamic behavior for relevance boosting based on Culinary Role matches during single-input Substitution Searches (SW-REQ-031).
 - **ARCH-003:** Added `SimilarityAssetResolver` and explicit server-hosted image URLs for similarity tier indicators. Addresses SW-REQ-018 requirement to store emojis as server images.
 - **ARCH-005:** Added `SimilarityIndicatorAsset` entity to data model for storing tier indicator images (SW-REQ-018).
 - **ARCH-009:** Added `ExternalSearchProxy` component and detailed flow diagram showing how admin searches external APIs (USDA/OpenFoodFacts) via ARCH-012 for data curation workflow (SW-REQ-055).

@@ -7,7 +7,7 @@
 - `AdminController`: owns admin-only endpoint routing, role checks, and audit coordination.
 - `DataImporter`: owns validated persistence of curated external candidates into ARCH-005.
 - `ItemCurator`: owns draft editing rules, required fields, and duplicate handling.
-- `TagManager`: owns global category/functionality tag CRUD and in-use safeguards.
+- `TagManager`: owns global food_category/culinary_role classification CRUD and in-use safeguards.
 - `UserAdminPanel`: owns restricted user lookup and administrative user actions.
 - `ExternalSearchProxy`: owns calls from admin UI to ARCH-012 and result shaping for curation.
 
@@ -15,17 +15,17 @@
 - `interface AdminContext { userId: UUID; role: "admin"; requestId: string }`
 - `interface ExternalSearchRequest { query: string; provider: "usda" | "openfoodfacts" | "all"; page: number }`
 - `interface ExternalCandidate { provider: string; externalId: string; name: string; macrosPer100: MacroValues; imageUrl?: string; raw: map[string]any }`
-- `interface CuratedItemDraft { sourceProvider?: string; externalId?: string; name: string; physicalState: PhysicalState; macrosPer100: MacroValues; categoryTagIds: UUID[]; functionalityTagIds: UUID[]; imageUrl?: string }`
+- `interface CuratedItemDraft { sourceProvider?: string; externalId?: string; name: string; physicalState: PhysicalState; macrosPer100: MacroValues; foodCategoryIds: UUID[]; culinaryRoleIds: UUID[]; imageUrl?: string }`
 - `interface AdminAuditEntry { adminUserId: UUID; action: string; entityType: string; entityId?: UUID; before?: any; after?: any; createdAt: time.Time }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. API gateway authenticates the request; `AdminController` verifies role `admin`.
 2. External search requests are sent to `ExternalSearchProxy`, which calls ARCH-012 instead of the local repository.
 3. Normalize provider results enough for admin display but do not persist them until curation is confirmed.
-4. Admin edits required fields, tags, macro values, physical state, and image URL.
+4. Admin edits required fields, classifications, macro values, physical state, and image URL.
 5. `DataImporter` validates the curated draft against repository rules and saves it through ARCH-005.
 6. Item CRUD operations load current state, apply the mutation, and write an `AdminAuditEntry`.
-7. `TagManager` creates and updates global category and functionality tags, preventing duplicate names within each kind.
+7. `TagManager` creates and updates global Food Category and Culinary Role classifications, preventing duplicate names within each kind.
 8. User admin actions are role-restricted and audited with before/after snapshots where appropriate.
 
 ### 3. State Management & Error Handling
@@ -35,7 +35,7 @@
 - `draft_invalid`: required curated fields are missing or inconsistent.
 - `import_conflict`: external item or normalized name already exists; require admin confirmation to merge.
 - `audit_write_failed`: abort mutating operation unless audit can be persisted in the same transaction.
-- `tag_in_use`: block destructive tag deletion or require replacement tag.
+- `classification_in_use`: block destructive classification deletion or require replacement classification.
 
 ### 4. Component Interfaces
 - `func (c *AdminController) SearchExternal(ctx *fiber.Ctx) error`

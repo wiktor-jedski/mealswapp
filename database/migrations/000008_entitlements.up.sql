@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS entitlements (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT entitlements_allowed_modes_not_empty CHECK (array_length(allowed_modes, 1) > 0),
-    CONSTRAINT entitlements_allowed_modes_valid CHECK (allowed_modes <@ ARRAY['single', 'replacement', 'diet']::text[]),
+    CONSTRAINT entitlements_allowed_modes_valid CHECK (allowed_modes <@ ARRAY['catalog', 'substitution', 'daily_diet_alternative']::text[]),
     CONSTRAINT entitlements_trial_expiry_required CHECK (tier <> 'trial' OR expires_at IS NOT NULL)
 );
 

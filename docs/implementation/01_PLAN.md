@@ -15,10 +15,10 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 ### Phase 01: Data Repository Foundation
 
-- Implement ARCH-005 core entities, PostgreSQL schema, migrations, repository interfaces, unit conversion, macro normalization, tag model, micronutrient vocabulary, and seed data.
-- Cover food items, meals, recipes, tags, users, preferences, entitlements, saved data, audit logs, and admin imports enough for later phases.
+- Implement ARCH-005 core entities, PostgreSQL schema, migrations, repository interfaces, unit conversion, macro normalization, classification model, micronutrient vocabulary, and seed data.
+- Cover food items, meals, recipes, classifications, users, preferences, entitlements, saved data, audit logs, and admin imports enough for later phases.
 - Require positive `densityGramsPerMilliliter` and `densitySourceKind` for liquids. Use density when normalizing mixed solid/liquid composite meals. Missing persisted liquid density is invalid data and returns an error.
-- Exit criteria: repository tests pass for CRUD, search primitives, tag filters, unit conversion, recipe macro summation, and micronutrient validation.
+- Exit criteria: repository tests pass for CRUD, search primitives, classification filters, unit conversion, recipe macro summation, and micronutrient validation.
 
 ### Phase 02: API Gateway, Security, Errors, Observability Baseline
 
@@ -36,7 +36,8 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Extend `InputNormalizer` with typed field-specific rules as account and profile controllers introduce new string inputs. Keep email normalization from Phase 02 and add only the fields used by these flows.
 - Harden account-deletion processing before exposing it: enforce the selected status-transition rules, lock request rows during transitions, and add a worker claim query using `FOR UPDATE SKIP LOCKED` or an equivalent concurrency-safe approach.
 - For account deletion, classify sanitized failures as transient, permanent, or unknown. Retry transient failures automatically with exponential backoff up to 3 attempts. Require admin-triggered retry after investigation for permanent, unknown, or exhausted failures, and alert when requests fail or exhaust retries.
-- Retain a minimal pseudonymous deletion receipt after account erasure: random receipt ID, request and completion timestamps, final outcome, and sanitized failure category when applicable. Do not retain the deleted user ID, email, or account data. Use a provisional three-year retention period pending pre-production legal review.
+- Retain a minimal pseudonymous deletion receipt after account erasure: random receipt ID, request and completion timestamps, final outcome, and sanitized failure food_category when applicable. Do not retain the deleted user ID, email, or account data. Use a provisional three-year retention period pending pre-production legal review.
+- Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period.
 - Use the installed `golang-security` agent skill during implementation and review. Add `go vet ./...`, `govulncheck ./...`, and `go test -race ./...` to the backend quality gate before completing this phase.
 - Lint auth/profile OpenAPI contract additions with Redocly CLI.
 - Exit criteria: authenticated session lifecycle works end to end; profile preferences persist; consent blocks registration when missing.
@@ -46,11 +47,11 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Implement ARCH-002, ARCH-003, and server-side ARCH-011 search cache.
 - Add search/autocomplete endpoints, query parsing, pagination limit of 10, filters, Levenshtein ranking, cosine similarity, similarity tiers/assets, Redis cache keys, and graceful similarity degradation.
 - Extend `InputNormalizer` with typed search-query normalization when the search controller is added.
-- Add named dietary rules as search constraints composed from ingredient-tag inclusions and exclusions, for example allowing fish while excluding meat for `pescatarian`. Keep ingredient classification tag-based.
+- Add Dietary Presets as named bundles that produce Exclusion Rules. Keep Food Object classification based on Food Categories, Culinary Roles, and Allergens.
 - Persist completed authenticated-user searches only after valid results are returned. Retain duplicate searches, cap history at the latest 100 rows per user, expose clear-history behavior, and do not persist anonymous searches.
 - Implement required OpenAPI-to-frontend type generation for the first domain contracts, including `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache-related response metadata. This is the latest phase where type generation may remain incomplete, because Phase 05 frontend API work consumes these generated types.
 - Lint search-domain OpenAPI contract additions with Redocly CLI before generating frontend types.
-- Exit criteria: API supports single/replacement/diet query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
+- Exit criteria: API supports Catalog Search, Substitution Search, and Daily Daily Diet Alternative Search query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
 
 ### Phase 05: Frontend Search Experience
 
@@ -66,9 +67,9 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Use the installed `golang-security` agent skill during implementation and review of entitlement enforcement, Stripe webhook verification, and billing endpoints.
 - Use Stripe CLI sandbox forwarding and event triggers to verify webhook signatures, retries, duplicate delivery, and failure handling locally.
 - Lint subscription/billing OpenAPI contract additions with Redocly CLI.
-- Exit criteria: free users are limited to single mode and usage caps; trial/paid users unlock ingredient, meal, and diet features; webhook tests cover duplicate and failure cases.
+- Exit criteria: free users are limited to single-input Substitution Search and usage caps; trial/paid users unlock multi-input substitution, meal, and daily-diet features; webhook tests cover duplicate and failure cases.
 
-### Phase 07: Diet Optimization Worker
+### Phase 07: Daily Diet Optimization Worker
 
 - Implement ARCH-004.
 - Add Redis-backed optimization jobs, LP constraint/objective construction, worker process, status polling, 30-second solver timeout, infeasible handling, and up to 3 alternatives.
@@ -79,7 +80,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 ### Phase 08: Admin Curation and External Data
 
 - Implement ARCH-009 and ARCH-012.
-- Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, tag management, user admin actions, and audit persistence.
+- Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, classification management, user admin actions, and audit persistence.
 - Extend `InputNormalizer` with typed rules for admin-authored names and provider text introduced by curation flows.
 - Normalize provider-specific serving-unit aliases to canonical repository units (`g`, `ml`, `oz`, `fl_oz`, or `serving`) at the external-import boundary before persistence.
 - Warn during external import when liquid macro totals per `100 ml` look suspicious, but do not reject them solely for exceeding `100 g`; without density data, that threshold is not a valid hard constraint for liquids.
@@ -87,7 +88,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Optimize curated-import micronutrient validation: replace per-item full active-vocabulary loading with supplied-key lookup such as `ListAllowed(ctx, keys)`, or load and reuse the active vocabulary once within an import workflow. Keep ordinary CRUD simple unless measurements justify sharing the optimized path.
 - Use the installed `golang-security` agent skill during implementation and review of admin authorization, provider input handling, and audit persistence.
 - Lint admin and external-data OpenAPI contract additions with Redocly CLI.
-- Exit criteria: non-admin users receive 403; admins can search external sources, edit/tag/import items, and all mutations create audit entries.
+- Exit criteria: non-admin users receive 403; admins can search external sources, edit/classification/import items, and all mutations create audit entries.
 
 ### Phase 09: Offline, Degradation, Accessibility, Production Hardening
 
@@ -96,6 +97,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Extend Playwright and `@axe-core/playwright` coverage for offline, degradation, keyboard, responsive, and WCAG acceptance paths.
 - Install and use the `gcp-cloud-run` agent skill when implementing Cloud Run deployment, restricted ingress, Cloud SQL, Memorystore, Secret Manager, and monitoring configuration.
 - Enforce SW-REQ-091: when trusted forwarded-scheme handling is enabled, restrict direct application ingress to the configured reverse proxy or load balancer and verify that arbitrary public clients cannot reach the application instance or spoof `X-Forwarded-Proto`.
+- Confirm the production reverse proxy or load balancer topology before deployment work so the SW-REQ-091 ingress restriction is implemented against the selected boundary.
 - Exit criteria: offline cached searches render, connection loss preserves state, WCAG/keyboard checks pass, performance and readiness gates are documented, and trusted-proxy deployment tests pass before enabling `MEALSWAPP_TRUST_PROXY=true`.
 
 ## Public APIs and Interfaces
@@ -111,7 +113,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Unit tests: repository validation, unit conversion, macro normalization, autocomplete ranking, cosine similarity, entitlement decisions, LP constraints, cache key stability, error classification.
 - Integration tests: API middleware, auth/session flows, profile/preferences, search pagination/filtering, Stripe webhook idempotency, optimization job lifecycle, admin import workflow.
 - Frontend tests: Svelte component state, debounce, localStorage LRU, keyboard navigation, theme persistence, responsive rendering, error/offline states.
-- E2E tests: registration/login, basic search, replacement search, paid-mode gating, saved favorites/history, admin import, account export/deletion.
+- E2E tests: registration/login, basic Catalog Search, Substitution Search, paid-mode gating, saved favorites/history, admin import, account export/deletion.
 - Operational checks: python scripts/check.py, backend go test ./..., frontend bun test, Playwright suite, health/readiness, and migration up/down validation.
 - Goal: 100% line coverage by the end of each phase. Each deviation from that has to be documented in AGENTS.md and accepted.
 - After each phase suggest integration, functional, end to end and acceptance tests that have to be performed by the project owner.

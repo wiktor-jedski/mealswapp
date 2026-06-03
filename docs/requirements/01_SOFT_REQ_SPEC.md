@@ -14,7 +14,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 
 ---
 ## [SW-REQ-001] Default Search State
-**Statement:** WHILE the software is in its initial state, the software shall set the Search Mode to 'Single Item' and enable all macronutrient toggles (Carbohydrates, Fats, Proteins).
+**Statement:** WHILE the software is in its initial state, the software shall set the Search Mode to 'Catalog' and enable all macronutrient toggles (Carbohydrates, Fats, Proteins).
 
 | Attribute | Value |
 | :--- | :--- |
@@ -78,8 +78,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Ingredients must appear above the macronutrient toggle bar.
 ---
 
-## [SW-REQ-006] Search Mode: Meal List
-**Statement:** WHILE in 'Meal List' mode, the software shall allow the user to select and aggregate multiple meals into a single collection representing a one-day diet.
+## [SW-REQ-006] Search Mode: Daily Diet
+**Statement:** WHILE in 'Daily Diet' mode, the software shall allow the user to select and aggregate multiple meals into a single collection representing a one-day diet.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -144,7 +144,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-011] Search Result Data Fields
-**Statement:** The software shall display the image, name, category tags, macronutrients per 100g/100ml, calories, and the similarity score for every item in the search result set.
+**Statement:** The software shall display the image, name, food_category classifications, macronutrients per 100g/100ml, calories, and the similarity score for every item in the search result set.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -153,11 +153,11 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | UI Inspection |
 
-**Notes:** Items without a specific image must use the category-based placeholder.
+**Notes:** Items without a specific image must use the food_category-based placeholder.
 ---
 
 ## [SW-REQ-012] Category-Based Placeholders
-**Statement:** IF an item record does not contain an image URL, THEN the software shall display a placeholder image associated with the item’s primary category tag (e.g., meat, dairy, gluten).
+**Statement:** IF an item record does not contain an image URL, THEN the software shall display a placeholder image associated with the item’s primary food_category classification (e.g., meat, dairy, gluten).
 
 | Attribute | Value |
 | :--- | :--- |
@@ -234,7 +234,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | Unit Test (Mathematical correctness vs reference set) |
 
-**Notes:** Core logic for meal/ingredient replacement.
+**Notes:** Core logic for Food Object substitution.
 ---
 
 ## [SW-REQ-017] Similarity Threshold Filtering
@@ -263,8 +263,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Applies to all search modes.
 ---
 
-## [SW-REQ-019] Tag-Based Filtering (Whitelist/Blacklist)
-**Statement:** WHERE user-defined tag preferences exist, the software shall filter all search results to include only 'whitelisted' tags and exclude all 'blacklisted' tags.
+## [SW-REQ-019] Classification-Based Filtering (Whitelist/Blacklist)
+**Statement:** WHERE user-defined classification preferences exist, the software shall filter all search results to include only 'whitelisted' classifications and exclude all 'blacklisted' classifications.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -328,8 +328,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Prevents the system from simply suggesting the same diet back to the user.
 ---
 
-## [SW-REQ-024] Implicit Similarity Search Trigger
-**Statement:** IF the search bar is empty AND the active ingredient list contains two or more items, THEN the software shall automatically trigger a meal similarity search.
+## [SW-REQ-024] Substitution Search Trigger
+**Statement:** IF the search bar is empty AND the active Substitution Input list contains one or more Food Objects, THEN the software shall automatically trigger a Substitution Search.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -338,11 +338,11 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | Integration Test (Logical trigger condition check) |
 
-**Notes:** This is the primary automated logic for ingredient-set matching.
+**Notes:** Adding Food Objects refines one Substitution Search. Multiple inputs are combined into one Macro Profile for Nutritional Similarity.
 ---
 
-## [SW-REQ-025] Explicit Similarity Search Redundancy
-**Statement:** The software shall provide a dedicated search button on the right-hand extremity of the search bar to allow the user to manually trigger the meal similarity search.
+## [SW-REQ-025] Explicit Substitution Search Trigger
+**Statement:** The software shall provide a dedicated search button on the right-hand extremity of the search bar to allow the user to manually trigger the Substitution Search.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -351,7 +351,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | UI Inspection / Integration Test |
 
-**Notes:** Provides a fallback for users who do not rely on the implicit trigger defined in SW-REQ-024.
+**Notes:** Provides a fallback for users who do not rely on the automatic trigger defined in SW-REQ-024.
 ---
 
 ## [SW-REQ-026] Result Sorting Order
@@ -381,7 +381,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-028] Comparative Quantity Calculation
-**Statement:** WHILE displaying a replacement result, the software shall calculate and display the specific quantity of the replacement item required to match either the calorie count or the protein count of the original item.
+**Statement:** WHILE displaying a Substitute, the software shall calculate and display the specific Matched Quantity required to match either the calorie count or the protein count of the Substitution Inputs.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -406,7 +406,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Requires the "Time to Prepare" metadata field to be populated in the data model.
 ---
 
-## [SW-REQ-030] Alternative Diet Result Volume
+## [SW-REQ-030] Alternative Daily Diet Result Volume
 **Statement:** The software shall generate a maximum of three (3) alternative meal combinations for every individual diet search request.
 
 | Attribute | Value |
@@ -419,8 +419,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** This limit ensures performance stability and prevents user choice paralysis. If the Linear Programming model (SW-REQ-021) finds fewer than 3 valid combinations meeting the diversity constraints, it may return 1 or 2 results.
 ---
 
-## [SW-REQ-031] Context-Aware Replacements
-**Statement:** WHERE a replacement search is executed, the software shall prioritize result items that share the same 'Functionality Tag' as the original item.
+## [SW-REQ-031] Context-Aware Substitutes
+**Statement:** WHERE a Substitution Search has exactly one Substitution Input, the software shall prioritize result Food Objects that share a Culinary Role with that input.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -429,7 +429,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | Integration Test (Search result relevance check) |
 
-**Notes:** Prevents suggesting a "crunchy snack" as a replacement for "fat for frying" even if macros are similar.
+**Notes:** Prevents suggesting a "crunchy snack" as a Substitute for "fat for frying" even if Macro Profiles are similar. Multiple-input Substitution Searches do not apply per-input Culinary Role ordering.
 ---
 
 ### 2.3 Data Model & Unit Conversion
@@ -500,8 +500,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Allows users to switch views between 100g/ml and discrete unit counts.
 ---
 
-## [SW-REQ-037] Functionality Tagging
-**Statement:** The software shall assign one or more 'Functionality Tags' (e.g., "fat for frying," "sweetener," "crunchy snack") to every item to define its culinary role.
+## [SW-REQ-037] Culinary Role Classification
+**Statement:** The software shall assign one or more Culinary Roles (e.g., "fat for frying," "sweetener," "crunchy snack") to every Food Object to define its practical culinary use.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -510,7 +510,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | UI/Data Inspection |
 
-**Notes:** Crucial for providing replacements that serve the same purpose in a recipe.
+**Notes:** Crucial for providing Substitutes that serve the same purpose in a recipe.
 ---
 
 ## [SW-REQ-038] Micronutrient Storage & Algorithm Exclusion
@@ -699,7 +699,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-052] Paid Tier Exclusive Features
-**Statement:** WHERE the user has an active Paid subscription or trial, the software shall enable access to 'Ingredient List' searches, 'Meal List' searches, and 'Diet Alternative' generation.
+**Statement:** WHERE the user has an active Paid subscription or trial, the software shall enable access to 'Ingredient List' searches, 'Daily Diet' searches, and 'Daily Diet Alternative' generation.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -712,14 +712,14 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-053] Free Tier Functional Scope
-**Statement:** IF the user is on the Free tier, THEN the software shall restrict search operations to single meal or single ingredient replacements only.
+**Statement:** IF the User Account is on the Free tier, THEN the software shall restrict search operations to Catalog Search and single-input Substitution Search only.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Functional |
 | **Priority** | High |
 | **Feasibility** | Feasible |
-| **Verification** | Integration Test (Verify blockage of list/diet search for free users) |
+| **Verification** | Integration Test (Verify blockage of daily-diet search for free users) |
 
 **Notes:** Combined with SW-REQ-042 (Daily limit), this defines the Free tier constraints.
 ---
@@ -738,7 +738,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-055] External Data Curation
-**Statement:** WHEN an administrator selects an entry from an external API source (USDA or OpenFoodFacts), the software shall allow the administrator to edit, tag, and import that entry into the local database.
+**Statement:** WHEN an administrator selects an entry from an external API source (USDA or OpenFoodFacts), the software shall allow the administrator to edit, classification, and import that entry into the local database.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -747,11 +747,11 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | UI Test (Import workflow validation) |
 
-**Notes:** Essential for maintaining data quality and functionality tags.
+**Notes:** Essential for maintaining data quality and culinary_role classifications.
 ---
 
 ## [SW-REQ-056] Manual Item Entry
-**Statement:** The software shall allow administrators to manually create, update, and delete custom items, including their associated macronutrients, images, and category tags.
+**Statement:** The software shall allow administrators to manually create, update, and delete custom items, including their associated macronutrients, images, and food_category classifications.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -763,15 +763,15 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Used for items not found in external databases.
 ---
 
-## [SW-REQ-057] Global Tag Management
-**Statement:** The software shall provide tools within the admin panel to create and manage the global list of Category Tags and Functionality Tags.
+## [SW-REQ-057] Global Classification Management
+**Statement:** The software shall provide tools within the admin panel to create and manage the global list of Food Categories and Culinary Roles.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Functional |
 | **Priority** | Medium |
 | **Feasibility** | Feasible |
-| **Verification** | UI Test (Tag management UI check) |
+| **Verification** | UI Test (Classification management UI check) |
 
 **Notes:** Ensures consistency across the item database.
 ---
@@ -932,8 +932,8 @@ This document defines the software-level requirements for the Mealswapp applicat
 **Notes:** Reset tokens must be cryptographically random and invalidated after use or expiration.
 ---
 
-## [SW-REQ-070] Email Verification
-**Statement:** WHEN a user registers with email and password, the software shall send a verification email and restrict access to paid features until the email address is verified.
+## [SW-REQ-070] Login Method Verification
+**Statement:** WHEN a User Account registers with email and password, the software shall send a verification email for that Login Method and restrict access to paid features until the User Account has at least one Verified Login Method.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -1056,7 +1056,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-079] Graceful Degradation
-**Statement:** WHEN a non-critical feature or service fails, the software shall continue operating with reduced functionality rather than displaying a full application error.
+**Statement:** WHEN a non-critical feature or service fails, the software shall continue operating with reduced culinary_role rather than displaying a full application error.
 
 | Attribute | Value |
 | :--- | :--- |

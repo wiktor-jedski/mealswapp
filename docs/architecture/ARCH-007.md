@@ -11,7 +11,7 @@
 
 **Dynamic Behavior:**
 
-- **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, single-item only. Paid/Trial: unlimited, all features.
+- **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, Catalog Search and single-input Substitution Search only. Paid/Trial: unlimited, all features.
 - **Payment Flow:** Client uses Stripe Elements (PCI-DSS compliant tokenization). Server creates Payment Intents, never handles raw card data.
 - **Webhook Processing:** Asynchronously processes payment_intent.succeeded/failed events to update entitlement status reliably.
 - **Trial Management:** Activates 7-day trial on first social login. Tracks expiration timestamp. Auto-downgrades to Free tier on expiry.

@@ -11,18 +11,18 @@ WHERE ($1::boolean OR deleted_at IS NULL)
       coalesce(cardinality($4::uuid[]), 0) = 0
       OR id IN (
           SELECT fit.food_item_id
-          FROM food_item_tags fit
-          JOIN tags t ON t.id = fit.tag_id
-          WHERE t.kind = 'category' AND t.id = ANY($4::uuid[])
+          FROM food_item_classifications fit
+          JOIN classifications t ON t.id = fit.classification_id
+          WHERE t.kind = 'food_category' AND t.id = ANY($4::uuid[])
       )
   )
   AND (
       coalesce(cardinality($5::uuid[]), 0) = 0
       OR id IN (
           SELECT fit.food_item_id
-          FROM food_item_tags fit
-          JOIN tags t ON t.id = fit.tag_id
-          WHERE t.kind = 'functionality' AND t.id = ANY($5::uuid[])
+          FROM food_item_classifications fit
+          JOIN classifications t ON t.id = fit.classification_id
+          WHERE t.kind = 'culinary_role' AND t.id = ANY($5::uuid[])
       )
   )
 ORDER BY normalized_name, id

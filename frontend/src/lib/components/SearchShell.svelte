@@ -2,7 +2,7 @@
   import { themePreference, setThemePreference } from "../stores/theme";
 
   // Implements DESIGN-001 SidebarComponent search-mode shell labels.
-  const modes = ["Single Item", "Replacement", "Diet"];
+  const modes = ["Catalog", "Substitution", "Daily Diet"];
 </script>
 
 <!-- Implements DESIGN-001 SearchView, SidebarComponent, SettingsPanel, and DESIGN-016 LayoutGrid. -->

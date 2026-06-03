@@ -24,7 +24,7 @@
 
 - *Chosen Approach:* On-demand fetching with admin curation workflow
 - *Alternative Considered:* Bulk data import with scheduled synchronization
-- *Trade-off:* On-demand fetching with curation (SW-REQ-055) ensures data quality and proper functionality tagging. Bulk import would populate database faster but with uncurated, potentially inconsistent data. Quality over quantity is critical for accurate similarity matching.
+- *Trade-off:* On-demand fetching with curation (SW-REQ-055) ensures data quality and proper culinary_role tagging. Bulk import would populate database faster but with uncurated, potentially inconsistent data. Quality over quantity is critical for accurate similarity matching.
 
 **Reference Documentation:** 
 - 02_APPENDIX_A.md

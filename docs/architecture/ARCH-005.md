@@ -5,7 +5,7 @@
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, TagEntity, MicronutrientVocabulary, UnitConverter, MacroNormalizer, RepositoryInterfaces |
+| **Static Aspects** | FoodItemEntity, MealEntity, RecipeEntity, ClassificationEntity, MicronutrientVocabulary, UnitConverter, MacroNormalizer, RepositoryInterfaces |
 | **Dependencies** | PostgreSQL (primary datastore, via lib/pq or pgx) |
 | **Traceability** | SW-REQ-032, SW-REQ-033, SW-REQ-034, SW-REQ-035, SW-REQ-036, SW-REQ-037, SW-REQ-038, SW-REQ-039, SW-REQ-040, SW-REQ-041, SW-REQ-090 |
 
@@ -33,21 +33,21 @@ FoodItem {
   averageUnitWeight: grams                  // SW-REQ-036
   macros: { protein, carbs, fat } per 100g  // SW-REQ-033
   micros: { sodium, fiber, ... }            // SW-REQ-038, keys validated by SW-REQ-090 vocabulary
-  categoryTags: Tag[]                       // SW-REQ-012
-  functionalityTags: Tag[]                  // SW-REQ-037
+  foodCategories: Classification[]                       // SW-REQ-012
+  culinaryRoles: Classification[]                  // SW-REQ-037
   imageUrl: string?
 }
 
 Meal {
   id: UUID
-  type: 'single' | 'recipe'                 // SW-REQ-034
+  type: 'catalog' | 'recipe'                 // SW-REQ-034
   items?: FoodItem                          // single dish
   recipe?: { item: FoodItem, qty: number }[] // recipe composition
   physicalState: 'solid' | 'liquid'        // SW-REQ-035
   prepTime: minutes                         // SW-REQ-035
   averageUnitWeight: grams                  // SW-REQ-036
-  categoryTags: Tag[]                       // SW-REQ-012
-  functionalityTags: Tag[]                  // SW-REQ-037
+  foodCategories: Classification[]                       // SW-REQ-012
+  culinaryRoles: Classification[]                  // SW-REQ-037
 }
 
 SimilarityIndicatorAsset {                   // SW-REQ-018

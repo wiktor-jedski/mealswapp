@@ -28,10 +28,10 @@ var mealUpdateSQL string
 //go:embed sql/meal_soft_delete.sql
 var mealSoftDeleteSQL string
 
-// Implements DESIGN-005 MealEntity tag validation query.
+// Implements DESIGN-005 MealEntity classification validation query.
 //
-//go:embed sql/meal_validate_tag.sql
-var mealValidateTagSQL string
+//go:embed sql/meal_validate_classification.sql
+var mealValidateClassificationSQL string
 
 // Implements DESIGN-005 MealEntity clear-ingredients query.
 //
@@ -43,15 +43,15 @@ var mealClearIngredientsSQL string
 //go:embed sql/meal_attach_ingredient.sql
 var mealAttachIngredientSQL string
 
-// Implements DESIGN-005 MealEntity clear-tags query.
+// Implements DESIGN-005 MealEntity clear-classifications query.
 //
-//go:embed sql/meal_clear_tags.sql
-var mealClearTagsSQL string
+//go:embed sql/meal_clear_classifications.sql
+var mealClearClassificationsSQL string
 
-// Implements DESIGN-005 MealEntity attach-tag query.
+// Implements DESIGN-005 MealEntity attach-classification query.
 //
-//go:embed sql/meal_attach_tag.sql
-var mealAttachTagSQL string
+//go:embed sql/meal_attach_classification.sql
+var mealAttachClassificationSQL string
 
 // Implements DESIGN-005 MealEntity get-by-id query.
 //
@@ -63,10 +63,10 @@ var mealGetByIDSQL string
 //go:embed sql/meal_list_ingredients.sql
 var mealListIngredientsSQL string
 
-// Implements DESIGN-005 MealEntity hydrate-tags query.
+// Implements DESIGN-005 MealEntity hydrate-classifications query.
 //
-//go:embed sql/meal_list_tags.sql
-var mealListTagsSQL string
+//go:embed sql/meal_list_classifications.sql
+var mealListClassificationsSQL string
 
 // PostgresMealRepository persists opaque single and composite meals in PostgreSQL.
 // Implements DESIGN-005 MealEntity.
@@ -80,7 +80,7 @@ func NewPostgresMealRepository(db transactionalExecutor) *PostgresMealRepository
 	return &PostgresMealRepository{db: db}
 }
 
-// GetByID loads an opaque single or composite meal with ingredients and hydrated tags.
+// GetByID loads an opaque single or composite meal with ingredients and hydrated classifications.
 // Implements DESIGN-005 MealEntity.
 func (r *PostgresMealRepository) GetByID(ctx context.Context, id uuid.UUID, rc RepositoryContext) (MealEntity, error) {
 	meal, err := r.getMealByID(ctx, id, rc.IncludeDeleted)
@@ -102,7 +102,7 @@ func (r *PostgresMealRepository) GetByID(ctx context.Context, id uuid.UUID, rc R
 	} else {
 		meal.NormalizedMacrosAvailable = true
 	}
-	if err := r.hydrateMealTags(ctx, &meal); err != nil {
+	if err := r.hydrateMealClassifications(ctx, &meal); err != nil {
 		return MealEntity{}, err
 	}
 	convertMealForUnitSystem(&meal, rc.UnitSystem)
@@ -121,7 +121,7 @@ func (r *PostgresMealRepository) Search(ctx context.Context, q RepositoryQuery) 
 		offset = 0
 	}
 
-	rows, err := r.db.Query(ctx, mealSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.CategoryTagIDs, q.FunctionalityIDs)
+	rows, err := r.db.Query(ctx, mealSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs)
 	if err != nil {
 		return nil, 0, mapPostgresError(err, "search meals")
 	}
@@ -208,7 +208,7 @@ func (r *PostgresMealRepository) calculateCompositeMacros(ctx context.Context, i
 	return ScaleMacros(total, 100, totalMassGrams), true, nil
 }
 
-// Create validates and persists a meal with tags and recipe ingredients.
+// Create validates and persists a meal with classifications and recipe ingredients.
 // Implements DESIGN-005 MealEntity.
 func (r *PostgresMealRepository) Create(ctx context.Context, meal MealEntity) (uuid.UUID, error) {
 	if err := r.validateMeal(ctx, meal); err != nil {
@@ -225,12 +225,12 @@ func (r *PostgresMealRepository) Create(ctx context.Context, meal MealEntity) (u
 		if err := txRepo.replaceIngredients(ctx, id, meal.RecipeItems); err != nil {
 			return err
 		}
-		return txRepo.replaceMealTags(ctx, id, meal.Tags)
+		return txRepo.replaceMealClassifications(ctx, id, meal.Classifications)
 	})
 	return id, err
 }
 
-// Update validates and replaces a meal with tags and recipe ingredients.
+// Update validates and replaces a meal with classifications and recipe ingredients.
 // Implements DESIGN-005 MealEntity.
 func (r *PostgresMealRepository) Update(ctx context.Context, meal MealEntity) error {
 	if meal.ID == uuid.Nil {
@@ -251,7 +251,7 @@ func (r *PostgresMealRepository) Update(ctx context.Context, meal MealEntity) er
 		if err := txRepo.replaceIngredients(ctx, meal.ID, meal.RecipeItems); err != nil {
 			return err
 		}
-		return txRepo.replaceMealTags(ctx, meal.ID, meal.Tags)
+		return txRepo.replaceMealClassifications(ctx, meal.ID, meal.Classifications)
 	})
 }
 
@@ -298,7 +298,7 @@ func (r *PostgresMealRepository) validateMeal(ctx context.Context, meal MealEnti
 	default:
 		return validationError("meal type must be single or composite")
 	}
-	return r.validateMealTags(ctx, meal.Tags)
+	return r.validateMealClassifications(ctx, meal.Classifications)
 }
 
 // validateIngredients checks recipe ingredient fields and ordering.
@@ -327,20 +327,20 @@ func (r *PostgresMealRepository) validateIngredients(ctx context.Context, mealID
 	return nil
 }
 
-// validateMealTags verifies that referenced meal tags exist.
+// validateMealClassifications verifies that referenced meal classifications exist.
 // Implements DESIGN-005 MealEntity.
-func (r *PostgresMealRepository) validateMealTags(ctx context.Context, tags []TagEntity) error {
-	for _, tag := range tags {
-		if tag.ID == uuid.Nil {
-			return validationError("meal tag id is required")
+func (r *PostgresMealRepository) validateMealClassifications(ctx context.Context, classifications []ClassificationEntity) error {
+	for _, classification := range classifications {
+		if classification.ID == uuid.Nil {
+			return validationError("meal classification id is required")
 		}
 		var exists bool
-		err := r.db.QueryRow(ctx, mealValidateTagSQL, tag.ID).Scan(&exists)
+		err := r.db.QueryRow(ctx, mealValidateClassificationSQL, classification.ID).Scan(&exists)
 		if err != nil {
-			return mapPostgresError(err, "validate meal tag")
+			return mapPostgresError(err, "validate meal classification")
 		}
 		if !exists {
-			return validationError("meal tag does not exist")
+			return validationError("meal classification does not exist")
 		}
 	}
 	return nil
@@ -360,15 +360,15 @@ func (r *PostgresMealRepository) replaceIngredients(ctx context.Context, mealID 
 	return nil
 }
 
-// replaceMealTags replaces persisted tag associations for a meal.
+// replaceMealClassifications replaces persisted classification associations for a meal.
 // Implements DESIGN-005 MealEntity.
-func (r *PostgresMealRepository) replaceMealTags(ctx context.Context, mealID uuid.UUID, tags []TagEntity) error {
-	if _, err := r.db.Exec(ctx, mealClearTagsSQL, mealID); err != nil {
-		return mapPostgresError(err, "clear meal tags")
+func (r *PostgresMealRepository) replaceMealClassifications(ctx context.Context, mealID uuid.UUID, classifications []ClassificationEntity) error {
+	if _, err := r.db.Exec(ctx, mealClearClassificationsSQL, mealID); err != nil {
+		return mapPostgresError(err, "clear meal classifications")
 	}
-	for _, tag := range tags {
-		if _, err := r.db.Exec(ctx, mealAttachTagSQL, mealID, tag.ID); err != nil {
-			return mapPostgresError(err, "replace meal tags")
+	for _, classification := range classifications {
+		if _, err := r.db.Exec(ctx, mealAttachClassificationSQL, mealID, classification.ID); err != nil {
+			return mapPostgresError(err, "replace meal classifications")
 		}
 	}
 	return nil
@@ -423,25 +423,25 @@ func (r *PostgresMealRepository) loadIngredients(ctx context.Context, mealID uui
 	return ingredients, nil
 }
 
-// hydrateMealTags loads tag IDs onto meal entities.
+// hydrateMealClassifications loads classification IDs onto meal entities.
 // Implements DESIGN-005 MealEntity.
-func (r *PostgresMealRepository) hydrateMealTags(ctx context.Context, meal *MealEntity) error {
-	rows, err := r.db.Query(ctx, mealListTagsSQL, meal.ID)
+func (r *PostgresMealRepository) hydrateMealClassifications(ctx context.Context, meal *MealEntity) error {
+	rows, err := r.db.Query(ctx, mealListClassificationsSQL, meal.ID)
 	if err != nil {
-		return mapPostgresError(err, "load meal tags")
+		return mapPostgresError(err, "load meal classifications")
 	}
 	defer rows.Close()
 
-	meal.Tags = nil
+	meal.Classifications = nil
 	for rows.Next() {
-		var tag TagEntity
-		if err := rows.Scan(&tag.ID, &tag.Name, &tag.Kind, &tag.ParentID); err != nil {
-			return mapPostgresError(err, "scan meal tag")
+		var classification ClassificationEntity
+		if err := rows.Scan(&classification.ID, &classification.Name, &classification.Kind, &classification.ParentID); err != nil {
+			return mapPostgresError(err, "scan meal classification")
 		}
-		meal.Tags = append(meal.Tags, tag)
+		meal.Classifications = append(meal.Classifications, classification)
 	}
 	if err := rows.Err(); err != nil {
-		return mapPostgresError(err, "iterate meal tags")
+		return mapPostgresError(err, "iterate meal classifications")
 	}
 	return nil
 }

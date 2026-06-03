@@ -19,9 +19,9 @@ FRONTEND = ROOT / "frontend"
 ARTIFACT_DIR = Path("/tmp/mealswapp-frontend-verifier")
 REQUIRED_TEXT = (
 	"Mealswapp",
-	"Single Item",
-	"Replacement",
-	"Diet",
+	"Catalog",
+	"Substitution",
+	"Daily Diet",
 	"Phase 00 Shell",
 	"Search foundation",
 	"Food search",

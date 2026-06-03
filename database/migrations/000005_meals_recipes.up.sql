@@ -88,11 +88,11 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1
         FROM pg_constraint
-        WHERE conname = 'meal_tags_meal_id_fkey'
-          AND conrelid = 'meal_tags'::regclass
+        WHERE conname = 'meal_classifications_meal_id_fkey'
+          AND conrelid = 'meal_classifications'::regclass
     ) THEN
-        ALTER TABLE meal_tags
-            ADD CONSTRAINT meal_tags_meal_id_fkey
+        ALTER TABLE meal_classifications
+            ADD CONSTRAINT meal_classifications_meal_id_fkey
             FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE;
     END IF;
 END $$;

@@ -1,6 +1,6 @@
 package repository
 
-// Implements DESIGN-005 TagEntity.
+// Implements DESIGN-005 ClassificationEntity.
 // Implements DESIGN-005 MicronutrientVocabulary.
 
 import (
@@ -45,8 +45,8 @@ var testInvalidPasswordPairCreateSQL string
 //go:embed sql/testdata/food_fixture_create.sql
 var testFoodFixtureCreateSQL string
 
-//go:embed sql/testdata/food_tag_fixture_create.sql
-var testFoodTagFixtureCreateSQL string
+//go:embed sql/testdata/food_classification_fixture_create.sql
+var testFoodClassificationFixtureCreateSQL string
 
 //go:embed sql/testdata/inactive_vocabulary_upsert.sql
 var testInactiveVocabularyUpsertSQL string
@@ -147,16 +147,16 @@ func TestUserIdentitySchemaSupportsOAuthOnlyUsers(t *testing.T) {
 	}
 }
 
-func TestPostgresTagRepositoryUpsertListAndSoftDelete(t *testing.T) {
+func TestPostgresClassificationRepositoryUpsertListAndSoftDelete(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
-	repo := NewPostgresTagRepository(db)
+	repo := NewPostgresClassificationRepository(db)
 
-	rootID, err := repo.Upsert(ctx, TagEntity{Name: "Fruit", Kind: TagKindCategory})
+	rootID, err := repo.Upsert(ctx, ClassificationEntity{Name: "Fruit", Kind: ClassificationKindFoodCategory})
 	if err != nil {
 		t.Fatalf("Upsert() root error = %v", err)
 	}
-	sameRootID, err := repo.Upsert(ctx, TagEntity{Name: " fruit ", Kind: TagKindCategory})
+	sameRootID, err := repo.Upsert(ctx, ClassificationEntity{Name: " fruit ", Kind: ClassificationKindFoodCategory})
 	if err != nil {
 		t.Fatalf("Upsert() duplicate root error = %v", err)
 	}
@@ -164,17 +164,17 @@ func TestPostgresTagRepositoryUpsertListAndSoftDelete(t *testing.T) {
 		t.Fatalf("duplicate root ID = %s, want %s", sameRootID, rootID)
 	}
 
-	childID, err := repo.Upsert(ctx, TagEntity{Name: "Citrus", Kind: TagKindCategory, ParentID: &rootID})
+	childID, err := repo.Upsert(ctx, ClassificationEntity{Name: "Citrus", Kind: ClassificationKindFoodCategory, ParentID: &rootID})
 	if err != nil {
 		t.Fatalf("Upsert() child error = %v", err)
 	}
 
-	tags, err := repo.List(ctx, TagKindCategory)
+	classifications, err := repo.List(ctx, ClassificationKindFoodCategory)
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(tags) != 2 {
-		t.Fatalf("List() length = %d, want 2: %#v", len(tags), tags)
+	if len(classifications) != 2 {
+		t.Fatalf("List() length = %d, want 2: %#v", len(classifications), classifications)
 	}
 
 	inUse, err := repo.IsInUse(ctx, childID)
@@ -182,45 +182,45 @@ func TestPostgresTagRepositoryUpsertListAndSoftDelete(t *testing.T) {
 		t.Fatalf("IsInUse() error = %v", err)
 	}
 	if inUse {
-		t.Fatalf("IsInUse() = true for unattached tag")
+		t.Fatalf("IsInUse() = true for unattached classification")
 	}
 	if err := repo.SoftDelete(ctx, childID); err != nil {
 		t.Fatalf("SoftDelete() unused error = %v", err)
 	}
 
-	tags, err = repo.List(ctx, TagKindCategory)
+	classifications, err = repo.List(ctx, ClassificationKindFoodCategory)
 	if err != nil {
 		t.Fatalf("List() after delete error = %v", err)
 	}
-	if len(tags) != 1 {
-		t.Fatalf("List() after delete length = %d, want 1", len(tags))
+	if len(classifications) != 1 {
+		t.Fatalf("List() after delete length = %d, want 1", len(classifications))
 	}
 }
 
-func TestPostgresTagRepositoryInUseSafeguard(t *testing.T) {
+func TestPostgresClassificationRepositoryInUseSafeguard(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
-	repo := NewPostgresTagRepository(db)
+	repo := NewPostgresClassificationRepository(db)
 
-	tagID, err := repo.Upsert(ctx, TagEntity{Name: "Protein", Kind: TagKindFunctionality})
+	classificationID, err := repo.Upsert(ctx, ClassificationEntity{Name: "Protein", Kind: ClassificationKindCulinaryRole})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 	if _, err := db.Exec(ctx, testFoodFixtureCreateSQL); err != nil {
 		t.Fatalf("create food fixture: %v", err)
 	}
-	if _, err := db.Exec(ctx, testFoodTagFixtureCreateSQL, tagID); err != nil {
-		t.Fatalf("attach tag fixture: %v", err)
+	if _, err := db.Exec(ctx, testFoodClassificationFixtureCreateSQL, classificationID); err != nil {
+		t.Fatalf("attach classification fixture: %v", err)
 	}
 
-	inUse, err := repo.IsInUse(ctx, tagID)
+	inUse, err := repo.IsInUse(ctx, classificationID)
 	if err != nil {
 		t.Fatalf("IsInUse() error = %v", err)
 	}
 	if !inUse {
-		t.Fatalf("IsInUse() = false for attached tag")
+		t.Fatalf("IsInUse() = false for attached classification")
 	}
-	if err := repo.SoftDelete(ctx, tagID); !IsKind(err, ErrorKindConflict) {
+	if err := repo.SoftDelete(ctx, classificationID); !IsKind(err, ErrorKindConflict) {
 		t.Fatalf("SoftDelete() error = %v, want conflict", err)
 	}
 	if err := repo.SoftDelete(ctx, uuid.New()); !IsKind(err, ErrorKindNotFound) {
@@ -228,12 +228,12 @@ func TestPostgresTagRepositoryInUseSafeguard(t *testing.T) {
 	}
 }
 
-func TestPostgresTagRepositoryValidation(t *testing.T) {
-	repo := NewPostgresTagRepository(nil)
-	if _, err := repo.Upsert(context.Background(), TagEntity{Name: "x", Kind: "bad"}); !IsKind(err, ErrorKindValidation) {
+func TestPostgresClassificationRepositoryValidation(t *testing.T) {
+	repo := NewPostgresClassificationRepository(nil)
+	if _, err := repo.Upsert(context.Background(), ClassificationEntity{Name: "x", Kind: "bad"}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("Upsert() invalid kind error = %v, want validation", err)
 	}
-	if _, err := repo.Upsert(context.Background(), TagEntity{Kind: TagKindCategory}); !IsKind(err, ErrorKindValidation) {
+	if _, err := repo.Upsert(context.Background(), ClassificationEntity{Kind: ClassificationKindFoodCategory}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("Upsert() missing name error = %v, want validation", err)
 	}
 }
@@ -300,16 +300,16 @@ func TestPostgresVocabularyRepositoryValidation(t *testing.T) {
 func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
-	tagRepo := NewPostgresTagRepository(db)
+	classificationRepo := NewPostgresClassificationRepository(db)
 	foodRepo := NewPostgresFoodItemRepository(db)
 
-	categoryID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Protein", Kind: TagKindCategory})
+	categoryID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Protein", Kind: ClassificationKindFoodCategory})
 	if err != nil {
-		t.Fatalf("create category: %v", err)
+		t.Fatalf("create food_category: %v", err)
 	}
-	functionalityID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Quick", Kind: TagKindFunctionality})
+	functionalityID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Quick", Kind: ClassificationKindCulinaryRole})
 	if err != nil {
-		t.Fatalf("create functionality: %v", err)
+		t.Fatalf("create culinary_role: %v", err)
 	}
 
 	id, err := foodRepo.Create(ctx, FoodItemEntity{
@@ -319,8 +319,8 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 		AverageUnitWeightGrams: 100,
 		MacrosPer100:           MacroValues{Protein: 8, Carbohydrates: 2, Fat: 4},
 		Micros:                 MicroValues{"Sodium": 7},
-		CategoryTags:           []TagEntity{{ID: categoryID, Kind: TagKindCategory}},
-		FunctionalityTags:      []TagEntity{{ID: functionalityID, Kind: TagKindFunctionality}},
+		FoodCategories:         []ClassificationEntity{{ID: categoryID, Kind: ClassificationKindFoodCategory}},
+		CulinaryRoles:          []ClassificationEntity{{ID: functionalityID, Kind: ClassificationKindCulinaryRole}},
 		ImageURL:               "https://example.test/tofu.jpg",
 	})
 	if err != nil {
@@ -334,11 +334,11 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 	if item.Name != "Tofu" || item.MacrosPer100.Protein != 8 || item.Micros["Sodium"] != 7 {
 		t.Fatalf("GetByID() item = %#v", item)
 	}
-	if len(item.CategoryTags) != 1 || item.CategoryTags[0].ID != categoryID {
-		t.Fatalf("GetByID() category tags = %#v", item.CategoryTags)
+	if len(item.FoodCategories) != 1 || item.FoodCategories[0].ID != categoryID {
+		t.Fatalf("GetByID() food_category classifications = %#v", item.FoodCategories)
 	}
-	if len(item.FunctionalityTags) != 1 || item.FunctionalityTags[0].ID != functionalityID {
-		t.Fatalf("GetByID() functionality tags = %#v", item.FunctionalityTags)
+	if len(item.CulinaryRoles) != 1 || item.CulinaryRoles[0].ID != functionalityID {
+		t.Fatalf("GetByID() culinary_role classifications = %#v", item.CulinaryRoles)
 	}
 
 	imperial, err := foodRepo.GetByID(ctx, id, RepositoryContext{UnitSystem: UnitSystemImperial})
@@ -351,7 +351,7 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 
 	item.Name = "Firm Tofu"
 	item.MacrosPer100.Protein = 9
-	item.CategoryTags = nil
+	item.FoodCategories = nil
 	if err := foodRepo.Update(ctx, item); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -362,8 +362,8 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 	if updated.Name != "Firm Tofu" || updated.MacrosPer100.Protein != 9 {
 		t.Fatalf("updated item = %#v", updated)
 	}
-	if len(updated.CategoryTags) != 0 || len(updated.FunctionalityTags) != 1 {
-		t.Fatalf("updated tags = category %#v functionality %#v", updated.CategoryTags, updated.FunctionalityTags)
+	if len(updated.FoodCategories) != 0 || len(updated.CulinaryRoles) != 1 {
+		t.Fatalf("updated classifications = food_category %#v culinary_role %#v", updated.FoodCategories, updated.CulinaryRoles)
 	}
 
 	if err := foodRepo.Delete(ctx, id); err != nil {
@@ -384,24 +384,24 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 func TestPostgresFoodItemRepositoryValidationAndConflicts(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
-	tagRepo := NewPostgresTagRepository(db)
+	classificationRepo := NewPostgresClassificationRepository(db)
 	foodRepo := NewPostgresFoodItemRepository(db)
 
-	categoryID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Category", Kind: TagKindCategory})
+	categoryID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Category", Kind: ClassificationKindFoodCategory})
 	if err != nil {
-		t.Fatalf("create category: %v", err)
+		t.Fatalf("create food_category: %v", err)
 	}
-	functionalityID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Function", Kind: TagKindFunctionality})
+	functionalityID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Function", Kind: ClassificationKindCulinaryRole})
 	if err != nil {
-		t.Fatalf("create functionality: %v", err)
+		t.Fatalf("create culinary_role: %v", err)
 	}
 
 	valid := FoodItemEntity{
-		Name:          "Apple",
-		PhysicalState: PhysicalStateSolid,
-		MacrosPer100:  MacroValues{Protein: 1, Carbohydrates: 2, Fat: 3},
-		Micros:        MicroValues{"Sodium": 1},
-		CategoryTags:  []TagEntity{{ID: categoryID, Kind: TagKindCategory}},
+		Name:           "Apple",
+		PhysicalState:  PhysicalStateSolid,
+		MacrosPer100:   MacroValues{Protein: 1, Carbohydrates: 2, Fat: 3},
+		Micros:         MicroValues{"Sodium": 1},
+		FoodCategories: []ClassificationEntity{{ID: categoryID, Kind: ClassificationKindFoodCategory}},
 	}
 	if _, err := foodRepo.Create(ctx, valid); err != nil {
 		t.Fatalf("Create() valid error = %v", err)
@@ -422,8 +422,8 @@ func TestPostgresFoodItemRepositoryValidationAndConflicts(t *testing.T) {
 		{name: "solid macros exceed mass", item: FoodItemEntity{Name: "Impossible Solid", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{Protein: 51, Carbohydrates: 50}}, kind: ErrorKindValidation},
 		{name: "invalid micronutrient", item: FoodItemEntity{Name: "Bad Micro", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, Micros: MicroValues{"Na": 1}}, kind: ErrorKindInvalidMicronutrientKey},
 		{name: "inactive micronutrient", item: FoodItemEntity{Name: "Inactive Micro", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, Micros: MicroValues{"Legacy": 1}}, kind: ErrorKindInvalidMicronutrientKey},
-		{name: "missing tag", item: FoodItemEntity{Name: "Bad Tag", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, CategoryTags: []TagEntity{{ID: uuid.New(), Kind: TagKindCategory}}}, kind: ErrorKindValidation},
-		{name: "wrong tag kind", item: FoodItemEntity{Name: "Wrong Tag", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, CategoryTags: []TagEntity{{ID: functionalityID, Kind: TagKindCategory}}}, kind: ErrorKindValidation},
+		{name: "missing classification", item: FoodItemEntity{Name: "Bad Classification", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, FoodCategories: []ClassificationEntity{{ID: uuid.New(), Kind: ClassificationKindFoodCategory}}}, kind: ErrorKindValidation},
+		{name: "wrong classification kind", item: FoodItemEntity{Name: "Wrong Classification", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, FoodCategories: []ClassificationEntity{{ID: functionalityID, Kind: ClassificationKindFoodCategory}}}, kind: ErrorKindValidation},
 	}
 	if _, err := db.Exec(ctx, testInactiveVocabularyUpsertSQL); err != nil {
 		t.Fatalf("insert inactive vocabulary: %v", err)
@@ -437,7 +437,7 @@ func TestPostgresFoodItemRepositoryValidationAndConflicts(t *testing.T) {
 	}
 
 	var invalidInserted bool
-	if err := db.QueryRow(ctx, testFoodExistsByNameSQL, "Bad Tag").Scan(&invalidInserted); err != nil {
+	if err := db.QueryRow(ctx, testFoodExistsByNameSQL, "Bad Classification").Scan(&invalidInserted); err != nil {
 		t.Fatalf("check validation rollback: %v", err)
 	}
 	if invalidInserted {
@@ -487,25 +487,25 @@ func TestPostgresFoodItemRepositoryRequiresLiquidDensity(t *testing.T) {
 func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
-	tagRepo := NewPostgresTagRepository(db)
+	classificationRepo := NewPostgresClassificationRepository(db)
 	foodRepo := NewPostgresFoodItemRepository(db)
 
-	categoryID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Fruit", Kind: TagKindCategory})
+	categoryID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Fruit", Kind: ClassificationKindFoodCategory})
 	if err != nil {
-		t.Fatalf("create category: %v", err)
+		t.Fatalf("create food_category: %v", err)
 	}
-	functionalityID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Breakfast", Kind: TagKindFunctionality})
+	functionalityID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Breakfast", Kind: ClassificationKindCulinaryRole})
 	if err != nil {
-		t.Fatalf("create functionality: %v", err)
+		t.Fatalf("create culinary_role: %v", err)
 	}
 
 	appleID, err := foodRepo.Create(ctx, FoodItemEntity{
-		Name:              "Apple",
-		PhysicalState:     PhysicalStateSolid,
-		PrepTimeMinutes:   1,
-		MacrosPer100:      MacroValues{Protein: 0.3, Carbohydrates: 14, Fat: 0.2},
-		CategoryTags:      []TagEntity{{ID: categoryID}},
-		FunctionalityTags: []TagEntity{{ID: functionalityID}},
+		Name:            "Apple",
+		PhysicalState:   PhysicalStateSolid,
+		PrepTimeMinutes: 1,
+		MacrosPer100:    MacroValues{Protein: 0.3, Carbohydrates: 14, Fat: 0.2},
+		FoodCategories:  []ClassificationEntity{{ID: categoryID}},
+		CulinaryRoles:   []ClassificationEntity{{ID: functionalityID}},
 	})
 	if err != nil {
 		t.Fatalf("create apple: %v", err)
@@ -515,7 +515,7 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 		PhysicalState:   PhysicalStateSolid,
 		PrepTimeMinutes: 2,
 		MacrosPer100:    MacroValues{Protein: 1.1, Carbohydrates: 23, Fat: 0.3},
-		CategoryTags:    []TagEntity{{ID: categoryID}},
+		FoodCategories:  []ClassificationEntity{{ID: categoryID}},
 	}); err != nil {
 		t.Fatalf("create banana: %v", err)
 	}
@@ -524,8 +524,8 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	items, total, err := foodRepo.Search(ctx, RepositoryQuery{
 		RepositoryContext: RepositoryContext{UnitSystem: UnitSystemMetric},
 		Name:              "Ap",
-		CategoryTagIDs:    []uuid.UUID{categoryID},
-		FunctionalityIDs:  []uuid.UUID{functionalityID},
+		FoodCategoryIDs:   []uuid.UUID{categoryID},
+		CulinaryRoleIDs:   []uuid.UUID{functionalityID},
 		MaxPrepMinutes:    &maxPrep,
 		Limit:             10,
 	})
@@ -559,17 +559,17 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 func TestPostgresMealRepositorySearch(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
-	tagRepo := NewPostgresTagRepository(db)
+	classificationRepo := NewPostgresClassificationRepository(db)
 	foodRepo := NewPostgresFoodItemRepository(db)
 	mealRepo := NewPostgresMealRepository(db)
 
-	categoryID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Breakfast", Kind: TagKindCategory})
+	categoryID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Breakfast", Kind: ClassificationKindFoodCategory})
 	if err != nil {
-		t.Fatalf("create category: %v", err)
+		t.Fatalf("create food_category: %v", err)
 	}
-	functionalityID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Quick", Kind: TagKindFunctionality})
+	functionalityID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Quick", Kind: ClassificationKindCulinaryRole})
 	if err != nil {
-		t.Fatalf("create functionality: %v", err)
+		t.Fatalf("create culinary_role: %v", err)
 	}
 
 	_, err = foodRepo.Create(ctx, FoodItemEntity{
@@ -596,7 +596,7 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 		Name:                   "Oat Bowl",
 		PhysicalState:          PhysicalStateSolid,
 		PrepTimeMinutes:        3,
-		Tags:                   []TagEntity{{ID: categoryID}, {ID: functionalityID}},
+		Classifications:        []ClassificationEntity{{ID: categoryID}, {ID: functionalityID}},
 		RecipeItems:            nil,
 		AverageUnitWeightGrams: 100,
 		MacrosPer100:           MacroValues{Protein: 5, Carbohydrates: 27, Fat: 3},
@@ -609,7 +609,7 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 		Name:                   "Berry Bowl",
 		PhysicalState:          PhysicalStateSolid,
 		PrepTimeMinutes:        8,
-		Tags:                   []TagEntity{{ID: categoryID}},
+		Classifications:        []ClassificationEntity{{ID: categoryID}},
 		AverageUnitWeightGrams: 100,
 		MacrosPer100:           MacroValues{Protein: 1, Carbohydrates: 14, Fat: 0.3},
 	})
@@ -619,11 +619,11 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 
 	maxPrep := 5
 	meals, total, err := mealRepo.Search(ctx, RepositoryQuery{
-		Name:             "Oat",
-		CategoryTagIDs:   []uuid.UUID{categoryID},
-		FunctionalityIDs: []uuid.UUID{functionalityID},
-		MaxPrepMinutes:   &maxPrep,
-		Limit:            10,
+		Name:            "Oat",
+		FoodCategoryIDs: []uuid.UUID{categoryID},
+		CulinaryRoleIDs: []uuid.UUID{functionalityID},
+		MaxPrepMinutes:  &maxPrep,
+		Limit:           10,
 	})
 	if err != nil {
 		t.Fatalf("Search() filtered error = %v", err)
@@ -950,7 +950,7 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 		Tier:              "free",
 		Status:            "active",
 		SearchLimitPer24h: 3,
-		AllowedModes:      []string{"single"},
+		AllowedModes:      []string{"catalog"},
 	}); err != nil {
 		t.Fatalf("AppendEntitlement() free error = %v", err)
 	}
@@ -959,7 +959,7 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 		Tier:                 "paid",
 		Status:               "active",
 		SearchLimitPer24h:    0,
-		AllowedModes:         []string{"single", "replacement"},
+		AllowedModes:         []string{"catalog", "substitution"},
 		StripeCustomerID:     "cus_fixture",
 		StripeSubscriptionID: "sub_fixture",
 	}); err != nil {
@@ -970,7 +970,7 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 		Tier:              "trial",
 		Status:            "active",
 		SearchLimitPer24h: 0,
-		AllowedModes:      []string{"single", "replacement"},
+		AllowedModes:      []string{"catalog", "substitution"},
 		ExpiresAt:         &expiredAt,
 	}); err != nil {
 		t.Fatalf("AppendEntitlement() trial error = %v", err)
@@ -1030,7 +1030,7 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 		Tier:              "paid",
 		Status:            "active",
 		SearchLimitPer24h: 0,
-		AllowedModes:      []string{"single", "replacement", "diet"},
+		AllowedModes:      []string{"catalog", "substitution", "daily_diet_alternative"},
 	}); err != nil {
 		t.Fatalf("AppendEntitlement() paid after trial error = %v", err)
 	}
@@ -1075,20 +1075,20 @@ func TestPostgresEntitlementRepositoryValidationAndErrors(t *testing.T) {
 	userID := uuid.New()
 	now := time.Now()
 	expiresAt := now.Add(time.Hour)
-	entitlementValues := []any{userID, "trial", "active", 0, []string{"single"}, &expiresAt, "", "", now, now}
+	entitlementValues := []any{userID, "trial", "active", 0, []string{"catalog"}, &expiresAt, "", "", now, now}
 	windowValues := []any{userID, "search", now, 1, now, now}
-	validEntitlement := Entitlement{UserID: userID, Tier: "free", Status: "active", SearchLimitPer24h: 3, AllowedModes: []string{"single"}}
+	validEntitlement := Entitlement{UserID: userID, Tier: "free", Status: "active", SearchLimitPer24h: 3, AllowedModes: []string{"catalog"}}
 	repo := NewPostgresEntitlementRepository(&fakeSQLExecutor{})
 
 	invalidEntitlements := []Entitlement{
 		{},
-		{UserID: userID, Tier: "bad", Status: "active", AllowedModes: []string{"single"}},
-		{UserID: userID, Tier: "free", Status: "bad", AllowedModes: []string{"single"}},
-		{UserID: userID, Tier: "free", Status: "active", SearchLimitPer24h: -1, AllowedModes: []string{"single"}},
+		{UserID: userID, Tier: "bad", Status: "active", AllowedModes: []string{"catalog"}},
+		{UserID: userID, Tier: "free", Status: "bad", AllowedModes: []string{"catalog"}},
+		{UserID: userID, Tier: "free", Status: "active", SearchLimitPer24h: -1, AllowedModes: []string{"catalog"}},
 		{UserID: userID, Tier: "free", Status: "active"},
 		{UserID: userID, Tier: "free", Status: "active", AllowedModes: []string{" "}},
-		{UserID: userID, Tier: "free", Status: "active", AllowedModes: []string{"single", "single"}},
-		{UserID: userID, Tier: "trial", Status: "active", AllowedModes: []string{"single"}},
+		{UserID: userID, Tier: "free", Status: "active", AllowedModes: []string{"catalog", "catalog"}},
+		{UserID: userID, Tier: "trial", Status: "active", AllowedModes: []string{"catalog"}},
 	}
 	for _, entitlement := range invalidEntitlements {
 		if err := repo.AppendEntitlement(ctx, entitlement); !IsKind(err, ErrorKindValidation) {
@@ -1558,8 +1558,8 @@ func TestPostgresFoodItemRepositoryUpdateAndDeleteMissing(t *testing.T) {
 	if err := foodRepo.Update(ctx, FoodItemEntity{ID: uuid.Nil}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("Update() missing id error = %v, want validation", err)
 	}
-	if err := foodRepo.Update(ctx, FoodItemEntity{ID: missingID, Name: "Bad Functionality", PhysicalState: PhysicalStateSolid, FunctionalityTags: []TagEntity{{ID: uuid.Nil}}}); !IsKind(err, ErrorKindValidation) {
-		t.Fatalf("Update() invalid functionality tag error = %v, want validation", err)
+	if err := foodRepo.Update(ctx, FoodItemEntity{ID: missingID, Name: "Bad Functionality", PhysicalState: PhysicalStateSolid, CulinaryRoles: []ClassificationEntity{{ID: uuid.Nil}}}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("Update() invalid culinary_role classification error = %v, want validation", err)
 	}
 	if err := foodRepo.Update(ctx, FoodItemEntity{ID: missingID, Name: "Missing", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}}); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("Update() missing row error = %v, want not found", err)
@@ -1574,11 +1574,11 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 	ctx := context.Background()
 	foodRepo := NewPostgresFoodItemRepository(db)
 	mealRepo := NewPostgresMealRepository(db)
-	tagRepo := NewPostgresTagRepository(db)
+	classificationRepo := NewPostgresClassificationRepository(db)
 
-	tagID, err := tagRepo.Upsert(ctx, TagEntity{Name: "Dinner", Kind: TagKindCategory})
+	classificationID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Dinner", Kind: ClassificationKindFoodCategory})
 	if err != nil {
-		t.Fatalf("create meal tag: %v", err)
+		t.Fatalf("create meal classification: %v", err)
 	}
 	riceID, err := foodRepo.Create(ctx, FoodItemEntity{
 		Name:                   "Rice",
@@ -1606,7 +1606,7 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 		PrepTimeMinutes:        5,
 		AverageUnitWeightGrams: 100,
 		MacrosPer100:           MacroValues{Protein: 2, Carbohydrates: 30, Fat: 1},
-		Tags:                   []TagEntity{{ID: tagID}},
+		Classifications:        []ClassificationEntity{{ID: classificationID}},
 	})
 	if err != nil {
 		t.Fatalf("Create() single error = %v", err)
@@ -1615,7 +1615,7 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByID() single error = %v", err)
 	}
-	if single.Type != MealTypeSingle || single.Name != "Restaurant Rice Bowl" || len(single.Tags) != 1 {
+	if single.Type != MealTypeSingle || single.Name != "Restaurant Rice Bowl" || len(single.Classifications) != 1 {
 		t.Fatalf("single meal = %#v", single)
 	}
 	if single.AverageUnitWeightGrams != 3.5274 {
@@ -1637,7 +1637,7 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 			{FoodItemID: riceID, Quantity: 150, Unit: "g", Position: 0},
 			{FoodItemID: beansID, Quantity: 2, Unit: "serving", Position: 1},
 		},
-		Tags: []TagEntity{{ID: tagID}},
+		Classifications: []ClassificationEntity{{ID: classificationID}},
 	})
 	if err != nil {
 		t.Fatalf("Create() recipe error = %v", err)
@@ -1646,7 +1646,7 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByID() recipe error = %v", err)
 	}
-	if recipe.Type != MealTypeComposite || len(recipe.RecipeItems) != 2 || len(recipe.Tags) != 1 {
+	if recipe.Type != MealTypeComposite || len(recipe.RecipeItems) != 2 || len(recipe.Classifications) != 1 {
 		t.Fatalf("composite meal = %#v", recipe)
 	}
 	recipeMacros, err := mealRepo.CalculateMacros(ctx, recipeID)
@@ -1749,7 +1749,7 @@ func TestPostgresMealRepositoryValidationAndCycles(t *testing.T) {
 		{name: "invalid ingredient unit", meal: MealEntity{Type: MealTypeComposite, Name: "Bad", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 1, Unit: "cup"}}}, kind: ErrorKindUnitConversion},
 		{name: "zero quantity", meal: MealEntity{Type: MealTypeComposite, Name: "Bad", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 0, Unit: "g"}}}, kind: ErrorKindValidation},
 		{name: "duplicate position", meal: MealEntity{Type: MealTypeComposite, Name: "Bad", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 1, Unit: "g", Position: 0}, {FoodItemID: foodID, Quantity: 1, Unit: "g", Position: 0}}}, kind: ErrorKindValidation},
-		{name: "nil meal tag", meal: MealEntity{Type: MealTypeComposite, Name: "Bad", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 1, Unit: "g"}}, Tags: []TagEntity{{ID: uuid.Nil}}}, kind: ErrorKindValidation},
+		{name: "nil meal classification", meal: MealEntity{Type: MealTypeComposite, Name: "Bad", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 1, Unit: "g"}}, Classifications: []ClassificationEntity{{ID: uuid.Nil}}}, kind: ErrorKindValidation},
 	}
 	for _, tt := range invalidMeals {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1839,7 +1839,7 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: mealValues}, rows: &fakeRows{err: queryErr}})
 	if _, err := repo.GetByID(ctx, mealID, RepositoryContext{}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("GetByID() tag rows error = %v, want connection", err)
+		t.Fatalf("GetByID() classification rows error = %v, want connection", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
@@ -1909,8 +1909,8 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{rowList: []fakeRow{{values: foodValues}, {values: []any{true}}}, rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, nil, execErr}}}})
-	if err := repo.Update(ctx, MealEntity{ID: mealID, Type: MealTypeComposite, Name: "Composite Meal", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 1, Unit: "g"}}, Tags: []TagEntity{{ID: uuid.New()}}}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("Update() replace tag error = %v, want connection", err)
+	if err := repo.Update(ctx, MealEntity{ID: mealID, Type: MealTypeComposite, Name: "Composite Meal", PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{{FoodItemID: foodID, Quantity: 1, Unit: "g"}}, Classifications: []ClassificationEntity{{ID: uuid.New()}}}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("Update() replace classification error = %v, want connection", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{execErr: execErr})
@@ -1923,12 +1923,12 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
-	if err := repo.validateMealTags(ctx, []TagEntity{{ID: uuid.New()}}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("validateMealTags() scan error = %v, want connection", err)
+	if err := repo.validateMealClassifications(ctx, []ClassificationEntity{{ID: uuid.New()}}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("validateMealClassifications() scan error = %v, want connection", err)
 	}
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{false}}})
-	if err := repo.validateMealTags(ctx, []TagEntity{{ID: uuid.New()}}); !IsKind(err, ErrorKindValidation) {
-		t.Fatalf("validateMealTags() missing error = %v, want validation", err)
+	if err := repo.validateMealClassifications(ctx, []ClassificationEntity{{ID: uuid.New()}}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("validateMealClassifications() missing error = %v, want validation", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{execErr: execErr})
@@ -1940,12 +1940,12 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("replaceIngredients() insert error = %v, want connection", err)
 	}
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{execErr: execErr})
-	if err := repo.replaceMealTags(ctx, mealID, nil); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("replaceMealTags() clear error = %v, want connection", err)
+	if err := repo.replaceMealClassifications(ctx, mealID, nil); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("replaceMealClassifications() clear error = %v, want connection", err)
 	}
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{execErrs: []error{nil, execErr}})
-	if err := repo.replaceMealTags(ctx, mealID, []TagEntity{{ID: uuid.New()}}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("replaceMealTags() insert error = %v, want connection", err)
+	if err := repo.replaceMealClassifications(ctx, mealID, []ClassificationEntity{{ID: uuid.New()}}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("replaceMealClassifications() insert error = %v, want connection", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{queryErr: queryErr})
@@ -1961,16 +1961,16 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("loadIngredients() rows error = %v, want connection", err)
 	}
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{queryErr: queryErr})
-	if err := repo.hydrateMealTags(ctx, &MealEntity{ID: mealID}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("hydrateMealTags() query error = %v, want connection", err)
+	if err := repo.hydrateMealClassifications(ctx, &MealEntity{ID: mealID}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("hydrateMealClassifications() query error = %v, want connection", err)
 	}
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
-	if err := repo.hydrateMealTags(ctx, &MealEntity{ID: mealID}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("hydrateMealTags() scan error = %v, want connection", err)
+	if err := repo.hydrateMealClassifications(ctx, &MealEntity{ID: mealID}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("hydrateMealClassifications() scan error = %v, want connection", err)
 	}
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{err: queryErr}})
-	if err := repo.hydrateMealTags(ctx, &MealEntity{ID: mealID}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("hydrateMealTags() rows error = %v, want connection", err)
+	if err := repo.hydrateMealClassifications(ctx, &MealEntity{ID: mealID}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("hydrateMealClassifications() rows error = %v, want connection", err)
 	}
 
 	if _, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: 1, Unit: "ml"}, FoodItemEntity{PhysicalState: PhysicalStateLiquid}); err != nil {
@@ -2080,10 +2080,10 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: failedCreateTx})
 	validWater := FoodItemEntity{Name: "Water", PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "manual", MacrosPer100: MacroValues{}}
 	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("Create() replace tags error = %v, want connection", err)
+		t.Fatalf("Create() replace classifications error = %v, want connection", err)
 	}
 	if !failedCreateTx.rolledBack {
-		t.Fatal("Create() replace tags error did not roll back transaction")
+		t.Fatal("Create() replace classifications error did not roll back transaction")
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}}}})
@@ -2099,7 +2099,7 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, execErr}}}})
 	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("Update() replace tags error = %v, want connection", err)
+		t.Fatalf("Update() replace classifications error = %v, want connection", err)
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{execErr: execErr})
@@ -2108,12 +2108,12 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
-	if _, err := repo.Create(ctx, FoodItemEntity{Name: "Bad Tag Scan", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, CategoryTags: []TagEntity{{ID: uuid.New()}}}); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("Create() tag scan error = %v, want connection", err)
+	if _, err := repo.Create(ctx, FoodItemEntity{Name: "Bad Classification Scan", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, FoodCategories: []ClassificationEntity{{ID: uuid.New()}}}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("Create() classification scan error = %v, want connection", err)
 	}
 
-	if _, err := NewPostgresFoodItemRepository(nil).Create(ctx, FoodItemEntity{Name: "Nil Tag", PhysicalState: PhysicalStateSolid, CategoryTags: []TagEntity{{ID: uuid.Nil}}}); !IsKind(err, ErrorKindValidation) {
-		t.Fatalf("Create() nil tag error = %v, want validation", err)
+	if _, err := NewPostgresFoodItemRepository(nil).Create(ctx, FoodItemEntity{Name: "Nil Classification", PhysicalState: PhysicalStateSolid, FoodCategories: []ClassificationEntity{{ID: uuid.Nil}}}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("Create() nil classification error = %v, want validation", err)
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{queryErr: queryErr})
@@ -2122,18 +2122,18 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 	}
 
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{execErrs: []error{nil, execErr}})
-	if err := repo.replaceFoodTags(ctx, foodID, []TagEntity{{ID: uuid.New()}}, nil); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("replaceFoodTags() insert error = %v, want connection", err)
+	if err := repo.replaceFoodClassifications(ctx, foodID, []ClassificationEntity{{ID: uuid.New()}}, nil); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("replaceFoodClassifications() insert error = %v, want connection", err)
 	}
 
 	itemForHydration := FoodItemEntity{ID: foodID}
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
-	if err := repo.hydrateFoodTags(ctx, &itemForHydration); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("hydrateFoodTags() scan error = %v, want connection", err)
+	if err := repo.hydrateFoodClassifications(ctx, &itemForHydration); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("hydrateFoodClassifications() scan error = %v, want connection", err)
 	}
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{err: queryErr}})
-	if err := repo.hydrateFoodTags(ctx, &itemForHydration); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("hydrateFoodTags() rows error = %v, want connection", err)
+	if err := repo.hydrateFoodClassifications(ctx, &itemForHydration); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("hydrateFoodClassifications() rows error = %v, want connection", err)
 	}
 
 	noMicrosValues := append([]any{}, foodValues...)
@@ -2202,29 +2202,29 @@ func TestPostgresRepositoryErrorBranches(t *testing.T) {
 	rowsErr := errors.New("rows failed")
 	execErr := errors.New("exec failed")
 
-	tagRepo := NewPostgresTagRepository(&fakeSQLExecutor{queryErr: queryErr})
-	if _, err := tagRepo.List(context.Background(), TagKindCategory); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("tag List() query error = %v, want connection", err)
+	classificationRepo := NewPostgresClassificationRepository(&fakeSQLExecutor{queryErr: queryErr})
+	if _, err := classificationRepo.List(context.Background(), ClassificationKindFoodCategory); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("classification List() query error = %v, want connection", err)
 	}
 
-	tagRepo = NewPostgresTagRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
-	if _, err := tagRepo.List(context.Background(), TagKindCategory); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("tag List() scan error = %v, want connection", err)
+	classificationRepo = NewPostgresClassificationRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
+	if _, err := classificationRepo.List(context.Background(), ClassificationKindFoodCategory); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("classification List() scan error = %v, want connection", err)
 	}
 
-	tagRepo = NewPostgresTagRepository(&fakeSQLExecutor{rows: &fakeRows{err: rowsErr}})
-	if _, err := tagRepo.List(context.Background(), TagKindCategory); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("tag List() rows error = %v, want connection", err)
+	classificationRepo = NewPostgresClassificationRepository(&fakeSQLExecutor{rows: &fakeRows{err: rowsErr}})
+	if _, err := classificationRepo.List(context.Background(), ClassificationKindFoodCategory); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("classification List() rows error = %v, want connection", err)
 	}
 
-	tagRepo = NewPostgresTagRepository(&fakeSQLExecutor{row: fakeRow{values: []any{false}}, execErr: execErr})
-	if err := tagRepo.SoftDelete(context.Background(), uuid.New()); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("tag SoftDelete() exec error = %v, want connection", err)
+	classificationRepo = NewPostgresClassificationRepository(&fakeSQLExecutor{row: fakeRow{values: []any{false}}, execErr: execErr})
+	if err := classificationRepo.SoftDelete(context.Background(), uuid.New()); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("classification SoftDelete() exec error = %v, want connection", err)
 	}
 
-	tagRepo = NewPostgresTagRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
-	if err := tagRepo.SoftDelete(context.Background(), uuid.New()); !IsKind(err, ErrorKindConnection) {
-		t.Fatalf("tag SoftDelete() usage error = %v, want connection", err)
+	classificationRepo = NewPostgresClassificationRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if err := classificationRepo.SoftDelete(context.Background(), uuid.New()); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("classification SoftDelete() usage error = %v, want connection", err)
 	}
 
 	vocabRepo := NewPostgresMicronutrientVocabularyRepository(&fakeSQLExecutor{queryErr: queryErr})
@@ -2277,12 +2277,12 @@ func (e *fakeSQLExecutor) Exec(context.Context, string, ...any) (pgconn.CommandT
 			index = len(e.execErrs) - 1
 		}
 		err := e.execErrs[index]
-		tag := pgconn.CommandTag{}
+		classification := pgconn.CommandTag{}
 		if index < len(e.execTags) {
-			tag = e.execTags[index]
+			classification = e.execTags[index]
 		}
 		e.execN++
-		return tag, err
+		return classification, err
 	}
 	if len(e.execTags) > 0 {
 		return e.execTags[0], e.execErr

@@ -5,22 +5,22 @@
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service |
-| **Static Aspects** | SearchController, AutocompleteRanker, QueryParser, PaginationHandler, FilterProcessor, FunctionalityTagWeighter |
+| **Static Aspects** | SearchController, AutocompleteRanker, QueryParser, PaginationHandler, FilterProcessor, CulinaryRoleWeighter |
 | **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), ARCH-011 (Caching Layer) |
 | **Traceability** | SW-REQ-004, SW-REQ-010, SW-REQ-017, SW-REQ-019, SW-REQ-024, SW-REQ-026, SW-REQ-029, SW-REQ-031 |
 
 **Dynamic Behavior:**
 
-- **Query Processing:** Receives search terms, applies tag whitelist/blacklist filters, and routes to appropriate search strategy (text-based or similarity-based).
+- **Query Processing:** Receives search terms, applies Search filters and Exclusion Rules, and routes to Catalog Search, Substitution Search, or Daily Daily Diet Alternative Search.
 - **Autocomplete Ranking:** Implements three-tier priority: (1) Exact match, (2) Levenshtein distance, (3) String length. Executes in < 100ms.
-- **Implicit Trigger:** Detects empty search bar with 2+ ingredients to automatically initiate similarity search.
-- **Pagination:** Returns max 10 results per page, sorted by cosine similarity descending.
-- **Functionality Tag Weighting (SW-REQ-031):** During replacement searches, applies a relevance boost multiplier to items sharing the same Functionality Tags as the source item. Sorting combines cosine similarity score with tag match weight (e.g., `finalScore = similarityScore * (1 + 0.2 * tagMatchCount)`) to prioritize contextually appropriate replacements.
+- **Substitution Trigger:** Detects empty search bar with one or more Substitution Inputs to automatically initiate Substitution Search.
+- **Pagination:** Returns max 10 results per page, sorted by Nutritional Similarity descending for Substitution Search.
+- **Culinary Role Weighting (SW-REQ-031):** During single-input Substitution Searches, applies a relevance boost multiplier to Food Objects sharing Culinary Roles with the Substitution Input. Sorting combines Nutritional Similarity with Culinary Role match weight (e.g., `finalScore = similarityScore * (1 + 0.2 * culinaryRoleMatchCount)`) to prioritize contextually appropriate Substitutes. Multiple-input Substitution Searches combine inputs into one Macro Profile and skip per-input Culinary Role weighting.
 
 **Interface Definition:**
 
-- `Input`: SearchRequest { query: string, mode: SearchMode, filters: TagFilter[], page: number, ingredients?: string[] }
-- `Output`: SearchResponse { items: FoodItem[], totalCount: number, page: number, similarityScores: number[] }
+- `Input`: SearchRequest { query: string, mode: SearchMode, filters: SearchFilter[], page: number, substitutionInputs?: SubstitutionInput[] }
+- `Output`: SearchResponse { items: FoodObject[], totalCount: number, page: number, similarityScores: number[] }
 
 **Alternative Analysis (BP6):**
 

@@ -33,30 +33,30 @@ var foodUpdateSQL string
 //go:embed sql/food_soft_delete.sql
 var foodSoftDeleteSQL string
 
-// Implements DESIGN-005 FoodItemEntity tag validation query.
+// Implements DESIGN-005 FoodItemEntity classification validation query.
 //
-//go:embed sql/food_validate_tag.sql
-var foodValidateTagSQL string
+//go:embed sql/food_validate_classification.sql
+var foodValidateClassificationSQL string
 
-// Implements DESIGN-005 FoodItemEntity clear-tags query.
+// Implements DESIGN-005 FoodItemEntity clear-classifications query.
 //
-//go:embed sql/food_clear_tags.sql
-var foodClearTagsSQL string
+//go:embed sql/food_clear_classifications.sql
+var foodClearClassificationsSQL string
 
-// Implements DESIGN-005 FoodItemEntity attach-tag query.
+// Implements DESIGN-005 FoodItemEntity attach-classification query.
 //
-//go:embed sql/food_attach_tag.sql
-var foodAttachTagSQL string
+//go:embed sql/food_attach_classification.sql
+var foodAttachClassificationSQL string
 
 // Implements DESIGN-005 FoodItemEntity get-by-id query.
 //
 //go:embed sql/food_get_by_id.sql
 var foodGetByIDSQL string
 
-// Implements DESIGN-005 FoodItemEntity hydrate-tags query.
+// Implements DESIGN-005 FoodItemEntity hydrate-classifications query.
 //
-//go:embed sql/food_list_tags.sql
-var foodListTagsSQL string
+//go:embed sql/food_list_classifications.sql
+var foodListClassificationsSQL string
 
 // PostgresFoodItemRepository persists normalized food items in PostgreSQL.
 // Implements DESIGN-005 FoodItemEntity.
@@ -70,14 +70,14 @@ func NewPostgresFoodItemRepository(db transactionalExecutor) *PostgresFoodItemRe
 	return &PostgresFoodItemRepository{db: db}
 }
 
-// GetByID loads one food item with hydrated tags.
+// GetByID loads one food item with hydrated classifications.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) GetByID(ctx context.Context, id uuid.UUID, rc RepositoryContext) (FoodItemEntity, error) {
 	item, err := r.getFoodByID(ctx, id, rc.IncludeDeleted)
 	if err != nil {
 		return FoodItemEntity{}, err
 	}
-	if err := r.hydrateFoodTags(ctx, &item); err != nil {
+	if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 		return FoodItemEntity{}, err
 	}
 	convertFoodItemForUnitSystem(&item, rc.UnitSystem)
@@ -97,11 +97,11 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 	}
 
 	var total int
-	if err := r.db.QueryRow(ctx, foodSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.CategoryTagIDs, q.FunctionalityIDs).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, foodSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs).Scan(&total); err != nil {
 		return nil, 0, mapPostgresError(err, "count food items")
 	}
 
-	rows, err := r.db.Query(ctx, foodSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.CategoryTagIDs, q.FunctionalityIDs, limit, offset)
+	rows, err := r.db.Query(ctx, foodSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs, limit, offset)
 	if err != nil {
 		return nil, 0, mapPostgresError(err, "search food items")
 	}
@@ -116,7 +116,7 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 			}
 			return nil, 0, mapPostgresError(err, "scan food item")
 		}
-		if err := r.hydrateFoodTags(ctx, &item); err != nil {
+		if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 			return nil, 0, err
 		}
 		convertFoodItemForUnitSystem(&item, q.UnitSystem)
@@ -143,12 +143,12 @@ func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEn
 		if err != nil {
 			return mapPostgresError(err, "create food item")
 		}
-		return txRepo.replaceFoodTags(ctx, id, item.CategoryTags, item.FunctionalityTags)
+		return txRepo.replaceFoodClassifications(ctx, id, item.FoodCategories, item.CulinaryRoles)
 	})
 	return id, err
 }
 
-// Update validates and replaces a food item and its tag assignments.
+// Update validates and replaces a food item and its classification assignments.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEntity) error {
 	if item.ID == uuid.Nil {
@@ -168,7 +168,7 @@ func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEn
 		if result.RowsAffected() == 0 {
 			return NewError(ErrorKindNotFound, "food item not found", nil)
 		}
-		return txRepo.replaceFoodTags(ctx, item.ID, item.CategoryTags, item.FunctionalityTags)
+		return txRepo.replaceFoodClassifications(ctx, item.ID, item.FoodCategories, item.CulinaryRoles)
 	})
 }
 
@@ -203,29 +203,29 @@ func (r *PostgresFoodItemRepository) validateFoodItem(ctx context.Context, item 
 	if err := validateFoodDensity(item); err != nil {
 		return err
 	}
-	if err := r.validateFoodTags(ctx, item.CategoryTags, TagKindCategory); err != nil {
+	if err := r.validateFoodClassifications(ctx, item.FoodCategories, ClassificationKindFoodCategory); err != nil {
 		return err
 	}
-	if err := r.validateFoodTags(ctx, item.FunctionalityTags, TagKindFunctionality); err != nil {
+	if err := r.validateFoodClassifications(ctx, item.CulinaryRoles, ClassificationKindCulinaryRole); err != nil {
 		return err
 	}
 	return r.validateMicronutrients(ctx, item.Micros)
 }
 
-// validateFoodTags verifies that food item tags exist with the required kinds.
+// validateFoodClassifications verifies that food item classifications exist with the required kinds.
 // Implements DESIGN-005 FoodItemEntity.
-func (r *PostgresFoodItemRepository) validateFoodTags(ctx context.Context, tags []TagEntity, kind TagKind) error {
-	for _, tag := range tags {
-		if tag.ID == uuid.Nil {
-			return validationError("tag id is required")
+func (r *PostgresFoodItemRepository) validateFoodClassifications(ctx context.Context, classifications []ClassificationEntity, kind ClassificationKind) error {
+	for _, classification := range classifications {
+		if classification.ID == uuid.Nil {
+			return validationError("classification id is required")
 		}
 		var exists bool
-		err := r.db.QueryRow(ctx, foodValidateTagSQL, tag.ID, string(kind)).Scan(&exists)
+		err := r.db.QueryRow(ctx, foodValidateClassificationSQL, classification.ID, string(kind)).Scan(&exists)
 		if err != nil {
-			return mapPostgresError(err, "validate food tag")
+			return mapPostgresError(err, "validate food classification")
 		}
 		if !exists {
-			return validationError("tag does not exist for required kind")
+			return validationError("classification does not exist for required kind")
 		}
 	}
 	return nil
@@ -242,15 +242,15 @@ func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context,
 	return ValidateMicronutrientKeys(micros, entries)
 }
 
-// replaceFoodTags replaces persisted tag associations for a food item.
+// replaceFoodClassifications replaces persisted classification associations for a food item.
 // Implements DESIGN-005 FoodItemEntity.
-func (r *PostgresFoodItemRepository) replaceFoodTags(ctx context.Context, foodID uuid.UUID, categoryTags []TagEntity, functionalityTags []TagEntity) error {
-	if _, err := r.db.Exec(ctx, foodClearTagsSQL, foodID); err != nil {
-		return mapPostgresError(err, "clear food tags")
+func (r *PostgresFoodItemRepository) replaceFoodClassifications(ctx context.Context, foodID uuid.UUID, foodCategories []ClassificationEntity, culinaryRoles []ClassificationEntity) error {
+	if _, err := r.db.Exec(ctx, foodClearClassificationsSQL, foodID); err != nil {
+		return mapPostgresError(err, "clear food classifications")
 	}
-	for _, tag := range append(categoryTags, functionalityTags...) {
-		if _, err := r.db.Exec(ctx, foodAttachTagSQL, foodID, tag.ID); err != nil {
-			return mapPostgresError(err, "replace food tags")
+	for _, classification := range append(foodCategories, culinaryRoles...) {
+		if _, err := r.db.Exec(ctx, foodAttachClassificationSQL, foodID, classification.ID); err != nil {
+			return mapPostgresError(err, "replace food classifications")
 		}
 	}
 	return nil
@@ -270,31 +270,31 @@ func (r *PostgresFoodItemRepository) getFoodByID(ctx context.Context, id uuid.UU
 	return item, nil
 }
 
-// hydrateFoodTags loads tag IDs onto food item entities.
+// hydrateFoodClassifications loads classification IDs onto food item entities.
 // Implements DESIGN-005 FoodItemEntity.
-func (r *PostgresFoodItemRepository) hydrateFoodTags(ctx context.Context, item *FoodItemEntity) error {
-	rows, err := r.db.Query(ctx, foodListTagsSQL, item.ID)
+func (r *PostgresFoodItemRepository) hydrateFoodClassifications(ctx context.Context, item *FoodItemEntity) error {
+	rows, err := r.db.Query(ctx, foodListClassificationsSQL, item.ID)
 	if err != nil {
-		return mapPostgresError(err, "load food tags")
+		return mapPostgresError(err, "load food classifications")
 	}
 	defer rows.Close()
 
-	item.CategoryTags = nil
-	item.FunctionalityTags = nil
+	item.FoodCategories = nil
+	item.CulinaryRoles = nil
 	for rows.Next() {
-		var tag TagEntity
-		if err := rows.Scan(&tag.ID, &tag.Name, &tag.Kind, &tag.ParentID); err != nil {
-			return mapPostgresError(err, "scan food tag")
+		var classification ClassificationEntity
+		if err := rows.Scan(&classification.ID, &classification.Name, &classification.Kind, &classification.ParentID); err != nil {
+			return mapPostgresError(err, "scan food classification")
 		}
-		switch tag.Kind {
-		case TagKindCategory:
-			item.CategoryTags = append(item.CategoryTags, tag)
-		case TagKindFunctionality:
-			item.FunctionalityTags = append(item.FunctionalityTags, tag)
+		switch classification.Kind {
+		case ClassificationKindFoodCategory:
+			item.FoodCategories = append(item.FoodCategories, classification)
+		case ClassificationKindCulinaryRole:
+			item.CulinaryRoles = append(item.CulinaryRoles, classification)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return mapPostgresError(err, "iterate food tags")
+		return mapPostgresError(err, "iterate food classifications")
 	}
 	return nil
 }

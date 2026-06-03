@@ -11,7 +11,7 @@
 
 **Dynamic Behavior:**
 
-- **Registration:** Validates email uniqueness, hashes password with Argon2 (golang.org/x/crypto/argon2, unique salt), sends verification email. Blocks paid features until verified.
+- **Registration:** Validates email uniqueness, hashes password with Argon2 (golang.org/x/crypto/argon2, unique salt), sends verification email for the email-and-password Login Method, and blocks paid features until the User Account has at least one Verified Login Method.
 - **Login:** Validates credentials, tracks failed attempts per account (5 max -> 15min lockout) and per IP (10 max/10min).
 - **Token Lifecycle:** Issues 15-minute access tokens and 7-day refresh tokens in HttpOnly/Secure/SameSite=Strict cookies. Manages sessions via Fiber session middleware. Rotates refresh token on use.
 - **Social Login:** Handles OAuth2 flows for Google/Apple using github.com/markbates/goth, creates or links user accounts, grants 7-day trial on first authentication.

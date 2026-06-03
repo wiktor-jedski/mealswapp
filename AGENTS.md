@@ -86,3 +86,17 @@ Do not commit real secrets. Treat `auth.json`, local service credentials, API to
 Do not commit generated artifacts or local caches, including `frontend/dist/`, root `dist/`, `node_modules/`, `.bun-tmp/`, `.bun-install/`, `backend/.go-cache/`, `backend/.go-mod-cache/`, and `backend/coverage.out`.
 
 Completed-phase HTML reports and their screenshots under `docs/implementation/implemented/` are intentional committed UAT evidence and are exempt from the generated-artifact rule.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use a single-context domain documentation layout and repository architecture files. See `docs/agents/domain.md`.

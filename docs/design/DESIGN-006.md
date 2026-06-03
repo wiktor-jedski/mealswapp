@@ -4,7 +4,7 @@
 **Static aspects covered:** AuthController, PasswordHasher, JWTManager, OAuthHandler, SessionManager, AccountLockoutTracker.
 
 ### 0. Static Aspect Responsibilities
-- `AuthController`: owns registration, login, logout, refresh, verification, and password reset HTTP handlers.
+- `AuthController`: owns registration, login, logout, refresh, Login Method verification, and password reset HTTP handlers.
 - `PasswordHasher`: owns Argon2 salt generation, hashing, and verification.
 - `JWTManager`: owns access token creation, validation, expiry, and refresh-token rotation metadata.
 - `OAuthHandler`: owns goth provider flow, profile normalization, and account linking.
@@ -13,8 +13,8 @@
 
 ### 1. Data Structures & Types
 - `interface Credentials { email: string; password: string }`
-- `interface AuthUser { id: UUID; email: string; emailVerified: boolean; role: "user" | "admin"; passwordHash?: string; passwordSalt?: string }`
-- `interface OAuthIdentity { id: UUID; userId: UUID; provider: "google" | "apple"; providerUserId: string; email: string }`
+- `interface AuthUser { id: UUID; email: string; hasVerifiedLoginMethod: boolean; role: "user" | "admin"; passwordHash?: string; passwordSalt?: string }`
+- `interface OAuthIdentity { id: UUID; userId: UUID; provider: "google" | "apple"; providerUserId: string; email: string; providerEmailVerified: boolean }`
 - `interface UserSession { id: UUID; userId: UUID; refreshTokenHash: string; refreshFamilyId: UUID; accessExpiresAt: time.Time; refreshExpiresAt: time.Time; revokedAt?: time.Time }`
 - `interface SessionTokens { accessToken: string; refreshToken: string; accessExpiresAt: time.Time; refreshExpiresAt: time.Time }`
 - `interface LockoutState { accountFailures: number; ipFailures: number; lockedUntil?: time.Time }`
@@ -24,16 +24,17 @@
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Registration validates email format, password policy, and uniqueness through ARCH-005.
 2. Generate a unique salt and hash the password with Argon2 from `golang.org/x/crypto/argon2`.
-3. Persist the user as unverified and send a verification email through the configured email provider.
+3. Persist the email-and-password Login Method as unverified, persist `AuthUser.hasVerifiedLoginMethod = false` as the account-level projection, and send a verification email through the configured email provider.
 4. Login checks IP and account lockout state before password verification.
 5. On successful login, reset failure counters, create a Fiber session, issue 15-minute access and 7-day refresh tokens in HttpOnly/Secure/SameSite=Strict cookies.
 6. On failed login, increment account and IP counters; lock account for 15 minutes after 5 account failures and enforce IP limits after 10 failures per 10 minutes.
 7. Refresh token flow validates the current refresh token, rotates it, and invalidates the previous token.
-8. OAuth flow uses `github.com/markbates/goth`, creates or links accounts, and activates a first-login trial through ARCH-007.
+8. OAuth flow uses `github.com/markbates/goth`, creates or links External Login Identities, records provider-asserted verification, updates the account-level verified-login projection when at least one linked Login Method is verified, and activates a first-login trial through ARCH-007.
 9. Password reset stores only a hash of a random token, enforces 1-hour expiry, and marks the token used after password change.
 
 ### 3. State Management & Error Handling
-- `unverified`: user can authenticate but paid features remain blocked.
+- `unverified_login_method`: an email-and-password Login Method can authenticate but does not unlock paid features until Mealswapp verification succeeds.
+- `verified_account_projection`: `AuthUser.hasVerifiedLoginMethod` is true when at least one linked Login Method is verified; paid feature checks use this projection.
 - `authenticated`: active session and valid token cookies exist.
 - `refresh_required`: access token expired but refresh token can rotate.
 - `locked`: account or IP lockout is active; return retry time.

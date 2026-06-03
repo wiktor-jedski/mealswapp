@@ -123,7 +123,7 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	userID := uuid.MustParse("23000000-0000-0000-0000-000000000001")
 	foodRepo := repository.NewPostgresFoodItemRepository(db)
 	mealRepo := repository.NewPostgresMealRepository(db)
-	tagRepo := repository.NewPostgresTagRepository(db)
+	classificationRepo := repository.NewPostgresClassificationRepository(db)
 	entitlementRepo := repository.NewPostgresEntitlementRepository(db)
 	savedRepo := repository.NewPostgresSavedDataRepository(db)
 	adminRepo := repository.NewPostgresAdminImportAuditRepository(db)
@@ -132,7 +132,7 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetByID() seeded food error = %v", err)
 	}
-	if food.MacrosPer100 != (repository.MacroValues{Protein: 0.3, Carbohydrates: 14, Fat: 0.2}) || len(food.CategoryTags) != 1 {
+	if food.MacrosPer100 != (repository.MacroValues{Protein: 0.3, Carbohydrates: 14, Fat: 0.2}) || len(food.FoodCategories) != 1 {
 		t.Fatalf("seeded food = %#v", food)
 	}
 
@@ -144,16 +144,16 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 		t.Fatalf("seeded composite macros = %#v", macros)
 	}
 
-	categoryTags, err := tagRepo.List(ctx, repository.TagKindCategory)
+	foodCategories, err := classificationRepo.List(ctx, repository.ClassificationKindFoodCategory)
 	if err != nil {
-		t.Fatalf("List() category tags error = %v", err)
+		t.Fatalf("List() food_category classifications error = %v", err)
 	}
-	functionalityTags, err := tagRepo.List(ctx, repository.TagKindFunctionality)
+	culinaryRoles, err := classificationRepo.List(ctx, repository.ClassificationKindCulinaryRole)
 	if err != nil {
-		t.Fatalf("List() functionality tags error = %v", err)
+		t.Fatalf("List() culinary_role classifications error = %v", err)
 	}
-	if len(categoryTags) < 2 || len(functionalityTags) < 2 {
-		t.Fatalf("seeded tags category=%#v functionality=%#v", categoryTags, functionalityTags)
+	if len(foodCategories) < 2 || len(culinaryRoles) < 2 {
+		t.Fatalf("seeded classifications food_category=%#v culinary_role=%#v", foodCategories, culinaryRoles)
 	}
 
 	entitlement, err := entitlementRepo.GetLatest(ctx, userID)

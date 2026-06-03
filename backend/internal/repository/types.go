@@ -49,22 +49,22 @@ type MicronutrientVocabularyEntry struct {
 	Active      bool
 }
 
-// TagKind identifies category and functionality tag groups.
-// Implements DESIGN-005 TagEntity.
-type TagKind string
+// ClassificationKind identifies Food Category and Culinary Role classification groups.
+// Implements DESIGN-005 ClassificationEntity.
+type ClassificationKind string
 
-// Implements DESIGN-005 TagEntity.
+// Implements DESIGN-005 ClassificationEntity.
 const (
-	TagKindCategory      TagKind = "category"
-	TagKindFunctionality TagKind = "functionality"
+	ClassificationKindFoodCategory ClassificationKind = "food_category"
+	ClassificationKindCulinaryRole ClassificationKind = "culinary_role"
 )
 
-// TagEntity stores global tag identity and optional hierarchy.
-// Implements DESIGN-005 TagEntity.
-type TagEntity struct {
+// ClassificationEntity stores global classification identity and optional hierarchy.
+// Implements DESIGN-005 ClassificationEntity.
+type ClassificationEntity struct {
 	ID       uuid.UUID
 	Name     string
-	Kind     TagKind
+	Kind     ClassificationKind
 	ParentID *uuid.UUID
 }
 
@@ -83,8 +83,8 @@ type FoodItemEntity struct {
 	DensitySourceKind               string
 	MacrosPer100                    MacroValues
 	Micros                          MicroValues
-	CategoryTags                    []TagEntity
-	FunctionalityTags               []TagEntity
+	FoodCategories                  []ClassificationEntity
+	CulinaryRoles                   []ClassificationEntity
 	ImageURL                        string
 	DeletedAt                       *time.Time
 	CreatedAt                       time.Time
@@ -122,7 +122,7 @@ type MealEntity struct {
 	AverageUnitWeightGrams    float64
 	MacrosPer100              MacroValues
 	NormalizedMacrosAvailable bool
-	Tags                      []TagEntity
+	Classifications           []ClassificationEntity
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
 }
@@ -139,12 +139,12 @@ type RepositoryContext struct {
 // Implements DESIGN-005 RepositoryInterfaces.
 type RepositoryQuery struct {
 	RepositoryContext
-	Name             string
-	CategoryTagIDs   []uuid.UUID
-	FunctionalityIDs []uuid.UUID
-	MaxPrepMinutes   *int
-	Limit            int
-	Offset           int
+	Name            string
+	FoodCategoryIDs []uuid.UUID
+	CulinaryRoleIDs []uuid.UUID
+	MaxPrepMinutes  *int
+	Limit           int
+	Offset          int
 }
 
 // UserRole identifies supported repository-owned user roles.
@@ -371,11 +371,11 @@ type MealRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-// TagRepository defines tag persistence behavior.
+// ClassificationRepository defines classification persistence behavior.
 // Implements DESIGN-005 RepositoryInterfaces.
-type TagRepository interface {
-	List(ctx context.Context, kind TagKind) ([]TagEntity, error)
-	Upsert(ctx context.Context, tag TagEntity) (uuid.UUID, error)
+type ClassificationRepository interface {
+	List(ctx context.Context, kind ClassificationKind) ([]ClassificationEntity, error)
+	Upsert(ctx context.Context, classification ClassificationEntity) (uuid.UUID, error)
 	IsInUse(ctx context.Context, id uuid.UUID) (bool, error)
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 }

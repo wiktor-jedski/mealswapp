@@ -4,8 +4,8 @@
 **Static aspects covered:** SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager, ServiceWorker.
 
 ### 0. Static Aspect Responsibilities
-- `SearchView`: owns search mode, query input, filter composition, debounce timing, and result loading orchestration.
-- `SidebarComponent`: owns navigation between search modes, saved filters, settings entry points, and responsive collapse behavior.
+- `SearchView`: owns catalog query input, Substitution Input composition, filter composition, debounce timing, and result loading orchestration.
+- `SidebarComponent`: owns navigation between Catalog Search, Substitution Search, Daily Daily Diet Alternative Search, saved filters, settings entry points, and responsive collapse behavior.
 - `ResultsGrid`: owns result card layout, pagination controls, image fallback display, and similarity badge rendering.
 - `AutocompleteDropdown`: owns ranked suggestion display, keyboard focus movement, selection, and dismissal rules.
 - `ThemeProvider`: owns resolved theme state and delegates token application to ARCH-016.
@@ -15,22 +15,23 @@
 - `ServiceWorker`: owns offline asset/API interception and delegates cache policy to ARCH-011.
 
 ### 1. Data Structures & Types
-- `type SearchMode = "single" | "replacement" | "diet"`
-- `interface SearchState { query: string; mode: SearchMode; filters: TagFilter[]; page: number; selectedIndex: number; isOnline: boolean; isLoading: boolean; error?: AppError }`
-- `interface TagFilter { id: string; kind: "category" | "functionality"; mode: "include" | "exclude"; label: string }`
-- `interface FoodItemViewModel { id: string; name: string; imageUrl?: string; macros: MacroSummary; tags: string[]; similarity?: SimilarityBadge }`
+- `type SearchMode = "catalog" | "substitution" | "daily_diet_alternative"`
+- `interface SearchState { query: string; mode: SearchMode; substitutionInputs: SubstitutionInputViewModel[]; filters: SearchFilter[]; page: number; selectedIndex: number; isOnline: boolean; isLoading: boolean; error?: AppError }`
+- `interface SubstitutionInputViewModel { foodObjectId: string; quantity: number; unit: string; label: string }`
+- `interface SearchFilter { id: string; kind: "food_category" | "culinary_role" | "food_object_type" | "allergen" | "dietary_preset"; mode: "include" | "exclude"; label: string }`
+- `interface FoodItemViewModel { id: string; name: string; imageUrl?: string; macros: MacroSummary; classifications: string[]; similarity?: SimilarityBadge }`
 - `interface MacroSummary { protein: number; carbs: number; fat: number; unitBasis: "100g" | "100ml" | "serving" }`
 - `interface SimilarityBadge { score: number; tier: "excellent" | "good" | "fair" | "poor"; colorHex: string; imageUrl: string }`
 - `interface AppSettings { theme: "system" | "light" | "dark"; unitSystem: "metric" | "imperial"; enabledMacros: { protein: boolean; carbs: boolean; fat: boolean } }`
 - `interface CachedQuery { key: string; request: SearchRequest; response: SearchResponse; storedAt: string; staleAt: string }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
-1. On app startup, load `AppSettings` from `LocalStorageManager`; default to `mode = "single"` and all macro toggles enabled.
+1. On app startup, load `AppSettings` from `LocalStorageManager`; default to `mode = "catalog"` and all macro toggles enabled.
 2. Register the service worker and subscribe to `online` and `offline` browser events.
 3. Initialize Svelte stores for search state, settings, offline status, and current user entitlement.
 4. When the search input changes, trim the value, update state immediately, and start a 150ms debounce timer.
 5. After debounce, build a `SearchRequest`; if offline, read cached results through ARCH-011 and mark the result set as stale.
-6. If online, execute the request through TanStack Query against ARCH-010; use query keys derived from mode, query, filters, page, and ingredient IDs.
+6. If online, execute the request through TanStack Query against ARCH-010; use query keys derived from mode, query, filters, page, and Substitution Input IDs and quantities.
 7. Render `AutocompleteDropdown` for active text input; keyboard navigation changes `selectedIndex` and Enter selects the highlighted option.
 8. Render `ResultsGrid` with stable card dimensions, image fallback handling, similarity badges, pagination controls, and empty-state text.
 9. Persist theme and unit preference changes to localStorage, then update CSS variables through ARCH-016.
@@ -53,7 +54,7 @@
 - `function debounceSearchInput(value: string, delayMs: 150): void`
 - `function selectAutocompleteOption(option: FoodItemViewModel): void`
 - `function setSearchMode(mode: SearchMode): void`
-- `function updateFilters(filters: TagFilter[]): void`
+- `function updateFilters(filters: SearchFilter[]): void`
 - `function loadSettings(): AppSettings`
 - `function saveSettings(settings: AppSettings): void`
 - `async function fetchSearchResults(request: SearchRequest): Promise<SearchResponse>`

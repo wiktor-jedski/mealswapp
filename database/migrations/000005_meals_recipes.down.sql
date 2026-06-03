@@ -1,6 +1,9 @@
 -- Implements DESIGN-005 MealEntity.
 -- Implements DESIGN-005 RecipeEntity.
-ALTER TABLE meal_tags
+ALTER TABLE meal_classifications
+    DROP CONSTRAINT IF EXISTS meal_classifications_meal_id_fkey;
+
+ALTER TABLE IF EXISTS meal_tags
     DROP CONSTRAINT IF EXISTS meal_tags_meal_id_fkey;
 
 DROP TRIGGER IF EXISTS recipe_ingredients_recipe_required ON recipe_ingredients;

@@ -221,7 +221,7 @@ func validateEntitlement(entitlement Entitlement) error {
 	}
 	seenModes := map[string]struct{}{}
 	for _, mode := range entitlement.AllowedModes {
-		if mode != "single" && mode != "replacement" && mode != "diet" {
+		if mode != "catalog" && mode != "substitution" && mode != "daily_diet_alternative" {
 			return validationError("allowed mode is invalid")
 		}
 		if _, exists := seenModes[mode]; exists {

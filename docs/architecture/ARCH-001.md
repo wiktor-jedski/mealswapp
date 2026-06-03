@@ -1,6 +1,6 @@
 # [ARCH-001] - Web Application Module
 
-**Description:** The responsive single-page application (SPA) built with Svelte that serves as the primary user interface, handling all client-side rendering, state management with Svelte stores + TanStack Query, local caching via Service Worker + localStorage, and offline functionality.
+**Description:** The responsive single-page application (SPA) built with Svelte that serves as the primary user interface, handling all client-side rendering, state management with Svelte stores + TanStack Query, local caching via Service Worker + localStorage, and offline culinary_role.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -11,7 +11,7 @@
 
 **Dynamic Behavior:**
 
-- **Initialization:** On application load, initializes search mode to 'Single Item' and enables all macronutrient toggles. Detects system theme preference and applies user-stored preference override.
+- **Initialization:** On application load, initializes search mode to 'Catalog' and enables all macronutrient toggles. Detects system theme preference and applies user-stored preference override.
 - **Search Input:** Debounces user input by 150ms before triggering API calls. Manages focus states for keyboard navigation (Tab/Shift+Tab).
 - **Offline Detection:** Monitors browser online/offline events. Switches to cached data display and shows offline indicator when disconnected.
 - **Theme Switching:** Real-time CSS variable updates when user toggles light/dark mode. Persists selection to localStorage.

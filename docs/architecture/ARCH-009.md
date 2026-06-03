@@ -1,6 +1,6 @@
 # [ARCH-009] - Administration Module
 
-**Description:** Restricted backend service providing administrative functions for data curation, user management, and global tag management. Acts as a proxy for external data searches to enable admin-curated imports.
+**Description:** Restricted backend service providing administrative functions for data curation, user management, and global classification management. Acts as a proxy for external data searches to enable admin-curated imports.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -17,15 +17,15 @@
   2. `ExternalSearchProxy` routes request to ARCH-012 (External Data Integration)
   3. ARCH-012 queries USDA and/or OpenFoodFacts APIs
   4. Results displayed in admin UI with "Import" action for each item
-  5. Admin selects item, edits fields (name, tags, macros), and confirms import
+  5. Admin selects item, edits fields (name, classifications, macros), and confirms import
   6. `DataImporter` saves curated item to local database via ARCH-005
-- **Item CRUD:** Full create/update/delete capabilities for food items including macros, images, and tags.
-- **Tag Management:** Creates and manages global Category Tags and Functionality Tags used across all items.
+- **Item CRUD:** Full create/update/delete capabilities for food items including macros, images, and classifications.
+- **Classification Management:** Creates and manages global Food Categories and Culinary Roles used across Food Objects.
 
 **Interface Definition:**
 
 - `Input`: Admin-authenticated requests, external search queries, item definitions
-- `Output`: External search results (uncurated), curated items (post-import), tag hierarchies, admin audit logs
+- `Output`: External search results (uncurated), curated items (post-import), classification hierarchies, admin audit logs
 
 **Admin External Search Flow:**
 
@@ -40,7 +40,7 @@
        │                                                           │
        ▼                                                           │
 ┌─────────────┐     ┌─────────────┐                               │
-│ Edit & Tag  │────>│  ARCH-005   │  (Save curated item)          │
+│ Edit & Classification  │────>│  ARCH-005   │  (Save curated item)          │
 │ (Admin)     │     │ (Repository)│                               │
 └─────────────┘     └─────────────┘                               │
 ```

@@ -45,16 +45,18 @@ func (contractMealRepository) Create(context.Context, MealEntity) (uuid.UUID, er
 func (contractMealRepository) Update(context.Context, MealEntity) error { return nil }
 func (contractMealRepository) Delete(context.Context, uuid.UUID) error  { return nil }
 
-type contractTagRepository struct{}
+type contractClassificationRepository struct{}
 
-func (contractTagRepository) List(context.Context, TagKind) ([]TagEntity, error) { return nil, nil }
-func (contractTagRepository) Upsert(context.Context, TagEntity) (uuid.UUID, error) {
+func (contractClassificationRepository) List(context.Context, ClassificationKind) ([]ClassificationEntity, error) {
+	return nil, nil
+}
+func (contractClassificationRepository) Upsert(context.Context, ClassificationEntity) (uuid.UUID, error) {
 	return uuid.Nil, nil
 }
-func (contractTagRepository) IsInUse(context.Context, uuid.UUID) (bool, error) {
+func (contractClassificationRepository) IsInUse(context.Context, uuid.UUID) (bool, error) {
 	return false, nil
 }
-func (contractTagRepository) SoftDelete(context.Context, uuid.UUID) error { return nil }
+func (contractClassificationRepository) SoftDelete(context.Context, uuid.UUID) error { return nil }
 
 type contractVocabularyRepository struct{}
 
@@ -215,7 +217,7 @@ func (contractAdminAuditRepository) ListAuditForEntity(context.Context, string, 
 var (
 	_ FoodItemRepository                = contractFoodRepository{}
 	_ MealRepository                    = contractMealRepository{}
-	_ TagRepository                     = contractTagRepository{}
+	_ ClassificationRepository          = contractClassificationRepository{}
 	_ MicronutrientVocabularyRepository = contractVocabularyRepository{}
 	_ UserProfileRepository             = contractUserProfileRepository{}
 	_ SavedItemRepository               = contractSavedItemRepository{}

@@ -19,7 +19,7 @@
 | **Surface** | `#161D16` | **Elevated Green-Gray** - For cards, search bars, and sections. |
 | **Primary** | `#4ADE80` | **Vibrant Mint** - High-visibility green for buttons and active states. |
 | **Secondary** | `#86EFAC` | **Soft Sage** - Secondary actions and borders. |
-| **Accent** | `#FFB86C` | **Soft Amber** - For Diet Search "Best Match" badges and high-energy CTAs. |
+| **Accent** | `#FFB86C` | **Soft Amber** - For Daily Diet Search "Best Match" badges and high-energy CTAs. |
 | **Error** | `#F87171` | **Muted Red** - For alerts and Stripe payment issues. |
 | **Text-Primary** | `#F3F4F6` | **Off-White** - Primary headers and body text (90% opacity). |
 | **Text-Muted** | `#9CA3AF` | **Cool Gray** - For descriptions, labels, and metadata. |
@@ -84,7 +84,7 @@ theme: {
 - **Styling:** Tailwind classes in `class` attributes; avoid `<style>` blocks unless necessary.
 - **Buttons:** 4px border-radius, `transition: all 0.2s ease` via Tailwind `transition-all duration-200`.
 - **Inputs:** White background with 1px border (`#E0E0E0`). Focus state must use Primary color.
-- **Loading States:** Use "Skeleton Screens" rather than spinning icons for Diet Search results.
+- **Loading States:** Use "Skeleton Screens" rather than spinning icons for Daily Diet Search results.
 
 #### 7. Compliance & Accessibility
 - **Contrast:** All Text/Background combinations must pass **WCAG 2.1 AA** (minimum 4.5:1 ratio).
