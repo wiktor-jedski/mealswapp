@@ -4,41 +4,57 @@ info:
   title: Mealswapp API
   version: 0.3.0
   description: Shared gateway source of truth. Domain contracts extend this document in later phases.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
 servers:
-  - url: http://localhost:8080
+  - url: /
 # Public gateway operations opt out explicitly; protected domain operations override this.
 security: []
 paths:
   /health:
     get:
+      operationId: getHealth
       summary: Process liveness check
       responses:
         "200":
           $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/Error"
   /ready:
     get:
+      operationId: getReady
       summary: Dependency readiness check
       responses:
         "200":
           $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
   /api/v1/health:
     get:
+      operationId: getApiV1Health
       summary: Versioned process liveness check
       responses:
         "200":
           $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/Error"
   /api/v1/ready:
     get:
+      operationId: getApiV1Ready
       summary: Versioned dependency readiness check
       responses:
         "200":
           $ref: "#/components/responses/Success"
+        "404":
+          $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
   /api/v1/auth/csrf-token:
     get:
+      operationId: getApiV1AuthCsrfToken
       summary: Obtain a session-bound CSRF synchronizer token for SPA mutation requests
       responses:
         "200":
@@ -47,16 +63,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CSRFTokenEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
 components:
-  securitySchemes:
-    cookieAuth:
-      type: apiKey
-      in: cookie
-      name: access_token
-    csrfToken:
-      type: apiKey
-      in: header
-      name: X-CSRF-Token
   responses:
     Success:
       description: Successful gateway envelope.

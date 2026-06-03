@@ -66,3 +66,14 @@ No project-owner action is required for Phase 00 at this time.
 
 - Resolved: Phase 03 treats verification as Login Method state and keeps `users.email_verified` as an account-level projection named `hasVerifiedLoginMethod` in `DESIGN-006`. Email-and-password methods require Mealswapp verification; External Login Identities rely on provider-asserted verification. Paid feature checks use the projection, which is true when at least one linked Login Method is verified.
 - Resolved: Phase 04 treats Substitution Search as one operation with one or more Substitution Inputs in `DESIGN-001` and `DESIGN-002`. Adding input Food Objects refines the same Substitution Search. Multiple-input searches combine Food Quantities into one Macro Profile for Nutritional Similarity and do not apply per-input Culinary Role ordering. Contradictory filters and Exclusion Rule conflicts return user-facing `SearchRejection` feedback instead of failing silently.
+
+## Phase 03
+
+### Assumptions
+
+- Accepted for planning: normalized-email uniqueness and lookup use a versioned keyed HMAC-SHA-256 digest stored alongside encrypted email. Phase 03 defines lookup-key metadata and a digest reindex command or repository method so rotation can add a new digest version and rebuild existing account lookup digests without decrypting or logging PII outside the service boundary.
+- Accepted for planning: OAuth first-login trial activation is represented in Phase 03 as an explicit no-op entitlement hook because ARCH-007 subscription and trial persistence are implemented in Phase 06. Phase 06 must replace this hook with real trial creation and entitlement reconciliation.
+
+### Actions needed
+
+- Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period described in `docs/implementation/01_PLAN.md`.
