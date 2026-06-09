@@ -23,6 +23,7 @@ Run from the repository root unless noted:
 git diff --check
 python3 scripts/validate-task-list.py
 python3 scripts/validate-traceability.py
+python3 scripts/verify-phase03-uat.py
 npx --no-install redocly lint api/openapi.yaml
 cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run check:api-types
 cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun test
@@ -37,6 +38,9 @@ python3 scripts/check.py --output docs/implementation/implemented/03_PHASE_REPOR
 Observed results:
 
 - Task-list validation, traceability validation, and `git diff --check` passed.
+- `python3 scripts/verify-phase03-uat.py` passed the live registration,
+  profile, password-reset request, saved/history, export, disclaimer, OAuth
+  fail-closed, logout, and deletion UAT flow.
 - Redocly lint passed with one warning for the OAuth start route's `302`
   redirect-only response.
 - Frontend API types regenerated deterministically and `check:api-types`
@@ -111,7 +115,9 @@ Primary design sources:
 
 ## Acceptance
 
-Accept Phase 03 after the automated evidence remains green and the
-project-owner checks confirm registration through deletion behavior, CSRF and
-cookie handling, export contents, disclaimer fallback behavior, and the listed
-legal/product follow-ups are accepted for later phases.
+Accept Phase 03 after the automated evidence remains green. The live UAT
+verifier covers registration through deletion behavior, CSRF and cookie
+handling, export contents, and disclaimer fallback behavior; the remaining
+project-owner confirmation is the pseudonymous receipt after the deletion
+executor completes and the listed legal/product follow-ups are accepted for
+later phases.

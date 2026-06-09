@@ -226,8 +226,12 @@ func TestPostgresEncryptedIdentityRepository(t *testing.T) {
 		t.Fatalf("legacy oauth columns = %q, %q", legacyProviderID, legacyOAuthEmail)
 	}
 
-	if _, err := NewPostgresUserProfileRepository(db).GetOrCreate(ctx, userID); err != nil {
-		t.Fatalf("GetOrCreate() profile error = %v", err)
+	createdProfile, err := repo.GetOrCreateEncryptedProfile(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetOrCreateEncryptedProfile() first call error = %v", err)
+	}
+	if createdProfile.UserID != userID || createdProfile.UnitSystem != UnitSystemMetric || createdProfile.ThemePreference != "system" {
+		t.Fatalf("created encrypted profile = %#v", createdProfile)
 	}
 	displayName := EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("display-nonce"), Ciphertext: []byte("display-ciphertext")}
 	profile, err := repo.UpdateEncryptedProfile(ctx, EncryptedUserProfile{
