@@ -20,15 +20,22 @@ Run from the repository root:
 git diff --check
 python3 scripts/validate-task-list.py
 python3 scripts/validate-traceability.py
+python3 scripts/verify-phase02-uat.py
 cd frontend && bun run check:api-types
 cd ..
 python3 scripts/check.py --output docs/implementation/implemented/02_PHASE_REPORT.html
 ```
 
-The aggregate gate verifies migrations, probes, screenshots, formatting,
-backend tests and 100% coverage, frontend build and 100% coverage, generated
-API-type drift, requirement coverage including `SW-REQ-090` and `SW-REQ-091`,
-and traceability.
+`python3 scripts/verify-phase02-uat.py` automates the project-owner gateway
+checks: live health/readiness probes, browser security headers, SPA CSRF token
+delivery with HttpOnly `SameSite=Strict` cookies, the Phase 02 HTTP gateway test
+suite, and deployed TLS redirect behavior that ignores spoofed
+`X-Forwarded-Proto`.
+
+The aggregate gate verifies migrations, probes, Phase 02 UAT automation, Phase
+03 UAT automation, screenshots, formatting, backend tests and accepted coverage,
+frontend build and 100% coverage, generated API-type drift, requirement
+coverage including `SW-REQ-090` and `SW-REQ-091`, and traceability.
 
 ## Project-Owner Checks
 
@@ -56,5 +63,7 @@ and traceability.
 
 ## Acceptance
 
-Accept Phase 02 after the automated gate passes and the project-owner checks
-confirm the repaired gateway behavior.
+Accept Phase 02 after the automated gate passes. The project-owner gateway
+checks are automated by `python3 scripts/verify-phase02-uat.py`; remaining
+manual review is limited to confirming the deferred Phase 09 ingress/TLS
+deployment actions still match project expectations.

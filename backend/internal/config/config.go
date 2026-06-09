@@ -13,13 +13,17 @@ import (
 
 // Implements DESIGN-010 RequestValidator local development defaults.
 const (
-	defaultHTTPPort       = "8080"
-	defaultDatabaseURL    = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
-	defaultRedisURL       = "redis://localhost:6379/0"
-	defaultEnvironment    = "development"
-	defaultFrontendOrigin = "http://localhost:5173"
-	defaultAPITimeout     = 10 * time.Second
-	defaultHSTSMaxAge     = 31536000
+	defaultHTTPPort             = "8080"
+	defaultDatabaseURL          = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
+	defaultRedisURL             = "redis://localhost:6379/0"
+	defaultEnvironment          = "development"
+	defaultFrontendOrigin       = "http://localhost:5173"
+	defaultAPITimeout           = 10 * time.Second
+	defaultHSTSMaxAge           = 31536000
+	defaultAccessTokenTTL       = 15 * time.Minute
+	defaultRefreshTokenTTL      = 7 * 24 * time.Hour
+	defaultEmailVerificationTTL = 24 * time.Hour
+	defaultPasswordResetTTL     = time.Hour
 )
 
 // Config contains the environment-backed settings for the API and worker.
@@ -36,6 +40,22 @@ type Config struct {
 	EnforceTLS     bool
 	HSTSMaxAge     int
 	TLSMinVersion  string
+	Account        AccountConfig
+}
+
+// AccountConfig contains authentication and account-flow settings.
+// Implements DESIGN-006 AuthController and DESIGN-013 InputNormalizer.
+type AccountConfig struct {
+	PasswordMinLength           int
+	AccessTokenTTL              time.Duration
+	RefreshTokenTTL             time.Duration
+	AccessCookieName            string
+	RefreshCookieName           string
+	CurrentPrivacyPolicyVersion string
+	CurrentTermsVersion         string
+	DisclaimerFallbackVersion   string
+	EmailVerificationTTL        time.Duration
+	PasswordResetTTL            time.Duration
 }
 
 // Load reads Mealswapp configuration from the environment and applies local defaults.
@@ -71,10 +91,19 @@ func Load() (Config, error) {
 	if cfg.TLSMinVersion = env("MEALSWAPP_TLS_MIN_VERSION", "1.3"); cfg.TLSMinVersion != "1.3" {
 		return Config{}, errors.New("MEALSWAPP_TLS_MIN_VERSION must be 1.3")
 	}
+	if cfg.Account, err = loadAccountConfig(); err != nil {
+		return Config{}, err
+	}
 
 	if cfg.Environment == "production" {
 		if os.Getenv("MEALSWAPP_DATABASE_URL") == "" || os.Getenv("MEALSWAPP_REDIS_URL") == "" {
 			return Config{}, errors.New("production requires MEALSWAPP_DATABASE_URL and MEALSWAPP_REDIS_URL")
+		}
+		if cfg.Account.CurrentPrivacyPolicyVersion == "dev-privacy-v1" || cfg.Account.CurrentTermsVersion == "dev-terms-v1" {
+			return Config{}, errors.New("production requires current consent versions")
+		}
+		if strings.HasPrefix(cfg.Account.AccessCookieName, "dev_") || strings.HasPrefix(cfg.Account.RefreshCookieName, "dev_") {
+			return Config{}, errors.New("production requires non-development auth cookie names")
 		}
 		cfg.EnforceTLS = true
 	}
@@ -94,6 +123,63 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadAccountConfig validates authentication and account-flow settings.
+// Implements DESIGN-006 AuthController and DESIGN-013 InputNormalizer.
+func loadAccountConfig() (AccountConfig, error) {
+	minLength, err := strconv.Atoi(env("MEALSWAPP_PASSWORD_MIN_LENGTH", "12"))
+	if err != nil || minLength < 8 {
+		return AccountConfig{}, errors.New("MEALSWAPP_PASSWORD_MIN_LENGTH must be an integer of at least 8")
+	}
+	accessTTL, err := positiveDuration("MEALSWAPP_ACCESS_TOKEN_TTL", defaultAccessTokenTTL)
+	if err != nil {
+		return AccountConfig{}, err
+	}
+	refreshTTL, err := positiveDuration("MEALSWAPP_REFRESH_TOKEN_TTL", defaultRefreshTokenTTL)
+	if err != nil {
+		return AccountConfig{}, err
+	}
+	if refreshTTL <= accessTTL {
+		return AccountConfig{}, errors.New("MEALSWAPP_REFRESH_TOKEN_TTL must be longer than MEALSWAPP_ACCESS_TOKEN_TTL")
+	}
+	emailVerificationTTL, err := positiveDuration("MEALSWAPP_EMAIL_VERIFICATION_TTL", defaultEmailVerificationTTL)
+	if err != nil {
+		return AccountConfig{}, err
+	}
+	passwordResetTTL, err := positiveDuration("MEALSWAPP_PASSWORD_RESET_TTL", defaultPasswordResetTTL)
+	if err != nil {
+		return AccountConfig{}, err
+	}
+	cfg := AccountConfig{
+		PasswordMinLength:           minLength,
+		AccessTokenTTL:              accessTTL,
+		RefreshTokenTTL:             refreshTTL,
+		AccessCookieName:            env("MEALSWAPP_ACCESS_COOKIE_NAME", "mealswapp_access"),
+		RefreshCookieName:           env("MEALSWAPP_REFRESH_COOKIE_NAME", "mealswapp_refresh"),
+		CurrentPrivacyPolicyVersion: env("MEALSWAPP_PRIVACY_POLICY_VERSION", "dev-privacy-v1"),
+		CurrentTermsVersion:         env("MEALSWAPP_TERMS_VERSION", "dev-terms-v1"),
+		DisclaimerFallbackVersion:   env("MEALSWAPP_DISCLAIMER_FALLBACK_VERSION", "dev-disclaimer-v1"),
+		EmailVerificationTTL:        emailVerificationTTL,
+		PasswordResetTTL:            passwordResetTTL,
+	}
+	if strings.TrimSpace(cfg.AccessCookieName) == "" || strings.TrimSpace(cfg.RefreshCookieName) == "" || cfg.AccessCookieName == cfg.RefreshCookieName {
+		return AccountConfig{}, errors.New("auth cookie names must be present and distinct")
+	}
+	if strings.TrimSpace(cfg.CurrentPrivacyPolicyVersion) == "" || strings.TrimSpace(cfg.CurrentTermsVersion) == "" || strings.TrimSpace(cfg.DisclaimerFallbackVersion) == "" {
+		return AccountConfig{}, errors.New("account legal content versions are required")
+	}
+	return cfg, nil
+}
+
+// positiveDuration parses a positive duration from an environment variable.
+// Implements DESIGN-006 AuthController token lifetime validation.
+func positiveDuration(key string, fallback time.Duration) (time.Duration, error) {
+	value, err := time.ParseDuration(env(key, fallback.String()))
+	if err != nil || value <= 0 {
+		return 0, fmt.Errorf("%s must be a positive duration", key)
+	}
+	return value, nil
 }
 
 // splitCSV parses comma-separated gateway settings.

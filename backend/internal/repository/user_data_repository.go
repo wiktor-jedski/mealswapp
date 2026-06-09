@@ -49,11 +49,19 @@ var searchHistoryAddSQL string
 //go:embed sql/search_history_list.sql
 var searchHistoryListSQL string
 
+// Implements DESIGN-008 SearchHistoryRepository clear query.
+//
+//go:embed sql/search_history_clear.sql
+var searchHistoryClearSQL string
+
 // PostgresUserProfileRepository persists user profiles and preferences in PostgreSQL.
 // Implements DESIGN-008 PreferenceManager.
 type PostgresUserProfileRepository struct {
 	db sqlExecutor
 }
+
+// Implements DESIGN-008 PreferenceManager compile-time repository contract.
+var _ UserProfileRepository = (*PostgresUserProfileRepository)(nil)
 
 // NewPostgresUserProfileRepository creates a PostgreSQL-backed profile repository.
 // Implements DESIGN-008 PreferenceManager.
@@ -106,6 +114,12 @@ func (r *PostgresUserProfileRepository) UpdateProfile(ctx context.Context, profi
 type PostgresSavedDataRepository struct {
 	db transactionalExecutor
 }
+
+// Implements DESIGN-008 SavedDataRepository compile-time repository contract.
+var _ SavedItemRepository = (*PostgresSavedDataRepository)(nil)
+
+// Implements DESIGN-008 SearchHistoryRepository compile-time repository contract.
+var _ SearchHistoryRepository = (*PostgresSavedDataRepository)(nil)
 
 // NewPostgresSavedDataRepository creates a PostgreSQL-backed saved data repository.
 // Implements DESIGN-008 SavedDataRepository.
@@ -222,6 +236,18 @@ func (r *PostgresSavedDataRepository) ListHistory(ctx context.Context, userID uu
 		return nil, mapPostgresError(err, "iterate search history")
 	}
 	return entries, nil
+}
+
+// ClearHistory removes all search history entries for one user.
+// Implements DESIGN-008 SearchHistoryRepository.
+func (r *PostgresSavedDataRepository) ClearHistory(ctx context.Context, userID uuid.UUID) error {
+	if userID == uuid.Nil {
+		return validationError("user id is required")
+	}
+	if _, err := r.db.Exec(ctx, searchHistoryClearSQL, userID); err != nil {
+		return mapPostgresError(err, "clear search history")
+	}
+	return nil
 }
 
 // validateSavedItemTarget verifies that a saved-item target exists for its kind.

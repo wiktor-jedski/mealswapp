@@ -9,7 +9,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -42,6 +41,7 @@ type Dependencies struct {
 	Metrics      observability.MetricsCollector
 	Routes       []RouteDefinition
 	CSRF         *CSRFManager
+	Auth         *JWTAuthenticator
 }
 
 // GatewayContext is request-scoped gateway metadata.
@@ -76,6 +76,12 @@ type Envelope struct {
 	RequestID string         `json:"requestId"`
 	Data      map[string]any `json:"data,omitempty"`
 	Error     *AppError      `json:"error,omitempty"`
+}
+
+// Controller exposes versioned HTTP route definitions.
+// Implements DESIGN-010 RouteHandler.
+type Controller interface {
+	Routes() []RouteDefinition
 }
 
 // RouteDefinition describes a versioned service route and required gateway hooks.
@@ -161,7 +167,7 @@ func registerV1Routes(group fiber.Router, deps Dependencies) {
 		}
 		handlers := []fiber.Handler{}
 		if route.RequiresAuth {
-			handlers = append(handlers, requireAuth)
+			handlers = append(handlers, requireAuth(deps.Auth))
 		}
 		if route.RequiresCSRF {
 			handlers = append(handlers, deps.CSRF.Validate)
@@ -273,19 +279,6 @@ func requireAudit(audit security.AuditLogger) fiber.Handler {
 	}
 }
 
-// requireAuth is the Phase 02 protected-route hook replaced by Phase 03 JWT validation.
-// Implements DESIGN-010 RouteHandler.
-func requireAuth(ctx *fiber.Ctx) error {
-	userID := strings.TrimSpace(ctx.Get("X-Test-User-ID"))
-	if userID == "" {
-		return AppError{HTTPStatus: fiber.StatusUnauthorized, Category: "auth", Code: "unauthorized", Message: "authentication required"}
-	}
-	if _, err := uuid.Parse(userID); err != nil {
-		return AppError{HTTPStatus: fiber.StatusUnauthorized, Category: "auth", Code: "unauthorized", Message: "authentication required", Cause: fmt.Errorf("parse authenticated user ID: %w", err)}
-	}
-	return ctx.Next()
-}
-
 // ValidateJSON returns middleware that parses and validates JSON payloads.
 // Implements DESIGN-010 RequestValidator.
 func ValidateJSON(validate func(map[string]any) error) fiber.Handler {
@@ -394,8 +387,10 @@ func instrument(deps Dependencies) fiber.Handler {
 		}
 		if deps.Logs != nil {
 			fields := map[string]any{"route": routeTemplate(ctx), "method": ctx.Method(), "status": status, "latencyMs": time.Since(started).Milliseconds()}
-			if userID := ctx.Get("X-Test-User-ID"); userID != "" {
-				fields["userId"] = userID
+			if user, ok := authenticatedUser(ctx); ok {
+				fields["userId"] = user.UserID.String()
+				fields["role"] = user.Role
+				fields["hasVerifiedLoginMethod"] = user.HasVerifiedLoginMethod
 			}
 			if err := deps.Logs.Log(ctx.UserContext(), observability.LogEvent{RequestID: requestID(ctx), Service: "api", Level: logLevel(status), Message: "http_request", Fields: fields, CreatedAt: time.Now()}); err != nil {
 				reportObservabilityFailure("log", err)
@@ -408,15 +403,10 @@ func instrument(deps Dependencies) fiber.Handler {
 // auditUserID returns an optional authenticated user UUID for security audit metadata.
 // Implements DESIGN-013 AuditLogger.
 func auditUserID(ctx *fiber.Ctx) (*uuid.UUID, error) {
-	value := strings.TrimSpace(ctx.Get("X-Test-User-ID"))
-	if value == "" {
-		return nil, nil
+	if user, ok := authenticatedUser(ctx); ok {
+		return &user.UserID, nil
 	}
-	id, err := uuid.Parse(value)
-	if err != nil {
-		return nil, fmt.Errorf("parse audit user ID: %w", err)
-	}
-	return &id, nil
+	return nil, nil
 }
 
 // logLevel maps response statuses to structured log severity.
@@ -508,7 +498,10 @@ func routeTemplate(ctx *fiber.Ctx) string {
 // Implements DESIGN-010 RateLimiter.
 func rateLimitKey(ctx *fiber.Ctx, scope string) string {
 	if scope == "user" {
-		return scope + ":" + ctx.Get("X-Test-User-ID")
+		if user, ok := authenticatedUser(ctx); ok {
+			return scope + ":" + user.UserID.String()
+		}
+		return scope + ":anonymous"
 	}
 	if scope == "endpoint" {
 		return scope + ":" + ctx.Path()

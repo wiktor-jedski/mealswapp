@@ -55,6 +55,18 @@ type JSONSink struct {
 	Writer io.Writer
 }
 
+// Implements DESIGN-014 LogAggregator compile-time JSON log sink contract.
+var _ LogSink = JSONSink{}
+
+// Implements DESIGN-014 MetricsCollector compile-time JSON metrics contract.
+var _ MetricsCollector = JSONSink{}
+
+// Implements DESIGN-014 LogAggregator compile-time memory log sink contract.
+var _ LogSink = (*MemorySink)(nil)
+
+// Implements DESIGN-014 MetricsCollector compile-time memory metrics contract.
+var _ MetricsCollector = (*MemorySink)(nil)
+
 // Log writes one JSON log line.
 // Implements DESIGN-014 LogAggregator.
 func (s JSONSink) Log(_ context.Context, event LogEvent) error {

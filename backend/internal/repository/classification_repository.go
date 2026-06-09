@@ -38,6 +38,9 @@ type PostgresClassificationRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-005 ClassificationEntity compile-time repository contract.
+var _ ClassificationRepository = (*PostgresClassificationRepository)(nil)
+
 // NewPostgresClassificationRepository creates a PostgreSQL-backed classification repository.
 // Implements DESIGN-005 ClassificationEntity.
 func NewPostgresClassificationRepository(db sqlExecutor) *PostgresClassificationRepository {

@@ -79,6 +79,15 @@ func (contractUserProfileRepository) UpdateProfile(context.Context, UserProfile)
 	return PreferenceUpdateResult{}, nil
 }
 
+type contractEncryptedUserProfileRepository struct{}
+
+func (contractEncryptedUserProfileRepository) GetOrCreateEncryptedProfile(context.Context, uuid.UUID) (EncryptedUserProfile, error) {
+	return EncryptedUserProfile{}, nil
+}
+func (contractEncryptedUserProfileRepository) UpdateEncryptedProfile(context.Context, EncryptedUserProfile) (EncryptedUserProfile, error) {
+	return EncryptedUserProfile{}, nil
+}
+
 type contractSavedItemRepository struct{}
 
 func (contractSavedItemRepository) SaveItem(context.Context, uuid.UUID, uuid.UUID, SavedItemKind) (uuid.UUID, error) {
@@ -99,6 +108,16 @@ func (contractSearchHistoryRepository) AddHistory(context.Context, SearchHistory
 func (contractSearchHistoryRepository) ListHistory(context.Context, uuid.UUID, int) ([]SearchHistoryEntry, error) {
 	return nil, nil
 }
+func (contractSearchHistoryRepository) ClearHistory(context.Context, uuid.UUID) error { return nil }
+
+type contractEncryptedSearchHistoryRepository struct{}
+
+func (contractEncryptedSearchHistoryRepository) AddEncryptedHistory(context.Context, EncryptedSearchHistoryEntry) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (contractEncryptedSearchHistoryRepository) ListEncryptedHistory(context.Context, uuid.UUID, int) ([]EncryptedSearchHistoryEntry, error) {
+	return nil, nil
+}
 
 type contractAuthUserRepository struct{}
 
@@ -112,6 +131,12 @@ func (contractAuthUserRepository) GetUserByNormalizedEmail(context.Context, stri
 	return AuthUser{}, nil
 }
 func (contractAuthUserRepository) UpdateUserState(context.Context, AuthUser) error { return nil }
+
+type contractAccountDeletionRepository struct{}
+
+func (contractAccountDeletionRepository) DeleteUserAccount(context.Context, uuid.UUID) error {
+	return nil
+}
 
 type contractOAuthIdentityRepository struct{}
 
@@ -132,6 +157,7 @@ func (contractSessionRepository) GetSessionByRefreshTokenHash(context.Context, s
 }
 func (contractSessionRepository) RevokeSession(context.Context, uuid.UUID) error       { return nil }
 func (contractSessionRepository) RevokeSessionFamily(context.Context, uuid.UUID) error { return nil }
+func (contractSessionRepository) RevokeUserSessions(context.Context, uuid.UUID) error  { return nil }
 
 type contractPasswordResetTokenRepository struct{}
 
@@ -180,6 +206,9 @@ func (contractConsentRepository) RecordConsent(context.Context, ConsentRecord) (
 func (contractConsentRepository) HasRequiredConsent(context.Context, uuid.UUID, string, string) (bool, error) {
 	return false, nil
 }
+func (contractConsentRepository) ListConsent(context.Context, uuid.UUID) ([]ConsentRecord, error) {
+	return nil, nil
+}
 
 type contractDeletionRequestRepository struct{}
 
@@ -191,6 +220,15 @@ func (contractDeletionRequestRepository) UpdateDeletionStatus(context.Context, u
 }
 func (contractDeletionRequestRepository) ListDeletionAudit(context.Context, uuid.UUID) ([]DataDeletionAuditEntry, error) {
 	return nil, nil
+}
+func (contractDeletionRequestRepository) ClaimDeletionRequests(context.Context, time.Time, int) ([]DataDeletionRequest, error) {
+	return nil, nil
+}
+func (contractDeletionRequestRepository) RecordDeletionFailure(context.Context, uuid.UUID, string, string, *time.Time) error {
+	return nil
+}
+func (contractDeletionRequestRepository) CompleteDeletionRequest(context.Context, uuid.UUID, uuid.UUID, time.Time) error {
+	return nil
 }
 
 type contractCuratedImportRepository struct{}
@@ -220,9 +258,12 @@ var (
 	_ ClassificationRepository          = contractClassificationRepository{}
 	_ MicronutrientVocabularyRepository = contractVocabularyRepository{}
 	_ UserProfileRepository             = contractUserProfileRepository{}
+	_ EncryptedUserProfileRepository    = contractEncryptedUserProfileRepository{}
 	_ SavedItemRepository               = contractSavedItemRepository{}
 	_ SearchHistoryRepository           = contractSearchHistoryRepository{}
+	_ EncryptedSearchHistoryRepository  = contractEncryptedSearchHistoryRepository{}
 	_ AuthUserRepository                = contractAuthUserRepository{}
+	_ AccountDeletionRepository         = contractAccountDeletionRepository{}
 	_ OAuthIdentityRepository           = contractOAuthIdentityRepository{}
 	_ SessionRepository                 = contractSessionRepository{}
 	_ PasswordResetTokenRepository      = contractPasswordResetTokenRepository{}

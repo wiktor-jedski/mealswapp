@@ -20,6 +20,9 @@ type PostgresSecurityAuditRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-013 AuditLogger compile-time repository contract.
+var _ security.AuditLogger = (*PostgresSecurityAuditRepository)(nil)
+
 // NewPostgresSecurityAuditRepository creates a PostgreSQL-backed security audit logger.
 // Implements DESIGN-013 AuditLogger.
 func NewPostgresSecurityAuditRepository(db sqlExecutor) *PostgresSecurityAuditRepository {
@@ -30,7 +33,7 @@ func NewPostgresSecurityAuditRepository(db sqlExecutor) *PostgresSecurityAuditRe
 // Implements DESIGN-013 AuditLogger.
 func (r *PostgresSecurityAuditRepository) Audit(ctx context.Context, entry security.AuditLogEntry) error {
 	if strings.TrimSpace(entry.RequestID) == "" || strings.TrimSpace(entry.Action) == "" ||
-		strings.TrimSpace(entry.Resource) == "" || (entry.Outcome != "success" && entry.Outcome != "failure") {
+		strings.TrimSpace(entry.Resource) == "" || (entry.Outcome != "attempt" && entry.Outcome != "success" && entry.Outcome != "failure") {
 		return validationError("security audit metadata is invalid")
 	}
 	if entry.RequestID != strings.TrimSpace(entry.RequestID) || entry.Action != strings.TrimSpace(entry.Action) ||

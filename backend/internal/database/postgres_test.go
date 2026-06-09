@@ -24,6 +24,10 @@ func (p *fakePool) Close() {
 	p.closed = true
 }
 
+func (p *fakePool) Begin(context.Context) (pgx.Tx, error) {
+	return nil, p.pingErr
+}
+
 func (p *fakePool) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return pgconn.NewCommandTag("UPDATE 1"), p.pingErr
 }

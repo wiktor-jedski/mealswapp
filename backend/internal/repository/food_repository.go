@@ -64,6 +64,9 @@ type PostgresFoodItemRepository struct {
 	db transactionalExecutor
 }
 
+// Implements DESIGN-005 FoodItemEntity compile-time repository contract.
+var _ FoodItemRepository = (*PostgresFoodItemRepository)(nil)
+
 // NewPostgresFoodItemRepository creates a PostgreSQL-backed food item repository.
 // Implements DESIGN-005 FoodItemEntity.
 func NewPostgresFoodItemRepository(db transactionalExecutor) *PostgresFoodItemRepository {

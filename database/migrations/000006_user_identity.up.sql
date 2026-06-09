@@ -1,8 +1,6 @@
 -- Implements DESIGN-006 AuthUser.
 CREATE TABLE IF NOT EXISTS users (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    email text NOT NULL,
-    normalized_email text GENERATED ALWAYS AS (lower(btrim(email))) STORED,
     role text NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     email_verified boolean NOT NULL DEFAULT false,
     password_hash text,
@@ -11,15 +9,11 @@ CREATE TABLE IF NOT EXISTS users (
     locked_until timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT users_email_not_blank CHECK (btrim(email) <> ''),
     CONSTRAINT users_password_pair CHECK (
         (password_hash IS NULL AND password_salt IS NULL)
         OR (password_hash IS NOT NULL AND password_salt IS NOT NULL)
     )
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS users_normalized_email_idx
-    ON users (normalized_email);
 
 CREATE TABLE IF NOT EXISTS oauth_identities (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

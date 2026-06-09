@@ -26,6 +26,9 @@ type PostgresMicronutrientVocabularyRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-005 MicronutrientVocabulary compile-time repository contract.
+var _ MicronutrientVocabularyRepository = (*PostgresMicronutrientVocabularyRepository)(nil)
+
 // NewPostgresMicronutrientVocabularyRepository creates a PostgreSQL-backed vocabulary repository.
 // Implements DESIGN-005 MicronutrientVocabulary.
 func NewPostgresMicronutrientVocabularyRepository(db sqlExecutor) *PostgresMicronutrientVocabularyRepository {

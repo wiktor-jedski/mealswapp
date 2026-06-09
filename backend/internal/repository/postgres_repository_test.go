@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -144,6 +146,358 @@ func TestUserIdentitySchemaSupportsOAuthOnlyUsers(t *testing.T) {
 
 	if _, err := db.Exec(ctx, testInvalidPasswordPairCreateSQL); err == nil {
 		t.Fatal("insert user with hash but no salt error = nil, want constraint violation")
+	}
+}
+
+func TestPostgresEncryptedIdentityRepository(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresEncryptedIdentityRepository(db)
+
+	email := EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("email-nonce"), Ciphertext: []byte("email-ciphertext")}
+	digest := LookupDigest{KeyVersion: "lookup-v1", Value: "email-digest"}
+	hash := "fixture-hash"
+	salt := "fixture-salt"
+	userID, err := repo.CreateUser(ctx, EncryptedAuthUser{
+		Email:                 email,
+		NormalizedEmailDigest: digest,
+		Role:                  UserRoleUser,
+		PasswordHash:          &hash,
+		PasswordSalt:          &salt,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser() error = %v", err)
+	}
+	if _, err := repo.CreateUser(ctx, EncryptedAuthUser{Email: email, NormalizedEmailDigest: digest}); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("CreateUser() duplicate digest error = %v, want conflict", err)
+	}
+	storedUser, err := repo.GetUserByNormalizedEmailDigest(ctx, digest)
+	if err != nil {
+		t.Fatalf("GetUserByNormalizedEmailDigest() error = %v", err)
+	}
+	if storedUser.ID != userID || storedUser.Email.KeyVersion != "pii-v1" || storedUser.NormalizedEmailDigest != digest {
+		t.Fatalf("stored user = %#v", storedUser)
+	}
+	storedByID, err := repo.GetEncryptedUserByID(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetEncryptedUserByID() error = %v", err)
+	}
+	if storedByID.ID != userID || storedByID.NormalizedEmailDigest != digest {
+		t.Fatalf("stored user by id = %#v", storedByID)
+	}
+	newDigest := LookupDigest{KeyVersion: "lookup-v2", Value: "email-digest-v2"}
+	if err := repo.ReindexUserEmailDigest(ctx, userID, newDigest); err != nil {
+		t.Fatalf("ReindexUserEmailDigest() error = %v", err)
+	}
+	if _, err := repo.GetUserByNormalizedEmailDigest(ctx, digest); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("old digest lookup error = %v, want not found", err)
+	}
+	storedUser, err = repo.GetUserByNormalizedEmailDigest(ctx, newDigest)
+	if err != nil {
+		t.Fatalf("new digest lookup error = %v", err)
+	}
+	if storedUser.ID != userID || storedUser.NormalizedEmailDigest != newDigest {
+		t.Fatalf("reindexed user = %#v", storedUser)
+	}
+	providerID := EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("provider-nonce"), Ciphertext: []byte("provider-ciphertext")}
+	providerDigest := LookupDigest{KeyVersion: "lookup-v1", Value: "provider-digest"}
+	oauthID, err := repo.UpsertOAuthIdentity(ctx, EncryptedOAuthIdentity{
+		UserID:               userID,
+		Provider:             "google",
+		ProviderUserID:       providerID,
+		ProviderUserIDDigest: providerDigest,
+		Email:                email,
+	})
+	if err != nil {
+		t.Fatalf("UpsertOAuthIdentity() error = %v", err)
+	}
+	storedOAuth, err := repo.GetOAuthIdentity(ctx, "google", providerDigest)
+	if err != nil {
+		t.Fatalf("GetOAuthIdentity() error = %v", err)
+	}
+	if storedOAuth.ID != oauthID || storedOAuth.ProviderUserIDDigest != providerDigest || storedOAuth.ProviderUserID.KeyVersion != "pii-v1" {
+		t.Fatalf("stored oauth = %#v", storedOAuth)
+	}
+	var legacyProviderID, legacyOAuthEmail string
+	if err := db.QueryRow(ctx, "SELECT provider_user_id, email FROM oauth_identities WHERE id = $1", oauthID).Scan(&legacyProviderID, &legacyOAuthEmail); err != nil {
+		t.Fatalf("select legacy oauth fields: %v", err)
+	}
+	if !strings.HasPrefix(legacyProviderID, "encrypted:") || legacyOAuthEmail != "encrypted" {
+		t.Fatalf("legacy oauth columns = %q, %q", legacyProviderID, legacyOAuthEmail)
+	}
+
+	createdProfile, err := repo.GetOrCreateEncryptedProfile(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetOrCreateEncryptedProfile() first call error = %v", err)
+	}
+	if createdProfile.UserID != userID || createdProfile.UnitSystem != UnitSystemMetric || createdProfile.ThemePreference != "system" {
+		t.Fatalf("created encrypted profile = %#v", createdProfile)
+	}
+	displayName := EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("display-nonce"), Ciphertext: []byte("display-ciphertext")}
+	profile, err := repo.UpdateEncryptedProfile(ctx, EncryptedUserProfile{
+		UserID:          userID,
+		DisplayName:     &displayName,
+		UnitSystem:      UnitSystemImperial,
+		ThemePreference: "dark",
+	})
+	if err != nil {
+		t.Fatalf("UpdateEncryptedProfile() error = %v", err)
+	}
+	if profile.DisplayName == nil || profile.DisplayName.KeyVersion != "pii-v1" || profile.UnitSystem != UnitSystemImperial {
+		t.Fatalf("encrypted profile = %#v", profile)
+	}
+	storedProfile, err := repo.GetOrCreateEncryptedProfile(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetOrCreateEncryptedProfile() error = %v", err)
+	}
+	if storedProfile.DisplayName == nil || storedProfile.DisplayName.KeyVersion != "pii-v1" || storedProfile.ThemePreference != "dark" {
+		t.Fatalf("stored encrypted profile = %#v", storedProfile)
+	}
+	var legacyDisplayName string
+	if err := db.QueryRow(ctx, "SELECT coalesce(display_name, '') FROM user_profiles WHERE user_id = $1", userID).Scan(&legacyDisplayName); err != nil {
+		t.Fatalf("select legacy display name: %v", err)
+	}
+	if legacyDisplayName != "encrypted" {
+		t.Fatalf("legacy display name = %q", legacyDisplayName)
+	}
+
+	historyID, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{
+		UserID:      userID,
+		Query:       EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("query-nonce"), Ciphertext: []byte("query-ciphertext")},
+		Mode:        "food",
+		FiltersHash: "hash",
+	})
+	if err != nil {
+		t.Fatalf("AddEncryptedHistory() error = %v", err)
+	}
+	var legacyQuery string
+	if err := db.QueryRow(ctx, "SELECT query FROM search_history WHERE id = $1", historyID).Scan(&legacyQuery); err != nil {
+		t.Fatalf("select legacy query: %v", err)
+	}
+	if legacyQuery != "encrypted" {
+		t.Fatalf("legacy query = %q", legacyQuery)
+	}
+	encryptedHistory, err := repo.ListEncryptedHistory(ctx, userID, 100)
+	if err != nil {
+		t.Fatalf("ListEncryptedHistory() error = %v", err)
+	}
+	if len(encryptedHistory) != 1 || encryptedHistory[0].ID != historyID || encryptedHistory[0].Query.KeyVersion != "pii-v1" {
+		t.Fatalf("encrypted history = %#v", encryptedHistory)
+	}
+	if _, err := NewPostgresComplianceRepository(db).RequestDeletion(ctx, userID); err != nil {
+		t.Fatalf("RequestDeletion() identity lockout error = %v", err)
+	}
+	if _, err := repo.GetEncryptedUserByID(ctx, userID); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("GetEncryptedUserByID() pending deletion error = %v, want not found", err)
+	}
+	if _, err := repo.GetUserByNormalizedEmailDigest(ctx, newDigest); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("GetUserByNormalizedEmailDigest() pending deletion error = %v, want not found", err)
+	}
+}
+
+func TestPostgresAccountLockoutRepository(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresAccountLockoutRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "lockout@example.test")
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	lockedUntil := now.Add(15 * time.Minute)
+
+	state, err := repo.GetLockoutState(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetLockoutState() error = %v", err)
+	}
+	if state.FailedLoginCount != 0 || state.LockedUntil != nil {
+		t.Fatalf("initial state = %#v", state)
+	}
+	for i := 1; i <= 4; i++ {
+		state, err = repo.RecordFailedLogin(ctx, userID, 5, lockedUntil, now)
+		if err != nil {
+			t.Fatalf("RecordFailedLogin(%d) error = %v", i, err)
+		}
+		if state.FailedLoginCount != i || state.LockedUntil != nil {
+			t.Fatalf("failure %d state = %#v", i, state)
+		}
+	}
+	state, err = repo.RecordFailedLogin(ctx, userID, 5, lockedUntil, now)
+	if err != nil {
+		t.Fatalf("RecordFailedLogin(lock) error = %v", err)
+	}
+	if state.FailedLoginCount != 5 || state.LockedUntil == nil || !state.LockedUntil.Equal(lockedUntil) {
+		t.Fatalf("locked state = %#v", state)
+	}
+	state, err = repo.ResetFailedLogins(ctx, userID)
+	if err != nil {
+		t.Fatalf("ResetFailedLogins() error = %v", err)
+	}
+	if state.FailedLoginCount != 0 || state.LockedUntil != nil {
+		t.Fatalf("reset state = %#v", state)
+	}
+
+	expiredLock := now.Add(-time.Minute)
+	if _, err := db.Exec(ctx, `UPDATE users SET failed_login_count = 5, locked_until = $2 WHERE id = $1`, userID, expiredLock); err != nil {
+		t.Fatalf("seed expired lock: %v", err)
+	}
+	state, err = repo.RecordFailedLogin(ctx, userID, 5, lockedUntil, now)
+	if err != nil {
+		t.Fatalf("RecordFailedLogin(expired) error = %v", err)
+	}
+	if state.FailedLoginCount != 1 || state.LockedUntil != nil {
+		t.Fatalf("expired lock restart state = %#v", state)
+	}
+}
+
+func TestPostgresRegistrationRepositoryCreatesUserWithConsentTransactionally(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresRegistrationRepository(db)
+	user := EncryptedAuthUser{
+		Email:                 EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("nonce"), Ciphertext: []byte("ciphertext")},
+		NormalizedEmailDigest: LookupDigest{KeyVersion: "lookup-v1", Value: "registration-digest"},
+		Role:                  UserRoleUser,
+	}
+
+	userID, err := repo.CreateUserWithConsent(ctx, user, "privacy-v1", "terms-v1")
+	if err != nil {
+		t.Fatalf("CreateUserWithConsent() error = %v", err)
+	}
+	hasConsent, err := NewPostgresComplianceRepository(db).HasRequiredConsent(ctx, userID, "privacy-v1", "terms-v1")
+	if err != nil {
+		t.Fatalf("HasRequiredConsent() error = %v", err)
+	}
+	if !hasConsent {
+		t.Fatal("registration consent was not persisted")
+	}
+	if _, err := repo.CreateUserWithConsent(ctx, user, "privacy-v1", "terms-v1"); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("CreateUserWithConsent() duplicate error = %v, want conflict", err)
+	}
+	var consentCount int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM consent_records WHERE privacy_policy_version = 'privacy-v1' AND terms_version = 'terms-v1'`).Scan(&consentCount); err != nil {
+		t.Fatalf("count consent records: %v", err)
+	}
+	if consentCount != 1 {
+		t.Fatalf("duplicate registration committed consent rows = %d", consentCount)
+	}
+}
+
+func TestPostgresSessionRepository(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresSessionRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "session@example.test")
+	familyID := uuid.New()
+	accessExpiresAt := time.Now().Add(15 * time.Minute).UTC().Truncate(time.Second)
+	refreshExpiresAt := time.Now().Add(7 * 24 * time.Hour).UTC().Truncate(time.Second)
+
+	sessionID, err := repo.CreateSession(ctx, UserSession{
+		UserID:           userID,
+		RefreshTokenHash: "refresh-hash-1",
+		RefreshFamilyID:  familyID,
+		AccessExpiresAt:  accessExpiresAt,
+		RefreshExpiresAt: refreshExpiresAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	session, err := repo.GetSessionByRefreshTokenHash(ctx, "refresh-hash-1")
+	if err != nil {
+		t.Fatalf("GetSessionByRefreshTokenHash() error = %v", err)
+	}
+	if session.ID != sessionID || session.UserID != userID || session.RefreshFamilyID != familyID || session.RevokedAt != nil {
+		t.Fatalf("session = %#v", session)
+	}
+	if err := repo.RevokeSession(ctx, sessionID); err != nil {
+		t.Fatalf("RevokeSession() error = %v", err)
+	}
+	session, err = repo.GetSessionByRefreshTokenHash(ctx, "refresh-hash-1")
+	if err != nil {
+		t.Fatalf("GetSessionByRefreshTokenHash() after revoke error = %v", err)
+	}
+	if session.RevokedAt == nil {
+		t.Fatalf("session was not revoked: %#v", session)
+	}
+	secondID, err := repo.CreateSession(ctx, UserSession{
+		UserID:           userID,
+		RefreshTokenHash: "refresh-hash-2",
+		RefreshFamilyID:  familyID,
+		AccessExpiresAt:  accessExpiresAt,
+		RefreshExpiresAt: refreshExpiresAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateSession() second error = %v", err)
+	}
+	if err := repo.RevokeSessionFamily(ctx, familyID); err != nil {
+		t.Fatalf("RevokeSessionFamily() error = %v", err)
+	}
+	var revokedAt *time.Time
+	if err := db.QueryRow(ctx, `SELECT revoked_at FROM user_sessions WHERE id = $1`, secondID).Scan(&revokedAt); err != nil {
+		t.Fatalf("select revoked family session: %v", err)
+	}
+	if revokedAt == nil {
+		t.Fatal("session family was not revoked")
+	}
+}
+
+func TestPostgresAccountVerificationRepository(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresAccountVerificationRepository(db)
+	sessionRepo := NewPostgresSessionRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "verify-reset@example.test")
+	now := time.Now().UTC().Truncate(time.Second)
+
+	if err := repo.MarkEmailVerified(ctx, userID); err != nil {
+		t.Fatalf("MarkEmailVerified() error = %v", err)
+	}
+	var verified bool
+	if err := db.QueryRow(ctx, `SELECT email_verified FROM users WHERE id = $1`, userID).Scan(&verified); err != nil {
+		t.Fatalf("select verified: %v", err)
+	}
+	if !verified {
+		t.Fatal("email_verified was not updated")
+	}
+	if err := repo.CreatePasswordResetToken(ctx, PasswordResetToken{TokenHash: "reset-hash", UserID: userID, ExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("CreatePasswordResetToken() error = %v", err)
+	}
+	token, err := repo.ConsumePasswordResetToken(ctx, "reset-hash", now)
+	if err != nil {
+		t.Fatalf("ConsumePasswordResetToken() error = %v", err)
+	}
+	if token.UserID != userID || token.UsedAt == nil || token.TokenHash != "reset-hash" {
+		t.Fatalf("consumed token = %#v", token)
+	}
+	if _, err := repo.ConsumePasswordResetToken(ctx, "reset-hash", now); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("ConsumePasswordResetToken() reuse error = %v, want not found", err)
+	}
+	if err := repo.CreatePasswordResetToken(ctx, PasswordResetToken{TokenHash: "expired-reset-hash", UserID: userID, ExpiresAt: now.Add(-time.Minute)}); err != nil {
+		t.Fatalf("CreatePasswordResetToken() expired seed error = %v", err)
+	}
+	if _, err := repo.ConsumePasswordResetToken(ctx, "expired-reset-hash", now); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("ConsumePasswordResetToken() expired error = %v, want not found", err)
+	}
+	if err := repo.UpdatePassword(ctx, userID, "new-hash", "new-salt"); err != nil {
+		t.Fatalf("UpdatePassword() error = %v", err)
+	}
+	var passwordHash string
+	if err := db.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&passwordHash); err != nil {
+		t.Fatalf("select password hash: %v", err)
+	}
+	if passwordHash != "new-hash" {
+		t.Fatalf("password hash = %q", passwordHash)
+	}
+	sessionID, err := sessionRepo.CreateSession(ctx, UserSession{UserID: userID, RefreshTokenHash: "reset-session", RefreshFamilyID: uuid.New(), AccessExpiresAt: now.Add(time.Minute), RefreshExpiresAt: now.Add(time.Hour)})
+	if err != nil {
+		t.Fatalf("CreateSession() error = %v", err)
+	}
+	if err := sessionRepo.RevokeUserSessions(ctx, userID); err != nil {
+		t.Fatalf("RevokeUserSessions() error = %v", err)
+	}
+	var revokedAt *time.Time
+	if err := db.QueryRow(ctx, `SELECT revoked_at FROM user_sessions WHERE id = $1`, sessionID).Scan(&revokedAt); err != nil {
+		t.Fatalf("select revoked session: %v", err)
+	}
+	if revokedAt == nil {
+		t.Fatal("password reset did not revoke sessions")
 	}
 }
 
@@ -772,6 +1126,16 @@ func TestPostgresUserDataRepositories(t *testing.T) {
 	if len(history) != 1 || history[0].UserID != userID || history[0].Query != "apple" || history[0].FiltersHash != "abc" {
 		t.Fatalf("history = %#v", history)
 	}
+	if err := savedRepo.ClearHistory(ctx, userID); err != nil {
+		t.Fatalf("ClearHistory() error = %v", err)
+	}
+	history, err = savedRepo.ListHistory(ctx, userID, 10)
+	if err != nil {
+		t.Fatalf("ListHistory() after clear error = %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("history after clear = %#v", history)
+	}
 
 	if err := savedRepo.RemoveItem(ctx, userID, foodID, SavedItemKindFavorite); err != nil {
 		t.Fatalf("RemoveItem() error = %v", err)
@@ -934,6 +1298,214 @@ func TestPostgresUserDataRepositoryValidationAndErrors(t *testing.T) {
 	savedRepo = NewPostgresSavedDataRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, values: historyValues}})
 	if entries, err := savedRepo.ListHistory(ctx, userID, 10); err != nil || len(entries) != 1 {
 		t.Fatalf("ListHistory() fake success entries=%#v err=%v", entries, err)
+	}
+}
+
+func TestPostgresEncryptedIdentityRepositoryValidationAndErrors(t *testing.T) {
+	ctx := context.Background()
+	queryErr := errors.New("query failed")
+	scanErr := errors.New("scan failed")
+	userID := uuid.New()
+	now := time.Now()
+	field := EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("nonce"), Ciphertext: []byte("ciphertext")}
+	digest := LookupDigest{KeyVersion: "lookup-v1", Value: "digest"}
+	userValues := []any{userID, field.KeyVersion, field.Nonce, field.Ciphertext, digest.KeyVersion, digest.Value, false, UserRoleUser, (*string)(nil), (*string)(nil), now, now}
+	oauthValues := []any{uuid.New(), userID, "google", field.KeyVersion, field.Nonce, field.Ciphertext, digest.KeyVersion, digest.Value, field.KeyVersion, field.Nonce, field.Ciphertext, now}
+	profileValues := []any{userID, &field.KeyVersion, field.Nonce, field.Ciphertext, UnitSystemMetric, "system", now, now}
+
+	repo := NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{})
+	if _, err := repo.CreateUser(ctx, EncryptedAuthUser{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("CreateUser() invalid envelope error = %v, want validation", err)
+	}
+	hash := "hash"
+	if _, err := repo.CreateUser(ctx, EncryptedAuthUser{Email: field, NormalizedEmailDigest: digest, PasswordHash: &hash}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("CreateUser() password pair error = %v, want validation", err)
+	}
+	if _, err := repo.CreateUser(ctx, EncryptedAuthUser{Email: field, NormalizedEmailDigest: digest, Role: "owner"}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("CreateUser() bad role error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if _, err := repo.CreateUser(ctx, EncryptedAuthUser{Email: field, NormalizedEmailDigest: digest}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("CreateUser() scan error = %v, want connection", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: []any{userID}}})
+	if _, err := repo.CreateUser(ctx, EncryptedAuthUser{Email: field, NormalizedEmailDigest: digest}); err != nil {
+		t.Fatalf("CreateUser() fake success error = %v", err)
+	}
+
+	if _, err := repo.GetUserByNormalizedEmailDigest(ctx, LookupDigest{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("GetUserByNormalizedEmailDigest() invalid digest error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{err: pgx.ErrNoRows}})
+	if _, err := repo.GetUserByNormalizedEmailDigest(ctx, digest); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("GetUserByNormalizedEmailDigest() missing error = %v, want not found", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: userValues}})
+	if _, err := repo.GetUserByNormalizedEmailDigest(ctx, digest); err != nil {
+		t.Fatalf("GetUserByNormalizedEmailDigest() fake success error = %v", err)
+	}
+	if _, err := repo.GetEncryptedUserByID(ctx, uuid.Nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("GetEncryptedUserByID() nil user error = %v, want validation", err)
+	}
+	if _, err := repo.GetEncryptedUserByID(ctx, userID); err != nil {
+		t.Fatalf("GetEncryptedUserByID() fake success error = %v", err)
+	}
+	if err := repo.ReindexUserEmailDigest(ctx, uuid.Nil, digest); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("ReindexUserEmailDigest() nil user error = %v, want validation", err)
+	}
+	if err := repo.ReindexUserEmailDigest(ctx, userID, LookupDigest{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("ReindexUserEmailDigest() invalid digest error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{err: pgx.ErrNoRows}})
+	if err := repo.ReindexUserEmailDigest(ctx, userID, digest); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("ReindexUserEmailDigest() missing error = %v, want not found", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: []any{userID}}})
+	if err := repo.ReindexUserEmailDigest(ctx, userID, digest); err != nil {
+		t.Fatalf("ReindexUserEmailDigest() fake success error = %v", err)
+	}
+
+	if _, err := repo.UpsertOAuthIdentity(ctx, EncryptedOAuthIdentity{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("UpsertOAuthIdentity() invalid error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if _, err := repo.UpsertOAuthIdentity(ctx, EncryptedOAuthIdentity{UserID: userID, Provider: "google", ProviderUserID: field, ProviderUserIDDigest: digest, Email: field}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("UpsertOAuthIdentity() scan error = %v, want connection", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}})
+	if _, err := repo.UpsertOAuthIdentity(ctx, EncryptedOAuthIdentity{UserID: userID, Provider: "google", ProviderUserID: field, ProviderUserIDDigest: digest, Email: field}); err != nil {
+		t.Fatalf("UpsertOAuthIdentity() fake success error = %v", err)
+	}
+	if _, err := repo.GetOAuthIdentity(ctx, "", digest); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("GetOAuthIdentity() provider error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: oauthValues}})
+	if _, err := repo.GetOAuthIdentity(ctx, "google", digest); err != nil {
+		t.Fatalf("GetOAuthIdentity() fake success error = %v", err)
+	}
+
+	if _, err := repo.UpdateEncryptedProfile(ctx, EncryptedUserProfile{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("UpdateEncryptedProfile() nil user error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: profileValues}})
+	if _, err := repo.UpdateEncryptedProfile(ctx, EncryptedUserProfile{UserID: userID, DisplayName: &field, UnitSystem: UnitSystemMetric, ThemePreference: "system"}); err != nil {
+		t.Fatalf("UpdateEncryptedProfile() fake success error = %v", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{err: queryErr}})
+	if _, err := repo.UpdateEncryptedProfile(ctx, EncryptedUserProfile{UserID: userID, UnitSystem: UnitSystemMetric, ThemePreference: "system"}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("UpdateEncryptedProfile() scan error = %v, want connection", err)
+	}
+
+	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("AddEncryptedHistory() invalid error = %v, want validation", err)
+	}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}})
+	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{UserID: userID, Query: field, Mode: "food"}); err != nil {
+		t.Fatalf("AddEncryptedHistory() fake success error = %v", err)
+	}
+}
+
+func TestPostgresAccountLockoutRepositoryValidationAndErrors(t *testing.T) {
+	ctx := context.Background()
+	scanErr := errors.New("scan failed")
+	userID := uuid.New()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	lockedUntil := now.Add(15 * time.Minute)
+	values := []any{3, (*time.Time)(nil)}
+
+	repo := NewPostgresAccountLockoutRepository(&fakeSQLExecutor{})
+	if _, err := repo.GetLockoutState(ctx, uuid.Nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("GetLockoutState() nil user error = %v, want validation", err)
+	}
+	repo = NewPostgresAccountLockoutRepository(&fakeSQLExecutor{row: fakeRow{err: pgx.ErrNoRows}})
+	if _, err := repo.GetLockoutState(ctx, userID); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("GetLockoutState() missing error = %v, want not found", err)
+	}
+	repo = NewPostgresAccountLockoutRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if _, err := repo.GetLockoutState(ctx, userID); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("GetLockoutState() scan error = %v, want connection", err)
+	}
+	repo = NewPostgresAccountLockoutRepository(&fakeSQLExecutor{row: fakeRow{values: values}})
+	if _, err := repo.GetLockoutState(ctx, userID); err != nil {
+		t.Fatalf("GetLockoutState() fake success error = %v", err)
+	}
+
+	if _, err := repo.RecordFailedLogin(ctx, uuid.Nil, 5, lockedUntil, now); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordFailedLogin() nil user error = %v, want validation", err)
+	}
+	if _, err := repo.RecordFailedLogin(ctx, userID, 0, lockedUntil, now); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordFailedLogin() bad threshold error = %v, want validation", err)
+	}
+	if _, err := repo.RecordFailedLogin(ctx, userID, 5, now, lockedUntil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordFailedLogin() bad time error = %v, want validation", err)
+	}
+	repo = NewPostgresAccountLockoutRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if _, err := repo.RecordFailedLogin(ctx, userID, 5, lockedUntil, now); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("RecordFailedLogin() scan error = %v, want connection", err)
+	}
+
+	if _, err := repo.ResetFailedLogins(ctx, uuid.Nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("ResetFailedLogins() nil user error = %v, want validation", err)
+	}
+	repo = NewPostgresAccountLockoutRepository(&fakeSQLExecutor{row: fakeRow{values: []any{0, (*time.Time)(nil)}}})
+	if _, err := repo.ResetFailedLogins(ctx, userID); err != nil {
+		t.Fatalf("ResetFailedLogins() fake success error = %v", err)
+	}
+}
+
+func TestPostgresSessionRepositoryValidationAndErrors(t *testing.T) {
+	ctx := context.Background()
+	scanErr := errors.New("scan failed")
+	userID := uuid.New()
+	sessionID := uuid.New()
+	familyID := uuid.New()
+	now := time.Now()
+	values := []any{sessionID, userID, "hash", familyID, now.Add(time.Minute), now.Add(time.Hour), (*time.Time)(nil), now}
+	repo := NewPostgresSessionRepository(&fakeSQLExecutor{})
+
+	if _, err := repo.CreateSession(ctx, UserSession{}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("CreateSession() invalid identity error = %v, want validation", err)
+	}
+	if _, err := repo.CreateSession(ctx, UserSession{UserID: userID, RefreshTokenHash: "hash", RefreshFamilyID: familyID, AccessExpiresAt: now.Add(time.Hour), RefreshExpiresAt: now.Add(time.Minute)}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("CreateSession() invalid expiry error = %v, want validation", err)
+	}
+	repo = NewPostgresSessionRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
+	if _, err := repo.CreateSession(ctx, UserSession{UserID: userID, RefreshTokenHash: "hash", RefreshFamilyID: familyID, AccessExpiresAt: now.Add(time.Minute), RefreshExpiresAt: now.Add(time.Hour)}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("CreateSession() scan error = %v, want connection", err)
+	}
+	repo = NewPostgresSessionRepository(&fakeSQLExecutor{row: fakeRow{values: []any{sessionID}}})
+	if _, err := repo.CreateSession(ctx, UserSession{UserID: userID, RefreshTokenHash: "hash", RefreshFamilyID: familyID, AccessExpiresAt: now.Add(time.Minute), RefreshExpiresAt: now.Add(time.Hour)}); err != nil {
+		t.Fatalf("CreateSession() fake success error = %v", err)
+	}
+
+	if _, err := repo.GetSessionByRefreshTokenHash(ctx, ""); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("GetSessionByRefreshTokenHash() blank error = %v, want validation", err)
+	}
+	repo = NewPostgresSessionRepository(&fakeSQLExecutor{row: fakeRow{err: pgx.ErrNoRows}})
+	if _, err := repo.GetSessionByRefreshTokenHash(ctx, "hash"); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("GetSessionByRefreshTokenHash() missing error = %v, want not found", err)
+	}
+	repo = NewPostgresSessionRepository(&fakeSQLExecutor{row: fakeRow{values: values}})
+	if _, err := repo.GetSessionByRefreshTokenHash(ctx, "hash"); err != nil {
+		t.Fatalf("GetSessionByRefreshTokenHash() fake success error = %v", err)
+	}
+
+	if err := repo.RevokeSession(ctx, uuid.Nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RevokeSession() nil error = %v, want validation", err)
+	}
+	repo = NewPostgresSessionRepository(&fakeSQLExecutor{row: fakeRow{err: pgx.ErrNoRows}})
+	if err := repo.RevokeSession(ctx, sessionID); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("RevokeSession() missing error = %v, want not found", err)
+	}
+	repo = NewPostgresSessionRepository(&fakeSQLExecutor{row: fakeRow{values: []any{sessionID}}})
+	if err := repo.RevokeSession(ctx, sessionID); err != nil {
+		t.Fatalf("RevokeSession() fake success error = %v", err)
+	}
+	if err := repo.RevokeSessionFamily(ctx, uuid.Nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RevokeSessionFamily() nil error = %v, want validation", err)
+	}
+	if err := repo.RevokeSessionFamily(ctx, familyID); err != nil {
+		t.Fatalf("RevokeSessionFamily() fake success error = %v", err)
 	}
 }
 
@@ -1229,6 +1801,13 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 	if !hasConsent {
 		t.Fatalf("HasRequiredConsent() = false, want true")
 	}
+	consentRecords, err := complianceRepo.ListConsent(ctx, userID)
+	if err != nil {
+		t.Fatalf("ListConsent() error = %v", err)
+	}
+	if len(consentRecords) != 1 || consentRecords[0].ID != consentID || consentRecords[0].PrivacyPolicyVersion != "privacy-v1" {
+		t.Fatalf("consent records = %#v", consentRecords)
+	}
 
 	deletion, err := complianceRepo.RequestDeletion(ctx, userID)
 	if err != nil {
@@ -1381,6 +1960,113 @@ func TestPostgresComplianceRepositoryDeletionTransitions(t *testing.T) {
 	}
 }
 
+func TestPostgresComplianceRepositoryDeletionHardening(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresComplianceRepository(db)
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	firstUserID := createRepositoryUser(t, ctx, db, "deletion-claim-1@example.test")
+	secondUserID := createRepositoryUser(t, ctx, db, "deletion-claim-2@example.test")
+	first, err := repo.RequestDeletion(ctx, firstUserID)
+	if err != nil {
+		t.Fatalf("RequestDeletion() first error = %v", err)
+	}
+	second, err := repo.RequestDeletion(ctx, secondUserID)
+	if err != nil {
+		t.Fatalf("RequestDeletion() second error = %v", err)
+	}
+	claimed, err := repo.ClaimDeletionRequests(ctx, now, 2)
+	if err != nil {
+		t.Fatalf("ClaimDeletionRequests() error = %v", err)
+	}
+	if len(claimed) != 2 || claimed[0].Status != "processing" || claimed[1].Status != "processing" {
+		t.Fatalf("claimed = %#v", claimed)
+	}
+	nextAttempt := now.Add(time.Hour)
+	if err := repo.RecordDeletionFailure(ctx, first.ID, "transient", "database temporarily unavailable", &nextAttempt); err != nil {
+		t.Fatalf("RecordDeletionFailure() transient error = %v", err)
+	}
+	claimed, err = repo.ClaimDeletionRequests(ctx, now, 2)
+	if err != nil {
+		t.Fatalf("ClaimDeletionRequests() before retry error = %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("claimed before retry = %#v", claimed)
+	}
+	claimed, err = repo.ClaimDeletionRequests(ctx, nextAttempt.Add(time.Second), 2)
+	if err != nil {
+		t.Fatalf("ClaimDeletionRequests() retry error = %v", err)
+	}
+	if len(claimed) != 1 || claimed[0].ID != first.ID || claimed[0].RetryCount != 1 {
+		t.Fatalf("retry claim = %#v", claimed)
+	}
+	if err := repo.RecordDeletionFailure(ctx, first.ID, "permanent", "provider policy", nil); err != nil {
+		t.Fatalf("RecordDeletionFailure() permanent error = %v", err)
+	}
+	claimed, err = repo.ClaimDeletionRequests(ctx, nextAttempt.Add(2*time.Hour), 2)
+	if err != nil {
+		t.Fatalf("ClaimDeletionRequests() after permanent error = %v", err)
+	}
+	if len(claimed) != 0 {
+		t.Fatalf("permanent failure was retryable: %#v", claimed)
+	}
+	receiptID := uuid.New()
+	if err := repo.CompleteDeletionRequest(ctx, second.ID, receiptID, now); err != nil {
+		t.Fatalf("CompleteDeletionRequest() error = %v", err)
+	}
+	var storedReceipt uuid.UUID
+	var storedUserID *uuid.UUID
+	if err := db.QueryRow(ctx, "SELECT receipt_id, NULL::uuid FROM data_deletion_requests WHERE id = $1", second.ID).Scan(&storedReceipt, &storedUserID); err != nil {
+		t.Fatalf("select receipt: %v", err)
+	}
+	if storedReceipt != receiptID || storedUserID != nil {
+		t.Fatalf("receipt/user = %s/%v", storedReceipt, storedUserID)
+	}
+
+	thirdUserID := createRepositoryUser(t, ctx, db, "deletion-claim-3@example.test")
+	fourthUserID := createRepositoryUser(t, ctx, db, "deletion-claim-4@example.test")
+	if _, err := repo.RequestDeletion(ctx, thirdUserID); err != nil {
+		t.Fatalf("RequestDeletion() third error = %v", err)
+	}
+	if _, err := repo.RequestDeletion(ctx, fourthUserID); err != nil {
+		t.Fatalf("RequestDeletion() fourth error = %v", err)
+	}
+	var wg sync.WaitGroup
+	claimedIDs := make(chan uuid.UUID, 2)
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			claims, err := repo.ClaimDeletionRequests(ctx, now, 1)
+			if err != nil {
+				errs <- err
+				return
+			}
+			if len(claims) != 1 {
+				errs <- errors.New("worker did not claim exactly one request")
+				return
+			}
+			claimedIDs <- claims[0].ID
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	close(claimedIDs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent claim error = %v", err)
+		}
+	}
+	seen := map[uuid.UUID]bool{}
+	for id := range claimedIDs {
+		seen[id] = true
+	}
+	if len(seen) != 2 {
+		t.Fatalf("concurrent claims were not distinct: %v", seen)
+	}
+}
+
 func TestPostgresComplianceAndAdminRepositoryValidationAndErrors(t *testing.T) {
 	ctx := context.Background()
 	queryErr := errors.New("query failed")
@@ -1390,7 +2076,7 @@ func TestPostgresComplianceAndAdminRepositoryValidationAndErrors(t *testing.T) {
 	entityID := uuid.New()
 	requestID := uuid.New()
 	now := time.Now()
-	deletionValues := []any{requestID, userID, "pending", now, (*time.Time)(nil), ""}
+	deletionValues := []any{requestID, userID, "pending", now, (*time.Time)(nil), "", "", 0, (*time.Time)(nil), (*uuid.UUID)(nil), (*time.Time)(nil)}
 	deletionAuditValues := []any{uuid.New(), requestID, "pending", "processing", "note", now}
 	importValues := []any{uuid.New(), "usda", "fdc-1", &entityID, "conflict", "duplicate", []byte(`{"x":1}`), now, now}
 	auditValues := []any{uuid.New(), adminID, "update", "food_item", &entityID, []byte(`{"before":true}`), []byte(`{"after":true}`), "req-1", now}

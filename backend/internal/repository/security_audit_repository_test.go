@@ -18,6 +18,11 @@ func TestSecurityAuditRepository(t *testing.T) {
 	if err := NewPostgresSecurityAuditRepository(&fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}}).Audit(context.Background(), entry); err != nil {
 		t.Fatal(err)
 	}
+	attempt := entry
+	attempt.Outcome = "attempt"
+	if err := NewPostgresSecurityAuditRepository(&fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}}).Audit(context.Background(), attempt); err != nil {
+		t.Fatalf("Audit(attempt) error = %v", err)
+	}
 	for _, invalid := range []security.AuditLogEntry{
 		{},
 		{RequestID: "r", Action: "a", Resource: "x", Outcome: "bad"},
