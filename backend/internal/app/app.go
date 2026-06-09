@@ -89,6 +89,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 // Implements DESIGN-006 OAuthHandler production provider boundary.
 type unavailableOAuthGateway struct{}
 
+// Implements DESIGN-006 OAuthHandler compile-time provider gateway contract.
 var _ httpapi.OAuthProviderGateway = unavailableOAuthGateway{}
 
 // StartOAuth fails closed until Google or Apple provider credentials are configured.
@@ -126,8 +127,13 @@ type localKeyLoader struct {
 	key     []byte
 }
 
+// Implements DESIGN-006 JWTManager compile-time signing key contract.
 var _ auth.SigningKeyLoader = localKeyLoader{}
+
+// Implements DESIGN-013 EncryptionService compile-time encryption key contract.
 var _ security.KeyLoader = localKeyLoader{}
+
+// Implements DESIGN-013 EncryptionService compile-time lookup key contract.
 var _ security.LookupKeyLoader = localKeyLoader{}
 
 // newLocalKeyLoader creates local key material for Phase 03 account flows.
@@ -191,6 +197,7 @@ type redisCachePurger struct {
 	client *redis.Client
 }
 
+// Implements DESIGN-008 AccountDeleter compile-time cache purge contract.
 var _ userdata.CachePurger = redisCachePurger{}
 
 // PurgeUser deletes the current user cache prefix best-effort.

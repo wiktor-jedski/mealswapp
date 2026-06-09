@@ -22,10 +22,11 @@ type DisclaimerContent struct {
 	Alert    string
 }
 
-const (
-	fallbackAccountDisclaimer = "Mealswapp account tools do not replace professional medical or nutritional advice. Review important account actions before continuing."
-	fallbackLoginDisclaimer   = "Mealswapp provides nutrition planning support only and does not replace professional medical or nutritional advice."
-)
+// Implements DESIGN-015 DisclaimerRenderer fallback Markdown content.
+const fallbackAccountDisclaimer = "Mealswapp account tools do not replace professional medical or nutritional advice. Review important account actions before continuing."
+
+// Implements DESIGN-015 DisclaimerRenderer fallback Markdown content.
+const fallbackLoginDisclaimer = "Mealswapp provides nutrition planning support only and does not replace professional medical or nutritional advice."
 
 // DisclaimerService returns configured or bundled fallback disclaimer content.
 // Implements DESIGN-015 DisclaimerRenderer.

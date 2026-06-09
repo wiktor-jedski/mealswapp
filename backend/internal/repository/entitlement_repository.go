@@ -49,9 +49,16 @@ type PostgresEntitlementRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-007 EntitlementManager compile-time repository contract.
 var _ EntitlementRepository = (*PostgresEntitlementRepository)(nil)
+
+// Implements DESIGN-007 StripeWebhookHandler compile-time repository contract.
 var _ StripeEventRepository = (*PostgresEntitlementRepository)(nil)
+
+// Implements DESIGN-007 TrialTracker compile-time repository contract.
 var _ TrialRepository = (*PostgresEntitlementRepository)(nil)
+
+// Implements DESIGN-007 UsageLimiter compile-time repository contract.
 var _ UsageRepository = (*PostgresEntitlementRepository)(nil)
 
 // NewPostgresEntitlementRepository creates a PostgreSQL-backed entitlement repository.

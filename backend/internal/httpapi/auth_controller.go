@@ -33,6 +33,7 @@ type AuthController struct {
 	logs     observability.LogSink
 }
 
+// Implements DESIGN-006 AuthController compile-time route controller contract.
 var _ Controller = (*AuthController)(nil)
 
 // NewAuthController creates account-flow HTTP handlers.

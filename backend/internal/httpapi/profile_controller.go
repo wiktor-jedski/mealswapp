@@ -23,6 +23,7 @@ type ProfileController struct {
 	service ProfileService
 }
 
+// Implements DESIGN-008 ProfileController compile-time route controller contract.
 var _ Controller = (*ProfileController)(nil)
 
 // NewProfileController creates authenticated profile handlers.

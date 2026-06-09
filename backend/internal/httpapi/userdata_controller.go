@@ -25,6 +25,7 @@ type UserDataController struct {
 	service UserDataService
 }
 
+// Implements DESIGN-008 SavedDataRepository compile-time route controller contract.
 var _ Controller = (*UserDataController)(nil)
 
 // NewUserDataController creates authenticated user-data handlers.

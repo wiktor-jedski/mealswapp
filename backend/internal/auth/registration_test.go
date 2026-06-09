@@ -41,10 +41,10 @@ func TestRegistrationServiceConsentGate(t *testing.T) {
 		Email:                 repository.EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("nonce"), Ciphertext: []byte("ciphertext")},
 		NormalizedEmailDigest: repository.LookupDigest{KeyVersion: "lookup-v1", Value: "digest"},
 	}
-	if _, err := service.Register(ctx, user, RegistrationConsent{}); err == nil || repo.called {
+	if _, err := service.Register(ctx, user, RegistrationConsent{}); err == nil || err.Error() != "consent_missing" || repo.called {
 		t.Fatalf("missing consent err=%v called=%v", err, repo.called)
 	}
-	if _, err := service.Register(ctx, user, RegistrationConsent{PrivacyPolicyVersion: "old", TermsVersion: "terms-v1"}); err == nil || repo.called {
+	if _, err := service.Register(ctx, user, RegistrationConsent{PrivacyPolicyVersion: "old", TermsVersion: "terms-v1"}); err == nil || err.Error() != "consent_version_stale" || repo.called {
 		t.Fatalf("stale consent err=%v called=%v", err, repo.called)
 	}
 	if _, err := service.Register(ctx, user, RegistrationConsent{PrivacyPolicyVersion: "bad version", TermsVersion: "terms-v1"}); err == nil || err.Error() != "consent_version_invalid" || repo.called {

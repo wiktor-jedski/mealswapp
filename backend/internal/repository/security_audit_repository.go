@@ -20,6 +20,7 @@ type PostgresSecurityAuditRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-013 AuditLogger compile-time repository contract.
 var _ security.AuditLogger = (*PostgresSecurityAuditRepository)(nil)
 
 // NewPostgresSecurityAuditRepository creates a PostgreSQL-backed security audit logger.

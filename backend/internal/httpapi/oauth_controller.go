@@ -30,6 +30,7 @@ type OAuthController struct {
 	sessions *AuthSessionManager
 }
 
+// Implements DESIGN-006 OAuthHandler compile-time route controller contract.
 var _ Controller = (*OAuthController)(nil)
 
 // NewOAuthController creates goth-backed OAuth HTTP handlers.

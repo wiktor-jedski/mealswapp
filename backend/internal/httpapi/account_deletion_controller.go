@@ -21,6 +21,7 @@ type AccountDeletionController struct {
 	sessions *AuthSessionManager
 }
 
+// Implements DESIGN-008 AccountDeleter compile-time route controller contract.
 var _ Controller = (*AccountDeletionController)(nil)
 
 // NewAccountDeletionController creates account deletion handlers.

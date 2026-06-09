@@ -22,6 +22,7 @@ type ExportController struct {
 	service ExportService
 }
 
+// Implements DESIGN-008 DataExporter compile-time route controller contract.
 var _ Controller = (*ExportController)(nil)
 
 // NewExportController creates account export handlers.

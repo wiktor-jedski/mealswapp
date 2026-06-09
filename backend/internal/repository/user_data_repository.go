@@ -60,6 +60,7 @@ type PostgresUserProfileRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-008 PreferenceManager compile-time repository contract.
 var _ UserProfileRepository = (*PostgresUserProfileRepository)(nil)
 
 // NewPostgresUserProfileRepository creates a PostgreSQL-backed profile repository.
@@ -114,7 +115,10 @@ type PostgresSavedDataRepository struct {
 	db transactionalExecutor
 }
 
+// Implements DESIGN-008 SavedDataRepository compile-time repository contract.
 var _ SavedItemRepository = (*PostgresSavedDataRepository)(nil)
+
+// Implements DESIGN-008 SearchHistoryRepository compile-time repository contract.
 var _ SearchHistoryRepository = (*PostgresSavedDataRepository)(nil)
 
 // NewPostgresSavedDataRepository creates a PostgreSQL-backed saved data repository.

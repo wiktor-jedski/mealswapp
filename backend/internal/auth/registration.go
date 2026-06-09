@@ -36,19 +36,19 @@ func (s *RegistrationService) Register(ctx context.Context, user repository.Encr
 	privacyVersion, err := security.NormalizeInput(security.InputFieldConsentVersion, consent.PrivacyPolicyVersion)
 	if err != nil {
 		if consent.PrivacyPolicyVersion == "" {
-			return uuid.Nil, errors.New("consent missing")
+			return uuid.Nil, errors.New("consent_missing")
 		}
-		return uuid.Nil, errors.New("consent version invalid")
+		return uuid.Nil, errors.New("consent_version_invalid")
 	}
 	termsVersion, err := security.NormalizeInput(security.InputFieldConsentVersion, consent.TermsVersion)
 	if err != nil {
 		if consent.TermsVersion == "" {
-			return uuid.Nil, errors.New("consent missing")
+			return uuid.Nil, errors.New("consent_missing")
 		}
-		return uuid.Nil, errors.New("consent version invalid")
+		return uuid.Nil, errors.New("consent_version_invalid")
 	}
 	if privacyVersion.Value != s.currentPrivacyVersion || termsVersion.Value != s.currentTermsVersion {
-		return uuid.Nil, errors.New("consent version stale")
+		return uuid.Nil, errors.New("consent_version_stale")
 	}
 	return s.repo.CreateUserWithConsent(ctx, user, privacyVersion.Value, termsVersion.Value)
 }

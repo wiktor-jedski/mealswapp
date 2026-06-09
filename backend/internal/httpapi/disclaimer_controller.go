@@ -19,6 +19,7 @@ type DisclaimerController struct {
 	service DisclaimerService
 }
 
+// Implements DESIGN-015 DisclaimerRenderer compile-time route controller contract.
 var _ Controller = (*DisclaimerController)(nil)
 
 // NewDisclaimerController creates disclaimer handlers.

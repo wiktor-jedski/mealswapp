@@ -70,8 +70,13 @@ type PostgresEncryptedIdentityRepository struct {
 	db sqlExecutor
 }
 
+// Implements DESIGN-008 AccountDeleter compile-time repository contract.
 var _ AccountDeletionRepository = (*PostgresEncryptedIdentityRepository)(nil)
+
+// Implements DESIGN-008 SearchHistoryRepository compile-time encrypted repository contract.
 var _ EncryptedSearchHistoryRepository = (*PostgresEncryptedIdentityRepository)(nil)
+
+// Implements DESIGN-008 PreferenceManager compile-time encrypted repository contract.
 var _ EncryptedUserProfileRepository = (*PostgresEncryptedIdentityRepository)(nil)
 
 // NewPostgresEncryptedIdentityRepository creates an encrypted PII repository.

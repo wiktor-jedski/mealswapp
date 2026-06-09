@@ -92,7 +92,10 @@ type PostgresComplianceRepository struct {
 	db transactionalExecutor
 }
 
+// Implements DESIGN-015 ConsentManager compile-time repository contract.
 var _ ConsentRepository = (*PostgresComplianceRepository)(nil)
+
+// Implements DESIGN-015 DataRetentionPolicy compile-time repository contract.
 var _ DeletionRequestRepository = (*PostgresComplianceRepository)(nil)
 
 // NewPostgresComplianceRepository creates a PostgreSQL-backed compliance repository.
@@ -294,7 +297,10 @@ type PostgresAdminImportAuditRepository struct {
 	db transactionalExecutor
 }
 
+// Implements DESIGN-009 AdminController compile-time repository contract.
 var _ AdminAuditRepository = (*PostgresAdminImportAuditRepository)(nil)
+
+// Implements DESIGN-009 DataImporter compile-time repository contract.
 var _ CuratedImportRepository = (*PostgresAdminImportAuditRepository)(nil)
 
 // NewPostgresAdminImportAuditRepository creates a PostgreSQL-backed admin repository.
