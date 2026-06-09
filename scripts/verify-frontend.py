@@ -149,7 +149,7 @@ def main() -> int:
 	args = parser.parse_args()
 
 	artifact_dir = Path(args.artifact_dir)
-	screenshot_stem = Path(args.screenshot_stem).stem
+	screenshot_stem = Path(args.screenshot_stem).name
 	port = free_port()
 	url = f"http://127.0.0.1:{port}"
 	process = start_vite(port)

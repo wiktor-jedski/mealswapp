@@ -13,6 +13,7 @@ import (
 type pool interface {
 	Ping(context.Context) error
 	Close()
+	Begin(context.Context) (pgx.Tx, error)
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
@@ -62,4 +63,10 @@ func (p *Pool) Query(ctx context.Context, sql string, arguments ...any) (pgx.Row
 // Implements DESIGN-005 RepositoryInterfaces PostgreSQL execution boundary.
 func (p *Pool) QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row {
 	return p.pool.QueryRow(ctx, sql, arguments...)
+}
+
+// Begin starts a PostgreSQL transaction for repositories that require atomic writes.
+// Implements DESIGN-005 RepositoryInterfaces PostgreSQL transaction boundary.
+func (p *Pool) Begin(ctx context.Context) (pgx.Tx, error) {
+	return p.pool.Begin(ctx)
 }

@@ -1,15 +1,14 @@
-# Implements DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
+# Implements DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
 openapi: 3.1.0
 info:
   title: Mealswapp API
   version: 0.3.0
-  description: Shared gateway source of truth. Domain contracts extend this document in later phases.
+  description: Shared gateway source of truth for Phase 03 authentication and gateway contracts.
   license:
     name: Proprietary
     identifier: LicenseRef-Proprietary
 servers:
   - url: /
-# Public gateway operations opt out explicitly; protected domain operations override this.
 security: []
 paths:
   /health:
@@ -55,10 +54,10 @@ paths:
   /api/v1/auth/csrf-token:
     get:
       operationId: getApiV1AuthCsrfToken
-      summary: Obtain a session-bound CSRF synchronizer token for SPA mutation requests
+      summary: Obtain a session-bound CSRF synchronizer token
       responses:
         "200":
-          description: CSRF token delivery envelope. The HttpOnly CSRF cookie is set separately.
+          description: CSRF token delivery envelope. HttpOnly CSRF cookies are set separately.
           content:
             application/json:
               schema:
@@ -67,7 +66,362 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /api/v1/auth/register:
+    post:
+      operationId: postApiV1AuthRegister
+      summary: Register with email, password, and current consent versions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/AuthSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/login:
+    post:
+      operationId: postApiV1AuthLogin
+      summary: Authenticate with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "423":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/logout:
+    post:
+      operationId: postApiV1AuthLogout
+      summary: Revoke the current refresh session and clear auth cookies
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        "204":
+          description: Session cleared.
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/refresh:
+    post:
+      operationId: postApiV1AuthRefresh
+      summary: Rotate the refresh token and issue a fresh access token
+      security:
+        - refreshCookie: []
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthSession"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/verify-email:
+    post:
+      operationId: postApiV1AuthVerifyEmail
+      summary: Mark the authenticated email login method verified
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        "200":
+          description: Verified-login projection update.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyEmailEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/password-reset/request:
+    post:
+      operationId: postApiV1AuthPasswordResetRequest
+      summary: Request a password reset without revealing account existence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "200":
+          description: Generic password-reset request acceptance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetRequestEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/password-reset/consume:
+    post:
+      operationId: postApiV1AuthPasswordResetConsume
+      summary: Consume a single-use reset token and set a new password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConsumeRequest"
+      responses:
+        "200":
+          description: Password reset completion.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetConsumeEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/oauth/{provider}/start:
+    get:
+      operationId: getApiV1AuthOAuthStart
+      summary: Start Google or Apple OAuth login
+      parameters:
+        - $ref: "#/components/parameters/OAuthProvider"
+      responses:
+        "302":
+          description: Redirect to provider authorization URL.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "400":
+          $ref: "#/components/responses/Error"
+  /api/v1/auth/oauth/{provider}/callback:
+    get:
+      operationId: getApiV1AuthOAuthCallback
+      summary: Complete Google or Apple OAuth login
+      parameters:
+        - $ref: "#/components/parameters/OAuthProvider"
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/AuthSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/profile:
+    get:
+      operationId: getApiV1Profile
+      summary: Read authenticated profile and preferences
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Profile"
+        "401":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: putApiV1Profile
+      summary: Update authenticated profile preferences
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Profile"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /api/v1/saved-items:
+    get:
+      operationId: getApiV1SavedItems
+      summary: List authenticated saved items
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [favorite, saved_meal, saved_diet]
+      responses:
+        "200":
+          $ref: "#/components/responses/SavedItems"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/saved-items/{kind}/{itemId}:
+    delete:
+      operationId: deleteApiV1SavedItem
+      summary: Delete one saved item
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [favorite, saved_meal, saved_diet]
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Saved item deleted.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+  /api/v1/search-history:
+    get:
+      operationId: getApiV1SearchHistory
+      summary: List latest authenticated search history
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/SearchHistory"
+        "401":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteApiV1SearchHistory
+      summary: Clear authenticated search history
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        "204":
+          description: Search history cleared.
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+  /api/v1/account/export:
+    get:
+      operationId: getApiV1AccountExport
+      summary: Export authenticated account data
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        "200":
+          description: Account export payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportBundle"
+            text/csv:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+  /api/v1/account:
+    delete:
+      operationId: deleteApiV1Account
+      summary: Request authenticated account deletion
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        "200":
+          $ref: "#/components/responses/DeletionRequest"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+  /api/v1/disclaimers:
+    get:
+      operationId: getApiV1Disclaimers
+      summary: Retrieve login or account disclaimer content
+      parameters:
+        - name: location
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [login, account]
+            default: login
+      responses:
+        "200":
+          $ref: "#/components/responses/Disclaimer"
+        "400":
+          $ref: "#/components/responses/Error"
 components:
+  parameters:
+    OAuthProvider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [google, apple]
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: mealswapp_access
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: mealswapp_refresh
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
   responses:
     Success:
       description: Successful gateway envelope.
@@ -75,8 +429,18 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Envelope"
+    AuthSession:
+      description: Authenticated session envelope. Access and refresh token values are set only as HttpOnly cookies.
+      headers:
+        Set-Cookie:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AuthSessionEnvelope"
     Error:
-      description: User-safe gateway error. Includes 403, 429 with Retry-After, 503, and 504 responses.
+      description: User-safe gateway error. Includes 400, 401, 403, 409, 429, 503, and 504 responses.
       headers:
         Retry-After:
           schema:
@@ -85,6 +449,36 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Envelope"
+    Profile:
+      description: Profile envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ProfileEnvelope"
+    SavedItems:
+      description: Saved items envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SavedItemsEnvelope"
+    SearchHistory:
+      description: Search history envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SearchHistoryEnvelope"
+    DeletionRequest:
+      description: Deletion request envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DeletionRequestEnvelope"
+    Disclaimer:
+      description: Disclaimer content envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DisclaimerEnvelope"
   schemas:
     AppError:
       type: object
@@ -107,6 +501,7 @@ components:
       properties:
         status:
           type: string
+          enum: [ok, error, ready, not_ready]
         requestId:
           type: string
         data:
@@ -116,12 +511,86 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AppError"
             - type: "null"
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, privacyPolicyVersion, termsVersion]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 12
+        privacyPolicyVersion:
+          type: string
+        termsVersion:
+          type: string
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    PasswordResetConsumeRequest:
+      type: object
+      additionalProperties: false
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          minLength: 32
+        newPassword:
+          type: string
+          minLength: 12
+    AuthSessionData:
+      type: object
+      required: [userId, role, hasVerifiedLoginMethod, accessExpiresAt, refreshExpiresAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, admin]
+        hasVerifiedLoginMethod:
+          type: boolean
+        accessExpiresAt:
+          type: string
+          format: date-time
+        refreshExpiresAt:
+          type: string
+          format: date-time
+    AuthSessionEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/AuthSessionData"
     CSRFTokenEnvelope:
       type: object
       required: [status, requestId, data]
       properties:
         status:
           type: string
+          enum: [ok]
         requestId:
           type: string
         data:
@@ -129,4 +598,223 @@ components:
           required: [csrfToken]
           properties:
             csrfToken:
+              type: string
+    VerifyEmailEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [hasVerifiedLoginMethod]
+          properties:
+            hasVerifiedLoginMethod:
+              type: boolean
+              const: true
+    PasswordResetRequestEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [accepted]
+          additionalProperties: false
+          properties:
+            accepted:
+              type: boolean
+              const: true
+    PasswordResetConsumeEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [reset]
+          properties:
+            reset:
+              type: boolean
+              const: true
+    ProfileUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [unitSystem, themePreference]
+      properties:
+        displayName:
+          type: string
+        unitSystem:
+          type: string
+          enum: [metric, imperial]
+        themePreference:
+          type: string
+          enum: [system, light, dark]
+    ProfileEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [userId, displayName, unitSystem, themePreference, requiresUnitRecalculation]
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+            unitSystem:
+              type: string
+              enum: [metric, imperial]
+            themePreference:
+              type: string
+              enum: [system, light, dark]
+            requiresUnitRecalculation:
+              type: boolean
+    SavedItem:
+      type: object
+      required: [id, itemId, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        itemId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [favorite, saved_meal, saved_diet]
+    SavedItemsEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/SavedItem"
+    SearchHistoryEntry:
+      type: object
+      required: [id, query, mode, filtersHash]
+      properties:
+        id:
+          type: string
+          format: uuid
+        query:
+          type: string
+        mode:
+          type: string
+        filtersHash:
+          type: string
+    SearchHistoryEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [history]
+          properties:
+            history:
+              type: array
+              items:
+                $ref: "#/components/schemas/SearchHistoryEntry"
+    ExportBundle:
+      type: object
+      required: [user, consent, savedItems, history, customItems, format]
+      properties:
+        user:
+          type: object
+          additionalProperties: true
+        consent:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        savedItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/SavedItem"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHistoryEntry"
+        customItems:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        format:
+          type: string
+          enum: [json, csv]
+    DeletionRequestEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [requestId, status]
+          properties:
+            requestId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [pending, processing, completed, failed]
+    DisclaimerEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [location, version, markdown, fallback]
+          properties:
+            location:
+              type: string
+              enum: [login, account]
+            version:
+              type: string
+            markdown:
+              type: string
+            fallback:
+              type: boolean
+            alert:
               type: string

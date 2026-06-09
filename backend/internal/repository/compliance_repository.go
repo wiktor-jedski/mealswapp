@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -19,6 +20,11 @@ var consentRecordSQL string
 //
 //go:embed sql/consent_has_required.sql
 var consentHasRequiredSQL string
+
+// Implements DESIGN-015 ConsentManager account-export list query.
+//
+//go:embed sql/consent_list_by_user.sql
+var consentListByUserSQL string
 
 // Implements DESIGN-015 DataRetentionPolicy request query.
 //
@@ -44,6 +50,21 @@ var deletionAuditInsertSQL string
 //
 //go:embed sql/deletion_audit_list.sql
 var deletionAuditListSQL string
+
+// Implements DESIGN-015 DataRetentionPolicy worker claim query.
+//
+//go:embed sql/deletion_claim.sql
+var deletionClaimSQL string
+
+// Implements DESIGN-015 DataRetentionPolicy categorized failure query.
+//
+//go:embed sql/deletion_fail.sql
+var deletionFailSQL string
+
+// Implements DESIGN-015 DataRetentionPolicy pseudonymous receipt query.
+//
+//go:embed sql/deletion_complete.sql
+var deletionCompleteSQL string
 
 // Implements DESIGN-009 AdminController curated-import upsert query.
 //
@@ -106,6 +127,31 @@ func (r *PostgresComplianceRepository) HasRequiredConsent(ctx context.Context, u
 		return false, mapPostgresError(err, "check consent")
 	}
 	return exists, nil
+}
+
+// ListConsent returns accepted consent records for account export.
+// Implements DESIGN-015 ConsentManager.
+func (r *PostgresComplianceRepository) ListConsent(ctx context.Context, userID uuid.UUID) ([]ConsentRecord, error) {
+	if userID == uuid.Nil {
+		return nil, validationError("user id is required")
+	}
+	rows, err := r.db.Query(ctx, consentListByUserSQL, userID)
+	if err != nil {
+		return nil, mapPostgresError(err, "list consent")
+	}
+	defer rows.Close()
+	records := []ConsentRecord{}
+	for rows.Next() {
+		var record ConsentRecord
+		if err := rows.Scan(&record.ID, &record.UserID, &record.PrivacyPolicyVersion, &record.TermsVersion, &record.AcceptedAt); err != nil {
+			return nil, mapPostgresError(err, "scan consent")
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapPostgresError(err, "iterate consent")
+	}
+	return records, nil
 }
 
 // RequestDeletion creates or returns the active deletion request for a user.
@@ -173,6 +219,70 @@ func (r *PostgresComplianceRepository) ListDeletionAudit(ctx context.Context, re
 		return nil, mapPostgresError(err, "iterate deletion audit")
 	}
 	return entries, nil
+}
+
+// ClaimDeletionRequests atomically claims pending or retryable deletion work.
+// Implements DESIGN-015 DataRetentionPolicy.
+func (r *PostgresComplianceRepository) ClaimDeletionRequests(ctx context.Context, now time.Time, limit int) ([]DataDeletionRequest, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+	rows, err := r.db.Query(ctx, deletionClaimSQL, now, limit)
+	if err != nil {
+		return nil, mapPostgresError(err, "claim deletion requests")
+	}
+	defer rows.Close()
+	requests := []DataDeletionRequest{}
+	for rows.Next() {
+		request, err := scanDeletionRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, request)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, mapPostgresError(err, "iterate deletion claims")
+	}
+	return requests, nil
+}
+
+// RecordDeletionFailure stores sanitized failure category and retry metadata.
+// Implements DESIGN-015 DataRetentionPolicy.
+func (r *PostgresComplianceRepository) RecordDeletionFailure(ctx context.Context, requestID uuid.UUID, category string, note string, nextAttemptAt *time.Time) error {
+	if requestID == uuid.Nil {
+		return validationError("request id is required")
+	}
+	if category != "transient" && category != "permanent" && category != "unknown" {
+		return validationError("failure category is invalid")
+	}
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx, deletionFailSQL, requestID, category, note, nextAttemptAt).Scan(&id)
+	if err != nil {
+		return mapPostgresError(err, "record deletion failure")
+	}
+	_, err = r.db.Exec(ctx, deletionAuditInsertSQL, requestID, "processing", "failed", category)
+	if err != nil {
+		return mapPostgresError(err, "audit deletion failure")
+	}
+	return nil
+}
+
+// CompleteDeletionRequest stores a pseudonymous deletion receipt.
+// Implements DESIGN-015 DataRetentionPolicy.
+func (r *PostgresComplianceRepository) CompleteDeletionRequest(ctx context.Context, requestID uuid.UUID, receiptID uuid.UUID, completedAt time.Time) error {
+	if requestID == uuid.Nil || receiptID == uuid.Nil {
+		return validationError("request and receipt ids are required")
+	}
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx, deletionCompleteSQL, requestID, receiptID, completedAt).Scan(&id)
+	if err != nil {
+		return mapPostgresError(err, "complete deletion request")
+	}
+	_, err = r.db.Exec(ctx, deletionAuditInsertSQL, requestID, "processing", "completed", "completed")
+	if err != nil {
+		return mapPostgresError(err, "audit deletion completion")
+	}
+	return nil
 }
 
 // PostgresAdminImportAuditRepository persists curated imports and admin audit records.
@@ -269,7 +379,7 @@ func (r *PostgresAdminImportAuditRepository) ListAuditForEntity(ctx context.Cont
 // Implements DESIGN-015 DataRetentionPolicy.
 func scanDeletionRequest(row pgx.Row) (DataDeletionRequest, error) {
 	var request DataDeletionRequest
-	if err := row.Scan(&request.ID, &request.UserID, &request.Status, &request.RequestedAt, &request.CompletedAt, &request.FailureReason); err != nil {
+	if err := row.Scan(&request.ID, &request.UserID, &request.Status, &request.RequestedAt, &request.CompletedAt, &request.FailureReason, &request.FailureCategory, &request.RetryCount, &request.NextAttemptAt, &request.ReceiptID, &request.ReceiptIssuedAt); err != nil {
 		return DataDeletionRequest{}, mapPostgresError(err, "scan deletion request")
 	}
 	return request, nil

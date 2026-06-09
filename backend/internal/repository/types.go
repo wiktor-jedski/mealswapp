@@ -170,6 +170,35 @@ type AuthUser struct {
 	UpdatedAt     time.Time
 }
 
+// EncryptedField stores one encrypted PII envelope at the repository boundary.
+// Implements DESIGN-013 EncryptionService.
+type EncryptedField struct {
+	KeyVersion string
+	Nonce      []byte
+	Ciphertext []byte
+}
+
+// LookupDigest stores deterministic keyed lookup material for encrypted PII.
+// Implements DESIGN-013 EncryptionService.
+type LookupDigest struct {
+	KeyVersion string
+	Value      string
+}
+
+// EncryptedAuthUser stores encrypted account identity data.
+// Implements DESIGN-006 AuthUser and DESIGN-013 EncryptionService.
+type EncryptedAuthUser struct {
+	ID                    uuid.UUID
+	Email                 EncryptedField
+	NormalizedEmailDigest LookupDigest
+	EmailVerified         bool
+	Role                  UserRole
+	PasswordHash          *string
+	PasswordSalt          *string
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
 // OAuthIdentity stores a provider-specific login identity linked to a user.
 // Implements DESIGN-006 OAuthHandler.
 type OAuthIdentity struct {
@@ -179,6 +208,18 @@ type OAuthIdentity struct {
 	ProviderUserID string
 	Email          string
 	CreatedAt      time.Time
+}
+
+// EncryptedOAuthIdentity stores encrypted provider identity data.
+// Implements DESIGN-006 OAuthHandler and DESIGN-013 EncryptionService.
+type EncryptedOAuthIdentity struct {
+	ID                   uuid.UUID
+	UserID               uuid.UUID
+	Provider             string
+	ProviderUserID       EncryptedField
+	ProviderUserIDDigest LookupDigest
+	Email                EncryptedField
+	CreatedAt            time.Time
 }
 
 // UserSession stores refresh-token rotation metadata for an authenticated user.
@@ -204,11 +245,30 @@ type PasswordResetToken struct {
 	CreatedAt time.Time
 }
 
+// AccountLockoutState stores persisted failed-login lockout metadata.
+// Implements DESIGN-006 AccountLockoutTracker.
+type AccountLockoutState struct {
+	UserID           uuid.UUID
+	FailedLoginCount int
+	LockedUntil      *time.Time
+}
+
 // UserProfile stores user-scoped preferences and profile data.
 // Implements DESIGN-008 PreferenceManager.
 type UserProfile struct {
 	UserID          uuid.UUID
 	DisplayName     string
+	UnitSystem      UnitSystem
+	ThemePreference string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// EncryptedUserProfile stores encrypted profile PII with non-PII preferences.
+// Implements DESIGN-008 PreferenceManager and DESIGN-013 EncryptionService.
+type EncryptedUserProfile struct {
+	UserID          uuid.UUID
+	DisplayName     *EncryptedField
 	UnitSystem      UnitSystem
 	ThemePreference string
 	CreatedAt       time.Time
@@ -242,6 +302,17 @@ type SearchHistoryEntry struct {
 	ID          uuid.UUID
 	UserID      uuid.UUID
 	Query       string
+	Mode        string
+	FiltersHash string
+	CreatedAt   time.Time
+}
+
+// EncryptedSearchHistoryEntry stores encrypted search-history query text.
+// Implements DESIGN-008 SearchHistoryRepository and DESIGN-013 EncryptionService.
+type EncryptedSearchHistoryEntry struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Query       EncryptedField
 	Mode        string
 	FiltersHash string
 	CreatedAt   time.Time
@@ -317,12 +388,17 @@ type ConsentRecord struct {
 // DataDeletionRequest stores auditable account-erasure workflow state.
 // Implements DESIGN-015 DataRetentionPolicy.
 type DataDeletionRequest struct {
-	ID            uuid.UUID
-	UserID        uuid.UUID
-	Status        string
-	RequestedAt   time.Time
-	CompletedAt   *time.Time
-	FailureReason string
+	ID              uuid.UUID
+	UserID          uuid.UUID
+	Status          string
+	RequestedAt     time.Time
+	CompletedAt     *time.Time
+	FailureReason   string
+	FailureCategory string
+	RetryCount      int
+	NextAttemptAt   *time.Time
+	ReceiptID       *uuid.UUID
+	ReceiptIssuedAt *time.Time
 }
 
 // DataDeletionAuditEntry stores deletion status transitions.
@@ -395,6 +471,13 @@ type UserProfileRepository interface {
 	UpdateProfile(ctx context.Context, profile UserProfile) (PreferenceUpdateResult, error)
 }
 
+// EncryptedUserProfileRepository defines encrypted profile PII persistence behavior.
+// Implements DESIGN-008 PreferenceManager and DESIGN-013 EncryptionService.
+type EncryptedUserProfileRepository interface {
+	GetOrCreateEncryptedProfile(ctx context.Context, userID uuid.UUID) (EncryptedUserProfile, error)
+	UpdateEncryptedProfile(ctx context.Context, profile EncryptedUserProfile) (EncryptedUserProfile, error)
+}
+
 // SavedItemRepository defines saved-item persistence behavior.
 // Implements DESIGN-008 SavedDataRepository.
 type SavedItemRepository interface {
@@ -408,6 +491,14 @@ type SavedItemRepository interface {
 type SearchHistoryRepository interface {
 	AddHistory(ctx context.Context, entry SearchHistoryEntry) (uuid.UUID, error)
 	ListHistory(ctx context.Context, userID uuid.UUID, limit int) ([]SearchHistoryEntry, error)
+	ClearHistory(ctx context.Context, userID uuid.UUID) error
+}
+
+// EncryptedSearchHistoryRepository defines encrypted history query persistence behavior.
+// Implements DESIGN-008 SearchHistoryRepository and DESIGN-013 EncryptionService.
+type EncryptedSearchHistoryRepository interface {
+	AddEncryptedHistory(ctx context.Context, entry EncryptedSearchHistoryEntry) (uuid.UUID, error)
+	ListEncryptedHistory(ctx context.Context, userID uuid.UUID, limit int) ([]EncryptedSearchHistoryEntry, error)
 }
 
 // AuthUserRepository defines Phase 03-facing user identity persistence behavior.
@@ -417,6 +508,12 @@ type AuthUserRepository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (AuthUser, error)
 	GetUserByNormalizedEmail(ctx context.Context, normalizedEmail string) (AuthUser, error)
 	UpdateUserState(ctx context.Context, user AuthUser) error
+}
+
+// AccountDeletionRepository defines production account row deletion behavior.
+// Implements DESIGN-008 AccountDeleter.
+type AccountDeletionRepository interface {
+	DeleteUserAccount(ctx context.Context, userID uuid.UUID) error
 }
 
 // OAuthIdentityRepository defines Phase 03-facing OAuth identity persistence behavior.
@@ -433,6 +530,7 @@ type SessionRepository interface {
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (UserSession, error)
 	RevokeSession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeSessionFamily(ctx context.Context, refreshFamilyID uuid.UUID) error
+	RevokeUserSessions(ctx context.Context, userID uuid.UUID) error
 }
 
 // PasswordResetTokenRepository defines Phase 03-facing reset-token persistence behavior.
@@ -440,6 +538,27 @@ type SessionRepository interface {
 type PasswordResetTokenRepository interface {
 	CreatePasswordResetToken(ctx context.Context, token PasswordResetToken) error
 	ConsumePasswordResetToken(ctx context.Context, tokenHash string, usedAt time.Time) (PasswordResetToken, error)
+}
+
+// AccountVerificationRepository defines verification and password mutation behavior.
+// Implements DESIGN-006 AuthController.
+type AccountVerificationRepository interface {
+	MarkEmailVerified(ctx context.Context, userID uuid.UUID) error
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash string, passwordSalt string) error
+}
+
+// AccountLockoutRepository defines failed-login persistence behavior.
+// Implements DESIGN-006 AccountLockoutTracker.
+type AccountLockoutRepository interface {
+	GetLockoutState(ctx context.Context, userID uuid.UUID) (AccountLockoutState, error)
+	RecordFailedLogin(ctx context.Context, userID uuid.UUID, threshold int, lockedUntil time.Time, now time.Time) (AccountLockoutState, error)
+	ResetFailedLogins(ctx context.Context, userID uuid.UUID) (AccountLockoutState, error)
+}
+
+// RegistrationRepository defines transactional account creation with consent.
+// Implements DESIGN-015 ConsentManager.
+type RegistrationRepository interface {
+	CreateUserWithConsent(ctx context.Context, user EncryptedAuthUser, privacyVersion string, termsVersion string) (uuid.UUID, error)
 }
 
 // EntitlementRepository defines entitlement-state persistence behavior.
@@ -473,6 +592,7 @@ type StripeEventRepository interface {
 type ConsentRepository interface {
 	RecordConsent(ctx context.Context, record ConsentRecord) (uuid.UUID, error)
 	HasRequiredConsent(ctx context.Context, userID uuid.UUID, privacyVersion string, termsVersion string) (bool, error)
+	ListConsent(ctx context.Context, userID uuid.UUID) ([]ConsentRecord, error)
 }
 
 // DeletionRequestRepository defines account-deletion workflow persistence behavior.
@@ -481,6 +601,9 @@ type DeletionRequestRepository interface {
 	RequestDeletion(ctx context.Context, userID uuid.UUID) (DataDeletionRequest, error)
 	UpdateDeletionStatus(ctx context.Context, requestID uuid.UUID, status string, note string) error
 	ListDeletionAudit(ctx context.Context, requestID uuid.UUID) ([]DataDeletionAuditEntry, error)
+	ClaimDeletionRequests(ctx context.Context, now time.Time, limit int) ([]DataDeletionRequest, error)
+	RecordDeletionFailure(ctx context.Context, requestID uuid.UUID, category string, note string, nextAttemptAt *time.Time) error
+	CompleteDeletionRequest(ctx context.Context, requestID uuid.UUID, receiptID uuid.UUID, completedAt time.Time) error
 }
 
 // CuratedImportRepository defines curated external-import persistence behavior.
