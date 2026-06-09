@@ -112,3 +112,10 @@ No Phase 03 project-owner action is required at this time.
 ### Code Review Findings
 
 No unresolved Phase 03 code review findings remain at this time.
+
+## Phase 04
+
+### Assumptions
+
+- Accepted for planning: Dietary Presets are deterministic backend-owned named bundles that expand into Exclusion Rules at search time. They are not stored as Food Object classifications and should not create misleading Food Category or Culinary Role rows.
+- Accepted for planning: Phase 04 supports the Daily Daily Diet Alternative Search request shape at the search API boundary, but does not implement Phase 07 LP optimization jobs or saved-diet persistence. When required Phase 07 data is unavailable, the API returns a deterministic user-facing `SearchRejection` instead of creating worker/job side effects.
