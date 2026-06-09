@@ -78,6 +78,12 @@ type Envelope struct {
 	Error     *AppError      `json:"error,omitempty"`
 }
 
+// Controller exposes versioned HTTP route definitions.
+// Implements DESIGN-010 RouteHandler.
+type Controller interface {
+	Routes() []RouteDefinition
+}
+
 // RouteDefinition describes a versioned service route and required gateway hooks.
 // Implements DESIGN-010 RouteHandler.
 type RouteDefinition struct {

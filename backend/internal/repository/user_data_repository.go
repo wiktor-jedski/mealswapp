@@ -60,6 +60,8 @@ type PostgresUserProfileRepository struct {
 	db sqlExecutor
 }
 
+var _ UserProfileRepository = (*PostgresUserProfileRepository)(nil)
+
 // NewPostgresUserProfileRepository creates a PostgreSQL-backed profile repository.
 // Implements DESIGN-008 PreferenceManager.
 func NewPostgresUserProfileRepository(db sqlExecutor) *PostgresUserProfileRepository {
@@ -111,6 +113,9 @@ func (r *PostgresUserProfileRepository) UpdateProfile(ctx context.Context, profi
 type PostgresSavedDataRepository struct {
 	db transactionalExecutor
 }
+
+var _ SavedItemRepository = (*PostgresSavedDataRepository)(nil)
+var _ SearchHistoryRepository = (*PostgresSavedDataRepository)(nil)
 
 // NewPostgresSavedDataRepository creates a PostgreSQL-backed saved data repository.
 // Implements DESIGN-008 SavedDataRepository.

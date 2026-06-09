@@ -888,6 +888,28 @@ func TestAuthControllerFailures(t *testing.T) {
 		t.Fatalf("reuse response = %d body=%+v cookies=%+v", resp.StatusCode, body, resp.Cookies())
 	}
 
+	failingCSRF := NewCSRFManager(cfg, nil)
+	failingCSRF.sessionStore.Storage = failingStorage{}
+	failingSessionManager := NewAuthSessionManager(cfg, failingCSRF)
+	warningSink := &observability.MemorySink{}
+	service.refreshErr = auth.ErrTokenReuseDetected
+	warningController := NewAuthController(service, failingSessionManager).WithLogSink(warningSink)
+	warningApp := mustNewRouter(t, Dependencies{Config: cfg, CSRF: failingCSRF, Routes: warningController.Routes()})
+	req = httptest.NewRequest(fiber.MethodPost, "/api/v1/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: cfg.Account.RefreshCookieName, Value: "reused"})
+	resp, err = warningApp.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusUnauthorized || body.Error == nil || body.Error.Code != "token_reuse_detected" {
+		t.Fatalf("cleanup failure masked refresh error = %d body=%+v", resp.StatusCode, body)
+	}
+	if len(warningSink.Logs) != 1 || warningSink.Logs[0].Level != "warning" || warningSink.Logs[0].Message != "auth_refresh_cookie_clear_failed" {
+		t.Fatalf("cleanup warning logs = %+v", warningSink.Logs)
+	}
+
 	service.resetReqErr = nil
 	service.resetToken = ""
 	req = httptest.NewRequest(fiber.MethodPost, "/api/v1/auth/password-reset/request", strings.NewReader(`{"email":"missing@example.test"}`))

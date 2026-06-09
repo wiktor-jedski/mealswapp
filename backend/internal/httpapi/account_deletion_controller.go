@@ -21,6 +21,8 @@ type AccountDeletionController struct {
 	sessions *AuthSessionManager
 }
 
+var _ Controller = (*AccountDeletionController)(nil)
+
 // NewAccountDeletionController creates account deletion handlers.
 // Implements DESIGN-008 AccountDeleter.
 func NewAccountDeletionController(service AccountDeletionService, sessions *AuthSessionManager) *AccountDeletionController {

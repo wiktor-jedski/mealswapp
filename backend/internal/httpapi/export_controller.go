@@ -22,6 +22,8 @@ type ExportController struct {
 	service ExportService
 }
 
+var _ Controller = (*ExportController)(nil)
+
 // NewExportController creates account export handlers.
 // Implements DESIGN-008 DataExporter.
 func NewExportController(service ExportService) *ExportController {

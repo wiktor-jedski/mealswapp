@@ -92,6 +92,9 @@ type PostgresComplianceRepository struct {
 	db transactionalExecutor
 }
 
+var _ ConsentRepository = (*PostgresComplianceRepository)(nil)
+var _ DeletionRequestRepository = (*PostgresComplianceRepository)(nil)
+
 // NewPostgresComplianceRepository creates a PostgreSQL-backed compliance repository.
 // Implements DESIGN-015 DataRetentionPolicy.
 func NewPostgresComplianceRepository(db transactionalExecutor) *PostgresComplianceRepository {
@@ -290,6 +293,9 @@ func (r *PostgresComplianceRepository) CompleteDeletionRequest(ctx context.Conte
 type PostgresAdminImportAuditRepository struct {
 	db transactionalExecutor
 }
+
+var _ AdminAuditRepository = (*PostgresAdminImportAuditRepository)(nil)
+var _ CuratedImportRepository = (*PostgresAdminImportAuditRepository)(nil)
 
 // NewPostgresAdminImportAuditRepository creates a PostgreSQL-backed admin repository.
 // Implements DESIGN-009 AdminController.

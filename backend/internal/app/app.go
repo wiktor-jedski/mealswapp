@@ -55,17 +55,18 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	})
 	savedRepo := repository.NewPostgresSavedDataRepository(pg)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
+	controllers := []httpapi.Controller{
+		httpapi.NewAuthController(authService, sessionManager).WithLogSink(telemetry),
+		httpapi.NewOAuthController(authService, unavailableOAuthGateway{}, sessionManager),
+		httpapi.NewProfileController(profile.NewService(identities, encryption)),
+		httpapi.NewUserDataController(userdata.NewService(savedRepo, identities, savedRepo, encryption)),
+		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
+		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
+		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
+	}
 	routes := []httpapi.RouteDefinition{}
-	for _, group := range [][]httpapi.RouteDefinition{
-		httpapi.NewAuthController(authService, sessionManager).Routes(),
-		httpapi.NewOAuthController(authService, unavailableOAuthGateway{}, sessionManager).Routes(),
-		httpapi.NewProfileController(profile.NewService(identities, encryption)).Routes(),
-		httpapi.NewUserDataController(userdata.NewService(savedRepo, identities, savedRepo, encryption)).Routes(),
-		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)).Routes(),
-		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager).Routes(),
-		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)).Routes(),
-	} {
-		routes = append(routes, group...)
+	for _, controller := range controllers {
+		routes = append(routes, controller.Routes()...)
 	}
 	deps := httpapi.Dependencies{
 		Config: cfg,
@@ -87,6 +88,8 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 // unavailableOAuthGateway exposes OAuth routes without fabricating provider behavior.
 // Implements DESIGN-006 OAuthHandler production provider boundary.
 type unavailableOAuthGateway struct{}
+
+var _ httpapi.OAuthProviderGateway = unavailableOAuthGateway{}
 
 // StartOAuth fails closed until Google or Apple provider credentials are configured.
 // Implements DESIGN-006 OAuthHandler.
@@ -122,6 +125,10 @@ type localKeyLoader struct {
 	version string
 	key     []byte
 }
+
+var _ auth.SigningKeyLoader = localKeyLoader{}
+var _ security.KeyLoader = localKeyLoader{}
+var _ security.LookupKeyLoader = localKeyLoader{}
 
 // newLocalKeyLoader creates local key material for Phase 03 account flows.
 // Implements DESIGN-013 EncryptionService and DESIGN-006 JWTManager.
@@ -162,8 +169,8 @@ func (l localKeyLoader) ActiveLookupKey(context.Context) (string, []byte, error)
 
 // LookupKey returns a versioned deterministic lookup key.
 // Implements DESIGN-013 EncryptionService.
-func (l localKeyLoader) LookupKey(_ context.Context, version string) ([]byte, error) {
-	return l.Key(context.Background(), version)
+func (l localKeyLoader) LookupKey(ctx context.Context, version string) ([]byte, error) {
+	return l.Key(ctx, version)
 }
 
 // ActiveSigningKey returns the active JWT signing key.
@@ -174,8 +181,8 @@ func (l localKeyLoader) ActiveSigningKey(context.Context) (string, []byte, error
 
 // SigningKey returns a versioned JWT signing key.
 // Implements DESIGN-006 JWTManager.
-func (l localKeyLoader) SigningKey(_ context.Context, version string) ([]byte, error) {
-	return l.Key(context.Background(), version)
+func (l localKeyLoader) SigningKey(ctx context.Context, version string) ([]byte, error) {
+	return l.Key(ctx, version)
 }
 
 // redisCachePurger removes user cache entries when a Redis client is configured.
@@ -183,6 +190,8 @@ func (l localKeyLoader) SigningKey(_ context.Context, version string) ([]byte, e
 type redisCachePurger struct {
 	client *redis.Client
 }
+
+var _ userdata.CachePurger = redisCachePurger{}
 
 // PurgeUser deletes the current user cache prefix best-effort.
 // Implements DESIGN-008 AccountDeleter.

@@ -20,6 +20,8 @@ type PostgresSecurityAuditRepository struct {
 	db sqlExecutor
 }
 
+var _ security.AuditLogger = (*PostgresSecurityAuditRepository)(nil)
+
 // NewPostgresSecurityAuditRepository creates a PostgreSQL-backed security audit logger.
 // Implements DESIGN-013 AuditLogger.
 func NewPostgresSecurityAuditRepository(db sqlExecutor) *PostgresSecurityAuditRepository {

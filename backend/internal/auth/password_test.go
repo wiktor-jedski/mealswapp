@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+func testPasswordHash() (string, string) {
+	return "argon2id$v=19$m=19456,t=1,p=1$u67X4pB7vrPK0wZMLU3SXg", "dGVzdC1maXh0dXJlLXNhbHQ"
+}
+
 // TestPasswordHasherHashesAndVerifies verifies DESIGN-006 PasswordHasher behavior.
 func TestPasswordHasherHashesAndVerifies(t *testing.T) {
 	hasher, err := NewPasswordHasher(PasswordHashParams{MemoryKiB: 19 * 1024, Iterations: 1, Parallelism: 1, KeyLength: 32, SaltLength: 16, MinLength: 12})
@@ -70,7 +74,7 @@ func TestPasswordHasherPolicyAndFixtures(t *testing.T) {
 	if _, _, err := hasher.HashPassword("Short1!"); err == nil || strings.Contains(err.Error(), "Short1") {
 		t.Fatalf("HashPassword() policy error = %v", err)
 	}
-	fixtureHash, fixtureSalt := TestPasswordHash()
+	fixtureHash, fixtureSalt := testPasswordHash()
 	if !strings.HasPrefix(fixtureHash, "argon2id$v=19$") || fixtureSalt == "" {
 		t.Fatalf("fixture hash/salt = %q %q", fixtureHash, fixtureSalt)
 	}

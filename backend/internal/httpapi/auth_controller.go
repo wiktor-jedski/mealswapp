@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/auth"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
@@ -28,12 +30,22 @@ type AuthService interface {
 type AuthController struct {
 	service  AuthService
 	sessions *AuthSessionManager
+	logs     observability.LogSink
 }
+
+var _ Controller = (*AuthController)(nil)
 
 // NewAuthController creates account-flow HTTP handlers.
 // Implements DESIGN-006 AuthController.
 func NewAuthController(service AuthService, sessions *AuthSessionManager) *AuthController {
 	return &AuthController{service: service, sessions: sessions}
+}
+
+// WithLogSink attaches structured warning logs for best-effort auth cleanup.
+// Implements DESIGN-014 LogAggregator.
+func (c *AuthController) WithLogSink(logs observability.LogSink) *AuthController {
+	c.logs = logs
+	return c
 }
 
 // Routes returns versioned auth routes with CSRF and rate-limit policies.
@@ -102,7 +114,9 @@ func (c *AuthController) Logout(ctx *fiber.Ctx) error {
 func (c *AuthController) Refresh(ctx *fiber.Ctx) error {
 	session, err := c.service.Refresh(ctx.UserContext(), ctx.Cookies(c.sessions.cfg.Account.RefreshCookieName))
 	if err != nil {
-		_ = c.sessions.ClearAuthenticatedCookies(ctx)
+		if clearErr := c.sessions.ClearAuthenticatedCookies(ctx); clearErr != nil {
+			c.warn(ctx, "auth_refresh_cookie_clear_failed", map[string]any{"error": clearErr.Error()})
+		}
 		return mapAuthError(ctx, err)
 	}
 	if err := c.sessions.SetAuthenticatedCookies(ctx, toHTTPAuthSession(session)); err != nil {
@@ -210,6 +224,17 @@ func mapAuthError(ctx *fiber.Ctx, err error) error {
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: err.Error(), Message: "request validation failed"}
 	}
 	return err
+}
+
+// warn emits optional structured controller warnings.
+// Implements DESIGN-014 LogAggregator.
+func (c *AuthController) warn(ctx *fiber.Ctx, message string, fields map[string]any) {
+	if c.logs == nil {
+		return
+	}
+	if err := c.logs.Log(ctx.UserContext(), observability.LogEvent{RequestID: requestID(ctx), Service: "api", Level: "warning", Message: message, Fields: fields, CreatedAt: time.Now()}); err != nil {
+		_, _ = observabilityFallbackWriter.Write([]byte(err.Error() + "\n"))
+	}
 }
 
 // validateRegisterBody validates registration JSON before service dispatch.

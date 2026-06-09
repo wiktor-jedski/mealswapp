@@ -23,6 +23,8 @@ type ProfileController struct {
 	service ProfileService
 }
 
+var _ Controller = (*ProfileController)(nil)
+
 // NewProfileController creates authenticated profile handlers.
 // Implements DESIGN-008 ProfileController.
 func NewProfileController(service ProfileService) *ProfileController {

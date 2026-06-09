@@ -22,6 +22,11 @@ type DisclaimerContent struct {
 	Alert    string
 }
 
+const (
+	fallbackAccountDisclaimer = "Mealswapp account tools do not replace professional medical or nutritional advice. Review important account actions before continuing."
+	fallbackLoginDisclaimer   = "Mealswapp provides nutrition planning support only and does not replace professional medical or nutritional advice."
+)
+
 // DisclaimerService returns configured or bundled fallback disclaimer content.
 // Implements DESIGN-015 DisclaimerRenderer.
 type DisclaimerService struct {
@@ -58,7 +63,7 @@ func (s *DisclaimerService) GetDisclaimer(ctx context.Context, location string) 
 // Implements DESIGN-015 DisclaimerRenderer.
 func fallbackDisclaimerMarkdown(location string) string {
 	if location == "account" {
-		return "Mealswapp account tools do not replace professional medical or nutritional advice. Review important account actions before continuing."
+		return fallbackAccountDisclaimer
 	}
-	return "Mealswapp provides nutrition planning support only and does not replace professional medical or nutritional advice."
+	return fallbackLoginDisclaimer
 }

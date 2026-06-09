@@ -25,6 +25,8 @@ type UserDataController struct {
 	service UserDataService
 }
 
+var _ Controller = (*UserDataController)(nil)
+
 // NewUserDataController creates authenticated user-data handlers.
 // Implements DESIGN-008 SavedDataRepository and SearchHistoryRepository.
 func NewUserDataController(service UserDataService) *UserDataController {

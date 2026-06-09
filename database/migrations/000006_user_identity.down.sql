@@ -7,7 +7,6 @@ DROP INDEX IF EXISTS user_sessions_user_idx;
 DROP TABLE IF EXISTS user_sessions;
 DROP INDEX IF EXISTS oauth_identities_user_idx;
 DROP TABLE IF EXISTS oauth_identities;
-DROP INDEX IF EXISTS users_normalized_email_idx;
 DROP TABLE IF EXISTS users;
 
 DELETE FROM schema_migrations WHERE version = 6;

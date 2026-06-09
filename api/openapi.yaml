@@ -350,8 +350,8 @@ paths:
           in: query
           required: false
           schema:
-            type: string
-            enum: [json, csv]
+            allOf:
+              - $ref: "#/components/schemas/ExportFormat"
             default: json
       responses:
         "200":
@@ -749,7 +749,7 @@ components:
                 $ref: "#/components/schemas/SearchHistoryEntry"
     ExportBundle:
       type: object
-      required: [user, consent, savedItems, history, customItems, format]
+      required: [user, consent, savedItems, history, customItems]
       properties:
         user:
           type: object
@@ -772,9 +772,9 @@ components:
           items:
             type: object
             additionalProperties: true
-        format:
-          type: string
-          enum: [json, csv]
+    ExportFormat:
+      type: string
+      enum: [json, csv]
     DeletionRequestEnvelope:
       type: object
       required: [status, requestId, data]

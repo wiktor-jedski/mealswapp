@@ -70,6 +70,10 @@ type PostgresEncryptedIdentityRepository struct {
 	db sqlExecutor
 }
 
+var _ AccountDeletionRepository = (*PostgresEncryptedIdentityRepository)(nil)
+var _ EncryptedSearchHistoryRepository = (*PostgresEncryptedIdentityRepository)(nil)
+var _ EncryptedUserProfileRepository = (*PostgresEncryptedIdentityRepository)(nil)
+
 // NewPostgresEncryptedIdentityRepository creates an encrypted PII repository.
 // Implements DESIGN-013 EncryptionService.
 func NewPostgresEncryptedIdentityRepository(db sqlExecutor) *PostgresEncryptedIdentityRepository {

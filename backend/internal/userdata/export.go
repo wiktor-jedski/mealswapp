@@ -52,7 +52,6 @@ type ExportBundle struct {
 	SavedItems  []repository.SavedItem `json:"savedItems"`
 	History     []SearchHistoryEntry   `json:"history"`
 	CustomItems []ExportCustomItem     `json:"customItems"`
-	Format      string                 `json:"format"`
 }
 
 // ExportUser contains decrypted user/profile fields for export.
@@ -86,7 +85,7 @@ func (s *ExportService) BuildExport(ctx context.Context, userID uuid.UUID, forma
 	if err != nil {
 		return ExportPayload{}, err
 	}
-	bundle, err := s.buildBundle(ctx, userID, normalized.Value)
+	bundle, err := s.buildBundle(ctx, userID)
 	if err != nil {
 		return ExportPayload{}, err
 	}
@@ -110,7 +109,7 @@ func (s *ExportService) BuildExport(ctx context.Context, userID uuid.UUID, forma
 
 // buildBundle gathers and decrypts account export data.
 // Implements DESIGN-008 DataExporter and DESIGN-013 EncryptionService.
-func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID, format string) (ExportBundle, error) {
+func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (ExportBundle, error) {
 	user, err := s.identity.GetEncryptedUserByID(ctx, userID)
 	if err != nil {
 		return ExportBundle{}, err
@@ -160,7 +159,7 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID, forma
 	}
 	return ExportBundle{
 		User:    ExportUser{UserID: userID, Email: email, Role: role, DisplayName: displayName, UnitSystem: profile.UnitSystem, ThemePreference: profile.ThemePreference},
-		Consent: consent, SavedItems: saved, History: history, CustomItems: []ExportCustomItem{}, Format: format,
+		Consent: consent, SavedItems: saved, History: history, CustomItems: []ExportCustomItem{},
 	}, nil
 }
 

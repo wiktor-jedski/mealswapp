@@ -199,14 +199,6 @@ func TestPostgresEncryptedIdentityRepository(t *testing.T) {
 	if storedUser.ID != userID || storedUser.NormalizedEmailDigest != newDigest {
 		t.Fatalf("reindexed user = %#v", storedUser)
 	}
-	var legacyEmail string
-	if err := db.QueryRow(ctx, "SELECT email FROM users WHERE id = $1", userID).Scan(&legacyEmail); err != nil {
-		t.Fatalf("select legacy email: %v", err)
-	}
-	if legacyEmail == "secret@example.test" || !strings.HasPrefix(legacyEmail, "encrypted:") {
-		t.Fatalf("legacy email column stored plaintext-like value %q", legacyEmail)
-	}
-
 	providerID := EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("provider-nonce"), Ciphertext: []byte("provider-ciphertext")}
 	providerDigest := LookupDigest{KeyVersion: "lookup-v1", Value: "provider-digest"}
 	oauthID, err := repo.UpsertOAuthIdentity(ctx, EncryptedOAuthIdentity{

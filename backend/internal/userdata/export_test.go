@@ -98,6 +98,13 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 0 {
 		t.Fatalf("json bundle = %#v", bundle)
 	}
+	var rawBundle map[string]any
+	if err := json.Unmarshal(payload.Body, &rawBundle); err != nil {
+		t.Fatalf("decode raw export json: %v", err)
+	}
+	if _, ok := rawBundle["format"]; ok {
+		t.Fatalf("json bundle leaked transport format: %s", payload.Body)
+	}
 	csvPayload, err := service.BuildExport(ctx, userID, "csv")
 	if err != nil {
 		t.Fatalf("BuildExport(csv) error = %v", err)

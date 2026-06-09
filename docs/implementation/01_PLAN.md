@@ -36,11 +36,17 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Extend `InputNormalizer` with typed field-specific rules as account and profile controllers introduce new string inputs. Keep email normalization from Phase 02 and add only the fields used by these flows.
 - Harden account-deletion processing before exposing it: enforce the selected status-transition rules, lock request rows during transitions, and add a worker claim query using `FOR UPDATE SKIP LOCKED` or an equivalent concurrency-safe approach.
 - For account deletion, classify sanitized failures as transient, permanent, or unknown. Retry transient failures automatically with exponential backoff up to 3 attempts. Require admin-triggered retry after investigation for permanent, unknown, or exhausted failures, and alert when requests fail or exhaust retries.
-- Retain a minimal pseudonymous deletion receipt after account erasure: random receipt ID, request and completion timestamps, final outcome, and sanitized failure food_category when applicable. Do not retain the deleted user ID, email, or account data. Use a provisional three-year retention period pending pre-production legal review.
-- Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period.
+- Retain a minimal pseudonymous deletion receipt after account erasure: random receipt ID, request and completion timestamps, final outcome, and sanitized failure food_category when applicable. Do not retain the deleted user ID, email, or account data. Use a provisional three-year retention period pending production-hardening privacy review.
 - Use the installed `golang-security` agent skill during implementation and review. Add `go vet ./...`, `govulncheck ./...`, and `go test -race ./...` to the backend quality gate before completing this phase.
 - Lint auth/profile OpenAPI contract additions with Redocly CLI.
 - Exit criteria: authenticated session lifecycle works end to end; profile preferences persist; consent blocks registration when missing.
+
+### Cross-Phase Mutation Idempotency Standard
+
+- Safe repeat behavior is required for mutation endpoints. Prefer natural idempotency first: absolute `PUT` updates, `DELETE` by stable resource identifier, unique constraints with `ON CONFLICT`, and state-machine transitions that reject invalid repeats without duplicating side effects.
+- REST endpoints that execute non-idempotent business actions must accept an `Idempotency-Key` header scoped to authenticated user, route, method, and normalized request body hash. Persist the first completed response or terminal failure for the key, return the stored result for exact retries, and reject key reuse with a different body hash.
+- Webhook/event handlers must use provider event IDs as idempotency keys. Duplicate Stripe events return success without reapplying entitlement changes.
+- Do not require idempotency keys for intentional append-only observability records, security audit records, search history rows, or login/account-lockout attempt counters. These are event logs or counters, not business object creation.
 
 ### Phase 04: Search, Similarity, Cache Core
 
@@ -64,6 +70,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-007.
 - Add free/trial/paid entitlement model, 3-search free limit, mode gating, Stripe checkout/webhooks, webhook idempotency, trial creation on social login, and reconciliation job.
+- Apply the cross-phase mutation idempotency standard to checkout/subscription creation and Stripe webhook processing. Store provider event IDs before side effects when possible, and ensure duplicate webhook delivery does not duplicate entitlement history or usage effects.
 - Use the installed `golang-security` agent skill during implementation and review of entitlement enforcement, Stripe webhook verification, and billing endpoints.
 - Use Stripe CLI sandbox forwarding and event triggers to verify webhook signatures, retries, duplicate delivery, and failure handling locally.
 - Lint subscription/billing OpenAPI contract additions with Redocly CLI.
@@ -81,6 +88,8 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-009 and ARCH-012.
 - Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, classification management, user admin actions, and audit persistence.
+- Add an explicit user-owned custom food item persistence model before enabling user custom-item export/deletion. Distinguish global curated `food_items` from user-owned custom items with a clear owner predicate, account-export inclusion rules, and account-deletion cleanup behavior.
+- Apply the cross-phase mutation idempotency standard to admin import confirmation, user-owned custom item creation, and any other non-idempotent admin or user-data creation endpoint. Use source-provider/external-ID natural keys where they exist, and `Idempotency-Key` where they do not.
 - Extend `InputNormalizer` with typed rules for admin-authored names and provider text introduced by curation flows.
 - Normalize provider-specific serving-unit aliases to canonical repository units (`g`, `ml`, `oz`, `fl_oz`, or `serving`) at the external-import boundary before persistence.
 - Warn during external import when liquid macro totals per `100 ml` look suspicious, but do not reject them solely for exceeding `100 g`; without density data, that threshold is not a valid hard constraint for liquids.
@@ -96,8 +105,11 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Add offline cached search/image behavior, stale indicators, retry manager integration, accessibility pass, Playwright browser coverage, monitoring alerts, backup/retention checks, and deployment config for GCP services.
 - Extend Playwright and `@axe-core/playwright` coverage for offline, degradation, keyboard, responsive, and WCAG acceptance paths.
 - Install and use the `gcp-cloud-run` agent skill when implementing Cloud Run deployment, restricted ingress, Cloud SQL, Memorystore, Secret Manager, and monitoring configuration.
+- Add signed, single-use email-verification tokens and outbound email delivery before production paid-feature unlocks can rely on email-and-password verification. Cover token expiry, replay rejection, provider failure handling, and abuse controls.
+- Add and validate production Google and Apple OAuth provider gateway configuration before enabling live external login. Cover Secret Manager-backed credentials, deployed callback URLs, provider redirect URI allowlists, callback exchange failures, and fail-closed behavior when configuration is incomplete.
 - Enforce SW-REQ-091: when trusted forwarded-scheme handling is enabled, restrict direct application ingress to the configured reverse proxy or load balancer and verify that arbitrary public clients cannot reach the application instance or spoof `X-Forwarded-Proto`.
 - Confirm the production reverse proxy or load balancer topology before deployment work so the SW-REQ-091 ingress restriction is implemented against the selected boundary.
+- Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period introduced in Phase 03. Do not launch with deletion receipts enabled until the reviewed retention purpose, field set, and retention period are accepted.
 - Exit criteria: offline cached searches render, connection loss preserves state, WCAG/keyboard checks pass, performance and readiness gates are documented, and trusted-proxy deployment tests pass before enabling `MEALSWAPP_TRUST_PROXY=true`.
 
 ## Public APIs and Interfaces

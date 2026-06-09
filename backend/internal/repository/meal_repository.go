@@ -74,6 +74,8 @@ type PostgresMealRepository struct {
 	db transactionalExecutor
 }
 
+var _ MealRepository = (*PostgresMealRepository)(nil)
+
 // NewPostgresMealRepository creates a PostgreSQL-backed meal repository.
 // Implements DESIGN-005 MealEntity.
 func NewPostgresMealRepository(db transactionalExecutor) *PostgresMealRepository {

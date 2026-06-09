@@ -55,6 +55,11 @@ type JSONSink struct {
 	Writer io.Writer
 }
 
+var _ LogSink = JSONSink{}
+var _ MetricsCollector = JSONSink{}
+var _ LogSink = (*MemorySink)(nil)
+var _ MetricsCollector = (*MemorySink)(nil)
+
 // Log writes one JSON log line.
 // Implements DESIGN-014 LogAggregator.
 func (s JSONSink) Log(_ context.Context, event LogEvent) error {

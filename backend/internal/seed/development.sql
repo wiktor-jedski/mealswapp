@@ -73,12 +73,43 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- Implements DESIGN-006 AuthUser deterministic development fixtures.
-INSERT INTO users (id, email, role, email_verified, password_hash, password_salt)
+INSERT INTO users (
+    id, email_key_version, email_nonce, email_ciphertext, normalized_email_lookup_key_version, normalized_email_digest,
+    role, email_verified, password_hash, password_salt
+)
 VALUES
-    ('23000000-0000-0000-0000-000000000001', 'seed.user@example.test', 'user', true, 'fixture-hash-not-secret', 'fixture-salt-not-secret'),
-    ('23000000-0000-0000-0000-000000000002', 'seed.admin@example.test', 'admin', true, 'fixture-hash-not-secret', 'fixture-salt-not-secret')
+    (
+        '23000000-0000-0000-0000-000000000001',
+        'seed-v1',
+        decode('736565642d757365722d6e6f6e6365', 'hex'),
+        convert_to('seed.user@example.test', 'UTF8'),
+        'seed-v1',
+        'seed.user@example.test',
+        'user',
+        true,
+        'fixture-hash-not-secret',
+        'fixture-salt-not-secret'
+    ),
+    (
+        '23000000-0000-0000-0000-000000000002',
+        'seed-v1',
+        decode('736565642d61646d696e2d6e6f6e6365', 'hex'),
+        convert_to('seed.admin@example.test', 'UTF8'),
+        'seed-v1',
+        'seed.admin@example.test',
+        'admin',
+        true,
+        'fixture-hash-not-secret',
+        'fixture-salt-not-secret'
+    )
 ON CONFLICT (id) DO UPDATE
-SET email = EXCLUDED.email, role = EXCLUDED.role, email_verified = EXCLUDED.email_verified,
+SET email_key_version = EXCLUDED.email_key_version,
+    email_nonce = EXCLUDED.email_nonce,
+    email_ciphertext = EXCLUDED.email_ciphertext,
+    normalized_email_lookup_key_version = EXCLUDED.normalized_email_lookup_key_version,
+    normalized_email_digest = EXCLUDED.normalized_email_digest,
+    role = EXCLUDED.role,
+    email_verified = EXCLUDED.email_verified,
     password_hash = EXCLUDED.password_hash, password_salt = EXCLUDED.password_salt;
 
 -- Implements DESIGN-008 PreferenceManager deterministic development fixtures.

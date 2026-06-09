@@ -200,12 +200,11 @@ export interface ExportBundle {
 	savedItems: SavedItem[];
 	history: SearchHistoryEntry[];
 	customItems: Array<Record<string, unknown>>;
-	format: "json" | "csv";
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** Supported account export formats. */
-export type ExportFormat = ExportBundle["format"];
+export type ExportFormat = "json" | "csv";
 
 // Implements DESIGN-008 AccountDeleter frontend deletion contract.
 /** Account deletion request response data. */

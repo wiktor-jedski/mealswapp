@@ -59,11 +59,9 @@ func (t *AccountLockoutTracker) RecordSuccess(ctx context.Context, userID uuid.U
 	return err
 }
 
-// GenericInvalidCredentialMessage returns the only safe failed-login message.
+// GenericInvalidCredentialMessage is the only safe failed-login message.
 // Implements DESIGN-006 AccountLockoutTracker.
-func GenericInvalidCredentialMessage() string {
-	return "invalid email or password"
-}
+const GenericInvalidCredentialMessage = "invalid email or password"
 
 // toLockoutState maps persisted state to runtime retry metadata.
 // Implements DESIGN-006 AccountLockoutTracker.

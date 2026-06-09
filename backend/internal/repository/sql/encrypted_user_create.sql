@@ -1,6 +1,5 @@
 -- Implements DESIGN-006 AuthUser and DESIGN-013 EncryptionService encrypted create query.
 INSERT INTO users (
-    email,
     email_key_version,
     email_nonce,
     email_ciphertext,
@@ -12,7 +11,6 @@ INSERT INTO users (
     password_salt
 )
 VALUES (
-    'encrypted:' || $5,
     $1,
     $2,
     $3,

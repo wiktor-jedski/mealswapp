@@ -49,6 +49,11 @@ type PostgresEntitlementRepository struct {
 	db sqlExecutor
 }
 
+var _ EntitlementRepository = (*PostgresEntitlementRepository)(nil)
+var _ StripeEventRepository = (*PostgresEntitlementRepository)(nil)
+var _ TrialRepository = (*PostgresEntitlementRepository)(nil)
+var _ UsageRepository = (*PostgresEntitlementRepository)(nil)
+
 // NewPostgresEntitlementRepository creates a PostgreSQL-backed entitlement repository.
 // Implements DESIGN-007 EntitlementManager.
 func NewPostgresEntitlementRepository(db sqlExecutor) *PostgresEntitlementRepository {

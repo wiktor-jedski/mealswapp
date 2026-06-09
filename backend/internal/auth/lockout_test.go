@@ -105,7 +105,7 @@ func TestAccountLockoutTrackerExpiredLocks(t *testing.T) {
 	if state.AccountFailures != 1 || state.Locked() {
 		t.Fatalf("expired lock did not restart count: %#v", state)
 	}
-	if GenericInvalidCredentialMessage() != "invalid email or password" {
+	if GenericInvalidCredentialMessage != "invalid email or password" {
 		t.Fatal("generic invalid credential message changed")
 	}
 }

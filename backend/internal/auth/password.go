@@ -87,12 +87,6 @@ func (h *PasswordHasher) VerifyPassword(password string, encodedHash string, enc
 	return subtle.ConstantTimeCompare(actualHash, expectedHash) == 1
 }
 
-// TestPasswordHash returns deterministic fixture-safe credentials for repository tests only.
-// Implements DESIGN-006 PasswordHasher.
-func TestPasswordHash() (string, string) {
-	return "argon2id$v=19$m=19456,t=1,p=1$u67X4pB7vrPK0wZMLU3SXg", "dGVzdC1maXh0dXJlLXNhbHQ"
-}
-
 // parseEncodedHash parses this package's Argon2id hash format.
 // Implements DESIGN-006 PasswordHasher.
 func parseEncodedHash(encodedHash string) (PasswordHashParams, []byte, error) {
@@ -116,7 +110,7 @@ func parseEncodedHash(encodedHash string) (PasswordHashParams, []byte, error) {
 // Implements DESIGN-006 PasswordHasher.
 func parseHashParams(value string) (PasswordHashParams, error) {
 	params := PasswordHashParams{}
-	for _, part := range strings.Split(value, ",") {
+	for part := range strings.SplitSeq(value, ",") {
 		key, raw, ok := strings.Cut(part, "=")
 		if !ok {
 			return PasswordHashParams{}, errors.New("password hash parameters are malformed")

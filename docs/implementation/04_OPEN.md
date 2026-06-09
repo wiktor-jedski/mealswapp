@@ -80,7 +80,21 @@ No project-owner action is required for Phase 00 at this time.
 - Accepted for Phase 03.1 evidence: generate separate `docs/implementation/implemented/03.1_PHASE_UAT.md` and `docs/implementation/implemented/03.1_PHASE_REPORT.html` artifacts so the original Phase 03 UAT/report remain available.
 - Phase 03.1 production bootstrap uses `MEALSWAPP_LOCAL_SECRET_KEY` for local JWT signing, PII encryption, and deterministic lookup digest key material. Development has a local fallback; production fails closed unless the variable is set. Replace this local loader with the documented Secret Manager-backed key loaders before deployment.
 - Accepted: `localKeyLoader` uses a static `"local-v1"` version. Since it only holds a single active key, configuring a dynamic version via environment variables would not enable testing multi-version key rotation (as it cannot serve historical keys concurrently). Multi-version key rotation testing is deferred to unit test mocks or the production Secret Manager key loader integration.
+- Resolved: `localKeyLoader.LookupKey` and `localKeyLoader.SigningKey` now forward the incoming context to the shared key lookup instead of replacing it with `context.Background()`.
+- Resolved: `AuthController.Refresh` now logs a warning when best-effort authenticated-cookie clearing fails after refresh-token rejection, while preserving the original authentication error response.
+- Resolved: `httpapi.Controller` now formalizes the `Routes() []RouteDefinition` contract, all Phase 03 HTTP controllers have compile-time guards for it, and `NewProduction` registers routes by flattening a typed controller slice.
+- Resolved: `GenericInvalidCredentialMessage` is now a constant instead of a function, keeping the failed-login message reusable without exposing a function-shaped API.
+- Resolved: deterministic password test-fixture hash and salt generation now live in `password_test.go` instead of production `password.go`.
+- Resolved: `parseHashParams` now ranges over `strings.SplitSeq` instead of allocating a slice with `strings.Split`.
+- Resolved: `ExportBundle` no longer carries the transport-level `format` field; the export format enum now lives at the API query-parameter/type boundary.
+- Resolved: fallback disclaimer Markdown strings now live in named package-level constants.
+- Resolved: database repositories, HTTP controllers, and local infrastructure adapters were audited for compile-time interface guards. Missing guards were added for concrete PostgreSQL repositories, security audit logging, observability sinks, local key loading, OAuth fail-closed gateway, and Redis cache purging. Cross-package service-boundary guards that would introduce import cycles remain intentionally omitted.
+- Resolved: the pre-production `users` schema no longer includes plaintext `email` or generated `normalized_email` columns. User email uniqueness and lookup now rely on the encrypted-email metadata and `normalized_email_digest`, and `encrypted_user_create.sql` no longer writes a placeholder legacy email value.
+- Resolved: all current database mutation SQL was audited for idempotency and duplication safety. Registration, saved items, consent, profile creation, deletion requests, OAuth identity linking, curated imports, classification/vocabulary upserts, food item creation, Stripe event recording, and usage windows rely on unique constraints, `ON CONFLICT`, or state-machine transitions. Profile/password/verification/session revocation updates are absolute or repeat-safe; password-reset token consume and refresh-token reuse intentionally reject replay; audit/security/history rows and login counters are intentionally append-only event records. Raw create primitives such as meal creation and future admin/custom-item creation must not be exposed through retryable REST flows without the cross-phase `Idempotency-Key` standard now recorded in `docs/implementation/01_PLAN.md`; Phase 06 checkout/webhook and Phase 08 admin/custom-item creation are called out explicitly.
 - Phase 03.1 production bootstrap composes auth, OAuth, profile, saved-data, export, account-deletion, disclaimer, CSRF, and JWT routes from real repositories. OAuth routes fail closed until Google/Apple provider credentials and callback exchange are configured.
+- Deferred to Phase 08: add an explicit user-owned custom item persistence model before relying on `customItems` in account export or account deletion. Until then, Phase 03 account export keeps `customItems` empty and typed.
+- Deferred to Phase 09: add signed, single-use email-verification tokens and outbound email delivery before production paid-feature unlocks can rely on email-and-password verification.
+- Deferred to Phase 09: add and validate production Google and Apple OAuth provider gateway configuration before enabling live external login. Until then, Phase 03 production bootstrap fails OAuth routes closed.
 
 ### Security review notes
 
@@ -93,22 +107,8 @@ No project-owner action is required for Phase 00 at this time.
 
 ### Actions needed
 
-- Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period described in `docs/implementation/01_PLAN.md`.
-- Fix context propagation in `localKeyLoader`'s `LookupKey` and `SigningKey` methods to forward the incoming context parameter instead of passing `context.Background()`.
-- Log the error returned by `ClearAuthenticatedCookies` in `AuthController.Refresh` as a warning instead of silently discarding it with `_ =`, since it can indicate backend session/CSRF state invalidation failures.
-- Introduce a formal `Controller` interface in `httpapi` and refactor the `NewProduction` route registry to loop over a slice of `Controller`s instead of using a 2D slice loop. - should other routes also use this interface? probably yes
-- Add an explicit user-owned custom item persistence model before relying on `customItems` in account export or account deletion.
-- Add signed, single-use email-verification tokens and outbound email delivery before enabling production paid-feature unlocks through email-and-password verification.
-- Add and validate the production OAuth provider gateway configuration before enabling live Google or Apple login.
-- replace GenericInvalidCredentialMessage with a const
+No Phase 03 project-owner action is required at this time.
 
 ### Code Review Findings
 
-- Refactor `TestPasswordHash()` in `password.go`: Move the hardcoded deterministic test-fixture hash and salt generator from `password.go` into `password_test.go` or a test-specific helper. Placing test fixtures inside a production source file unnecessarily pollutes the exported API of the package and compiles test-only helpers into production binaries.
-- Refactor `parseHashParams` in `password.go`: Use range over `strings.SplitSeq` instead of using `strings.Split` to avoid unnecessary allocations when parsing comma-separated Argon2 parameters.
-- Refactor `ExportBundle` in `userdata/export.go` to remove the redundant `Format` field. The schema definition leak that couples the frontend type generator's `ExportFormat` to `ExportBundle["format"]` should be resolved by defining the format enum at the API route/query-parameter schema level instead of embedding transport-level metadata inside the core domain-data bundle.
-- Refactor `fallbackDisclaimerMarkdown` in `compliance/disclaimer.go`: Extract the hardcoded plain text strings into named, package-level constants (e.g., `fallbackLoginDisclaimer` and `fallbackAccountDisclaimer`) to improve readability, self-documentation, and ease of future Markdown styling.
-- Audit Database Repositories and Infrastructure Adapters: Verify if there are other database repositories, outer boundaries, or API adapters missing the Go compile-time interface guard pattern (`var _ Interface = (*Concrete)(nil)`). Add these guards where missing to guarantee instant compile-time feedback on signature mismatches and contract drifts across packages.
-- Eliminate Legacy `email` Column Technical Debt: In `users` table and `encrypted_user_create.sql`, the original `email` field is redundant since we are in pre-production Phase 03 and have no live users to migrate. Refactor the database migrations to completely drop the unencrypted `email` and generated `normalized_email` columns from `users`, and clean up `encrypted_user_create.sql` to avoid writing the placeholder `'encrypted:' || $5` concatenation, relying solely on `normalized_email_digest` for uniqueness and lookups.
-- Idempotency and Duplication Safety Audit: Audit all mutation database operations (INSERTs, non-absolute UPDATEs) to ensure they are either naturally idempotent or protected against duplication/replay attacks (e.g., double payments, cloned recipes/meals, or duplicate logs). Define a standardized idempotency-key pattern for the REST/API controller endpoints where non-idempotent business actions are executed.
-
+No unresolved Phase 03 code review findings remain at this time.

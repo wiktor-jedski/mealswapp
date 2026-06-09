@@ -19,6 +19,8 @@ type DisclaimerController struct {
 	service DisclaimerService
 }
 
+var _ Controller = (*DisclaimerController)(nil)
+
 // NewDisclaimerController creates disclaimer handlers.
 // Implements DESIGN-015 DisclaimerRenderer.
 func NewDisclaimerController(service DisclaimerService) *DisclaimerController {

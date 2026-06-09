@@ -242,12 +242,11 @@ export interface ExportBundle {
 \tsavedItems: SavedItem[];
 \thistory: SearchHistoryEntry[];
 \tcustomItems: Array<Record<string, unknown>>;
-\tformat: "json" | "csv";
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** Supported account export formats. */
-export type ExportFormat = ExportBundle["format"];
+export type ExportFormat = "json" | "csv";
 
 // Implements DESIGN-008 AccountDeleter frontend deletion contract.
 /** Account deletion request response data. */

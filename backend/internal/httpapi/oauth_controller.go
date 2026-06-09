@@ -30,6 +30,8 @@ type OAuthController struct {
 	sessions *AuthSessionManager
 }
 
+var _ Controller = (*OAuthController)(nil)
+
 // NewOAuthController creates goth-backed OAuth HTTP handlers.
 // Implements DESIGN-006 OAuthHandler.
 func NewOAuthController(service OAuthService, gateway OAuthProviderGateway, sessions *AuthSessionManager) *OAuthController {
