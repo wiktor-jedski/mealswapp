@@ -7,6 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -292,6 +293,108 @@ func TestPostgresEncryptedIdentityRepository(t *testing.T) {
 	}
 	if _, err := repo.GetUserByNormalizedEmailDigest(ctx, newDigest); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("GetUserByNormalizedEmailDigest() pending deletion error = %v, want not found", err)
+	}
+}
+
+func TestPostgresEncryptedIdentityRepositoryEncryptedHistoryLatest100(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresEncryptedIdentityRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "history-cap@example.test")
+	otherUserID := createRepositoryUser(t, ctx, db, "history-cap-other@example.test")
+	baseCreatedAt := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
+	duplicateCiphertext := []byte("duplicate-query-ciphertext")
+
+	insertedIDs := make([]uuid.UUID, 0, 102)
+	for i := 0; i < 102; i++ {
+		ciphertext := []byte(fmt.Sprintf("query-ciphertext-%03d", i))
+		if i == 100 || i == 101 {
+			ciphertext = duplicateCiphertext
+		}
+		id, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{
+			UserID: userID,
+			Query: EncryptedField{
+				KeyVersion: "pii-v1",
+				Nonce:      []byte(fmt.Sprintf("query-nonce-%03d", i)),
+				Ciphertext: ciphertext,
+			},
+			Mode:        "food",
+			FiltersHash: fmt.Sprintf("filters-%03d", i),
+		})
+		if err != nil {
+			t.Fatalf("AddEncryptedHistory(%d) error = %v", i, err)
+		}
+		if _, err := db.Exec(ctx, "UPDATE search_history SET created_at = $1 WHERE id = $2", baseCreatedAt.Add(time.Duration(i)*time.Second), id); err != nil {
+			t.Fatalf("set created_at for history %d: %v", i, err)
+		}
+		insertedIDs = append(insertedIDs, id)
+	}
+	finalID, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{
+		UserID: userID,
+		Query:  EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("query-nonce-102"), Ciphertext: []byte("query-ciphertext-102")},
+		Mode:   "food",
+	})
+	if err != nil {
+		t.Fatalf("AddEncryptedHistory() final user row error = %v", err)
+	}
+	insertedIDs = append(insertedIDs, finalID)
+	otherID, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{
+		UserID: otherUserID,
+		Query:  EncryptedField{KeyVersion: "pii-v1", Nonce: []byte("other-query-nonce"), Ciphertext: []byte("other-query-ciphertext")},
+		Mode:   "food",
+	})
+	if err != nil {
+		t.Fatalf("AddEncryptedHistory() other user error = %v", err)
+	}
+
+	var persistedCount int
+	if err := db.QueryRow(ctx, "SELECT count(*) FROM search_history WHERE user_id = $1", userID).Scan(&persistedCount); err != nil {
+		t.Fatalf("count capped history: %v", err)
+	}
+	if persistedCount != 100 {
+		t.Fatalf("persisted history count = %d, want 100", persistedCount)
+	}
+	var oldestExists bool
+	if err := db.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM search_history WHERE id = $1)", insertedIDs[0]).Scan(&oldestExists); err != nil {
+		t.Fatalf("check oldest history row: %v", err)
+	}
+	if oldestExists {
+		t.Fatalf("oldest history row %s was not pruned", insertedIDs[0])
+	}
+	history, err := repo.ListEncryptedHistory(ctx, userID, 0)
+	if err != nil {
+		t.Fatalf("ListEncryptedHistory() error = %v", err)
+	}
+	if len(history) != 100 {
+		t.Fatalf("history length = %d, want 100", len(history))
+	}
+	if history[0].ID != finalID || history[99].ID != insertedIDs[3] {
+		t.Fatalf("history ordering/latest range first=%s last=%s, want first=%s last=%s", history[0].ID, history[99].ID, finalID, insertedIDs[3])
+	}
+	duplicateCount := 0
+	for i, entry := range history {
+		if entry.UserID != userID {
+			t.Fatalf("history[%d].UserID = %s, want %s", i, entry.UserID, userID)
+		}
+		if entry.ID == otherID {
+			t.Fatalf("history[%d] includes other user's row %s", i, otherID)
+		}
+		if i > 0 && history[i-1].CreatedAt.Before(entry.CreatedAt) {
+			t.Fatalf("history order at %d: %s before %s", i, history[i-1].CreatedAt, entry.CreatedAt)
+		}
+		if string(entry.Query.Ciphertext) == string(duplicateCiphertext) {
+			duplicateCount++
+		}
+	}
+	if duplicateCount != 2 {
+		t.Fatalf("duplicate encrypted query count = %d, want 2", duplicateCount)
+	}
+	otherHistory, err := repo.ListEncryptedHistory(ctx, otherUserID, 100)
+	if err != nil {
+		t.Fatalf("ListEncryptedHistory() other user error = %v", err)
+	}
+	if len(otherHistory) != 1 || otherHistory[0].ID != otherID {
+		t.Fatalf("other user history = %#v, want only %s", otherHistory, otherID)
 	}
 }
 
@@ -852,6 +955,14 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create culinary_role: %v", err)
 	}
+	excludedCategoryID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Snack", Kind: ClassificationKindFoodCategory})
+	if err != nil {
+		t.Fatalf("create excluded food_category: %v", err)
+	}
+	excludedRoleID, err := classificationRepo.Upsert(ctx, ClassificationEntity{Name: "Dessert", Kind: ClassificationKindCulinaryRole})
+	if err != nil {
+		t.Fatalf("create excluded culinary_role: %v", err)
+	}
 
 	appleID, err := foodRepo.Create(ctx, FoodItemEntity{
 		Name:            "Apple",
@@ -869,9 +980,21 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 		PhysicalState:   PhysicalStateSolid,
 		PrepTimeMinutes: 2,
 		MacrosPer100:    MacroValues{Protein: 1.1, Carbohydrates: 23, Fat: 0.3},
-		FoodCategories:  []ClassificationEntity{{ID: categoryID}},
+		FoodCategories:  []ClassificationEntity{{ID: categoryID}, {ID: excludedCategoryID}},
 	}); err != nil {
 		t.Fatalf("create banana: %v", err)
+	}
+	if _, err := foodRepo.Create(ctx, FoodItemEntity{
+		Name:                            "Apple Juice",
+		PhysicalState:                   PhysicalStateLiquid,
+		DensityGramsPerMilliliter:       1.04,
+		DensitySourceKind:               "estimated",
+		AverageServingVolumeMilliliters: 250,
+		MacrosPer100:                    MacroValues{Protein: 0.1, Carbohydrates: 11, Fat: 0},
+		FoodCategories:                  []ClassificationEntity{{ID: categoryID}},
+		CulinaryRoles:                   []ClassificationEntity{{ID: excludedRoleID}},
+	}); err != nil {
+		t.Fatalf("create apple juice: %v", err)
 	}
 
 	maxPrep := 1
@@ -889,11 +1012,27 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	if total != 1 || len(items) != 1 || items[0].ID != appleID {
 		t.Fatalf("Search() total=%d items=%#v, want apple only", total, items)
 	}
+	items, total, err = foodRepo.Search(ctx, RepositoryQuery{
+		RepositoryContext:       RepositoryContext{UnitSystem: UnitSystemMetric},
+		FoodCategoryIDs:         []uuid.UUID{categoryID},
+		ExcludedFoodCategoryIDs: []uuid.UUID{excludedCategoryID},
+		ExcludedCulinaryRoleIDs: []uuid.UUID{excludedRoleID},
+		ExcludedAllergenIDs:     []uuid.UUID{excludedCategoryID},
+		FoodObjectTypes:         []PhysicalState{PhysicalStateSolid},
+		ExcludedFoodObjectTypes: []PhysicalState{PhysicalStateLiquid},
+		Limit:                   10,
+	})
+	if err != nil {
+		t.Fatalf("Search() exclusion filters error = %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].ID != appleID {
+		t.Fatalf("Search() exclusion filters total=%d items=%#v, want apple only", total, items)
+	}
 
 	if err := foodRepo.Delete(ctx, appleID); err != nil {
 		t.Fatalf("Delete() apple error = %v", err)
 	}
-	items, total, err = foodRepo.Search(ctx, RepositoryQuery{Name: "Ap", Limit: 10})
+	items, total, err = foodRepo.Search(ctx, RepositoryQuery{Name: "Ap", CulinaryRoleIDs: []uuid.UUID{functionalityID}, Limit: 10})
 	if err != nil {
 		t.Fatalf("Search() deleted exclusion error = %v", err)
 	}
@@ -901,7 +1040,7 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 		t.Fatalf("Search() deleted exclusion total=%d items=%#v, want none", total, items)
 	}
 
-	items, total, err = foodRepo.Search(ctx, RepositoryQuery{Limit: 1, Offset: 99})
+	items, total, err = foodRepo.Search(ctx, RepositoryQuery{FoodCategoryIDs: []uuid.UUID{excludedCategoryID}, Limit: 1, Offset: 99})
 	if err != nil {
 		t.Fatalf("Search() past final row error = %v", err)
 	}

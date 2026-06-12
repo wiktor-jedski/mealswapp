@@ -215,6 +215,22 @@ func fetchCSRFToken(t *testing.T, app *fiber.App, cookies ...*http.Cookie) (stri
 	return token, mergeCookies(cookies, resp.Cookies())
 }
 
+func TestRouterServesSimilarityIndicatorAssets(t *testing.T) {
+	app := mustNewRouter(t, Dependencies{Config: testConfig()})
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/assets/similarity/poor.svg", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("asset status = %d, want %d", resp.StatusCode, fiber.StatusOK)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.Contains(contentType, "image/svg+xml") {
+		t.Fatalf("asset content type = %q", contentType)
+	}
+}
+
 func mergeCookies(existing []*http.Cookie, updates []*http.Cookie) []*http.Cookie {
 	merged := map[string]*http.Cookie{}
 	for _, cookie := range existing {

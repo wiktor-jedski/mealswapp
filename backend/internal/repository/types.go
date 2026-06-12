@@ -139,12 +139,20 @@ type RepositoryContext struct {
 // Implements DESIGN-005 RepositoryInterfaces.
 type RepositoryQuery struct {
 	RepositoryContext
-	Name            string
-	FoodCategoryIDs []uuid.UUID
-	CulinaryRoleIDs []uuid.UUID
-	MaxPrepMinutes  *int
-	Limit           int
-	Offset          int
+	Name                    string
+	FoodCategoryIDs         []uuid.UUID
+	ExcludedFoodCategoryIDs []uuid.UUID
+	CulinaryRoleIDs         []uuid.UUID
+	ExcludedCulinaryRoleIDs []uuid.UUID
+	AllergenIDs             []uuid.UUID
+	ExcludedAllergenIDs     []uuid.UUID
+	AllergenKeys            []string
+	ExcludedAllergenKeys    []string
+	FoodObjectTypes         []PhysicalState
+	ExcludedFoodObjectTypes []PhysicalState
+	MaxPrepMinutes          *int
+	Limit                   int
+	Offset                  int
 }
 
 // UserRole identifies supported repository-owned user roles.

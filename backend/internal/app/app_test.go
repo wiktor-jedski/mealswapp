@@ -59,8 +59,8 @@ type fakeProductionRow struct{}
 
 func (fakeProductionRow) Scan(...any) error { return errors.New("row not available") }
 
-// TestNewProductionExposesPhase03Routes verifies DESIGN-010 RouteHandler production composition.
-func TestNewProductionExposesPhase03Routes(t *testing.T) {
+// TestNewProductionExposesProductionRoutes verifies DESIGN-010 RouteHandler production composition.
+func TestNewProductionExposesProductionRoutes(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -90,6 +90,8 @@ func TestNewProductionExposesPhase03Routes(t *testing.T) {
 		{fiber.MethodGet, "/api/v1/profile", ""},
 		{fiber.MethodGet, "/api/v1/account/export", ""},
 		{fiber.MethodDelete, "/api/v1/account", ""},
+		{fiber.MethodPost, "/api/v1/search", `{"query":"milk","mode":"catalog","page":1,"filters":[]}`},
+		{fiber.MethodGet, "/api/v1/search/autocomplete?query=milk", ""},
 	}
 	for _, check := range checks {
 		req := httptest.NewRequest(check.method, check.path, strings.NewReader(check.body))
@@ -104,5 +106,49 @@ func TestNewProductionExposesPhase03Routes(t *testing.T) {
 		if resp.StatusCode == fiber.StatusNotFound {
 			t.Fatalf("%s %s returned 404; route is not composed", check.method, check.path)
 		}
+	}
+}
+
+// TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog verifies DESIGN-002 production search composition.
+func TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog(t *testing.T) {
+	cfg := config.Config{
+		APITimeout:     time.Second,
+		AllowedOrigins: []string{"http://localhost:5173"},
+		Environment:    "development",
+		Account: config.AccountConfig{
+			AccessTokenTTL:              15 * time.Minute,
+			RefreshTokenTTL:             7 * 24 * time.Hour,
+			AccessCookieName:            "__Host-test_access",
+			RefreshCookieName:           "__Host-test_refresh",
+			CurrentPrivacyPolicyVersion: "privacy-v1",
+			CurrentTermsVersion:         "terms-v1",
+		},
+	}
+	server, err := NewProduction(cfg, fakeProductionPostgres{}, nil, observability.JSONSink{Writer: io.Discard})
+	if err != nil {
+		t.Fatalf("NewProduction() error = %v", err)
+	}
+	body := `{"query":"milk","mode":"substitution","page":1,"filters":[],"substitutionInputs":[{"foodObjectId":"60000000-0000-4000-8000-000000000001","quantity":100,"unit":"g"}]}`
+
+	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/search", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := server.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != fiber.StatusUnprocessableEntity {
+		t.Fatalf("response = %d body=%s", resp.StatusCode, responseBody)
+	}
+	if strings.Contains(string(responseBody), "search mode is not available for catalog results") || strings.Contains(string(responseBody), `"field":"mode"`) {
+		t.Fatalf("substitution request still reached catalog-only rejection: %s", responseBody)
+	}
+	if !strings.Contains(string(responseBody), `"field":"substitutionInputs"`) {
+		t.Fatalf("substitution request did not reach substitution service: %s", responseBody)
 	}
 }

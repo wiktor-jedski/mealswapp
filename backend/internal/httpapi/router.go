@@ -19,6 +19,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
@@ -91,6 +92,7 @@ type RouteDefinition struct {
 	Path          string
 	Handler       fiber.Handler
 	RequiresAuth  bool
+	OptionalAuth  bool
 	RequiresCSRF  bool
 	ExemptCSRF    bool
 	RequiresAudit bool
@@ -144,6 +146,8 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	app.Use(securityHeaders(deps.Config))
 	app.Use(instrument(deps))
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
+	// Implements DESIGN-003 SimilarityAssetResolver server-hosted indicator assets.
+	app.Static("/assets", search.StaticAssetRoot(), fiber.Static{Browse: false})
 	if deps.CSRF == nil {
 		deps.CSRF = NewCSRFManager(deps.Config, deps.Audit)
 	}
@@ -168,6 +172,8 @@ func registerV1Routes(group fiber.Router, deps Dependencies) {
 		handlers := []fiber.Handler{}
 		if route.RequiresAuth {
 			handlers = append(handlers, requireAuth(deps.Auth))
+		} else if route.OptionalAuth {
+			handlers = append(handlers, optionalAuth(deps.Auth))
 		}
 		if route.RequiresCSRF {
 			handlers = append(handlers, deps.CSRF.Validate)
