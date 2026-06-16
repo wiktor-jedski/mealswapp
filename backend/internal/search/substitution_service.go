@@ -19,14 +19,19 @@ type SubstitutionFoodRepository interface {
 // SubstitutionService orchestrates Substitution Search over source macros, filters, similarity, and cache.
 // Implements DESIGN-002 SearchController and CulinaryRoleWeighter.
 type SubstitutionService struct {
-	repository SubstitutionFoodRepository
-	cache      SearchResponseCache
+	repository      SubstitutionFoodRepository
+	cache           SearchResponseCache
+	similarityCache SimilarityCalculationCache
 }
 
 // NewSubstitutionService creates Substitution Search orchestration.
 // Implements DESIGN-002 SearchController.
-func NewSubstitutionService(repository SubstitutionFoodRepository, cache SearchResponseCache) *SubstitutionService {
-	return &SubstitutionService{repository: repository, cache: cache}
+func NewSubstitutionService(repository SubstitutionFoodRepository, cache SearchResponseCache, similarityCache ...SimilarityCalculationCache) *SubstitutionService {
+	service := &SubstitutionService{repository: repository, cache: cache}
+	if len(similarityCache) > 0 {
+		service.similarityCache = similarityCache[0]
+	}
+	return service
 }
 
 // Search executes Substitution Search and returns ranked food substitutes.
@@ -60,6 +65,8 @@ func (s *SubstitutionService) Search(ctx context.Context, req SearchRequest) (Se
 	if response.Rejection == nil && s.cache != nil {
 		if err := s.cache.SetSearchResponse(ctx, normalizedReq, responseWithoutCache(response)); err != nil {
 			response.Warnings = appendWarningOnce(response.Warnings, WarningCacheUnavailable)
+		} else {
+			response.Cache = searchResponseCacheMetadata(s.cache, normalizedReq, CacheStatusMiss)
 		}
 	}
 	return response, nil
@@ -85,19 +92,20 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 		return SearchResponse{}, err
 	}
 
-	results, diagnostics, err := CompareMacros(ctx, ComparisonRequest{
+	calculation, similarityWarnings, err := s.compareMacrosWithCache(ctx, req.SubstitutionInputs, ComparisonRequest{
 		SourceMacros:        source.macros,
 		SourceCalories:      macroCalories(source.macros),
 		Targets:             substitutionTargets(candidates),
 		MatchType:           MatchTypeCalorie,
 		SimilarityThreshold: defaultSimilarityThreshold,
-	}, nil)
+	})
 	if err != nil {
 		return SearchResponse{}, SimilarityUnavailableError{Cause: err}
 	}
-	ranked := rankSubstitutionCandidates(candidates, results, len(req.SubstitutionInputs) == 1, sourceRoles)
+	ranked := rankSubstitutionCandidates(candidates, calculation.Results, len(req.SubstitutionInputs) == 1, sourceRoles)
 	warnings := append(catalogWarnings(processed.ExclusionRules), sourceWarnings...)
-	for _, diagnostic := range diagnostics {
+	warnings = append(warnings, similarityWarnings...)
+	for _, diagnostic := range calculation.Diagnostics {
 		warnings = append(warnings, "skipped target "+diagnostic.ItemID.String()+" "+diagnostic.Code)
 	}
 
@@ -109,6 +117,31 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 		SimilarityMetadata: ranked.metadata,
 		Warnings:           warnings,
 	}, nil
+}
+
+// compareMacrosWithCache checks Redis-backed similarity calculations before macro comparison.
+// Implements DESIGN-003 CosineSimilarityCalculator and DESIGN-011 RedisCache.
+func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs []SubstitutionInput, req ComparisonRequest) (SimilarityCalculation, []string, error) {
+	warnings := []string{}
+	if s.similarityCache != nil {
+		if cached, hit, err := s.similarityCache.GetSimilarityCalculation(ctx, inputs); err == nil && hit {
+			return cached, warnings, nil
+		} else if err != nil {
+			warnings = append(warnings, WarningCacheUnavailable)
+		}
+	}
+
+	results, diagnostics, err := CompareMacros(ctx, req, nil)
+	if err != nil {
+		return SimilarityCalculation{}, warnings, err
+	}
+	calculation := SimilarityCalculation{Results: results, Diagnostics: diagnostics}
+	if s.similarityCache != nil {
+		if err := s.similarityCache.SetSimilarityCalculation(ctx, inputs, calculation); err != nil {
+			warnings = appendWarningOnce(warnings, WarningCacheUnavailable)
+		}
+	}
+	return calculation, warnings, nil
 }
 
 // substitutionSource carries the combined source Macro Profile for Substitution Search.

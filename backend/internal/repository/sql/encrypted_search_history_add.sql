@@ -20,7 +20,7 @@ pruned AS (
           FROM search_history
           WHERE user_id = $1
           ORDER BY created_at DESC, id DESC
-          LIMIT 99
+          LIMIT 100
       )
 )
 SELECT id FROM inserted;

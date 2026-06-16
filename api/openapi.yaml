@@ -996,9 +996,10 @@ components:
             $ref: "#/components/schemas/SimilarityMetadata"
         warnings:
           type: array
+          description: Degraded or diagnostic search warnings. Values can include stable warning codes such as cache_unavailable and contextual diagnostics such as excluded filters or skipped similarity targets.
           items:
             type: string
-            enum: [cache_unavailable]
+          example: [cache_unavailable, excluded allergen dairy]
         cache:
           $ref: "#/components/schemas/CacheMetadata"
     SearchResponseEnvelope:

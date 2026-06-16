@@ -373,7 +373,7 @@ export interface SearchResponse extends Record<string, unknown> {
 \tpage: number;
 \tsimilarityScores: number[];
 \tsimilarityMetadata: SimilarityMetadata[];
-\twarnings: Array<"cache_unavailable">;
+\twarnings: string[];
 \tcache?: CacheMetadata;
 }
 

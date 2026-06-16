@@ -320,7 +320,7 @@ export interface SearchResponse extends Record<string, unknown> {
 	page: number;
 	similarityScores: number[];
 	similarityMetadata: SimilarityMetadata[];
-	warnings: Array<"cache_unavailable">;
+	warnings: string[];
 	cache?: CacheMetadata;
 }
 

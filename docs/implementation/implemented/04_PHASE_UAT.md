@@ -6,7 +6,7 @@ Phase 04 covers tasks `115`-`133`. The backend now exposes search input
 normalization, search DTO parsing, dietary-preset expansion, autocomplete
 ranking, Redis-backed search/autocomplete/similarity caching, macro similarity
 ranking, similarity indicator metadata, catalog search, substitution search,
-Daily Daily Diet Alternative Search request-shape handling, search error
+Daily Diet Alternative Search request-shape handling, search error
 mapping, authenticated search-history persistence, search routes, OpenAPI
 contracts, generated frontend API types, production bootstrap composition, and
 aggregate gate evidence.

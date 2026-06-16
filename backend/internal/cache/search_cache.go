@@ -66,8 +66,9 @@ type RedisStore interface {
 // SearchResponseStore adapts RedisStore to the Catalog Search service cache boundary.
 // Implements DESIGN-002 SearchController and DESIGN-011 RedisCache.
 type SearchResponseStore struct {
-	Store RedisStore
-	TTL   time.Duration
+	Store         RedisStore
+	TTL           time.Duration
+	SimilarityTTL time.Duration
 }
 
 // GetSearchResponse reads one cached SearchResponse.
@@ -91,6 +92,34 @@ func (s SearchResponseStore) SetSearchResponse(ctx context.Context, req search.S
 	return SetRedis(ctx, s.Store, key, responseWithoutCacheMetadata(response), ttl)
 }
 
+// SearchResponseCacheMetadata returns response metadata for a search cache request.
+// Implements DESIGN-011 RedisCache response metadata.
+func (s SearchResponseStore) SearchResponseCacheMetadata(req search.SearchRequest, status search.CacheStatus) *search.CacheMetadata {
+	key := BuildSearchCacheKey(req)
+	return cacheMetadataPtr(key, status, s.ttl())
+}
+
+// GetSimilarityCalculation reads one cached Substitution Search macro comparison payload.
+// Implements DESIGN-011 RedisCache similarity calculation cache-hit behavior.
+func (s SearchResponseStore) GetSimilarityCalculation(ctx context.Context, inputs []search.SubstitutionInput) (search.SimilarityCalculation, bool, error) {
+	key := BuildSimilarityCacheKey(inputs)
+	return GetRedis[search.SimilarityCalculation](ctx, s.Store, key)
+}
+
+// SetSimilarityCalculation stores one successful Substitution Search macro comparison payload.
+// Implements DESIGN-011 RedisCache similarity calculation cache-miss persistence behavior.
+func (s SearchResponseStore) SetSimilarityCalculation(ctx context.Context, inputs []search.SubstitutionInput, calculation search.SimilarityCalculation) error {
+	key := BuildSimilarityCacheKey(inputs)
+	return SetRedis(ctx, s.Store, key, calculation, s.similarityTTL())
+}
+
+// SimilarityCalculationCacheMetadata returns response metadata for a similarity cache request.
+// Implements DESIGN-011 RedisCache response metadata.
+func (s SearchResponseStore) SimilarityCalculationCacheMetadata(inputs []search.SubstitutionInput, status search.CacheStatus) *search.CacheMetadata {
+	key := BuildSimilarityCacheKey(inputs)
+	return cacheMetadataPtr(key, status, s.similarityTTL())
+}
+
 // ttl returns the configured search TTL or the default duration.
 // Implements DESIGN-011 RedisCache cache expiration behavior.
 func (s SearchResponseStore) ttl() time.Duration {
@@ -98,6 +127,15 @@ func (s SearchResponseStore) ttl() time.Duration {
 		return DefaultSearchTTL
 	}
 	return s.TTL
+}
+
+// similarityTTL returns the configured similarity TTL or the default duration.
+// Implements DESIGN-011 RedisCache cache expiration behavior.
+func (s SearchResponseStore) similarityTTL() time.Duration {
+	if s.SimilarityTTL <= 0 {
+		return DefaultSimilarityTTL
+	}
+	return s.SimilarityTTL
 }
 
 // GoRedisStore adapts go-redis clients to RedisStore.

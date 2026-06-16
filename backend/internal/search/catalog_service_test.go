@@ -51,6 +51,10 @@ func (c *searchCacheStub) SetSearchResponse(_ context.Context, req SearchRequest
 	return c.setErr
 }
 
+func (c *searchCacheStub) SearchResponseCacheMetadata(SearchRequest, CacheStatus) *CacheMetadata {
+	return &CacheMetadata{Status: CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v1", TTLSeconds: 300}
+}
+
 func TestCatalogServiceSearchFiltersPaginationSortingWarningsAndCacheMiss(t *testing.T) {
 	categoryID := uuid.New()
 	excludedRoleID := uuid.New()
@@ -87,6 +91,9 @@ func TestCatalogServiceSearchFiltersPaginationSortingWarningsAndCacheMiss(t *tes
 	}
 	if len(response.Warnings) != 1 || response.Warnings[0] == "" {
 		t.Fatalf("warnings = %#v", response.Warnings)
+	}
+	if response.Cache == nil || response.Cache.Status != CacheStatusMiss || response.Cache.Namespace != "search" || response.Cache.SchemaVersion != "search-response-v1" || response.Cache.TTLSeconds != 300 {
+		t.Fatalf("cache miss metadata = %+v", response.Cache)
 	}
 	if cache.setReq.Query != "apple bowl" || cache.setReq.Page != 2 {
 		t.Fatalf("cache request = %+v", cache.setReq)
@@ -187,6 +194,9 @@ func TestCatalogServiceSearchReturnsCacheUnavailableWarningOnFallback(t *testing
 	}
 	if got := countWarnings(response.Warnings, WarningCacheUnavailable); got != 1 {
 		t.Fatalf("cache warning count = %d warnings=%#v", got, response.Warnings)
+	}
+	if response.Cache != nil {
+		t.Fatalf("cache write failure advertised metadata = %+v", response.Cache)
 	}
 }
 

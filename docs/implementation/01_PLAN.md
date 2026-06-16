@@ -57,7 +57,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Persist completed authenticated-user searches only after valid results are returned. Retain duplicate searches, cap history at the latest 100 rows per user, expose clear-history behavior, and do not persist anonymous searches.
 - Implement required OpenAPI-to-frontend type generation for the first domain contracts, including `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache-related response metadata. This is the latest phase where type generation may remain incomplete, because Phase 05 frontend API work consumes these generated types.
 - Lint search-domain OpenAPI contract additions with Redocly CLI before generating frontend types.
-- Exit criteria: API supports Catalog Search, Substitution Search, and Daily Daily Diet Alternative Search query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
+- Exit criteria: API supports Catalog Search, Substitution Search, and Daily Diet Alternative Search query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
 
 ### Phase 05: Frontend Search Experience
 

@@ -23,6 +23,31 @@ type substitutionRepositoryStub struct {
 	searchErr error
 }
 
+type similarityCacheStub struct {
+	calculation SimilarityCalculation
+	hit         bool
+	getErr      error
+	setErr      error
+	gets        int
+	sets        int
+	getInputs   []SubstitutionInput
+	setInputs   []SubstitutionInput
+}
+
+func (c *similarityCacheStub) GetSimilarityCalculation(_ context.Context, inputs []SubstitutionInput) (SimilarityCalculation, bool, error) {
+	c.gets++
+	c.getInputs = slices.Clone(inputs)
+	return c.calculation, c.hit, c.getErr
+}
+
+func (c *similarityCacheStub) SetSimilarityCalculation(_ context.Context, inputs []SubstitutionInput, calculation SimilarityCalculation) error {
+	c.sets++
+	c.setInputs = slices.Clone(inputs)
+	c.calculation = calculation
+	c.hit = true
+	return c.setErr
+}
+
 func (r *substitutionRepositoryStub) GetByID(_ context.Context, id uuid.UUID, _ repository.RepositoryContext) (repository.FoodItemEntity, error) {
 	r.getCalls++
 	item, ok := r.byID[id]
@@ -181,12 +206,123 @@ func TestSubstitutionServiceCachesRejectionsAndSkippedSources(t *testing.T) {
 	if response.Page != 1 || len(response.Items) != 1 || cache.gets != 1 || cache.sets != 1 || cache.setReq.Query != "milk" || cache.setReq.Page != 1 {
 		t.Fatalf("response=%+v cache gets=%d sets=%d req=%+v", response, cache.gets, cache.sets, cache.setReq)
 	}
+	if response.Cache == nil || response.Cache.Status != CacheStatusMiss || response.Cache.Namespace != "search" || response.Cache.SchemaVersion != "search-response-v1" || response.Cache.TTLSeconds != 300 {
+		t.Fatalf("cache miss metadata = %+v", response.Cache)
+	}
 	assertWarningContains(t, response.Warnings, "skipped source 50000000-0000-4000-8000-000000000099 load_failed")
 
 	rejected, err := NewSubstitutionService(repo, nil).Search(context.Background(), SearchRequest{Query: "swap", Mode: SearchModeSubstitution, Page: 1})
 	if err != nil || rejected.Rejection == nil || rejected.Rejection.Field != "substitutionInputs" {
 		t.Fatalf("empty input rejection = %+v err=%v", rejected, err)
 	}
+	if rejected.Cache != nil {
+		t.Fatalf("rejection advertised cache metadata = %+v", rejected.Cache)
+	}
+}
+
+func TestSubstitutionServiceCachesSimilarityCalculationsBeforeMacroComparison(t *testing.T) {
+	sourceID := uuid.MustParse("60000000-0000-4000-8000-000000000001")
+	candidateID := uuid.MustParse("60000000-0000-4000-8000-000000000002")
+	repo := &substitutionRepositoryStub{
+		byID: map[uuid.UUID]repository.FoodItemEntity{
+			sourceID: {ID: sourceID, Name: "Source", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
+		},
+		items: []repository.FoodItemEntity{
+			{ID: candidateID, Name: "Cached Target", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{}},
+		},
+	}
+	cache := &similarityCacheStub{hit: true, calculation: SimilarityCalculation{Results: []SimilarityResult{{
+		ItemID:           candidateID,
+		Score:            0.91,
+		Tier:             SimilarityTierExcellent,
+		ColorHex:         "#1B7F4C",
+		ImageURL:         "/assets/similarity/excellent.svg",
+		MatchingQuantity: 88,
+	}}}}
+
+	response, err := NewSubstitutionService(repo, nil, cache).Search(context.Background(), SearchRequest{
+		Query: "swap",
+		Mode:  SearchModeSubstitution,
+		Page:  1,
+		SubstitutionInputs: []SubstitutionInput{
+			{FoodObjectID: sourceID, Quantity: 100, Unit: "g"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cache.gets != 1 || cache.sets != 0 || len(cache.getInputs) != 1 {
+		t.Fatalf("similarity cache calls gets=%d sets=%d inputs=%+v", cache.gets, cache.sets, cache.getInputs)
+	}
+	if len(response.Items) != 1 || response.Items[0].ID != candidateID || response.SimilarityMetadata[0].Score != 0.91 || response.SimilarityMetadata[0].MatchingQuantity != 88 {
+		t.Fatalf("cached similarity response = %+v", response)
+	}
+	if len(response.Warnings) != 0 {
+		t.Fatalf("cached similarity produced warnings: %+v", response.Warnings)
+	}
+}
+
+func TestSubstitutionServiceWritesAndReusesSimilarityCache(t *testing.T) {
+	sourceID := uuid.MustParse("61000000-0000-4000-8000-000000000001")
+	candidateID := uuid.MustParse("61000000-0000-4000-8000-000000000002")
+	repo := &substitutionRepositoryStub{
+		byID: map[uuid.UUID]repository.FoodItemEntity{
+			sourceID: {ID: sourceID, Name: "Source", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
+		},
+		items: []repository.FoodItemEntity{
+			{ID: candidateID, Name: "Target", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
+		},
+	}
+	cache := &similarityCacheStub{}
+	service := NewSubstitutionService(repo, nil, cache)
+	req := SearchRequest{Query: "swap", Mode: SearchModeSubstitution, Page: 1, SubstitutionInputs: []SubstitutionInput{{FoodObjectID: sourceID, Quantity: 100, Unit: "gram"}}}
+
+	first, err := service.Search(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondReq := req
+	secondReq.SubstitutionInputs = []SubstitutionInput{{FoodObjectID: sourceID, Quantity: 100, Unit: "gram"}}
+	second, err := service.Search(context.Background(), secondReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cache.gets != 2 || cache.sets != 1 {
+		t.Fatalf("similarity cache calls gets=%d sets=%d", cache.gets, cache.sets)
+	}
+	if len(first.Items) != 1 || len(second.Items) != 1 || first.Items[0].ID != second.Items[0].ID || first.SimilarityMetadata[0] != second.SimilarityMetadata[0] {
+		t.Fatalf("cached repeat mismatch first=%+v second=%+v", first, second)
+	}
+}
+
+func TestSubstitutionServiceWarnsAndFallsBackWhenSimilarityCacheUnavailable(t *testing.T) {
+	sourceID := uuid.MustParse("62000000-0000-4000-8000-000000000001")
+	candidateID := uuid.MustParse("62000000-0000-4000-8000-000000000002")
+	repo := &substitutionRepositoryStub{
+		byID: map[uuid.UUID]repository.FoodItemEntity{
+			sourceID: {ID: sourceID, Name: "Source", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
+		},
+		items: []repository.FoodItemEntity{
+			{ID: candidateID, Name: "Target", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
+		},
+	}
+	cache := &similarityCacheStub{getErr: errors.New("redis down"), setErr: errors.New("redis still down")}
+
+	response, err := NewSubstitutionService(repo, nil, cache).Search(context.Background(), SearchRequest{
+		Query: "swap",
+		Mode:  SearchModeSubstitution,
+		Page:  1,
+		SubstitutionInputs: []SubstitutionInput{
+			{FoodObjectID: sourceID, Quantity: 100, Unit: "g"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Items) != 1 || cache.gets != 1 || cache.sets != 1 {
+		t.Fatalf("fallback response=%+v cache gets=%d sets=%d", response, cache.gets, cache.sets)
+	}
+	assertWarningContains(t, response.Warnings, WarningCacheUnavailable)
 }
 
 func TestApplyCulinaryRoleWeightCountsUniqueSharedRoles(t *testing.T) {

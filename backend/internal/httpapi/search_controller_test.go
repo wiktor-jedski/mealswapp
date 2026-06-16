@@ -157,6 +157,10 @@ func (c *composedSearchGateCache) SetSearchResponse(_ context.Context, req searc
 	return nil
 }
 
+func (c *composedSearchGateCache) SearchResponseCacheMetadata(search.SearchRequest, search.CacheStatus) *search.CacheMetadata {
+	return &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v1", TTLSeconds: 300}
+}
+
 func composedSearchGateCacheKey(req search.SearchRequest) string {
 	return string(req.Mode) + "|" + req.Query + "|" + string(rune(req.Page))
 }
@@ -487,6 +491,10 @@ func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing
 	if items[0].(map[string]any)["name"] != "Apple" {
 		t.Fatalf("catalog results were not repository-to-route sorted: %+v", items)
 	}
+	cacheData := envelope.Data["cache"].(map[string]any)
+	if cacheData["status"] != "miss" || cacheData["namespace"] != "search" || cacheData["schemaVersion"] != "search-response-v1" || cacheData["ttlSeconds"] != float64(300) {
+		t.Fatalf("cache miss metadata = %+v", cacheData)
+	}
 
 	anonymousReq := searchHTTPPost(body)
 	resp, err = app.Test(anonymousReq)
@@ -498,7 +506,7 @@ func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing
 	if resp.StatusCode != fiber.StatusOK || repo.searches != 1 || cache.gets != 2 || cache.sets != 1 || history.calls != 1 {
 		t.Fatalf("hit response=%d repo=%d cache=%+v history calls=%d envelope=%+v", resp.StatusCode, repo.searches, cache, history.calls, envelope)
 	}
-	cacheData := envelope.Data["cache"].(map[string]any)
+	cacheData = envelope.Data["cache"].(map[string]any)
 	if cacheData["status"] != "hit" || cacheData["schemaVersion"] != "search-response-v1" {
 		t.Fatalf("cache hit metadata = %+v", cacheData)
 	}

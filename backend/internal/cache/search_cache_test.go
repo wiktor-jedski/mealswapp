@@ -293,6 +293,43 @@ func TestSearchResponseStoreGetSetUsesDefaultTTLAndStripsTransientMetadata(t *te
 	}
 }
 
+func TestSearchResponseStoreSimilarityCalculationUsesNamespaceSchemaAndTTL(t *testing.T) {
+	ctx := context.Background()
+	store := &memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}
+	responseStore := SearchResponseStore{Store: store, SimilarityTTL: 42 * time.Second}
+	inputs := []search.SubstitutionInput{{
+		FoodObjectID: uuid.MustParse("77777777-7777-4777-8777-777777777777"),
+		Quantity:     100,
+		Unit:         "g",
+	}}
+	calculation := search.SimilarityCalculation{
+		Results:     []search.SimilarityResult{{ItemID: uuid.MustParse("88888888-8888-4888-8888-888888888888"), Score: 0.91}},
+		Diagnostics: []search.SimilarityDiagnostic{{ItemID: uuid.MustParse("99999999-9999-4999-8999-999999999999"), Code: "below_threshold"}},
+	}
+	key := BuildSimilarityCacheKey(inputs)
+
+	if err := responseStore.SetSimilarityCalculation(ctx, inputs, calculation); err != nil {
+		t.Fatalf("SetSimilarityCalculation() error = %v", err)
+	}
+	if key.Namespace != RedisNamespaceSimilarity || key.Version != SimilaritySchemaVersion {
+		t.Fatalf("similarity key = %+v", key)
+	}
+	if store.ttls[key.String()] != 42*time.Second {
+		t.Fatalf("ttl = %v, want 42s", store.ttls[key.String()])
+	}
+	got, hit, err := responseStore.GetSimilarityCalculation(ctx, inputs)
+	if err != nil || !hit {
+		t.Fatalf("GetSimilarityCalculation() hit=%v err=%v", hit, err)
+	}
+	if len(got.Results) != 1 || got.Results[0].Score != 0.91 || len(got.Diagnostics) != 1 || got.Diagnostics[0].Code != "below_threshold" {
+		t.Fatalf("cached calculation = %+v", got)
+	}
+	metadata := responseStore.SimilarityCalculationCacheMetadata(inputs, search.CacheStatusMiss)
+	if metadata == nil || metadata.Status != search.CacheStatusMiss || metadata.Namespace != string(RedisNamespaceSimilarity) || metadata.SchemaVersion != SimilaritySchemaVersion || metadata.TTLSeconds != 42 {
+		t.Fatalf("similarity cache metadata = %+v", metadata)
+	}
+}
+
 func TestGetOrLoadAutocompleteResponseAttachesMetadata(t *testing.T) {
 	ctx := context.Background()
 	store := &memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}

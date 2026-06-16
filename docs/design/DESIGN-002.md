@@ -6,7 +6,7 @@
 ### 0. Static Aspect Responsibilities
 - `SearchController`: owns Fiber endpoint handlers, request validation, service orchestration, and response envelopes.
 - `AutocompleteRanker`: owns exact-match, Levenshtein, and string-length ranking.
-- `QueryParser`: owns normalization and strategy selection for Catalog Search, Substitution Search, and Daily Daily Diet Alternative Search.
+- `QueryParser`: owns normalization and strategy selection for Catalog Search, Substitution Search, and Daily Diet Alternative Search.
 - `PaginationHandler`: owns page bounds, page size of 10, offsets, and response metadata.
 - `FilterProcessor`: owns include/exclude Search filter validation, Exclusion Rule conflict detection, and repository query translation.
 - `CulinaryRoleWeighter`: owns single-input Substitution Search score boosts for shared Culinary Roles.

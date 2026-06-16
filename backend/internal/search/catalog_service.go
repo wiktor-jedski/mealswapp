@@ -20,6 +20,32 @@ type SearchResponseCache interface {
 	SetSearchResponse(context.Context, SearchRequest, SearchResponse) error
 }
 
+// SearchResponseCacheMetadataProvider reports response-safe cache metadata without exposing cache keys.
+// Implements DESIGN-011 RedisCache response metadata.
+type SearchResponseCacheMetadataProvider interface {
+	SearchResponseCacheMetadata(SearchRequest, CacheStatus) *CacheMetadata
+}
+
+// SimilarityCalculation carries cached macro comparison results and diagnostics.
+// Implements DESIGN-003 CosineSimilarityCalculator and DESIGN-011 RedisCache.
+type SimilarityCalculation struct {
+	Results     []SimilarityResult
+	Diagnostics []SimilarityDiagnostic
+}
+
+// SimilarityCalculationCache stores successful Substitution Search macro comparison payloads.
+// Implements DESIGN-002 SearchController and DESIGN-011 RedisCache.
+type SimilarityCalculationCache interface {
+	GetSimilarityCalculation(context.Context, []SubstitutionInput) (SimilarityCalculation, bool, error)
+	SetSimilarityCalculation(context.Context, []SubstitutionInput, SimilarityCalculation) error
+}
+
+// SimilarityCalculationCacheMetadataProvider reports response-safe similarity cache metadata.
+// Implements DESIGN-011 RedisCache response metadata.
+type SimilarityCalculationCacheMetadataProvider interface {
+	SimilarityCalculationCacheMetadata([]SubstitutionInput, CacheStatus) *CacheMetadata
+}
+
 // CatalogService orchestrates Catalog Search over filters, repository paging, and cache.
 // Implements DESIGN-002 SearchController.
 type CatalogService struct {
@@ -67,6 +93,8 @@ func (s *CatalogService) Search(ctx context.Context, req SearchRequest) (SearchR
 	if response.Rejection == nil && s.cache != nil {
 		if err := s.cache.SetSearchResponse(ctx, normalizedReq, responseWithoutCache(response)); err != nil {
 			response.Warnings = appendWarningOnce(response.Warnings, WarningCacheUnavailable)
+		} else {
+			response.Cache = searchResponseCacheMetadata(s.cache, normalizedReq, CacheStatusMiss)
 		}
 	}
 	return response, nil
@@ -134,6 +162,16 @@ func normalizedPage(page int) int {
 func responseWithoutCache(response SearchResponse) SearchResponse {
 	response.Cache = nil
 	return response
+}
+
+// searchResponseCacheMetadata returns optional metadata for successful cache writes.
+// Implements DESIGN-011 RedisCache response metadata.
+func searchResponseCacheMetadata(cache SearchResponseCache, req SearchRequest, status CacheStatus) *CacheMetadata {
+	provider, ok := cache.(SearchResponseCacheMetadataProvider)
+	if !ok {
+		return nil
+	}
+	return provider.SearchResponseCacheMetadata(req, status)
 }
 
 // appendWarningOnce appends a warning only when it is absent.

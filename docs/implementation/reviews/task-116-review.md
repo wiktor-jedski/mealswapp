@@ -33,7 +33,7 @@ All listed dependency task IDs are PREPARED or PASSED.
 - PASS: Query parsing normalizes search text and exposes normalized tokens.
 - PASS: Pagination uses deterministic page size 10 and converts one-based page numbers to offsets.
 - PASS: Supplied page size is clamped/ignored in favor of page size 10.
-- PASS: Strategy selection covers Catalog Search, Substitution Search, and Daily Daily Diet Alternative Search.
+- PASS: Strategy selection covers Catalog Search, Substitution Search, and Daily Diet Alternative Search.
 - PASS: Substitution inputs select Substitution Search regardless of input count and override other shapes.
 - PASS: Unit tests cover the task verification criteria.
 - PASS: Design traceability comments reference `DESIGN-002`.

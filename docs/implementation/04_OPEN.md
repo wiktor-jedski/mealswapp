@@ -118,7 +118,7 @@ No unresolved Phase 03 code review findings remain at this time.
 ### Assumptions
 
 - Accepted for planning: Dietary Presets are deterministic backend-owned named bundles that expand into Exclusion Rules at search time. They are not stored as Food Object classifications and should not create misleading Food Category or Culinary Role rows.
-- Accepted for planning: Phase 04 supports the Daily Daily Diet Alternative Search request shape at the search API boundary, but does not implement Phase 07 LP optimization jobs or saved-diet persistence. When required Phase 07 data is unavailable, the API returns a deterministic user-facing `SearchRejection` instead of creating worker/job side effects.
+- Accepted for planning: Phase 04 supports the Daily Diet Alternative Search request shape at the search API boundary, but does not implement Phase 07 LP optimization jobs or saved-diet persistence. When required Phase 07 data is unavailable, the API returns a deterministic user-facing `SearchRejection` instead of creating worker/job side effects.
 - Task 115 implementation assumes defensive request-boundary limits of 200 runes for search queries, 120 runes for autocomplete queries, and maximum page `10000`; project owner should adjust these before public launch if product search UX requires different bounds.
 - Task 115 implementation treats substitution units as compact letter, hyphen, or underscore tokens up to 32 runes and validates `dailyDietId` as UUID-shaped when present; required-vs-optional daily-diet semantics remain deferred to Task 124.
 - Task 119 implementation uses schema versions `search-response-v1`, `autocomplete-response-v1`, and `similarity-calculation-v1`, with default TTLs of 5 minutes for search responses, 2 minutes for autocomplete responses, and 15 minutes for similarity calculations. DESIGN-011 requires schema versions and TTLs but does not specify concrete values.
@@ -136,4 +136,6 @@ No unresolved Phase 03 code review findings remain at this time.
 
 ### Actions needed
 
+- Task 136 is open from the Phase 04 review: catalog and substitution search cache misses write to Redis but do not attach `cache.status = "miss"` response metadata after successful uncached loads.
+- Task 137 is open from the Phase 04 review: similarity cache helpers exist, but production substitution search calls macro comparison directly instead of using Redis cache get/set behavior for similarity calculations.
 - No current Phase 04 aggregate-gate blocker remains after Task 134 audit verification on 2026-06-12. Future phases should add tests when any dormant account, OAuth, deletion-worker, export, repository, or defensive search branch becomes active product behavior.

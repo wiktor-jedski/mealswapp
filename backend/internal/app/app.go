@@ -61,10 +61,12 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	mealRepo := repository.NewPostgresMealRepository(pg)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
 	var searchResponseCache search.SearchResponseCache
+	var similarityCache search.SimilarityCalculationCache
 	var redisStore cache.RedisStore
 	if redisClient != nil {
 		redisStore = cache.GoRedisStore{Client: redisClient}
 		searchResponseCache = cache.SearchResponseStore{Store: redisStore}
+		similarityCache = cache.SearchResponseStore{Store: redisStore}
 	}
 	userDataService := userdata.NewService(savedRepo, identities, savedRepo, encryption)
 	controllers := []httpapi.Controller{
@@ -73,7 +75,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewProfileController(profile.NewService(identities, encryption)),
 		httpapi.NewSearchController(search.NewSearchDispatcher(
 			search.NewCatalogService(foodRepo, searchResponseCache),
-			search.NewSubstitutionService(foodRepo, searchResponseCache),
+			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache),
 		)).WithAutocompleteService(searchAutocompleteAdapter{
 			service: search.NewAutocompleteService(foodRepo, mealRepo),
 			cache:   redisStore,
