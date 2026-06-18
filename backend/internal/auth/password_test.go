@@ -91,3 +91,27 @@ func TestPasswordHasherRandomnessFailure(t *testing.T) {
 		t.Fatal("HashPassword() accepted randomness failure")
 	}
 }
+
+func TestDefaultPasswordHasherAndParserBoundaries(t *testing.T) {
+	params := DefaultPasswordHashParams()
+	if params.MemoryKiB == 0 || params.Iterations == 0 || params.SaltLength < 16 || NewDefaultPasswordHasher() == nil {
+		t.Fatalf("default params = %+v", params)
+	}
+	hasher, err := NewPasswordHasher(PasswordHashParams{MemoryKiB: 19 * 1024, Iterations: 1, Parallelism: 1, KeyLength: 32, SaltLength: 16, MinLength: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, _ := testPasswordHash()
+	if hasher.VerifyPassword("StrongerPassword1!", hash, "") {
+		t.Fatal("VerifyPassword() accepted an empty salt")
+	}
+	for _, raw := range []string{
+		"m=19456,t=1,bad",
+		"m=bad,t=1,p=1",
+		"m=19456,t=1,x=1",
+	} {
+		if _, err := parseHashParams(raw); err == nil {
+			t.Fatalf("parseHashParams(%q) accepted", raw)
+		}
+	}
+}

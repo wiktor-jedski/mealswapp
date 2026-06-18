@@ -100,11 +100,13 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 	}
 
 	var total int
-	if err := r.db.QueryRow(ctx, foodSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs).Scan(&total); err != nil {
+	foodObjectTypes := physicalStatesToStrings(q.FoodObjectTypes)
+	excludedFoodObjectTypes := physicalStatesToStrings(q.ExcludedFoodObjectTypes)
+	if err := r.db.QueryRow(ctx, foodSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.ExcludedFoodCategoryIDs, q.CulinaryRoleIDs, q.ExcludedCulinaryRoleIDs, q.AllergenIDs, q.ExcludedAllergenIDs, q.AllergenKeys, q.ExcludedAllergenKeys, foodObjectTypes, excludedFoodObjectTypes).Scan(&total); err != nil {
 		return nil, 0, mapPostgresError(err, "count food items")
 	}
 
-	rows, err := r.db.Query(ctx, foodSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs, limit, offset)
+	rows, err := r.db.Query(ctx, foodSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.ExcludedFoodCategoryIDs, q.CulinaryRoleIDs, q.ExcludedCulinaryRoleIDs, q.AllergenIDs, q.ExcludedAllergenIDs, q.AllergenKeys, q.ExcludedAllergenKeys, foodObjectTypes, excludedFoodObjectTypes, limit, offset)
 	if err != nil {
 		return nil, 0, mapPostgresError(err, "search food items")
 	}
@@ -129,6 +131,19 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 		return nil, 0, mapPostgresError(err, "iterate food items")
 	}
 	return items, total, nil
+}
+
+// physicalStatesToStrings converts domain physical-state filters to SQL parameters.
+// Implements DESIGN-005 FoodItemEntity search query.
+func physicalStatesToStrings(states []PhysicalState) []string {
+	if len(states) == 0 {
+		return nil
+	}
+	values := make([]string, 0, len(states))
+	for _, state := range states {
+		values = append(values, string(state))
+	}
+	return values
 }
 
 // Create validates and persists a food item.

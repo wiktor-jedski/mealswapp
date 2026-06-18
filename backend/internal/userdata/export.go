@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -89,22 +88,15 @@ func (s *ExportService) BuildExport(ctx context.Context, userID uuid.UUID, forma
 	if err != nil {
 		return ExportPayload{}, err
 	}
-	switch normalized.Value {
-	case "json":
+	if normalized.Value == "json" {
 		body, err := json.Marshal(bundle)
 		if err != nil {
 			return ExportPayload{}, err
 		}
 		return ExportPayload{Format: "json", ContentType: "application/json", Filename: "mealswapp-export.json", Body: body}, nil
-	case "csv":
-		body, err := encodeCSV(bundle)
-		if err != nil {
-			return ExportPayload{}, err
-		}
-		return ExportPayload{Format: "csv", ContentType: "text/csv", Filename: "mealswapp-export.csv", Body: body}, nil
-	default:
-		return ExportPayload{}, errors.New("export format is unsupported")
 	}
+	body := encodeCSV(bundle)
+	return ExportPayload{Format: "csv", ContentType: "text/csv", Filename: "mealswapp-export.csv", Body: body}, nil
 }
 
 // buildBundle gathers and decrypts account export data.
@@ -175,7 +167,7 @@ func decryptField(ctx context.Context, encryption *security.EncryptionService, f
 
 // encodeCSV writes separate CSV sections into one downloadable file.
 // Implements DESIGN-008 DataExporter.
-func encodeCSV(bundle ExportBundle) ([]byte, error) {
+func encodeCSV(bundle ExportBundle) []byte {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 	rows := [][]string{
@@ -197,8 +189,6 @@ func encodeCSV(bundle ExportBundle) ([]byte, error) {
 	}
 	// placeholder for user-owned custom items in the future
 	rows = append(rows, []string{"customItems", "count", "0"})
-	if err := writer.WriteAll(rows); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	_ = writer.WriteAll(rows)
+	return buf.Bytes()
 }

@@ -4,6 +4,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,14 +13,27 @@ import (
 )
 
 type memoryLockoutRepository struct {
-	state repository.AccountLockoutState
+	state      repository.AccountLockoutState
+	err        error
+	getErr     error
+	failureErr error
+	resetErr   error
 }
 
 func (r *memoryLockoutRepository) GetLockoutState(context.Context, uuid.UUID) (repository.AccountLockoutState, error) {
-	return r.state, nil
+	if r.getErr != nil {
+		return repository.AccountLockoutState{}, r.getErr
+	}
+	return r.state, r.err
 }
 
 func (r *memoryLockoutRepository) RecordFailedLogin(_ context.Context, userID uuid.UUID, threshold int, lockedUntil time.Time, now time.Time) (repository.AccountLockoutState, error) {
+	if r.failureErr != nil {
+		return repository.AccountLockoutState{}, r.failureErr
+	}
+	if r.err != nil {
+		return repository.AccountLockoutState{}, r.err
+	}
 	if r.state.LockedUntil != nil && !r.state.LockedUntil.After(now) {
 		r.state.FailedLoginCount = 0
 		r.state.LockedUntil = nil
@@ -33,6 +47,12 @@ func (r *memoryLockoutRepository) RecordFailedLogin(_ context.Context, userID uu
 }
 
 func (r *memoryLockoutRepository) ResetFailedLogins(_ context.Context, userID uuid.UUID) (repository.AccountLockoutState, error) {
+	if r.resetErr != nil {
+		return repository.AccountLockoutState{}, r.resetErr
+	}
+	if r.err != nil {
+		return repository.AccountLockoutState{}, r.err
+	}
 	r.state = repository.AccountLockoutState{UserID: userID}
 	return r.state, nil
 }
@@ -107,5 +127,19 @@ func TestAccountLockoutTrackerExpiredLocks(t *testing.T) {
 	}
 	if GenericInvalidCredentialMessage != "invalid email or password" {
 		t.Fatal("generic invalid credential message changed")
+	}
+}
+
+func TestAccountLockoutTrackerPropagatesRepositoryErrors(t *testing.T) {
+	wantErr := errors.New("repository failed")
+	tracker := NewAccountLockoutTracker(&memoryLockoutRepository{err: wantErr})
+	if _, err := tracker.Check(context.Background(), uuid.New()); !errors.Is(err, wantErr) {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if _, err := tracker.RecordFailure(context.Background(), uuid.New()); !errors.Is(err, wantErr) {
+		t.Fatalf("RecordFailure() error = %v", err)
+	}
+	if err := tracker.RecordSuccess(context.Background(), uuid.New()); !errors.Is(err, wantErr) {
+		t.Fatalf("RecordSuccess() error = %v", err)
 	}
 }

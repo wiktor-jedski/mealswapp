@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"time"
@@ -91,6 +93,7 @@ type RouteDefinition struct {
 	Path          string
 	Handler       fiber.Handler
 	RequiresAuth  bool
+	OptionalAuth  bool
 	RequiresCSRF  bool
 	ExemptCSRF    bool
 	RequiresAudit bool
@@ -144,6 +147,8 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	app.Use(securityHeaders(deps.Config))
 	app.Use(instrument(deps))
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
+	// Implements DESIGN-010 RouteHandler server-hosted static assets.
+	app.Static("/assets", staticAssetRoot(), fiber.Static{Browse: false})
 	if deps.CSRF == nil {
 		deps.CSRF = NewCSRFManager(deps.Config, deps.Audit)
 	}
@@ -158,6 +163,16 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	return app, nil
 }
 
+// staticAssetRoot returns the backend-served asset directory.
+// Implements DESIGN-010 RouteHandler server-hosted static assets.
+func staticAssetRoot() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return filepath.Join("static", "assets")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "static", "assets"))
+}
+
 // registerV1Routes composes route-specific gateway hooks.
 // Implements DESIGN-010 RouteHandler.
 func registerV1Routes(group fiber.Router, deps Dependencies) {
@@ -168,6 +183,8 @@ func registerV1Routes(group fiber.Router, deps Dependencies) {
 		handlers := []fiber.Handler{}
 		if route.RequiresAuth {
 			handlers = append(handlers, requireAuth(deps.Auth))
+		} else if route.OptionalAuth {
+			handlers = append(handlers, optionalAuth(deps.Auth))
 		}
 		if route.RequiresCSRF {
 			handlers = append(handlers, deps.CSRF.Validate)

@@ -1,4 +1,4 @@
-# Implements DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
+# Implements DESIGN-002 SearchController, DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
 openapi: 3.1.0
 info:
   title: Mealswapp API
@@ -339,6 +339,70 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+  /api/v1/search:
+    post:
+      operationId: postApiV1Search
+      summary: Search catalog food objects, substitutions, or daily-diet alternatives
+      description: Optional cookie authentication associates completed searches with authenticated search history; anonymous requests are accepted.
+      security:
+        - {}
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/Search"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/SearchRejected"
+        "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/search/autocomplete:
+    get:
+      operationId: getApiV1SearchAutocomplete
+      summary: Return ranked food and meal autocomplete suggestions
+      description: Optional cookie authentication scopes autocomplete candidate visibility when a session is present.
+      security:
+        - {}
+        - cookieAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1
+      responses:
+        "200":
+          $ref: "#/components/responses/Autocomplete"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/account/export:
     get:
       operationId: getApiV1AccountExport
@@ -467,6 +531,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/SearchHistoryEnvelope"
+    Search:
+      description: Search response envelope with results, similarity metadata, warnings, and cache metadata.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SearchResponseEnvelope"
+    Autocomplete:
+      description: Autocomplete response envelope with ranked suggestions and cache metadata.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AutocompleteEnvelope"
+    SearchRejected:
+      description: Valid search request rejected by user-facing search constraint rules.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SearchRejectionEnvelope"
     DeletionRequest:
       description: Deletion request envelope.
       content:
@@ -747,6 +829,229 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/SearchHistoryEntry"
+    SearchMode:
+      type: string
+      enum: [catalog, substitution, daily_diet_alternative]
+    SearchFilterKind:
+      type: string
+      enum: [food_category, culinary_role, physical_state, allergen, dietary_preset]
+    SearchFilter:
+      type: object
+      additionalProperties: false
+      required: [filterId, kind, include]
+      properties:
+        filterId:
+          type: string
+          minLength: 1
+        kind:
+          $ref: "#/components/schemas/SearchFilterKind"
+        include:
+          type: boolean
+    SubstitutionInput:
+      type: object
+      additionalProperties: false
+      required: [foodObjectId, quantity, unit]
+      properties:
+        foodObjectId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+        unit:
+          type: string
+          enum: [g, ml, oz, fl_oz]
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      required: [query, mode, page]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 200
+        mode:
+          $ref: "#/components/schemas/SearchMode"
+        filters:
+          type: array
+          default: []
+          items:
+            $ref: "#/components/schemas/SearchFilter"
+        page:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        substitutionInputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubstitutionInput"
+        dailyDietId:
+          type: string
+          format: uuid
+    FoodObject:
+      type: object
+      required: [id, name, physicalState]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        physicalState:
+          type: string
+          enum: [solid, liquid]
+        imageUrl:
+          type:
+            - string
+            - "null"
+          format: uri-reference
+    SimilarityTier:
+      type: string
+      enum: [excellent, good, fair, poor]
+    SimilarityMetadata:
+      type: object
+      required: [itemId, score, tier, imageUrl, matchingQuantity]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        score:
+          type: number
+          minimum: 0
+          maximum: 1
+        tier:
+          $ref: "#/components/schemas/SimilarityTier"
+        imageUrl:
+          type: string
+          format: uri-reference
+        matchingQuantity:
+          type: number
+          minimum: 0
+    CacheMetadata:
+      type: object
+      required: [status, namespace, schemaVersion, ttlSeconds]
+      properties:
+        status:
+          type: string
+          enum: [hit, miss]
+        namespace:
+          type: string
+        schemaVersion:
+          type: string
+        ttlSeconds:
+          type: integer
+          minimum: 0
+    SearchRejection:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        field:
+          type: string
+    SearchResponse:
+      type: object
+      required: [items, totalCount, page, similarityScores, similarityMetadata, warnings]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FoodObject"
+        totalCount:
+          type: integer
+          minimum: 0
+        page:
+          type: integer
+          minimum: 1
+        similarityScores:
+          type: array
+          items:
+            type: number
+            minimum: 0
+            maximum: 1
+        similarityMetadata:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimilarityMetadata"
+        warnings:
+          type: array
+          description: Degraded or diagnostic search warnings. Values can include stable warning codes such as cache_unavailable and contextual diagnostics such as excluded filters or skipped similarity targets.
+          items:
+            type: string
+          example: [cache_unavailable, excluded allergen dairy]
+        cache:
+          $ref: "#/components/schemas/CacheMetadata"
+    SearchResponseEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/SearchResponse"
+    SearchRejectionEnvelope:
+      type: object
+      required: [status, requestId, data, error]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        requestId:
+          type: string
+        data:
+          type: object
+          required: [rejection]
+          properties:
+            rejection:
+              $ref: "#/components/schemas/SearchRejection"
+        error:
+          $ref: "#/components/schemas/AppError"
+    RankedAutocomplete:
+      type: object
+      required: [itemId, label, exactMatch, levenshteinDistance, length, rank]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        label:
+          type: string
+        exactMatch:
+          type: boolean
+        levenshteinDistance:
+          type: integer
+          minimum: 0
+        length:
+          type: integer
+          minimum: 0
+        rank:
+          type: integer
+          minimum: 1
+    AutocompleteResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RankedAutocomplete"
+        cache:
+          $ref: "#/components/schemas/CacheMetadata"
+    AutocompleteEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/AutocompleteResponse"
     ExportBundle:
       type: object
       required: [user, consent, savedItems, history, customItems]

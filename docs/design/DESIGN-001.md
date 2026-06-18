@@ -5,7 +5,7 @@
 
 ### 0. Static Aspect Responsibilities
 - `SearchView`: owns catalog query input, Substitution Input composition, filter composition, debounce timing, and result loading orchestration.
-- `SidebarComponent`: owns navigation between Catalog Search, Substitution Search, Daily Daily Diet Alternative Search, saved filters, settings entry points, and responsive collapse behavior.
+- `SidebarComponent`: owns navigation between Catalog Search, Substitution Search, Daily Diet Alternative Search, saved filters, settings entry points, and responsive collapse behavior.
 - `ResultsGrid`: owns result card layout, pagination controls, image fallback display, and similarity badge rendering.
 - `AutocompleteDropdown`: owns ranked suggestion display, keyboard focus movement, selection, and dismissal rules.
 - `ThemeProvider`: owns resolved theme state and delegates token application to ARCH-016.

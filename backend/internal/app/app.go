@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -11,12 +12,14 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/auth"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/compliance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/userdata"
 )
@@ -54,12 +57,31 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		Hasher:  auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
 	})
 	savedRepo := repository.NewPostgresSavedDataRepository(pg)
+	foodRepo := repository.NewPostgresFoodItemRepository(pg)
+	mealRepo := repository.NewPostgresMealRepository(pg)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
+	var searchResponseCache search.SearchResponseCache
+	var similarityCache search.SimilarityCalculationCache
+	var redisStore cache.RedisStore
+	if redisClient != nil {
+		redisStore = cache.GoRedisStore{Client: redisClient}
+		searchResponseCache = cache.SearchResponseStore{Store: redisStore}
+		similarityCache = cache.SearchResponseStore{Store: redisStore}
+	}
+	userDataService := userdata.NewService(savedRepo, identities, savedRepo, encryption)
 	controllers := []httpapi.Controller{
 		httpapi.NewAuthController(authService, sessionManager).WithLogSink(telemetry),
 		httpapi.NewOAuthController(authService, unavailableOAuthGateway{}, sessionManager),
 		httpapi.NewProfileController(profile.NewService(identities, encryption)),
-		httpapi.NewUserDataController(userdata.NewService(savedRepo, identities, savedRepo, encryption)),
+		httpapi.NewSearchController(search.NewSearchDispatcher(
+			search.NewCatalogService(foodRepo, searchResponseCache),
+			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache),
+		)).WithAutocompleteService(searchAutocompleteAdapter{
+			service: search.NewAutocompleteService(foodRepo, mealRepo),
+			cache:   redisStore,
+			ttl:     cache.DefaultAutocompleteTTL,
+		}).WithSearchHistoryAppender(userDataService),
+		httpapi.NewUserDataController(userDataService),
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
@@ -83,6 +105,31 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		CSRF: csrf, Auth: httpapi.NewJWTAuthenticator(cfg, tokens, sessions), Routes: routes,
 	}
 	return New(deps)
+}
+
+// searchAutocompleteAdapter adds optional Redis metadata around autocomplete ranking.
+// Implements DESIGN-002 SearchController and DESIGN-011 RedisCache.
+type searchAutocompleteAdapter struct {
+	service search.AutocompleteService
+	cache   cache.RedisStore
+	ttl     time.Duration
+}
+
+// Autocomplete returns ranked suggestions with cache metadata when Redis is configured.
+// Implements DESIGN-002 SearchController.
+func (a searchAutocompleteAdapter) Autocomplete(ctx context.Context, query string, rc repository.RepositoryContext) (search.AutocompleteResponse, error) {
+	load := func(loadCtx context.Context) (search.AutocompleteResponse, error) {
+		items, err := a.service.Autocomplete(loadCtx, query, rc)
+		return search.AutocompleteResponse{Items: items}, err
+	}
+	if a.cache == nil {
+		return load(ctx)
+	}
+	ttl := a.ttl
+	if ttl <= 0 {
+		ttl = cache.DefaultAutocompleteTTL
+	}
+	return cache.GetOrLoadAutocompleteResponse(ctx, a.cache, query, ttl, load)
 }
 
 // unavailableOAuthGateway exposes OAuth routes without fabricating provider behavior.

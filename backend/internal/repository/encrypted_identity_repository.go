@@ -59,6 +59,11 @@ var encryptedProfileUpdateSQL string
 //go:embed sql/encrypted_search_history_add.sql
 var encryptedSearchHistoryAddSQL string
 
+// Implements DESIGN-008 SearchHistoryRepository bounded retention query.
+//
+//go:embed sql/encrypted_search_history_prune.sql
+var encryptedSearchHistoryPruneSQL string
+
 // Implements DESIGN-008 SearchHistoryRepository and DESIGN-013 EncryptionService encrypted query list.
 //
 //go:embed sql/encrypted_search_history_list.sql
@@ -67,7 +72,7 @@ var encryptedSearchHistoryListSQL string
 // PostgresEncryptedIdentityRepository persists encrypted account PII in PostgreSQL.
 // Implements DESIGN-013 EncryptionService.
 type PostgresEncryptedIdentityRepository struct {
-	db sqlExecutor
+	db transactionalExecutor
 }
 
 // Implements DESIGN-008 AccountDeleter compile-time repository contract.
@@ -81,7 +86,7 @@ var _ EncryptedUserProfileRepository = (*PostgresEncryptedIdentityRepository)(ni
 
 // NewPostgresEncryptedIdentityRepository creates an encrypted PII repository.
 // Implements DESIGN-013 EncryptionService.
-func NewPostgresEncryptedIdentityRepository(db sqlExecutor) *PostgresEncryptedIdentityRepository {
+func NewPostgresEncryptedIdentityRepository(db transactionalExecutor) *PostgresEncryptedIdentityRepository {
 	return &PostgresEncryptedIdentityRepository{db: db}
 }
 
@@ -222,9 +227,17 @@ func (r *PostgresEncryptedIdentityRepository) AddEncryptedHistory(ctx context.Co
 		return uuid.Nil, validationError("history mode is required")
 	}
 	var id uuid.UUID
-	err := r.db.QueryRow(ctx, encryptedSearchHistoryAddSQL, entry.UserID, entry.Query.KeyVersion, entry.Query.Nonce, entry.Query.Ciphertext, entry.Mode, entry.FiltersHash).Scan(&id)
+	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := db.QueryRow(ctx, encryptedSearchHistoryAddSQL, entry.UserID, entry.Query.KeyVersion, entry.Query.Nonce, entry.Query.Ciphertext, entry.Mode, entry.FiltersHash).Scan(&id); err != nil {
+			return mapPostgresError(err, "add encrypted search history")
+		}
+		if _, err := db.Exec(ctx, encryptedSearchHistoryPruneSQL, entry.UserID); err != nil {
+			return mapPostgresError(err, "prune encrypted search history")
+		}
+		return nil
+	})
 	if err != nil {
-		return uuid.Nil, mapPostgresError(err, "add encrypted search history")
+		return uuid.Nil, err
 	}
 	return id, nil
 }

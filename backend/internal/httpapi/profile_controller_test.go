@@ -125,3 +125,21 @@ func TestProfileControllerRejectsCSRFAndUndocumentedUserRoute(t *testing.T) {
 		t.Fatalf("invalid update = %d", resp.StatusCode)
 	}
 }
+
+func TestProfileControllerServiceAndParserFailures(t *testing.T) {
+	cfg := testConfig()
+	authenticator, authCookies := testJWTAuth(t, cfg, uuid.New(), nil)
+	service := &fakeProfileService{err: errors.New("repository failed")}
+	controller := NewProfileController(service)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: controller.Routes()})
+	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/profile", nil)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("profile service failure = %d", resp.StatusCode)
+	}
+}

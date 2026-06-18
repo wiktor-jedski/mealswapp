@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -34,5 +35,15 @@ func TestDisclaimerController(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK || body.Data["markdown"] != "Disclaimer" || body.Data["fallback"] != true || resp.Header.Get("Cache-Control") == "" || service.location != "login" {
 		t.Fatalf("disclaimer response = %d body=%+v cache=%q location=%q", resp.StatusCode, body, resp.Header.Get("Cache-Control"), service.location)
+	}
+	service.err = errors.New("invalid location")
+	resp, err = app.Test(httptest.NewRequest(fiber.MethodGet, "/api/v1/disclaimers?location=bad", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest || body.Error == nil || body.Error.Code != "validation_failed" {
+		t.Fatalf("disclaimer failure = %d body=%+v", resp.StatusCode, body)
 	}
 }

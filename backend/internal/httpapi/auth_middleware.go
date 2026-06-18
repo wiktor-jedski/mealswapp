@@ -85,6 +85,26 @@ func requireAuth(authenticator *JWTAuthenticator) fiber.Handler {
 	}
 }
 
+// optionalAuth attaches server-derived identity for public routes when valid cookies are present.
+// Implements DESIGN-006 JWTManager and DESIGN-008 SearchHistoryRepository.
+func optionalAuth(authenticator *JWTAuthenticator) fiber.Handler {
+	return func(ctx *fiber.Ctx) error {
+		if authenticator == nil {
+			return ctx.Next()
+		}
+		accessToken := ctx.Cookies(authenticator.cfg.Account.AccessCookieName)
+		refreshToken := ctx.Cookies(authenticator.cfg.Account.RefreshCookieName)
+		if accessToken == "" || refreshToken == "" {
+			return ctx.Next()
+		}
+		user, err := authenticator.Authenticate(ctx.UserContext(), accessToken, refreshToken)
+		if err == nil {
+			ctx.Locals(authenticatedUserLocal, user)
+		}
+		return ctx.Next()
+	}
+}
+
 // authenticatedUser returns the server-derived request identity when present.
 // Implements DESIGN-006 JWTManager.
 func authenticatedUser(ctx *fiber.Ctx) (AuthenticatedUser, bool) {

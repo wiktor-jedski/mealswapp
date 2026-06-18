@@ -132,7 +132,7 @@ Container orchestration is not required as managed services handle scaling and a
 
 **Dynamic Behavior:**
 
-- **Query Processing:** Receives search terms, applies Search filters and Exclusion Rules, and routes to Catalog Search, Substitution Search, or Daily Daily Diet Alternative Search.
+- **Query Processing:** Receives search terms, applies Search filters and Exclusion Rules, and routes to Catalog Search, Substitution Search, or Daily Diet Alternative Search.
 - **Autocomplete Ranking:** Implements three-tier priority: (1) Exact match, (2) Levenshtein distance, (3) String length. Executes in < 100ms.
 - **Substitution Trigger:** Detects empty search bar with one or more Substitution Inputs to automatically initiate Substitution Search.
 - **Pagination:** Returns max 10 results per page, sorted by Nutritional Similarity descending for Substitution Search.

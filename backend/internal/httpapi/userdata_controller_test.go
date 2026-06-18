@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -14,16 +15,23 @@ import (
 )
 
 type fakeUserDataService struct {
-	items       []repository.SavedItem
-	history     []userdata.SearchHistoryEntry
-	gotUser     uuid.UUID
-	gotItemID   uuid.UUID
-	gotKind     repository.SavedItemKind
-	clearCalled bool
+	items        []repository.SavedItem
+	history      []userdata.SearchHistoryEntry
+	gotUser      uuid.UUID
+	gotItemID    uuid.UUID
+	gotKind      repository.SavedItemKind
+	clearCalled  bool
+	listSavedErr error
+	deleteErr    error
+	historyErr   error
+	clearErr     error
 }
 
 func (s *fakeUserDataService) ListSaved(_ context.Context, userID uuid.UUID, kind *repository.SavedItemKind) ([]repository.SavedItem, error) {
 	s.gotUser = userID
+	if s.listSavedErr != nil {
+		return nil, s.listSavedErr
+	}
 	if kind == nil {
 		return s.items, nil
 	}
@@ -40,18 +48,73 @@ func (s *fakeUserDataService) DeleteSaved(_ context.Context, userID uuid.UUID, i
 	s.gotUser = userID
 	s.gotItemID = itemID
 	s.gotKind = kind
-	return nil
+	return s.deleteErr
 }
 
 func (s *fakeUserDataService) ListHistory(_ context.Context, userID uuid.UUID, _ int) ([]userdata.SearchHistoryEntry, error) {
 	s.gotUser = userID
+	if s.historyErr != nil {
+		return nil, s.historyErr
+	}
 	return s.history, nil
 }
 
 func (s *fakeUserDataService) ClearHistory(_ context.Context, userID uuid.UUID) error {
 	s.gotUser = userID
 	s.clearCalled = true
-	return nil
+	return s.clearErr
+}
+
+func TestUserDataControllerServiceFailures(t *testing.T) {
+	cfg := testConfig()
+	authenticator, authCookies := testJWTAuth(t, cfg, uuid.New(), nil)
+	csrf := NewCSRFManager(cfg, nil)
+	service := &fakeUserDataService{}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: csrf, Routes: NewUserDataController(service).Routes()})
+	wantErr := errors.New("repository failed")
+
+	service.listSavedErr = wantErr
+	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/saved-items", nil)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("list saved failure = %d", resp.StatusCode)
+	}
+	service.historyErr = wantErr
+	req = httptest.NewRequest(fiber.MethodGet, "/api/v1/search-history", nil)
+	addCookies(req, authCookies)
+	resp, _ = app.Test(req)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("list history failure = %d", resp.StatusCode)
+	}
+
+	token, csrfCookies := fetchCSRFToken(t, app)
+	service.deleteErr = wantErr
+	req = httptest.NewRequest(fiber.MethodDelete, "/api/v1/saved-items/favorite/"+uuid.NewString(), nil)
+	req.Header.Set("X-CSRF-Token", token)
+	addCookies(req, csrfCookies)
+	addCookies(req, authCookies)
+	resp, _ = app.Test(req)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("delete saved failure = %d", resp.StatusCode)
+	}
+	token, csrfCookies = fetchCSRFToken(t, app, csrfCookies...)
+	service.clearErr = wantErr
+	req = httptest.NewRequest(fiber.MethodDelete, "/api/v1/search-history", nil)
+	req.Header.Set("X-CSRF-Token", token)
+	addCookies(req, csrfCookies)
+	addCookies(req, authCookies)
+	resp, _ = app.Test(req)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("clear history failure = %d", resp.StatusCode)
+	}
 }
 
 // TestUserDataControllerSavedItemsAndHistory verifies DESIGN-008 authenticated routes.

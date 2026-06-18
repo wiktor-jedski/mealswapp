@@ -230,3 +230,133 @@ export interface DisclaimerData extends Record<string, unknown> {
 // Implements DESIGN-015 DisclaimerRenderer frontend disclaimer contract.
 /** Disclaimer response envelope. */
 export type DisclaimerEnvelope = Envelope<DisclaimerData>;
+
+// Implements DESIGN-002 SearchController frontend search-mode contract.
+/** Supported search workflows exposed by the search API. */
+export type SearchMode = "catalog" | "substitution" | "daily_diet_alternative";
+
+// Implements DESIGN-002 SearchController frontend search-filter contract.
+/** Supported filter classes accepted by the search API. */
+export type SearchFilterKind =
+	| "food_category"
+	| "culinary_role"
+	| "physical_state"
+	| "allergen"
+	| "dietary_preset";
+
+// Implements DESIGN-002 SearchController frontend search-filter contract.
+/** One include or exclude filter applied to a search request. */
+export interface SearchFilter {
+	filterId: string;
+	kind: SearchFilterKind;
+	include: boolean;
+}
+
+// Implements DESIGN-002 SearchController frontend substitution contract.
+/** Canonical units accepted by substitution search inputs. */
+export type SubstitutionUnit = "g" | "ml" | "oz" | "fl_oz";
+
+// Implements DESIGN-002 SearchController frontend substitution contract.
+/** Quantity-bearing food input for substitution searches. */
+export interface SubstitutionInput {
+	foodObjectId: string;
+	quantity: number;
+	unit: SubstitutionUnit;
+}
+
+// Implements DESIGN-002 SearchController frontend search request contract.
+/** Request payload for catalog, substitution, and daily-diet alternative search. */
+export interface SearchRequest {
+	query: string;
+	mode: SearchMode;
+	filters?: SearchFilter[];
+	page: number;
+	substitutionInputs?: SubstitutionInput[];
+	dailyDietId?: string;
+}
+
+// Implements DESIGN-002 SearchController frontend food-object result contract.
+/** Food object returned by search and autocomplete-related result flows. */
+export interface FoodObject {
+	id: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	imageUrl?: string | null;
+}
+
+// Implements DESIGN-002 SearchController frontend similarity metadata contract.
+/** User-facing nutritional similarity tier. */
+export type SimilarityTier = "excellent" | "good" | "fair" | "poor";
+
+// Implements DESIGN-002 SearchController frontend similarity metadata contract.
+/** Similarity display metadata for a ranked search result. */
+export interface SimilarityMetadata {
+	itemId: string;
+	score: number;
+	tier: SimilarityTier;
+	imageUrl: string;
+	matchingQuantity: number;
+}
+
+// Implements DESIGN-011 SearchCache frontend cache metadata contract.
+/** Cache status metadata returned with search-domain responses. */
+export interface CacheMetadata {
+	status: "hit" | "miss";
+	namespace: string;
+	schemaVersion: string;
+	ttlSeconds: number;
+}
+
+// Implements DESIGN-002 SearchController frontend search rejection contract.
+/** Structured, user-facing search rejection detail. */
+export interface SearchRejection {
+	code: string;
+	message: string;
+	field?: string;
+}
+
+// Implements DESIGN-002 SearchController frontend search response contract.
+/** Search result payload with ranking, warnings, and optional cache metadata. */
+export interface SearchResponse extends Record<string, unknown> {
+	items: FoodObject[];
+	totalCount: number;
+	page: number;
+	similarityScores: number[];
+	similarityMetadata: SimilarityMetadata[];
+	warnings: string[];
+	cache?: CacheMetadata;
+}
+
+// Implements DESIGN-002 SearchController frontend search response contract.
+/** Successful search response envelope. */
+export type SearchResponseEnvelope = Envelope<SearchResponse>;
+
+// Implements DESIGN-017 ErrorMessageMapper frontend search error contract.
+/** Search rejection response envelope with safe error text. */
+export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRejection }> {
+	status: "error";
+	data: { rejection: SearchRejection };
+	error: AppError;
+}
+
+// Implements DESIGN-002 SearchController frontend autocomplete contract.
+/** Ranked autocomplete suggestion. */
+export interface RankedAutocomplete {
+	itemId: string;
+	label: string;
+	exactMatch: boolean;
+	levenshteinDistance: number;
+	length: number;
+	rank: number;
+}
+
+// Implements DESIGN-002 SearchController frontend autocomplete contract.
+/** Autocomplete payload with ranked suggestions and optional cache metadata. */
+export interface AutocompleteResponse extends Record<string, unknown> {
+	items: RankedAutocomplete[];
+	cache?: CacheMetadata;
+}
+
+// Implements DESIGN-002 SearchController frontend autocomplete contract.
+/** Successful autocomplete response envelope. */
+export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;

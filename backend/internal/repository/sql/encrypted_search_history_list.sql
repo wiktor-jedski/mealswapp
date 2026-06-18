@@ -10,5 +10,5 @@ SELECT id,
 FROM search_history
 WHERE user_id = $1
   AND query_key_version IS NOT NULL
-ORDER BY created_at DESC, id
+ORDER BY created_at DESC, id DESC
 LIMIT $2;
