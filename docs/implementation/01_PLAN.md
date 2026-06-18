@@ -56,6 +56,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Add Dietary Presets as named bundles that produce Exclusion Rules. Keep Food Object classification based on Food Categories, Culinary Roles, and Allergens.
 - Persist completed authenticated-user searches only after valid results are returned. Retain duplicate searches, cap history at the latest 100 rows per user, expose clear-history behavior, and do not persist anonymous searches.
 - Implement required OpenAPI-to-frontend type generation for the first domain contracts, including `SearchRequest`, `SearchResponse`, autocomplete responses, search errors, and cache-related response metadata. This is the latest phase where type generation may remain incomplete, because Phase 05 frontend API work consumes these generated types.
+- Before Phase 05 result rendering, extend each search-result contract with classifications, an explicit primary Food Category, protein/carbohydrate/fat macros and their `100g` or `100ml` basis, and calories. Keep this data server-derived and regenerate frontend types so category placeholders and result cards do not infer missing domain data.
 - Lint search-domain OpenAPI contract additions with Redocly CLI before generating frontend types.
 - Exit criteria: API supports Catalog Search, Substitution Search, and Daily Diet Alternative Search query shapes; autocomplete order is deterministic; similarity threshold and sorting match design.
 
@@ -64,7 +65,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Implement ARCH-001 and ARCH-016 user-facing search shell.
 - Add Svelte stores, TanStack Query API client, sidebar, search mode controls, macro toggles, autocomplete keyboard navigation, results grid, pagination, theme provider, responsive layout, placeholder images, and local query cache.
 - Add Playwright browser coverage and `@axe-core/playwright` accessibility checks while building the search UI so keyboard and WCAG regressions are caught before Phase 09 hardening.
-- Exit criteria: default search state, 150ms debounce, local cache LRU, responsive UI, light/dark persistence, and result rendering satisfy SW-REQ-001 through SW-REQ-015 and SW-REQ-089.
+- Exit criteria: default search state, 150ms debounce, local cache LRU, responsive UI, light/dark persistence, and result rendering satisfy SW-REQ-001 through SW-REQ-005, SW-REQ-007 through SW-REQ-015, and SW-REQ-089. SW-REQ-006 Daily Diet aggregation is deferred to Phase 07.
 
 ### Phase 06: Subscription and Entitlement Enforcement
 
@@ -80,9 +81,10 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-004.
 - Add Redis-backed optimization jobs, LP constraint/objective construction, worker process, status polling, 30-second solver timeout, infeasible handling, and up to 3 alternatives.
+- Implement the SW-REQ-006 Daily Diet client and API model for selecting and aggregating multiple meals into a one-day collection, then use that persisted collection as optimization input.
 - Add the dedicated saved-diet persistence model and enable `saved_items` rows with kind `saved_diet`; until this phase, repositories must reject attempts to save that reserved kind.
 - Lint optimization-job OpenAPI contract additions with Redocly CLI.
-- Exit criteria: API returns 202 with job ID, worker stores completed/failed results, and LP tests validate macro tolerance, exclusions, diversity penalty, and timeout behavior.
+- Exit criteria: users can build a multi-meal one-day collection satisfying SW-REQ-006; the API returns 202 with job ID; the worker stores completed/failed results; and LP tests validate macro tolerance, exclusions, diversity penalty, and timeout behavior.
 
 ### Phase 08: Admin Curation and External Data
 

@@ -139,3 +139,23 @@ No unresolved Phase 03 code review findings remain at this time.
 ### Code Review Findings
 
 - No unresolved Phase 04 code review findings remain at this time.
+
+## Phase 05
+
+### Assumptions
+
+- Phase 05 uses TanStack Query for server state and localStorage for the SW-REQ-003 cache of the 20 most recent unique normalized request/result pairs. Cache recency is updated on reads and writes; malformed or schema-version-mismatched entries are discarded. Phase 09 remains responsible for service-worker API/image interception and broader offline hardening.
+- Phase 05 renders authenticated history and favorites in the Activity Sidebar from the existing Phase 03 generated contracts. Anonymous users receive empty/sign-in guidance, and activity API failure does not block public Catalog Search.
+
+### Clarifications
+
+- Resolved by project-owner decision: Task 138 extends each search-result item with server-derived classification summaries (`id`, `name`, and `kind`), an explicit primary Food Category, protein/carbohydrate/fat macros with a `100g` or `100ml` basis, and calories. OpenAPI and generated frontend types must expose these fields before Task 146 implements result cards and category placeholders.
+- Resolved by project-owner decision: SW-REQ-006 multi-meal Daily Diet aggregation moves to Phase 07 alongside the saved-diet model and optimization worker. Phase 05 continues to expose the designed Daily Diet Alternative request/rejection flow but does not claim SW-REQ-006 compliance.
+
+### Testing coverage deviations
+
+- None accepted during planning. Phase 05 targets 100% line coverage for testable frontend source; any implementation-time exception must identify the specific file/function and rationale here.
+
+### Actions needed
+
+- None.
