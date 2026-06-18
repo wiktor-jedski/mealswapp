@@ -23,7 +23,7 @@ func NewSearchDispatcher(catalog Searcher, substitution Searcher) *SearchDispatc
 	return &SearchDispatcher{catalog: catalog, substitution: substitution}
 }
 
-// Search resolves the user request shape and delegates to the matching search service.
+// Search resolves the requested mode and delegates to the matching search service.
 // Implements DESIGN-002 SearchController and CulinaryRoleWeighter.
 func (d *SearchDispatcher) Search(ctx context.Context, req SearchRequest) (SearchResponse, error) {
 	parsed, err := BuildParsedQuery(req)

@@ -84,8 +84,8 @@ func TestAutocompleteAndSimilarityKeysAreDeterministic(t *testing.T) {
 		t.Fatalf("normalized autocomplete keys differ: %q != %q", autoLeft.String(), autoRight.String())
 	}
 
-	inputA := search.SubstitutionInput{FoodObjectID: uuid.MustParse("22222222-2222-2222-2222-222222222222"), Quantity: 2, Unit: "Gram"}
-	inputB := search.SubstitutionInput{FoodObjectID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Quantity: 1, Unit: " gram "}
+	inputA := search.SubstitutionInput{FoodObjectID: uuid.MustParse("22222222-2222-2222-2222-222222222222"), Quantity: 2, Unit: "g"}
+	inputB := search.SubstitutionInput{FoodObjectID: uuid.MustParse("11111111-1111-1111-1111-111111111111"), Quantity: 1, Unit: "g"}
 	simLeft := BuildSimilarityCacheKey([]search.SubstitutionInput{inputA, inputB})
 	simRight := BuildSimilarityCacheKey([]search.SubstitutionInput{inputB, inputA})
 	if simLeft != simRight {
@@ -190,14 +190,14 @@ func TestSearchCacheKeyIncludesDailyDietIDAndSortsTieBreakers(t *testing.T) {
 
 	inputID := uuid.MustParse("44444444-4444-4444-4444-444444444444")
 	left := BuildSimilarityCacheKey([]search.SubstitutionInput{
-		{FoodObjectID: inputID, Quantity: 2, Unit: "gram"},
-		{FoodObjectID: inputID, Quantity: 1, Unit: "gram"},
+		{FoodObjectID: inputID, Quantity: 2, Unit: "g"},
+		{FoodObjectID: inputID, Quantity: 1, Unit: "g"},
 		{FoodObjectID: inputID, Quantity: 1, Unit: "ml"},
 	})
 	right := BuildSimilarityCacheKey([]search.SubstitutionInput{
 		{FoodObjectID: inputID, Quantity: 1, Unit: "ml"},
-		{FoodObjectID: inputID, Quantity: 1, Unit: "gram"},
-		{FoodObjectID: inputID, Quantity: 2, Unit: "gram"},
+		{FoodObjectID: inputID, Quantity: 1, Unit: "g"},
+		{FoodObjectID: inputID, Quantity: 2, Unit: "g"},
 	})
 	if left != right {
 		t.Fatalf("similarity tie-breaker keys differ: %q != %q", left.String(), right.String())
@@ -218,7 +218,7 @@ func TestCacheResponseMetadataContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(payload), `"Status":"miss"`) || !strings.Contains(string(payload), SearchSchemaVersion) {
+	if !strings.Contains(string(payload), `"cache"`) || strings.Contains(string(payload), `"Cache"`) || !strings.Contains(string(payload), SearchSchemaVersion) {
 		t.Fatalf("cache metadata payload = %s", payload)
 	}
 }
@@ -405,6 +405,62 @@ func TestGetOrLoadSimilarityResultsCachesAndFallsBack(t *testing.T) {
 	if loadCalls != 1 || hitMetadata.Status != search.CacheStatusHit || len(hit) != 1 {
 		t.Fatalf("hit loadCalls=%d metadata=%+v results=%+v", loadCalls, hitMetadata, hit)
 	}
+}
+
+func TestSearchResponseStoreMetadataAndTTLSelection(t *testing.T) {
+	req := searchRequest(nil)
+	configured := SearchResponseStore{TTL: 42 * time.Second}
+	metadata := configured.SearchResponseCacheMetadata(req, search.CacheStatusMiss)
+	if metadata == nil || metadata.Status != search.CacheStatusMiss || metadata.TTLSeconds != 42 || metadata.Namespace != string(RedisNamespaceSearch) {
+		t.Fatalf("configured metadata = %+v", metadata)
+	}
+	if got := configured.ttl(); got != 42*time.Second {
+		t.Fatalf("configured ttl = %v", got)
+	}
+	if got := (SearchResponseStore{}).similarityTTL(); got != DefaultSimilarityTTL {
+		t.Fatalf("default similarity ttl = %v", got)
+	}
+}
+
+func TestGetOrLoadHelpersPropagateLoaderErrors(t *testing.T) {
+	wantErr := errors.New("loader failed")
+	if _, err := GetOrLoadSearchResponse(context.Background(), nil, searchRequest(nil), time.Minute, func(context.Context) (search.SearchResponse, error) {
+		return search.SearchResponse{}, wantErr
+	}); !errors.Is(err, wantErr) {
+		t.Fatalf("search loader error = %v", err)
+	}
+	if _, err := GetOrLoadAutocompleteResponse(context.Background(), nil, "apple", time.Minute, func(context.Context) (search.AutocompleteResponse, error) {
+		return search.AutocompleteResponse{}, wantErr
+	}); !errors.Is(err, wantErr) {
+		t.Fatalf("autocomplete loader error = %v", err)
+	}
+	results := []search.SimilarityResult{{Score: 0.5}}
+	got, metadata, err := GetOrLoadSimilarityResults(context.Background(), nil, nil, time.Minute, func(context.Context) ([]search.SimilarityResult, error) {
+		return results, wantErr
+	})
+	if !errors.Is(err, wantErr) || len(got) != 1 || metadata.Status != search.CacheStatusMiss {
+		t.Fatalf("similarity loader results=%+v metadata=%+v err=%v", got, metadata, err)
+	}
+}
+
+func TestCanonicalFilterIncludeTieBreaker(t *testing.T) {
+	canonical := canonicalFilters([]search.SearchFilter{
+		{FilterID: "same", Kind: search.SearchFilterKindAllergen, Include: true},
+		{FilterID: "same", Kind: search.SearchFilterKindAllergen, Include: false},
+		{FilterID: "alpha", Kind: search.SearchFilterKindAllergen, Include: true},
+	})
+	if len(canonical) != 3 || canonical[0].FilterID != "alpha" || canonical[1].Include || !canonical[2].Include {
+		t.Fatalf("canonical filters = %+v", canonical)
+	}
+}
+
+func TestStableHashPanicsForUnsupportedPayload(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("stableHash() did not panic for unsupported payload")
+		}
+	}()
+	stableHash(make(chan int))
 }
 
 func searchRequest(filters []search.SearchFilter) search.SearchRequest {

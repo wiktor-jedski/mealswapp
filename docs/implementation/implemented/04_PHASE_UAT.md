@@ -61,9 +61,9 @@ Observed results from task reviews `128`-`132`:
   autocomplete returning namespace `autocomplete`, schema version
   `autocomplete-response-v1`, and TTL `120`.
 - `go vet ./...` passed.
-- Backend internal coverage passed with the accepted Phase 04 deviation:
-  aggregate coverage `88.5%`, `backend/internal/repository` `95.8%`,
-  `backend/internal/search` `89.3%`, and `backend/internal/cache` `83.3%`.
+- Backend internal coverage reached `99.2%`: repository, search, cache, app,
+  and eight other internal packages are at `100%`; auth is `99.2%`, HTTP API
+  `97.0%`, security `99.5%`, and user data `99.3%`.
 - `python3 scripts/check.py` passed after sequential execution, including local
   stack verification, Phase 02/03 UAT checks, frontend screenshot verification,
   backend tests, `go test -race ./...`, backend coverage, frontend build,
@@ -155,12 +155,11 @@ Related Phase 04 task IDs:
 
 ## Known Deviations
 
-- Phase 04 backend internal coverage is accepted at `88.5%` and documented in
-  `docs/implementation/04_OPEN.md`. The aggregate gate accepts this only because
-  the documented deviation is present. This is an aggregate-gate exception, not
-  a blanket carry-forward of the Phase 03 coverage exception; Task 134 must audit
-  the remaining uncovered lines and close or justify active behavior gaps.
-  Frontend coverage remains `100%`.
+- Backend `cmd/*` remains outside the line-coverage profile and is verified by
+  build, migration, and API smoke checks. `scripts/check.py` reports backend
+  internal coverage without enforcing a percentage threshold; the remaining
+  implementation-impossible and low-value defensive branches are documented in
+  `docs/implementation/04_OPEN.md`. Frontend coverage remains `100%`.
 - Concrete search boundary limits are implementation assumptions: search
   queries are limited to `200` runes, autocomplete queries to `120` runes, and
   page values to a maximum of `10000`. The project owner should adjust these

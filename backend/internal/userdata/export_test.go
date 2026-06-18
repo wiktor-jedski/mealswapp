@@ -5,6 +5,7 @@ package userdata
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -19,14 +20,21 @@ type memoryExportRepository struct {
 	saved   []repository.SavedItem
 	history []repository.EncryptedSearchHistoryEntry
 	consent []repository.ConsentRecord
+	errAt   string
 }
 
 func (r *memoryExportRepository) GetEncryptedUserByID(_ context.Context, userID uuid.UUID) (repository.EncryptedAuthUser, error) {
+	if r.errAt == "identity" {
+		return repository.EncryptedAuthUser{}, errors.New("identity failed")
+	}
 	r.user.ID = userID
 	return r.user, nil
 }
 
 func (r *memoryExportRepository) GetOrCreateEncryptedProfile(context.Context, uuid.UUID) (repository.EncryptedUserProfile, error) {
+	if r.errAt == "profile" {
+		return repository.EncryptedUserProfile{}, errors.New("profile failed")
+	}
 	return r.profile, nil
 }
 
@@ -43,6 +51,9 @@ func (r *memoryExportRepository) RemoveItem(context.Context, uuid.UUID, uuid.UUI
 }
 
 func (r *memoryExportRepository) ListItems(context.Context, uuid.UUID, *repository.SavedItemKind) ([]repository.SavedItem, error) {
+	if r.errAt == "saved" {
+		return nil, errors.New("saved failed")
+	}
 	return r.saved, nil
 }
 
@@ -51,6 +62,9 @@ func (r *memoryExportRepository) AddEncryptedHistory(context.Context, repository
 }
 
 func (r *memoryExportRepository) ListEncryptedHistory(context.Context, uuid.UUID, int) ([]repository.EncryptedSearchHistoryEntry, error) {
+	if r.errAt == "history" {
+		return nil, errors.New("history failed")
+	}
 	return r.history, nil
 }
 
@@ -63,6 +77,9 @@ func (r *memoryExportRepository) HasRequiredConsent(context.Context, uuid.UUID, 
 }
 
 func (r *memoryExportRepository) ListConsent(context.Context, uuid.UUID) ([]repository.ConsentRecord, error) {
+	if r.errAt == "consent" {
+		return nil, errors.New("consent failed")
+	}
 	return r.consent, nil
 }
 
@@ -114,5 +131,63 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	}
 	if _, err := service.BuildExport(ctx, userID, "xml"); err == nil {
 		t.Fatal("BuildExport() accepted unsupported format")
+	}
+}
+
+func TestExportServicePropagatesValidationDependencyAndDecryptionErrors(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	key := []byte("11111111111111111111111111111111")
+	encryption := security.NewEncryptionService(keyLoader{active: "pii-v1", entries: map[string][]byte{"pii-v1": key}})
+	encrypt := func(value string) repository.EncryptedField {
+		field, err := encryption.EncryptPII(ctx, []byte(value))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return repository.EncryptedField{KeyVersion: field.KeyVersion, Nonce: field.Nonce, Ciphertext: field.Ciphertext}
+	}
+	valid := func() *memoryExportRepository {
+		return &memoryExportRepository{
+			user:    repository.EncryptedAuthUser{Email: encrypt("ada@example.test")},
+			profile: repository.EncryptedUserProfile{UserID: userID, UnitSystem: repository.UnitSystemMetric, ThemePreference: "system"},
+		}
+	}
+	if _, err := NewExportService(valid(), valid(), valid(), valid(), valid(), encryption).BuildExport(ctx, userID, ""); err == nil {
+		t.Fatal("empty export format accepted")
+	}
+	for _, stage := range []string{"identity", "profile", "saved", "history", "consent"} {
+		repo := valid()
+		repo.errAt = stage
+		if _, err := NewExportService(repo, repo, repo, repo, repo, encryption).BuildExport(ctx, userID, "json"); err == nil {
+			t.Fatalf("%s failure ignored", stage)
+		}
+	}
+	badEmail := valid()
+	badEmail.user.Email.KeyVersion = "missing"
+	if _, err := NewExportService(badEmail, badEmail, badEmail, badEmail, badEmail, encryption).BuildExport(ctx, userID, "json"); err == nil {
+		t.Fatal("email decryption failure ignored")
+	}
+	badDisplay := valid()
+	display := encrypt("Ada")
+	display.KeyVersion = "missing"
+	badDisplay.profile.DisplayName = &display
+	if _, err := NewExportService(badDisplay, badDisplay, badDisplay, badDisplay, badDisplay, encryption).BuildExport(ctx, userID, "json"); err == nil {
+		t.Fatal("display-name decryption failure ignored")
+	}
+	badHistory := valid()
+	query := encrypt("apple")
+	query.KeyVersion = "missing"
+	badHistory.history = []repository.EncryptedSearchHistoryEntry{{Query: query}}
+	if _, err := NewExportService(badHistory, badHistory, badHistory, badHistory, badHistory, encryption).BuildExport(ctx, userID, "json"); err == nil {
+		t.Fatal("history decryption failure ignored")
+	}
+	defaultRole := valid()
+	payload, err := NewExportService(defaultRole, defaultRole, defaultRole, defaultRole, defaultRole, encryption).BuildExport(ctx, userID, "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle ExportBundle
+	if err := json.Unmarshal(payload.Body, &bundle); err != nil || bundle.User.Role != repository.UserRoleUser {
+		t.Fatalf("default role bundle=%+v err=%v", bundle, err)
 	}
 }

@@ -105,6 +105,13 @@ func TestLoadRejectsInvalidAccountSettings(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsMalformedRefreshTTL(t *testing.T) {
+	t.Setenv("MEALSWAPP_REFRESH_TOKEN_TTL", "bad")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted malformed refresh TTL")
+	}
+}
+
 // TestLoadRejectsDevelopmentAccountSettingsInProduction verifies DESIGN-006 AuthController production validation.
 func TestLoadRejectsDevelopmentAccountSettingsInProduction(t *testing.T) {
 	base := func(t *testing.T) {

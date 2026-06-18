@@ -296,7 +296,7 @@ func normalizeSearchPage(value string) (NormalizationResult, error) {
 func normalizeSearchFilterKind(value string) (NormalizationResult, error) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	switch normalized {
-	case "food_category", "culinary_role", "food_object_type", "allergen", "dietary_preset":
+	case "food_category", "culinary_role", "physical_state", "allergen", "dietary_preset":
 		result := NormalizationResult{Value: normalized, Changed: normalized != value}
 		if result.Changed {
 			result.Violations = []string{"filter_kind_normalized"}

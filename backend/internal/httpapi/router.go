@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"time"
@@ -19,7 +21,6 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
@@ -146,8 +147,8 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	app.Use(securityHeaders(deps.Config))
 	app.Use(instrument(deps))
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
-	// Implements DESIGN-003 SimilarityAssetResolver server-hosted indicator assets.
-	app.Static("/assets", search.StaticAssetRoot(), fiber.Static{Browse: false})
+	// Implements DESIGN-010 RouteHandler server-hosted static assets.
+	app.Static("/assets", staticAssetRoot(), fiber.Static{Browse: false})
 	if deps.CSRF == nil {
 		deps.CSRF = NewCSRFManager(deps.Config, deps.Audit)
 	}
@@ -160,6 +161,16 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	v1.Get("/auth/csrf-token", csrfToken)
 	registerV1Routes(v1, deps)
 	return app, nil
+}
+
+// staticAssetRoot returns the backend-served asset directory.
+// Implements DESIGN-010 RouteHandler server-hosted static assets.
+func staticAssetRoot() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return filepath.Join("static", "assets")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "static", "assets"))
 }
 
 // registerV1Routes composes route-specific gateway hooks.

@@ -4,11 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -22,10 +18,10 @@ const similarityAssetURLPrefix = "/assets/similarity"
 
 // Implements DESIGN-003 SimilarityIndicatorMapper tier rules.
 var similarityTierRules = []TierRule{
-	{Tier: SimilarityTierExcellent, MinScore: 0.85, MaxScore: 1, ColorHex: "#1B7F4C", ImageURL: similarityAssetURLPrefix + "/excellent.svg"},
-	{Tier: SimilarityTierGood, MinScore: 0.70, MaxScore: 0.85, ColorHex: "#2F80ED", ImageURL: similarityAssetURLPrefix + "/good.svg"},
-	{Tier: SimilarityTierFair, MinScore: 0.55, MaxScore: 0.70, ColorHex: "#B7791F", ImageURL: similarityAssetURLPrefix + "/fair.svg"},
-	{Tier: SimilarityTierPoor, MinScore: 0, MaxScore: 0.55, ColorHex: "#A23B3B", ImageURL: similarityAssetURLPrefix + "/poor.svg"},
+	{Tier: SimilarityTierExcellent, MinScore: 0.85, MaxScore: 1, ImageURL: similarityAssetURLPrefix + "/excellent.svg"},
+	{Tier: SimilarityTierGood, MinScore: 0.70, MaxScore: 0.85, ImageURL: similarityAssetURLPrefix + "/good.svg"},
+	{Tier: SimilarityTierFair, MinScore: 0.55, MaxScore: 0.70, ImageURL: similarityAssetURLPrefix + "/fair.svg"},
+	{Tier: SimilarityTierPoor, MinScore: 0, MaxScore: 0.55, ImageURL: similarityAssetURLPrefix + "/poor.svg"},
 }
 
 // MatchType selects the replacement quantity denominator.
@@ -86,7 +82,6 @@ type SimilarityResult struct {
 	Score            float64
 	Tier             SimilarityTier
 	MatchingQuantity float64
-	ColorHex         string
 	ImageURL         string
 }
 
@@ -103,7 +98,6 @@ type TierRule struct {
 	Tier     SimilarityTier
 	MinScore float64
 	MaxScore float64
-	ColorHex string
 	ImageURL string
 }
 
@@ -181,7 +175,6 @@ func CompareMacros(ctx context.Context, req ComparisonRequest, aggregator MacroA
 			Score:            score,
 			Tier:             rule.Tier,
 			MatchingQuantity: CalculateMatchingQuantity(req.SourceMacros, req.SourceCalories, target, req.MatchType),
-			ColorHex:         rule.ColorHex,
 			ImageURL:         rule.ImageURL,
 		})
 	}
@@ -209,49 +202,10 @@ func FilterByThreshold(results []SimilarityResult, minScore float64) []Similarit
 func MapSimilarityTier(score float64) TierRule {
 	for _, rule := range similarityTierRules {
 		if score >= rule.MinScore {
-			rule.ColorHex, rule.ImageURL = ResolveIndicatorAsset(rule.Tier)
 			return rule
 		}
 	}
-	rule := similarityTierRules[len(similarityTierRules)-1]
-	rule.ColorHex, rule.ImageURL = ResolveIndicatorAsset(rule.Tier)
-	return rule
-}
-
-// ResolveIndicatorAsset returns the color and static asset URL for a tier.
-// Implements DESIGN-003 SimilarityAssetResolver.
-func ResolveIndicatorAsset(tier SimilarityTier) (string, string) {
-	fallback := similarityTierRules[len(similarityTierRules)-1]
-	for _, rule := range similarityTierRules {
-		if rule.Tier == tier {
-			if indicatorAssetExists(rule.ImageURL) {
-				return rule.ColorHex, rule.ImageURL
-			}
-			return rule.ColorHex, fallback.ImageURL
-		}
-	}
-	return fallback.ColorHex, fallback.ImageURL
-}
-
-// StaticAssetRoot returns the backend-served asset directory.
-// Implements DESIGN-003 SimilarityAssetResolver static asset root.
-func StaticAssetRoot() string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return filepath.Join("static", "assets")
-	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "static", "assets"))
-}
-
-// indicatorAssetExists checks whether a similarity indicator asset can be served.
-// Implements DESIGN-003 SimilarityAssetResolver.
-func indicatorAssetExists(assetURL string) bool {
-	rel, ok := strings.CutPrefix(assetURL, "/assets/")
-	if !ok {
-		return false
-	}
-	info, err := os.Stat(filepath.Join(StaticAssetRoot(), filepath.FromSlash(rel)))
-	return err == nil && !info.IsDir()
+	return similarityTierRules[len(similarityTierRules)-1]
 }
 
 // CalculateMatchingQuantity derives a replacement quantity from calorie or protein matching.

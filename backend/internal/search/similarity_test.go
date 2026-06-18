@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"math"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -83,7 +80,7 @@ func TestCompareMacrosIgnoresMicronutrientsAndRanksByCosineScore(t *testing.T) {
 	if results[0].MatchingQuantity != 10 {
 		t.Fatalf("calorie matching quantity = %f", results[0].MatchingQuantity)
 	}
-	if results[0].Tier != SimilarityTierExcellent || results[0].ColorHex == "" || results[0].ImageURL == "" {
+	if results[0].Tier != SimilarityTierExcellent || results[0].ImageURL == "" {
 		t.Fatalf("tier metadata = %+v", results[0])
 	}
 	assertDiagnostic(t, diagnostics, zeroID, "zero_target_vector")
@@ -152,9 +149,8 @@ func TestSimilarityHelpersFilterAssetsAndUncalculableQuantity(t *testing.T) {
 	if rule := MapSimilarityTier(0.70); rule.Tier != SimilarityTierGood {
 		t.Fatalf("tier rule = %+v", rule)
 	}
-	color, image := ResolveIndicatorAsset(SimilarityTierFair)
-	if color == "" || !strings.Contains(image, "fair") {
-		t.Fatalf("asset = %q %q", color, image)
+	if rule := MapSimilarityTier(0.60); rule.ImageURL != "/assets/similarity/fair.svg" {
+		t.Fatalf("asset = %q", rule.ImageURL)
 	}
 	if quantity := CalculateMatchingQuantity(repository.MacroValues{Protein: 10}, 100, TargetMacroVector{}, MatchTypeCalorie); quantity != 0 {
 		t.Fatalf("zero calorie denominator quantity = %f", quantity)
@@ -164,42 +160,45 @@ func TestSimilarityHelpersFilterAssetsAndUncalculableQuantity(t *testing.T) {
 	}
 }
 
-func TestMapSimilarityTierBoundariesColorsAndAssetURLs(t *testing.T) {
+func TestMapSimilarityTierBoundariesAndAssetURLs(t *testing.T) {
 	for _, tc := range []struct {
 		score float64
 		tier  SimilarityTier
-		color string
 		image string
 	}{
-		{score: 0.85, tier: SimilarityTierExcellent, color: "#1B7F4C", image: "/assets/similarity/excellent.svg"},
-		{score: 0.849999, tier: SimilarityTierGood, color: "#2F80ED", image: "/assets/similarity/good.svg"},
-		{score: 0.70, tier: SimilarityTierGood, color: "#2F80ED", image: "/assets/similarity/good.svg"},
-		{score: 0.699999, tier: SimilarityTierFair, color: "#B7791F", image: "/assets/similarity/fair.svg"},
-		{score: 0.55, tier: SimilarityTierFair, color: "#B7791F", image: "/assets/similarity/fair.svg"},
-		{score: 0.549999, tier: SimilarityTierPoor, color: "#A23B3B", image: "/assets/similarity/poor.svg"},
+		{score: 0.85, tier: SimilarityTierExcellent, image: "/assets/similarity/excellent.svg"},
+		{score: 0.849999, tier: SimilarityTierGood, image: "/assets/similarity/good.svg"},
+		{score: 0.70, tier: SimilarityTierGood, image: "/assets/similarity/good.svg"},
+		{score: 0.699999, tier: SimilarityTierFair, image: "/assets/similarity/fair.svg"},
+		{score: 0.55, tier: SimilarityTierFair, image: "/assets/similarity/fair.svg"},
+		{score: 0.549999, tier: SimilarityTierPoor, image: "/assets/similarity/poor.svg"},
 	} {
 		rule := MapSimilarityTier(tc.score)
-		if rule.Tier != tc.tier || rule.ColorHex != tc.color || rule.ImageURL != tc.image {
-			t.Fatalf("MapSimilarityTier(%f) = %+v, want tier=%s color=%s image=%s", tc.score, rule, tc.tier, tc.color, tc.image)
+		if rule.Tier != tc.tier || rule.ImageURL != tc.image {
+			t.Fatalf("MapSimilarityTier(%f) = %+v, want tier=%s image=%s", tc.score, rule, tc.tier, tc.image)
 		}
 	}
 }
 
-func TestResolveIndicatorAssetFallsBackWhenTierFileIsMissing(t *testing.T) {
-	assetPath := filepath.Join(StaticAssetRoot(), "similarity", "excellent.svg")
-	renamedPath := assetPath + ".test-missing"
-	if err := os.Rename(assetPath, renamedPath); err != nil {
-		t.Fatalf("rename fixture asset: %v", err)
+func TestCompareMacrosErrorBoundariesAndTierFallback(t *testing.T) {
+	if _, _, err := CompareMacros(context.Background(), ComparisonRequest{}, nil); err == nil {
+		t.Fatal("CompareMacros() accepted a zero source vector")
 	}
-	defer func() {
-		if err := os.Rename(renamedPath, assetPath); err != nil {
-			t.Fatalf("restore fixture asset: %v", err)
-		}
-	}()
-
-	color, image := ResolveIndicatorAsset(SimilarityTierExcellent)
-	if color != "#1B7F4C" || image != "/assets/similarity/poor.svg" {
-		t.Fatalf("missing excellent asset resolved color=%q image=%q", color, image)
+	mealID := uuid.New()
+	if _, _, err := CompareMacros(context.Background(), ComparisonRequest{
+		SourceMacros: repository.MacroValues{Protein: 1},
+		Targets:      []TargetMacroVector{{ItemID: uuid.New(), RecipeMealID: &mealID}},
+	}, nil); err == nil {
+		t.Fatal("CompareMacros() accepted a recipe target without an aggregator")
+	}
+	if _, _, err := CompareMacros(context.Background(), ComparisonRequest{
+		SourceMacros: repository.MacroValues{Protein: 1},
+		Targets:      []TargetMacroVector{{ItemID: uuid.New(), Macros: repository.MacroValues{Protein: -1}}},
+	}, nil); err == nil {
+		t.Fatal("CompareMacros() accepted invalid target macros")
+	}
+	if rule := MapSimilarityTier(math.NaN()); rule.Tier != SimilarityTierPoor {
+		t.Fatalf("NaN fallback rule = %+v", rule)
 	}
 }
 

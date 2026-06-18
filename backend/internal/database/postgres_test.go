@@ -86,4 +86,7 @@ func TestPoolPingAndClose(t *testing.T) {
 	if err := pool.QueryRow(context.Background(), "sql").Scan(); err != nil {
 		t.Fatalf("QueryRow().Scan() error = %v", err)
 	}
+	if _, err := pool.Begin(context.Background()); !errors.Is(err, expected) {
+		t.Fatalf("Begin() error = %v, want %v", err, expected)
+	}
 }

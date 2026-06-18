@@ -2,6 +2,7 @@ package search
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/google/uuid"
@@ -173,10 +174,10 @@ func addRepositoryFilter(query *repository.RepositoryQuery, filter SearchFilter,
 			query.ExcludedAllergenKeys = appendUniqueString(query.ExcludedAllergenKeys, filter.FilterID)
 		}
 		return nil
-	case SearchFilterKindFoodObjectType:
+	case SearchFilterKindPhysicalState:
 		state, ok := physicalStateFromFilterID(filter.FilterID)
 		if !ok {
-			return rejectedFilter("food object type is unsupported", "filters")
+			return rejectedFilter("physical state is unsupported", "filters")
 		}
 		if include {
 			query.FoodObjectTypes = appendUniquePhysicalState(query.FoodObjectTypes, state)
@@ -220,10 +221,8 @@ func physicalStateFromFilterID(filterID string) (repository.PhysicalState, bool)
 // appendUniqueUUID appends UUID values without duplicates.
 // Implements DESIGN-002 FilterProcessor.
 func appendUniqueUUID(values []uuid.UUID, value uuid.UUID) []uuid.UUID {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
+	if slices.Contains(values, value) {
+		return values
 	}
 	return append(values, value)
 }
@@ -231,10 +230,8 @@ func appendUniqueUUID(values []uuid.UUID, value uuid.UUID) []uuid.UUID {
 // appendUniquePhysicalState appends physical states without duplicates.
 // Implements DESIGN-002 FilterProcessor.
 func appendUniquePhysicalState(values []repository.PhysicalState, value repository.PhysicalState) []repository.PhysicalState {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
+	if slices.Contains(values, value) {
+		return values
 	}
 	return append(values, value)
 }
@@ -242,10 +239,8 @@ func appendUniquePhysicalState(values []repository.PhysicalState, value reposito
 // appendUniqueString appends string values without duplicates.
 // Implements DESIGN-002 FilterProcessor.
 func appendUniqueString(values []string, value string) []string {
-	for _, existing := range values {
-		if existing == value {
-			return values
-		}
+	if slices.Contains(values, value) {
+		return values
 	}
 	return append(values, value)
 }

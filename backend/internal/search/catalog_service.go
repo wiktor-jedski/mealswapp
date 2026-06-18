@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"slices"
 	"sort"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -117,14 +118,12 @@ func (s *CatalogService) loadCatalog(ctx context.Context, prepared PreparedSearc
 	}, nil
 }
 
-// sortCatalogItems applies deterministic presentation ordering.
+// sortCatalogItems applies name-first presentation ordering.
 // Implements DESIGN-002 SearchController.
 func sortCatalogItems(items []repository.FoodItemEntity) {
+	// Active food names are unique in PostgreSQL; stable sorting preserves repository order for defensive fixtures.
 	sort.SliceStable(items, func(i, j int) bool {
-		if items[i].Name != items[j].Name {
-			return items[i].Name < items[j].Name
-		}
-		return items[i].ID.String() < items[j].ID.String()
+		return items[i].Name < items[j].Name
 	})
 }
 
@@ -174,13 +173,11 @@ func searchResponseCacheMetadata(cache SearchResponseCache, req SearchRequest, s
 	return provider.SearchResponseCacheMetadata(req, status)
 }
 
-// appendWarningOnce appends a warning only when it is absent.
-// Implements DESIGN-017 ErrorMessageMapper degraded feature metadata.
+// appendWarningOnce appends cache-degradation warning metadata only when absent.
+// Implements DESIGN-011 RedisCache degraded response metadata.
 func appendWarningOnce(warnings []string, warning string) []string {
-	for _, existing := range warnings {
-		if existing == warning {
-			return warnings
-		}
+	if slices.Contains(warnings, warning) {
+		return warnings
 	}
 	return append(warnings, warning)
 }

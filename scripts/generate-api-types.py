@@ -293,7 +293,7 @@ export type SearchMode = "catalog" | "substitution" | "daily_diet_alternative";
 export type SearchFilterKind =
 \t| "food_category"
 \t| "culinary_role"
-\t| "food_object_type"
+\t| "physical_state"
 \t| "allergen"
 \t| "dietary_preset";
 
@@ -306,11 +306,15 @@ export interface SearchFilter {
 }
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
+/** Canonical units accepted by substitution search inputs. */
+export type SubstitutionUnit = "g" | "ml" | "oz" | "fl_oz";
+
+// Implements DESIGN-002 SearchController frontend substitution contract.
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 \tfoodObjectId: string;
-\tquantity: number | string;
-\tunit: string;
+\tquantity: number;
+\tunit: SubstitutionUnit;
 }
 
 // Implements DESIGN-002 SearchController frontend search request contract.
@@ -319,7 +323,7 @@ export interface SearchRequest {
 \tquery: string;
 \tmode: SearchMode;
 \tfilters?: SearchFilter[];
-\tpage: number | string;
+\tpage: number;
 \tsubstitutionInputs?: SubstitutionInput[];
 \tdailyDietId?: string;
 }
@@ -343,7 +347,6 @@ export interface SimilarityMetadata {
 \titemId: string;
 \tscore: number;
 \ttier: SimilarityTier;
-\tcolorHex: string;
 \timageUrl: string;
 \tmatchingQuantity: number;
 }

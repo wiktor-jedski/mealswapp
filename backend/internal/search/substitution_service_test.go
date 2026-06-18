@@ -87,7 +87,7 @@ func TestSubstitutionServiceCombinesMultipleInputsWithoutPerInputCulinaryOrderin
 		Mode:  SearchModeSubstitution,
 		Page:  1,
 		SubstitutionInputs: []SubstitutionInput{
-			{FoodObjectID: sourceAID, Quantity: 100, Unit: "gram"},
+			{FoodObjectID: sourceAID, Quantity: 100, Unit: "g"},
 			{FoodObjectID: sourceBID, Quantity: 100, Unit: "g"},
 		},
 	})
@@ -109,7 +109,7 @@ func TestSubstitutionServiceCombinesMultipleInputsWithoutPerInputCulinaryOrderin
 	if len(response.SimilarityMetadata) != 2 || response.SimilarityMetadata[0].ItemID != bestMacroCandidateID || response.SimilarityMetadata[1].ItemID != weightedCandidateID {
 		t.Fatalf("multi-input similarity metadata order = %+v", response.SimilarityMetadata)
 	}
-	if response.SimilarityMetadata[0].Tier != SimilarityTierExcellent || response.SimilarityMetadata[0].ColorHex == "" || response.SimilarityMetadata[0].ImageURL == "" || response.SimilarityMetadata[0].MatchingQuantity <= 0 {
+	if response.SimilarityMetadata[0].Tier != SimilarityTierExcellent || response.SimilarityMetadata[0].ImageURL == "" || response.SimilarityMetadata[0].MatchingQuantity <= 0 {
 		t.Fatalf("multi-input tier metadata = %+v", response.SimilarityMetadata[0])
 	}
 }
@@ -167,7 +167,7 @@ func TestSubstitutionServiceAppliesSingleInputCulinaryRoleWeightThresholdWarning
 	if math.Abs(response.SimilarityMetadata[0].Score-0.668647849835731) > 0.0000001 {
 		t.Fatalf("metadata raw score = %.12f", response.SimilarityMetadata[0].Score)
 	}
-	if response.SimilarityMetadata[0].Tier != SimilarityTierFair || response.SimilarityMetadata[0].ColorHex != "#B7791F" || response.SimilarityMetadata[0].ImageURL != "/assets/similarity/fair.svg" || response.SimilarityMetadata[0].MatchingQuantity <= 0 {
+	if response.SimilarityMetadata[0].Tier != SimilarityTierFair || response.SimilarityMetadata[0].ImageURL != "/assets/similarity/fair.svg" || response.SimilarityMetadata[0].MatchingQuantity <= 0 {
 		t.Fatalf("boosted tier metadata = %+v", response.SimilarityMetadata[0])
 	}
 	if response.Items[1].ID != tieAID || response.Items[2].ID != tieBID {
@@ -178,6 +178,35 @@ func TestSubstitutionServiceAppliesSingleInputCulinaryRoleWeightThresholdWarning
 	}
 	assertWarningContains(t, response.Warnings, "skipped target "+belowID.String()+" below_threshold")
 	assertWarningContains(t, response.Warnings, "skipped target "+zeroID.String()+" zero_target_vector")
+}
+
+func TestRankSubstitutionCandidatesPreservesResultOrderForDuplicateNameFixture(t *testing.T) {
+	firstID := uuid.MustParse("40000000-0000-4000-8000-000000000003")
+	secondID := uuid.MustParse("40000000-0000-4000-8000-000000000001")
+	items := []repository.FoodItemEntity{
+		{ID: secondID, Name: "Apple"},
+		{ID: firstID, Name: "Apple"},
+	}
+	results := []SimilarityResult{
+		{ItemID: firstID, Score: 0.9, Tier: SimilarityTierExcellent, ImageURL: "/assets/similarity/excellent.svg", MatchingQuantity: 100},
+		{ItemID: secondID, Score: 0.9, Tier: SimilarityTierExcellent, ImageURL: "/assets/similarity/excellent.svg", MatchingQuantity: 100},
+	}
+
+	ranked := rankSubstitutionCandidates(items, results, false, nil)
+
+	if len(ranked.items) != 2 || ranked.items[0].ID != firstID || ranked.items[1].ID != secondID {
+		t.Fatalf("ranked duplicate-name fixture = %+v", ranked.items)
+	}
+	if ranked.metadata[0].ItemID != firstID || ranked.metadata[1].ItemID != secondID {
+		t.Fatalf("ranked metadata = %+v", ranked.metadata)
+	}
+}
+
+func TestRankSubstitutionCandidatesSkipsMissingRepositoryItems(t *testing.T) {
+	ranked := rankSubstitutionCandidates(nil, []SimilarityResult{{ItemID: uuid.New(), Score: 1}}, false, nil)
+	if len(ranked.items) != 0 || len(ranked.scores) != 0 || len(ranked.metadata) != 0 {
+		t.Fatalf("ranked missing item = %+v", ranked)
+	}
 }
 
 func TestSubstitutionServiceCachesRejectionsAndSkippedSources(t *testing.T) {
@@ -235,7 +264,6 @@ func TestSubstitutionServiceCachesSimilarityCalculationsBeforeMacroComparison(t 
 		ItemID:           candidateID,
 		Score:            0.91,
 		Tier:             SimilarityTierExcellent,
-		ColorHex:         "#1B7F4C",
 		ImageURL:         "/assets/similarity/excellent.svg",
 		MatchingQuantity: 88,
 	}}}}
@@ -275,14 +303,14 @@ func TestSubstitutionServiceWritesAndReusesSimilarityCache(t *testing.T) {
 	}
 	cache := &similarityCacheStub{}
 	service := NewSubstitutionService(repo, nil, cache)
-	req := SearchRequest{Query: "swap", Mode: SearchModeSubstitution, Page: 1, SubstitutionInputs: []SubstitutionInput{{FoodObjectID: sourceID, Quantity: 100, Unit: "gram"}}}
+	req := SearchRequest{Query: "swap", Mode: SearchModeSubstitution, Page: 1, SubstitutionInputs: []SubstitutionInput{{FoodObjectID: sourceID, Quantity: 100, Unit: "g"}}}
 
 	first, err := service.Search(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	secondReq := req
-	secondReq.SubstitutionInputs = []SubstitutionInput{{FoodObjectID: sourceID, Quantity: 100, Unit: "gram"}}
+	secondReq.SubstitutionInputs = []SubstitutionInput{{FoodObjectID: sourceID, Quantity: 100, Unit: "g"}}
 	second, err := service.Search(context.Background(), secondReq)
 	if err != nil {
 		t.Fatal(err)
@@ -332,6 +360,78 @@ func TestApplyCulinaryRoleWeightCountsUniqueSharedRoles(t *testing.T) {
 	sourceRoles := []repository.ClassificationEntity{{ID: roleID}}
 	if score := ApplyCulinaryRoleWeight(0.5, candidateRoles, sourceRoles); score != 0.6 {
 		t.Fatalf("weighted score = %f", score)
+	}
+}
+
+func TestSubstitutionServiceFailureAndDegradationPaths(t *testing.T) {
+	validSourceID := uuid.New()
+	validCandidateID := uuid.New()
+	validSource := repository.FoodItemEntity{ID: validSourceID, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}}
+	validCandidate := repository.FoodItemEntity{ID: validCandidateID, Name: "Candidate", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}}
+	validRequest := SearchRequest{Query: "swap", Mode: SearchModeSubstitution, Page: 1, SubstitutionInputs: []SubstitutionInput{{FoodObjectID: validSourceID, Quantity: 100, Unit: "g"}}}
+
+	if _, err := NewSubstitutionService(&substitutionRepositoryStub{}, nil).Search(context.Background(), SearchRequest{Mode: SearchModeSubstitution, Page: 1}); err == nil {
+		t.Fatal("Search() accepted an empty query")
+	}
+	response, err := NewSubstitutionService(&substitutionRepositoryStub{}, nil).Search(context.Background(), SearchRequest{Query: "apple", Mode: SearchModeCatalog, Page: 1})
+	if err != nil || response.Rejection == nil || response.Rejection.Field != "mode" {
+		t.Fatalf("wrong-mode response=%+v err=%v", response, err)
+	}
+
+	cached := SearchResponse{Items: []repository.FoodItemEntity{validCandidate}, TotalCount: 1}
+	cache := &searchCacheStub{hit: true, response: searchCacheEntry{value: cached}}
+	repo := &substitutionRepositoryStub{}
+	response, err = NewSubstitutionService(repo, cache).Search(context.Background(), validRequest)
+	if err != nil || response.TotalCount != 1 || repo.searches != 0 {
+		t.Fatalf("cache-hit response=%+v err=%v searches=%d", response, err, repo.searches)
+	}
+
+	repo = &substitutionRepositoryStub{byID: map[uuid.UUID]repository.FoodItemEntity{validSourceID: validSource}, searchErr: errors.New("database down")}
+	if _, err := NewSubstitutionService(repo, nil).Search(context.Background(), validRequest); err == nil {
+		t.Fatal("Search() swallowed repository error")
+	}
+
+	repo = &substitutionRepositoryStub{byID: map[uuid.UUID]repository.FoodItemEntity{validSourceID: validSource}}
+	conflicting := validRequest
+	conflicting.Filters = []SearchFilter{
+		{FilterID: "dairy", Kind: SearchFilterKindAllergen, Include: true},
+		{FilterID: string(DietaryPresetDairyFree), Kind: SearchFilterKindDietaryPreset, Include: false},
+	}
+	response, err = NewSubstitutionService(repo, nil).Search(context.Background(), conflicting)
+	if err != nil || response.Rejection == nil {
+		t.Fatalf("filter rejection response=%+v err=%v", response, err)
+	}
+
+	invalidInput := validRequest
+	invalidInput.SubstitutionInputs = []SubstitutionInput{{Quantity: 1, Unit: "g"}}
+	response, err = NewSubstitutionService(repo, nil).Search(context.Background(), invalidInput)
+	if err != nil || response.Rejection == nil {
+		t.Fatalf("invalid-input response=%+v err=%v", response, err)
+	}
+
+	conversionFailure := validRequest
+	conversionFailure.SubstitutionInputs = []SubstitutionInput{{FoodObjectID: validSourceID, Quantity: 1, Unit: "ml"}}
+	response, err = NewSubstitutionService(repo, nil).Search(context.Background(), conversionFailure)
+	if err != nil || response.Rejection == nil {
+		t.Fatalf("conversion response=%+v err=%v", response, err)
+	}
+	assertWarningContains(t, response.Warnings, "conversion_failed")
+
+	repo = &substitutionRepositoryStub{
+		byID:  map[uuid.UUID]repository.FoodItemEntity{validSourceID: validSource},
+		items: []repository.FoodItemEntity{{ID: validCandidateID, MacrosPer100: repository.MacroValues{Protein: -1}}},
+	}
+	_, err = NewSubstitutionService(repo, nil).Search(context.Background(), validRequest)
+	var similarityErr SimilarityUnavailableError
+	if !errors.As(err, &similarityErr) || similarityErr.Error() != "similarity_unavailable" || similarityErr.Unwrap() == nil {
+		t.Fatalf("similarity error = %v", err)
+	}
+
+	repo = &substitutionRepositoryStub{byID: map[uuid.UUID]repository.FoodItemEntity{validSourceID: validSource}, items: []repository.FoodItemEntity{validCandidate}}
+	cache = &searchCacheStub{getErr: errors.New("redis get failed"), setErr: errors.New("redis set failed")}
+	response, err = NewSubstitutionService(repo, cache).Search(context.Background(), validRequest)
+	if err != nil || countWarnings(response.Warnings, WarningCacheUnavailable) != 1 || response.Cache != nil {
+		t.Fatalf("cache degradation response=%+v err=%v", response, err)
 	}
 }
 

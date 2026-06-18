@@ -33,6 +33,8 @@ type memorySavedRepository struct {
 	items   []repository.SavedItem
 	history []repository.EncryptedSearchHistoryEntry
 	cleared uuid.UUID
+	addErr  error
+	listErr error
 }
 
 func (r *memorySavedRepository) SaveItem(context.Context, uuid.UUID, uuid.UUID, repository.SavedItemKind) (uuid.UUID, error) {
@@ -73,12 +75,18 @@ func (r *memorySavedRepository) ClearHistory(_ context.Context, userID uuid.UUID
 }
 
 func (r *memorySavedRepository) AddEncryptedHistory(_ context.Context, entry repository.EncryptedSearchHistoryEntry) (uuid.UUID, error) {
+	if r.addErr != nil {
+		return uuid.Nil, r.addErr
+	}
 	entry.ID = uuid.New()
 	r.history = append([]repository.EncryptedSearchHistoryEntry{entry}, r.history...)
 	return entry.ID, nil
 }
 
 func (r *memorySavedRepository) ListEncryptedHistory(_ context.Context, userID uuid.UUID, limit int) ([]repository.EncryptedSearchHistoryEntry, error) {
+	if r.listErr != nil {
+		return nil, r.listErr
+	}
 	result := []repository.EncryptedSearchHistoryEntry{}
 	for _, entry := range r.history {
 		if entry.UserID == userID {
@@ -127,5 +135,39 @@ func TestServiceSavedDataAndHistory(t *testing.T) {
 	}
 	if err := service.ClearHistory(ctx, userID); err != nil || repo.cleared != userID {
 		t.Fatalf("ClearHistory() err=%v cleared=%s", err, repo.cleared)
+	}
+}
+
+func TestServiceHistoryValidationAndFailures(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	wantErr := errors.New("repository failed")
+	validEncryption := security.NewEncryptionService(keyLoader{active: "pii-v1", entries: map[string][]byte{"pii-v1": []byte("11111111111111111111111111111111")}})
+
+	service := NewService(&memorySavedRepository{}, &memorySavedRepository{}, &memorySavedRepository{}, validEncryption)
+	for _, query := range []string{"", "bad\x00query"} {
+		if _, err := service.AddHistory(ctx, userID, query, "search", ""); err == nil {
+			t.Fatalf("query %q accepted", query)
+		}
+	}
+	badEncryption := security.NewEncryptionService(keyLoader{active: "missing", entries: map[string][]byte{}})
+	service = NewService(&memorySavedRepository{}, &memorySavedRepository{}, &memorySavedRepository{}, badEncryption)
+	if _, err := service.AddHistory(ctx, userID, "apple", "search", ""); err == nil {
+		t.Fatal("encryption failure ignored")
+	}
+	repo := &memorySavedRepository{addErr: wantErr}
+	service = NewService(repo, repo, repo, validEncryption)
+	if _, err := service.AddHistory(ctx, userID, "apple", "search", ""); !errors.Is(err, wantErr) {
+		t.Fatalf("history add error = %v", err)
+	}
+	repo = &memorySavedRepository{listErr: wantErr}
+	service = NewService(repo, repo, repo, validEncryption)
+	if _, err := service.ListHistory(ctx, userID, 100); !errors.Is(err, wantErr) {
+		t.Fatalf("history list error = %v", err)
+	}
+	repo = &memorySavedRepository{history: []repository.EncryptedSearchHistoryEntry{{UserID: userID, Query: repository.EncryptedField{KeyVersion: "missing"}}}}
+	service = NewService(repo, repo, repo, validEncryption)
+	if _, err := service.ListHistory(ctx, userID, 100); err == nil {
+		t.Fatal("history decryption failure ignored")
 	}
 }

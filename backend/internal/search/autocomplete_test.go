@@ -144,6 +144,22 @@ func TestAutocompleteServicePropagatesRepositoryErrors(t *testing.T) {
 	}
 }
 
+func TestAutocompleteValidationLimitAndEmptyDistanceBoundaries(t *testing.T) {
+	if _, err := NewAutocompleteService(nil, nil).Autocomplete(context.Background(), "", repository.RepositoryContext{}); err == nil {
+		t.Fatal("Autocomplete() accepted an empty query")
+	}
+	candidates := []AutocompleteCandidate{{ItemID: uuid.New(), Label: "apple"}}
+	if ranked := RankAutocomplete("apple", candidates, 0); len(ranked) != 1 || ranked[0].Rank != 1 {
+		t.Fatalf("RankAutocomplete() = %+v", ranked)
+	}
+	if distance := levenshteinDistance("", "apple"); distance != 5 {
+		t.Fatalf("empty-left distance = %d", distance)
+	}
+	if distance := levenshteinDistance("apple", ""); distance != 5 {
+		t.Fatalf("empty-right distance = %d", distance)
+	}
+}
+
 func labels(items []RankedAutocomplete) []string {
 	out := make([]string, 0, len(items))
 	for _, item := range items {

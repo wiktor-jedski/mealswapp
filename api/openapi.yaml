@@ -382,14 +382,6 @@ paths:
             type: string
             minLength: 1
             maxLength: 120
-        - name: q
-          in: query
-          required: false
-          deprecated: true
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 120
         - name: page
           in: query
           required: false
@@ -842,7 +834,7 @@ components:
       enum: [catalog, substitution, daily_diet_alternative]
     SearchFilterKind:
       type: string
-      enum: [food_category, culinary_role, food_object_type, allergen, dietary_preset]
+      enum: [food_category, culinary_role, physical_state, allergen, dietary_preset]
     SearchFilter:
       type: object
       additionalProperties: false
@@ -864,16 +856,11 @@ components:
           type: string
           format: uuid
         quantity:
-          oneOf:
-            - type: number
-              exclusiveMinimum: 0
-            - type: string
-              pattern: '^[0-9]+(\.[0-9]+)?$'
+          type: number
+          exclusiveMinimum: 0
         unit:
           type: string
-          minLength: 1
-          maxLength: 32
-          pattern: '^[A-Za-z_-]+$'
+          enum: [g, ml, oz, fl_oz]
     SearchRequest:
       type: object
       additionalProperties: false
@@ -891,12 +878,9 @@ components:
           items:
             $ref: "#/components/schemas/SearchFilter"
         page:
-          oneOf:
-            - type: integer
-              minimum: 1
-              maximum: 10000
-            - type: string
-              pattern: '^[1-9][0-9]{0,3}$|^10000$'
+          type: integer
+          minimum: 1
+          maximum: 10000
         substitutionInputs:
           type: array
           items:
@@ -926,7 +910,7 @@ components:
       enum: [excellent, good, fair, poor]
     SimilarityMetadata:
       type: object
-      required: [itemId, score, tier, colorHex, imageUrl, matchingQuantity]
+      required: [itemId, score, tier, imageUrl, matchingQuantity]
       properties:
         itemId:
           type: string
@@ -937,9 +921,6 @@ components:
           maximum: 1
         tier:
           $ref: "#/components/schemas/SimilarityTier"
-        colorHex:
-          type: string
-          pattern: '^#[0-9A-Fa-f]{6}$'
         imageUrl:
           type: string
           format: uri-reference

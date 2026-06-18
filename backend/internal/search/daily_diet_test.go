@@ -1,6 +1,7 @@
 package search
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestPrepareSearchRequestHonorsFiltersPaginationAndSimilarityEligibleAlterna
 		DailyDietID: &dailyDietID,
 		Filters: []SearchFilter{
 			{FilterID: categoryID.String(), Kind: SearchFilterKindFoodCategory, Include: true},
-			{FilterID: string(repository.PhysicalStateLiquid), Kind: SearchFilterKindFoodObjectType, Include: false},
+			{FilterID: string(repository.PhysicalStateLiquid), Kind: SearchFilterKindPhysicalState, Include: false},
 		},
 	}, DailyDietDataAvailable)
 	if err != nil {
@@ -73,7 +74,7 @@ func TestPrepareSearchRequestHonorsFiltersPaginationAndSimilarityEligibleAlterna
 		t.Fatalf("excluded object types = %#v", query.ExcludedFoodObjectTypes)
 	}
 
-	results, diagnostics, err := CompareMacros(nil, ComparisonRequest{
+	results, diagnostics, err := CompareMacros(context.Background(), ComparisonRequest{
 		SourceMacros: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10},
 		Targets: []TargetMacroVector{
 			{ItemID: uuid.MustParse("22222222-2222-4222-8222-222222222222"), Macros: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}},
@@ -91,7 +92,7 @@ func TestPrepareSearchRequestHonorsFiltersPaginationAndSimilarityEligibleAlterna
 	}
 }
 
-func TestPrepareSearchRequestDoesNotTreatSubstitutionAsDailyDietJob(t *testing.T) {
+func TestPrepareSearchRequestUsesDailyDietModeEvenWithSubstitutionInputs(t *testing.T) {
 	dailyDietID := uuid.MustParse("61e0cae4-0f45-4854-8ac5-b228214cdd1d")
 	prepared, err := PrepareSearchRequest(SearchRequest{
 		Query: "tofu",
@@ -100,14 +101,23 @@ func TestPrepareSearchRequestDoesNotTreatSubstitutionAsDailyDietJob(t *testing.T
 		SubstitutionInputs: []SubstitutionInput{{
 			FoodObjectID: uuid.MustParse("2d4a5f20-c55f-4ba7-9751-779e682f7063"),
 			Quantity:     100,
-			Unit:         "gram",
+			Unit:         "g",
 		}},
 		DailyDietID: &dailyDietID,
 	}, DailyDietDataUnavailable)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.ParsedQuery.Strategy != SearchStrategySubstitution || prepared.Rejection != nil {
-		t.Fatalf("prepared substitution = %+v", prepared)
+	if prepared.ParsedQuery.Strategy != SearchStrategyDailyDietAlternative || prepared.Rejection == nil {
+		t.Fatalf("prepared daily diet = %+v", prepared)
+	}
+}
+
+func TestDailyDietValidationErrorAndParserFailure(t *testing.T) {
+	if got := ErrDailyDietIDRequired.Error(); got == "" {
+		t.Fatal("ErrDailyDietIDRequired.Error() returned an empty message")
+	}
+	if _, err := PrepareSearchRequest(SearchRequest{Mode: SearchModeCatalog, Page: 1}, DailyDietDataUnavailable); err == nil {
+		t.Fatal("PrepareSearchRequest() accepted an empty query")
 	}
 }

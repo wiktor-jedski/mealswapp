@@ -26,7 +26,7 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 			return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx)})
 		},
 	}}})
-	validBody := `{"query":"  Fresh   TOMATO  ","mode":"catalog","page":1,"filters":[{"filterId":"vegetable","kind":" Food_Category ","include":true}],"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":"12.5","unit":" Gram "}],"dailyDietId":"2d4a5f20-c55f-4ba7-9751-779e682f7063"}`
+	validBody := `{"query":"  Fresh   TOMATO  ","mode":"catalog","page":1,"filters":[{"filterId":"vegetable","kind":" Food_Category ","include":true}]}`
 	resp := postSearchValidation(t, app, validBody)
 	resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK || calls != 1 {
@@ -34,14 +34,23 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 	}
 
 	for name, body := range map[string]string{
-		"empty query":                     `{"query":"   ","mode":"catalog","page":1}`,
-		"maximum query length":            `{"query":"` + strings.Repeat("a", 201) + `","mode":"catalog","page":1}`,
-		"invalid mode":                    `{"query":"tomato","mode":"meal_plan","page":1}`,
-		"zero page":                       `{"query":"tomato","mode":"catalog","page":0}`,
-		"fractional page":                 `{"query":"tomato","mode":"catalog","page":1.5}`,
-		"unsupported filter kind":         `{"query":"tomato","mode":"catalog","page":1,"filters":[{"filterId":"x","kind":"brand","include":true}]}`,
-		"malformed substitution quantity": `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":"1,5","unit":"g"}]}`,
-		"invalid daily diet id":           `{"query":"tomato","mode":"daily_diet_alternative","page":1,"dailyDietId":"not-a-uuid"}`,
+		"empty query":                  `{"query":"   ","mode":"catalog","page":1}`,
+		"maximum query length":         `{"query":"` + strings.Repeat("a", 201) + `","mode":"catalog","page":1}`,
+		"invalid mode":                 `{"query":"tomato","mode":"meal_plan","page":1}`,
+		"zero page":                    `{"query":"tomato","mode":"catalog","page":0}`,
+		"string page":                  `{"query":"tomato","mode":"catalog","page":"1"}`,
+		"fractional page":              `{"query":"tomato","mode":"catalog","page":1.5}`,
+		"unsupported filter kind":      `{"query":"tomato","mode":"catalog","page":1,"filters":[{"filterId":"x","kind":"brand","include":true}]}`,
+		"old physical state kind":      `{"query":"tomato","mode":"catalog","page":1,"filters":[{"filterId":"solid","kind":"food_object_type","include":true}]}`,
+		"string substitution quantity": `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":"12.5","unit":"g"}]}`,
+		"aliased substitution unit":    `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"gram"}]}`,
+		"fluid ounce alias":            `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"fluid_ounce"}]}`,
+		"invalid daily diet id":        `{"query":"tomato","mode":"daily_diet_alternative","page":1,"dailyDietId":"not-a-uuid"}`,
+		"catalog with substitution":    `{"query":"tomato","mode":"catalog","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"g"}]}`,
+		"catalog with daily diet id":   `{"query":"tomato","mode":"catalog","page":1,"dailyDietId":"2d4a5f20-c55f-4ba7-9751-779e682f7063"}`,
+		"substitution without inputs":  `{"query":"tomato","mode":"substitution","page":1}`,
+		"substitution with daily id":   `{"query":"tomato","mode":"substitution","page":1,"dailyDietId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"g"}]}`,
+		"daily diet with inputs":       `{"query":"tomato","mode":"daily_diet_alternative","page":1,"dailyDietId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"g"}]}`,
 	} {
 		resp := postSearchValidation(t, app, body)
 		envelope := decodeEnvelope(t, resp.Body)
@@ -69,6 +78,7 @@ func TestAutocompleteValidationStopsBeforeHandler(t *testing.T) {
 	for path, want := range map[string]int{
 		"/api/v1/search/autocomplete?query=%20Lentils%20&page=1":        fiber.StatusNoContent,
 		"/api/v1/search/autocomplete?q=":                                fiber.StatusBadRequest,
+		"/api/v1/search/autocomplete?q=Apple":                           fiber.StatusBadRequest,
 		"/api/v1/search/autocomplete?query=" + strings.Repeat("a", 121): fiber.StatusBadRequest,
 		"/api/v1/search/autocomplete?query=lentils&page=-1":             fiber.StatusBadRequest,
 	} {
@@ -175,10 +185,7 @@ func TestParseValidatedSearchRequestBodyPreservesDailyDietAndFilters(t *testing.
 		"page":        float64(2),
 		"dailyDietId": "61e0cae4-0f45-4854-8ac5-b228214cdd1d",
 		"filters": []any{
-			map[string]any{"filterId": "solid", "kind": "food_object_type", "include": true},
-		},
-		"substitutionInputs": []any{
-			map[string]any{"foodObjectId": "2d4a5f20-c55f-4ba7-9751-779e682f7063", "quantity": "12.5", "unit": "gram"},
+			map[string]any{"filterId": "solid", "kind": "physical_state", "include": true},
 		},
 	}
 	req, err := ParseValidatedSearchRequestBody(body)
@@ -188,11 +195,38 @@ func TestParseValidatedSearchRequestBodyPreservesDailyDietAndFilters(t *testing.
 	if req.Mode != search.SearchModeDailyDietAlternative || req.Page != 2 || req.DailyDietID == nil {
 		t.Fatalf("request core fields = %+v", req)
 	}
-	if len(req.Filters) != 1 || req.Filters[0].Kind != search.SearchFilterKindFoodObjectType || !req.Filters[0].Include {
+	if len(req.Filters) != 1 || req.Filters[0].Kind != search.SearchFilterKindPhysicalState || !req.Filters[0].Include {
 		t.Fatalf("filters = %+v", req.Filters)
 	}
-	if len(req.SubstitutionInputs) != 1 || req.SubstitutionInputs[0].Quantity != 12.5 || req.SubstitutionInputs[0].Unit != "gram" {
+	if len(req.SubstitutionInputs) != 0 {
 		t.Fatalf("substitution inputs = %+v", req.SubstitutionInputs)
+	}
+}
+
+func TestParseValidatedSearchRequestBodyRejectsMissingOrMistypedFields(t *testing.T) {
+	for name, body := range map[string]map[string]any{
+		"missing query": {"mode": "catalog", "page": float64(1)},
+		"mistyped query": {
+			"query": 123,
+			"mode":  "catalog",
+			"page":  float64(1),
+		},
+		"missing mode": {"query": "apple", "page": float64(1)},
+		"mistyped mode": {
+			"query": "apple",
+			"mode":  123,
+			"page":  float64(1),
+		},
+		"missing page": {"query": "apple", "mode": "catalog"},
+		"mistyped page": {
+			"query": "apple",
+			"mode":  "catalog",
+			"page":  map[string]any{},
+		},
+	} {
+		if _, err := ParseValidatedSearchRequestBody(body); err == nil {
+			t.Fatalf("%s accepted", name)
+		}
 	}
 }
 

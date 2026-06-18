@@ -75,6 +75,15 @@ type httpSessionRepository struct {
 	byHash map[string]repository.UserSession
 }
 
+type staticAccessTokenValidator struct {
+	claims auth.AccessTokenClaims
+	err    error
+}
+
+func (v staticAccessTokenValidator) ValidateAccessToken(context.Context, string) (auth.AccessTokenClaims, error) {
+	return v.claims, v.err
+}
+
 func (r *httpSessionRepository) CreateSession(context.Context, repository.UserSession) (uuid.UUID, error) {
 	return uuid.Nil, errors.New("unused")
 }
@@ -972,6 +981,145 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func TestAuthControllerValidatorsAndErrorMapping(t *testing.T) {
+	invalidRegisterBodies := []map[string]any{
+		{},
+		{"email": "a@example.test"},
+		{"email": "a@example.test", "password": "password"},
+		{"email": "a@example.test", "password": "password", "privacyPolicyVersion": "p"},
+		{"email": "a@example.test", "password": "password", "privacyPolicyVersion": "bad version", "termsVersion": "t"},
+		{"email": "a@example.test", "password": "password", "privacyPolicyVersion": "p", "termsVersion": "bad version"},
+	}
+	for _, body := range invalidRegisterBodies {
+		if err := validateRegisterBody(body); err == nil {
+			t.Fatalf("validateRegisterBody() accepted %+v", body)
+		}
+	}
+	for _, body := range []map[string]any{{}, {"email": "a@example.test"}} {
+		if err := validateLoginBody(body); err == nil {
+			t.Fatalf("validateLoginBody() accepted %+v", body)
+		}
+	}
+	for _, body := range []map[string]any{{}, {"email": " "}} {
+		if err := validatePasswordResetRequestBody(body); err == nil {
+			t.Fatalf("validatePasswordResetRequestBody() accepted %+v", body)
+		}
+	}
+	for _, body := range []map[string]any{{}, {"token": "token"}} {
+		if err := validatePasswordResetConsumeBody(body); err == nil {
+			t.Fatalf("validatePasswordResetConsumeBody() accepted %+v", body)
+		}
+	}
+
+	cases := []struct {
+		err  error
+		code string
+	}{
+		{auth.ErrSessionExpired, "session_expired"},
+		{auth.ErrTokenReuseDetected, "token_reuse_detected"},
+		{auth.ErrPasswordResetInvalid, "password_reset_invalid"},
+		{errors.New("consent_missing"), "consent_missing"},
+		{errors.New("consent_version_stale"), "consent_version_stale"},
+		{errors.New("consent_version_invalid"), "consent_version_invalid"},
+	}
+	for _, tc := range cases {
+		mapped, ok := mapAuthError(nil, tc.err).(AppError)
+		if !ok || mapped.Code != tc.code {
+			t.Fatalf("mapAuthError(%v) = %#v", tc.err, mapped)
+		}
+	}
+}
+
+func TestAuthControllerBodyParserAndAuthenticationFailures(t *testing.T) {
+	cfg := testConfig()
+	controller := NewAuthController(&fakeAuthService{}, NewAuthSessionManager(cfg, NewCSRFManager(cfg, nil)))
+	app := fiber.New()
+	app.Post("/register", controller.Register)
+	app.Post("/login", controller.Login)
+	app.Post("/reset-request", controller.RequestPasswordReset)
+	app.Post("/reset-consume", controller.ConsumePasswordReset)
+	app.Post("/verify", controller.VerifyEmail)
+	for _, path := range []string{"/register", "/login", "/reset-request", "/reset-consume"} {
+		req := httptest.NewRequest(fiber.MethodPost, path, strings.NewReader("{"))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != fiber.StatusInternalServerError {
+			t.Fatalf("%s malformed body = %d", path, resp.StatusCode)
+		}
+	}
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodPost, "/verify", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("verify unauthenticated = %d", resp.StatusCode)
+	}
+}
+
+func TestJWTAuthenticatorAndSessionManagerFailures(t *testing.T) {
+	ctx := context.Background()
+	cfg := testConfig()
+	wantErr := errors.New("token failed")
+	authenticator := NewJWTAuthenticator(cfg, staticAccessTokenValidator{err: wantErr}, &httpSessionRepository{})
+	if _, err := authenticator.Authenticate(ctx, "access", "refresh"); !errors.Is(err, wantErr) {
+		t.Fatalf("Authenticate() token error = %v", err)
+	}
+	claims := auth.AccessTokenClaims{UserID: uuid.New(), SessionID: uuid.New(), RefreshFamilyID: uuid.New()}
+	authenticator = NewJWTAuthenticator(cfg, staticAccessTokenValidator{claims: claims}, &httpSessionRepository{byHash: map[string]repository.UserSession{}})
+	if _, err := authenticator.Authenticate(ctx, "access", "refresh"); err == nil {
+		t.Fatal("Authenticate() accepted missing session")
+	}
+	session := repository.UserSession{ID: uuid.New(), UserID: claims.UserID, RefreshFamilyID: claims.RefreshFamilyID, RefreshExpiresAt: time.Now().Add(time.Hour)}
+	authenticator.sessions = &httpSessionRepository{byHash: map[string]repository.UserSession{auth.HashRefreshToken("refresh"): session}}
+	if _, err := authenticator.Authenticate(ctx, "access", "refresh"); err == nil {
+		t.Fatal("Authenticate() accepted mismatched claims")
+	}
+
+	app := fiber.New()
+	app.Get("/required", requireAuth(nil), func(c *fiber.Ctx) error { return c.SendStatus(fiber.StatusOK) })
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/required", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("requireAuth(nil) = %d", resp.StatusCode)
+	}
+
+	manager := NewAuthSessionManager(cfg, nil)
+	app = fiber.New()
+	app.Get("/invalid", func(c *fiber.Ctx) error { return manager.SetAuthenticatedCookies(c, AuthSessionTokens{}) })
+	resp, err = app.Test(httptest.NewRequest(fiber.MethodGet, "/invalid", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("invalid session tokens = %d", resp.StatusCode)
+	}
+	failingCSRF := NewCSRFManager(cfg, nil)
+	failingCSRF.sessionStore.Storage = failingStorage{}
+	manager = NewAuthSessionManager(cfg, failingCSRF)
+	now := time.Now()
+	app = fiber.New()
+	app.Get("/storage", func(c *fiber.Ctx) error {
+		return manager.SetAuthenticatedCookies(c, AuthSessionTokens{AccessToken: "access", RefreshToken: "refresh", AccessExpiresAt: now.Add(time.Minute), RefreshExpiresAt: now.Add(time.Hour)})
+	})
+	resp, err = app.Test(httptest.NewRequest(fiber.MethodGet, "/storage", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("session storage failure = %d", resp.StatusCode)
+	}
 }
 
 func TestCSRFLifecycleReportsSessionStorageFailures(t *testing.T) {

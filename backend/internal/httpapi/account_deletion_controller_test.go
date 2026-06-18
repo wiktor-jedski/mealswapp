@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http/httptest"
 	"testing"
 
@@ -15,11 +16,12 @@ import (
 type fakeAccountDeletionService struct {
 	request repository.DataDeletionRequest
 	userID  uuid.UUID
+	err     error
 }
 
 func (s *fakeAccountDeletionService) RequestDeletion(_ context.Context, userID uuid.UUID) (repository.DataDeletionRequest, error) {
 	s.userID = userID
-	return s.request, nil
+	return s.request, s.err
 }
 
 // TestAccountDeletionController verifies DESIGN-008 AccountDeleter HTTP behavior.
@@ -57,5 +59,20 @@ func TestAccountDeletionController(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != fiber.StatusOK || body.Data["status"] != "pending" || service.userID != userID || findCookie(resp.Cookies(), cfg.Account.RefreshCookieName).Value != "" {
 		t.Fatalf("delete response = %d body=%+v user=%s cookies=%+v", resp.StatusCode, body, service.userID, resp.Cookies())
+	}
+
+	service.err = errors.New("repository failed")
+	token, csrfCookies = fetchCSRFToken(t, app, csrfCookies...)
+	req = httptest.NewRequest(fiber.MethodDelete, "/api/v1/account", nil)
+	req.Header.Set("X-CSRF-Token", token)
+	addCookies(req, csrfCookies)
+	addCookies(req, authCookies)
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("delete service failure = %d", resp.StatusCode)
 	}
 }

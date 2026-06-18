@@ -38,4 +38,12 @@ func TestDisclaimerService(t *testing.T) {
 	if _, err := service.GetDisclaimer(ctx, "checkout"); err == nil {
 		t.Fatal("GetDisclaimer() accepted invalid location")
 	}
+	defaulted, err := NewDisclaimerService(fakeDisclaimerProvider{}).GetDisclaimer(ctx, "")
+	if err != nil || defaulted.Location != "login" || !defaulted.Fallback || defaulted.Markdown != fallbackLoginDisclaimer {
+		t.Fatalf("default disclaimer=%+v err=%v", defaulted, err)
+	}
+	account, err := NewDisclaimerService(nil).GetDisclaimer(ctx, "account")
+	if err != nil || account.Markdown != fallbackAccountDisclaimer {
+		t.Fatalf("account fallback=%+v err=%v", account, err)
+	}
 }

@@ -1538,9 +1538,34 @@ func TestPostgresEncryptedIdentityRepositoryValidationAndErrors(t *testing.T) {
 	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("AddEncryptedHistory() invalid error = %v, want validation", err)
 	}
-	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}})
+	historyID := uuid.New()
+	historyTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{historyID}}, execErrs: []error{nil}}}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{tx: historyTx})
 	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{UserID: userID, Query: field, Mode: "food"}); err != nil {
 		t.Fatalf("AddEncryptedHistory() fake success error = %v", err)
+	}
+	if historyTx.execN != 1 {
+		t.Fatalf("AddEncryptedHistory() prune calls = %d, want 1", historyTx.execN)
+	}
+
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{beginErr: queryErr})
+	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{UserID: userID, Query: field, Mode: "food"}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("AddEncryptedHistory() begin error = %v, want connection", err)
+	}
+	insertTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: queryErr}}}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{tx: insertTx})
+	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{UserID: userID, Query: field, Mode: "food"}); !IsKind(err, ErrorKindConnection) || !insertTx.rolledBack {
+		t.Fatalf("AddEncryptedHistory() insert error = %v rolledBack=%t, want connection and rollback", err, insertTx.rolledBack)
+	}
+	pruneTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{historyID}}, execErr: queryErr}}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{tx: pruneTx})
+	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{UserID: userID, Query: field, Mode: "food"}); !IsKind(err, ErrorKindConnection) || !pruneTx.rolledBack {
+		t.Fatalf("AddEncryptedHistory() prune error = %v rolledBack=%t, want connection and rollback", err, pruneTx.rolledBack)
+	}
+	commitTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{historyID}}}, commitErr: queryErr}
+	repo = NewPostgresEncryptedIdentityRepository(&fakeSQLExecutor{tx: commitTx})
+	if _, err := repo.AddEncryptedHistory(ctx, EncryptedSearchHistoryEntry{UserID: userID, Query: field, Mode: "food"}); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("AddEncryptedHistory() commit error = %v, want connection", err)
 	}
 }
 

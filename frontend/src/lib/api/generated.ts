@@ -240,7 +240,7 @@ export type SearchMode = "catalog" | "substitution" | "daily_diet_alternative";
 export type SearchFilterKind =
 	| "food_category"
 	| "culinary_role"
-	| "food_object_type"
+	| "physical_state"
 	| "allergen"
 	| "dietary_preset";
 
@@ -253,11 +253,15 @@ export interface SearchFilter {
 }
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
+/** Canonical units accepted by substitution search inputs. */
+export type SubstitutionUnit = "g" | "ml" | "oz" | "fl_oz";
+
+// Implements DESIGN-002 SearchController frontend substitution contract.
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 	foodObjectId: string;
-	quantity: number | string;
-	unit: string;
+	quantity: number;
+	unit: SubstitutionUnit;
 }
 
 // Implements DESIGN-002 SearchController frontend search request contract.
@@ -266,7 +270,7 @@ export interface SearchRequest {
 	query: string;
 	mode: SearchMode;
 	filters?: SearchFilter[];
-	page: number | string;
+	page: number;
 	substitutionInputs?: SubstitutionInput[];
 	dailyDietId?: string;
 }
@@ -290,7 +294,6 @@ export interface SimilarityMetadata {
 	itemId: string;
 	score: number;
 	tier: SimilarityTier;
-	colorHex: string;
 	imageUrl: string;
 	matchingQuantity: number;
 }

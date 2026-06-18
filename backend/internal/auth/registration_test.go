@@ -44,6 +44,12 @@ func TestRegistrationServiceConsentGate(t *testing.T) {
 	if _, err := service.Register(ctx, user, RegistrationConsent{}); err == nil || err.Error() != "consent_missing" || repo.called {
 		t.Fatalf("missing consent err=%v called=%v", err, repo.called)
 	}
+	if _, err := service.Register(ctx, user, RegistrationConsent{PrivacyPolicyVersion: "privacy-v1"}); err == nil || err.Error() != "consent_missing" || repo.called {
+		t.Fatalf("missing terms err=%v called=%v", err, repo.called)
+	}
+	if _, err := service.Register(ctx, user, RegistrationConsent{PrivacyPolicyVersion: "privacy-v1", TermsVersion: "bad version"}); err == nil || err.Error() != "consent_version_invalid" || repo.called {
+		t.Fatalf("invalid terms err=%v called=%v", err, repo.called)
+	}
 	if _, err := service.Register(ctx, user, RegistrationConsent{PrivacyPolicyVersion: "old", TermsVersion: "terms-v1"}); err == nil || err.Error() != "consent_version_stale" || repo.called {
 		t.Fatalf("stale consent err=%v called=%v", err, repo.called)
 	}

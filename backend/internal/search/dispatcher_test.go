@@ -22,7 +22,7 @@ func (s *fakeDispatcherSearcher) Search(_ context.Context, req SearchRequest) (S
 	return s.response, nil
 }
 
-func TestSearchDispatcherRoutesSubstitutionInputsToSubstitutionService(t *testing.T) {
+func TestSearchDispatcherRoutesSubstitutionModeToSubstitutionService(t *testing.T) {
 	catalog := &fakeDispatcherSearcher{}
 	substitution := &fakeDispatcherSearcher{response: SearchResponse{
 		Items:            []repository.FoodItemEntity{{Name: "Soy Milk"}},
@@ -34,7 +34,7 @@ func TestSearchDispatcherRoutesSubstitutionInputsToSubstitutionService(t *testin
 	}}
 	req := SearchRequest{
 		Query: "milk",
-		Mode:  SearchModeCatalog,
+		Mode:  SearchModeSubstitution,
 		Page:  1,
 		SubstitutionInputs: []SubstitutionInput{{
 			FoodObjectID: mustUUID("60000000-0000-4000-8000-000000000001"),
@@ -58,6 +58,38 @@ func TestSearchDispatcherRoutesSubstitutionInputsToSubstitutionService(t *testin
 	}
 }
 
+func TestSearchDispatcherRoutesCatalogModeToCatalogServiceEvenWithSubstitutionInputs(t *testing.T) {
+	catalog := &fakeDispatcherSearcher{response: SearchResponse{
+		Items:      []repository.FoodItemEntity{{Name: "Milk"}},
+		TotalCount: 1,
+	}}
+	substitution := &fakeDispatcherSearcher{}
+	req := SearchRequest{
+		Query: "milk",
+		Mode:  SearchModeCatalog,
+		Page:  1,
+		SubstitutionInputs: []SubstitutionInput{{
+			FoodObjectID: mustUUID("60000000-0000-4000-8000-000000000001"),
+			Quantity:     100,
+			Unit:         "g",
+		}},
+	}
+
+	response, err := NewSearchDispatcher(catalog, substitution).Search(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if catalog.calls != 1 || substitution.calls != 0 {
+		t.Fatalf("dispatcher calls catalog=%d substitution=%d", catalog.calls, substitution.calls)
+	}
+	if catalog.request.SubstitutionInputs[0].FoodObjectID != req.SubstitutionInputs[0].FoodObjectID {
+		t.Fatalf("catalog request = %+v", catalog.request)
+	}
+	if len(response.Items) != 1 || response.Items[0].Name != "Milk" {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
 func TestSearchDispatcherPreservesCatalogAndDailyDietDispatch(t *testing.T) {
 	catalog := &fakeDispatcherSearcher{}
 	substitution := &fakeDispatcherSearcher{}
@@ -73,6 +105,17 @@ func TestSearchDispatcherPreservesCatalogAndDailyDietDispatch(t *testing.T) {
 
 	if catalog.calls != 2 || substitution.calls != 0 {
 		t.Fatalf("dispatcher calls catalog=%d substitution=%d", catalog.calls, substitution.calls)
+	}
+}
+
+func TestSearchDispatcherRejectsInvalidRequestBeforeDispatch(t *testing.T) {
+	catalog := &fakeDispatcherSearcher{}
+	substitution := &fakeDispatcherSearcher{}
+	if _, err := NewSearchDispatcher(catalog, substitution).Search(context.Background(), SearchRequest{Mode: SearchModeCatalog, Page: 1}); err == nil {
+		t.Fatal("Search() accepted an empty query")
+	}
+	if catalog.calls != 0 || substitution.calls != 0 {
+		t.Fatalf("invalid request dispatched catalog=%d substitution=%d", catalog.calls, substitution.calls)
 	}
 }
 

@@ -120,6 +120,9 @@ func TestLookupDigestDeterminismRotationAndFailures(t *testing.T) {
 	if _, err := NewLookupDigestService(keys{active: "short", entries: map[string][]byte{"short": []byte("short")}}).DigestForWrite(ctx, nil); err == nil {
 		t.Fatal("short lookup key accepted")
 	}
+	if _, err := NewLookupDigestService(keys{entries: map[string][]byte{"short": []byte("short")}}).DigestForVersion(ctx, "short", nil); err == nil {
+		t.Fatal("short versioned lookup key accepted")
+	}
 	if _, err := NewLookupDigestService(keys{err: errors.New("down")}).DigestForWrite(ctx, nil); err == nil {
 		t.Fatal("active lookup key failure accepted")
 	}
@@ -174,8 +177,8 @@ func TestNormalizeInput(t *testing.T) {
 	if err != nil || quantity.Value != "12.5" || !quantity.Changed {
 		t.Fatalf("quantity normalize = %+v, %v", quantity, err)
 	}
-	unit, err := NormalizeInput(InputFieldSubstitutionUnit, " Gram ")
-	if err != nil || unit.Value != "gram" || !unit.Changed {
+	unit, err := NormalizeInput(InputFieldSubstitutionUnit, "g")
+	if err != nil || unit.Value != "g" || unit.Changed {
 		t.Fatalf("unit normalize = %+v, %v", unit, err)
 	}
 	dailyDietID, err := NormalizeInput(InputFieldDailyDietID, " 2D4A5F20-C55F-4BA7-9751-779E682F7063 ")
@@ -194,6 +197,7 @@ func TestNormalizeInput(t *testing.T) {
 		{InputFieldPassword, "UPPERCASEPASSWORD1!"},
 		{InputFieldPassword, "NoDigitsHere!"},
 		{InputFieldPassword, "No symbol 1"},
+		{InputFieldPassword, "No spaces 1! allowed"},
 		{InputFieldDisplayName, strings.Repeat("a", 81)},
 		{InputFieldDisplayName, "Ada\x00Lovelace"},
 		{InputFieldConsentVersion, "bad version"},
@@ -205,16 +209,21 @@ func TestNormalizeInput(t *testing.T) {
 		{InputFieldAutocompleteQuery, strings.Repeat("a", MaxAutocompleteQueryLength+1)},
 		{InputFieldSearchMode, "meal_plan"},
 		{InputFieldPagination, "0"},
+		{InputFieldPagination, ""},
+		{InputFieldPagination, "01"},
 		{InputFieldPagination, "-1"},
 		{InputFieldPagination, "1.5"},
 		{InputFieldPagination, "10001"},
 		{InputFieldSearchFilterKind, "brand"},
 		{InputFieldSubstitutionQuantity, "0"},
+		{InputFieldSubstitutionQuantity, ""},
 		{InputFieldSubstitutionQuantity, "-1"},
 		{InputFieldSubstitutionQuantity, "1,5"},
 		{InputFieldSubstitutionUnit, ""},
 		{InputFieldSubstitutionUnit, "grams/ml"},
 		{InputFieldDailyDietID, "not-a-uuid"},
+		{InputFieldDailyDietID, "2d4a5f20xc55f-4ba7-9751-779e682f7063"},
+		{InputFieldDailyDietID, "2d4a5f20-c55f-4ba7-9751-779e682f706z"},
 		{"unknown", "value"},
 	} {
 		if _, err := NormalizeInput(input.field, input.value); err == nil {
@@ -227,6 +236,10 @@ func TestNormalizeInput(t *testing.T) {
 	emptyDisplayName, err := NormalizeInput(InputFieldDisplayName, "   ")
 	if err != nil || emptyDisplayName.Value != "" {
 		t.Fatalf("empty display name = %+v, %v", emptyDisplayName, err)
+	}
+	normalizedUnit, err := NormalizeInput(InputFieldSubstitutionUnit, " G ")
+	if err != nil || normalizedUnit.Value != "g" || !normalizedUnit.Changed {
+		t.Fatalf("normalized unit = %+v, %v", normalizedUnit, err)
 	}
 }
 

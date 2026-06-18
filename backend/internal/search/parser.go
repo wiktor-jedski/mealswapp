@@ -37,15 +37,9 @@ func BuildParsedQuery(req SearchRequest) (ParsedQuery, error) {
 	}, nil
 }
 
-// SelectStrategy resolves the search operation from request shape.
+// SelectStrategy resolves the search operation from the requested mode.
 // Implements DESIGN-002 QueryParser.
 func SelectStrategy(req SearchRequest) (SearchStrategy, error) {
-	if len(req.SubstitutionInputs) > 0 {
-		return SearchStrategySubstitution, nil
-	}
-	if req.DailyDietID != nil {
-		return SearchStrategyDailyDietAlternative, nil
-	}
 	switch req.Mode {
 	case SearchModeCatalog:
 		return SearchStrategyCatalog, nil

@@ -4,6 +4,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -137,5 +138,81 @@ func TestJWTManagerRefreshTokens(t *testing.T) {
 	manager.randomness = strings.NewReader("")
 	if _, err := manager.CreateRefreshToken(); err == nil {
 		t.Fatal("CreateRefreshToken() accepted randomness failure")
+	}
+}
+
+func TestJWTManagerRemainingValidationPaths(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	key := []byte("11111111111111111111111111111111")
+	payload := jwtPayload{Subject: uuid.NewString(), Role: "user", SessionID: uuid.NewString(), RefreshFamilyID: uuid.NewString(), ExpiresAt: now.Add(time.Minute).Unix(), IssuedAt: now.Unix()}
+
+	for _, header := range []jwtHeader{
+		{Algorithm: "bad", Type: "JWT", KeyID: "jwt-v1"},
+		{Algorithm: "HS256", Type: "bad", KeyID: "jwt-v1"},
+		{Algorithm: "HS256", Type: "JWT"},
+	} {
+		token, err := signJWT(header, payload, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manager := NewJWTManager(signingKeys{entries: map[string][]byte{"jwt-v1": key}})
+		manager.now = func() time.Time { return now }
+		if _, err := manager.ValidateAccessToken(ctx, token); err == nil {
+			t.Fatalf("ValidateAccessToken() accepted header %+v", header)
+		}
+	}
+
+	valid, err := signJWT(jwtHeader{Algorithm: "HS256", Type: "JWT", KeyID: "missing"}, payload, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := NewJWTManager(signingKeys{entries: map[string][]byte{}})
+	manager.now = func() time.Time { return now }
+	if _, err := manager.ValidateAccessToken(ctx, valid); err == nil {
+		t.Fatal("ValidateAccessToken() accepted missing key")
+	}
+	short, err := signJWT(jwtHeader{Algorithm: "HS256", Type: "JWT", KeyID: "short"}, payload, []byte("short"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager = NewJWTManager(signingKeys{entries: map[string][]byte{"short": []byte("short")}})
+	manager.now = func() time.Time { return now }
+	if _, err := manager.ValidateAccessToken(ctx, short); err == nil {
+		t.Fatal("ValidateAccessToken() accepted short key")
+	}
+
+	malformed := []string{
+		"!.e30.c2ln",
+		"e30.!.c2ln",
+		"e30.e30.!",
+		base64.RawURLEncoding.EncodeToString([]byte("{")) + ".e30.c2ln",
+		"e30." + base64.RawURLEncoding.EncodeToString([]byte("{")) + ".c2ln",
+	}
+	for _, token := range malformed {
+		if _, _, _, _, err := parseJWT(token); err == nil {
+			t.Fatalf("parseJWT() accepted %q", token)
+		}
+	}
+
+	invalidPayloads := []jwtPayload{
+		{Subject: "bad", SessionID: uuid.NewString(), RefreshFamilyID: uuid.NewString(), Role: "user", ExpiresAt: 1, IssuedAt: 1},
+		{Subject: uuid.NewString(), SessionID: "bad", RefreshFamilyID: uuid.NewString(), Role: "user", ExpiresAt: 1, IssuedAt: 1},
+		{Subject: uuid.NewString(), SessionID: uuid.NewString(), RefreshFamilyID: "bad", Role: "user", ExpiresAt: 1, IssuedAt: 1},
+		{Subject: uuid.NewString(), SessionID: uuid.NewString(), RefreshFamilyID: uuid.NewString()},
+	}
+	for _, candidate := range invalidPayloads {
+		if _, err := candidate.toClaims("jwt-v1"); err == nil {
+			t.Fatalf("toClaims() accepted %+v", candidate)
+		}
+	}
+	invalidClaimsToken, err := signJWT(jwtHeader{Algorithm: "HS256", Type: "JWT", KeyID: "jwt-v1"}, invalidPayloads[0], key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager = NewJWTManager(signingKeys{entries: map[string][]byte{"jwt-v1": key}})
+	manager.now = func() time.Time { return now }
+	if _, err := manager.ValidateAccessToken(ctx, invalidClaimsToken); err == nil {
+		t.Fatal("ValidateAccessToken() accepted invalid signed claims")
 	}
 }

@@ -21,8 +21,8 @@ func TestApplyFiltersTranslatesIncludeAndExcludeFilters(t *testing.T) {
 		{FilterID: excludedCategoryID.String(), Kind: SearchFilterKindFoodCategory, Include: false},
 		{FilterID: roleID.String(), Kind: SearchFilterKindCulinaryRole, Include: true},
 		{FilterID: allergenID.String(), Kind: SearchFilterKindAllergen, Include: false},
-		{FilterID: string(repository.PhysicalStateSolid), Kind: SearchFilterKindFoodObjectType, Include: true},
-		{FilterID: string(repository.PhysicalStateLiquid), Kind: SearchFilterKindFoodObjectType, Include: false},
+		{FilterID: string(repository.PhysicalStateSolid), Kind: SearchFilterKindPhysicalState, Include: true},
+		{FilterID: string(repository.PhysicalStateLiquid), Kind: SearchFilterKindPhysicalState, Include: false},
 	})
 	if rejection != nil {
 		t.Fatalf("ApplyFilters() rejection = %+v", rejection)
@@ -106,14 +106,59 @@ func TestApplyFiltersRejectsExclusionRuleConflicts(t *testing.T) {
 
 func TestApplyFiltersRejectsUnsupportedShapes(t *testing.T) {
 	for name, filters := range map[string][]SearchFilter{
-		"included preset":         {{FilterID: string(DietaryPresetVegan), Kind: SearchFilterKindDietaryPreset, Include: true}},
-		"unsupported preset":      {{FilterID: "keto", Kind: SearchFilterKindDietaryPreset, Include: false}},
-		"unsupported allergen":    {{FilterID: "sesame", Kind: SearchFilterKindAllergen, Include: false}},
-		"unsupported object type": {{FilterID: "meal", Kind: SearchFilterKindFoodObjectType, Include: true}},
-		"invalid uuid":            {{FilterID: "fruit", Kind: SearchFilterKindFoodCategory, Include: true}},
+		"included preset":            {{FilterID: string(DietaryPresetVegan), Kind: SearchFilterKindDietaryPreset, Include: true}},
+		"unsupported preset":         {{FilterID: "keto", Kind: SearchFilterKindDietaryPreset, Include: false}},
+		"unsupported allergen":       {{FilterID: "sesame", Kind: SearchFilterKindAllergen, Include: false}},
+		"unsupported physical state": {{FilterID: "meal", Kind: SearchFilterKindPhysicalState, Include: true}},
+		"invalid uuid":               {{FilterID: "fruit", Kind: SearchFilterKindFoodCategory, Include: true}},
 	} {
 		if _, rejection := ApplyFilters(ParsedQuery{Limit: 10}, filters); rejection == nil {
 			t.Fatalf("%s accepted", name)
 		}
+	}
+}
+
+func TestApplyFiltersDeduplicatesEveryRepositoryFilterType(t *testing.T) {
+	categoryID := uuid.New().String()
+	allergenID := uuid.New().String()
+	filters := []SearchFilter{
+		{FilterID: categoryID, Kind: SearchFilterKindFoodCategory, Include: true},
+		{FilterID: categoryID, Kind: SearchFilterKindFoodCategory, Include: true},
+		{FilterID: allergenID, Kind: SearchFilterKindAllergen, Include: true},
+		{FilterID: allergenID, Kind: SearchFilterKindAllergen, Include: true},
+		{FilterID: "dairy", Kind: SearchFilterKindAllergen, Include: true},
+		{FilterID: "dairy", Kind: SearchFilterKindAllergen, Include: true},
+		{FilterID: string(repository.PhysicalStateSolid), Kind: SearchFilterKindPhysicalState, Include: true},
+		{FilterID: string(repository.PhysicalStateSolid), Kind: SearchFilterKindPhysicalState, Include: true},
+	}
+	processed, rejection := ApplyFilters(ParsedQuery{Limit: 10}, filters)
+	if rejection != nil {
+		t.Fatalf("ApplyFilters() rejection = %+v", rejection)
+	}
+	query := processed.RepositoryQuery
+	if len(query.FoodCategoryIDs) != 1 || len(query.AllergenIDs) != 1 || len(query.AllergenKeys) != 1 || len(query.FoodObjectTypes) != 1 {
+		t.Fatalf("deduplicated query = %+v", query)
+	}
+
+	processed, rejection = ApplyFilters(ParsedQuery{Limit: 10}, []SearchFilter{
+		{FilterID: string(DietaryPresetDairyFree), Kind: SearchFilterKindDietaryPreset, Include: false},
+		{FilterID: string(DietaryPresetDairyFree), Kind: SearchFilterKindDietaryPreset, Include: false},
+	})
+	if rejection != nil || len(processed.ExclusionRules) != 1 {
+		t.Fatalf("duplicate exclusion rules = %+v rejection=%+v", processed.ExclusionRules, rejection)
+	}
+}
+
+func TestApplyFiltersRejectsUnknownFilterKind(t *testing.T) {
+	_, rejection := ApplyFilters(ParsedQuery{Limit: 10}, []SearchFilter{{FilterID: "value", Kind: SearchFilterKind("unknown")}})
+	if rejection == nil || rejection.Field != "filters" {
+		t.Fatalf("rejection = %+v", rejection)
+	}
+}
+
+func TestApplyFiltersRejectsEmptyFilterID(t *testing.T) {
+	_, rejection := ApplyFilters(ParsedQuery{Limit: 10}, []SearchFilter{{Kind: SearchFilterKindAllergen}})
+	if rejection == nil || rejection.Field != "filters" {
+		t.Fatalf("rejection = %+v", rejection)
 	}
 }

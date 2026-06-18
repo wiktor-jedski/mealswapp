@@ -187,33 +187,15 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 // sourceBaseQuantity converts an input quantity into the food item's macro storage basis.
 // Implements DESIGN-002 SearchController.
 func sourceBaseQuantity(input SubstitutionInput, food repository.FoodItemEntity) (float64, string, error) {
-	unit := canonicalQuantityUnit(input.Unit)
 	baseUnit := "g"
 	if food.PhysicalState == repository.PhysicalStateLiquid {
 		baseUnit = "ml"
 	}
-	if unit == "serving" {
+	if input.Unit == "serving" {
 		return repository.ConvertServingToBase(input.Quantity, food.AverageUnitWeightGrams, food.AverageServingVolumeMilliliters, food.PhysicalState)
 	}
-	quantity, err := repository.ConvertUnit(input.Quantity, unit, baseUnit)
+	quantity, err := repository.ConvertUnit(input.Quantity, input.Unit, baseUnit)
 	return quantity, baseUnit, err
-}
-
-// canonicalQuantityUnit maps API-friendly unit aliases to repository units.
-// Implements DESIGN-002 QueryParser.
-func canonicalQuantityUnit(unit string) string {
-	switch unit {
-	case "gram", "grams":
-		return "g"
-	case "milliliter", "milliliters":
-		return "ml"
-	case "ounce", "ounces":
-		return "oz"
-	case "fluid_ounce", "fluid_ounces":
-		return "fl_oz"
-	default:
-		return unit
-	}
 }
 
 // substitutionTargets adapts repository food items into DESIGN-003 comparison targets.
@@ -248,7 +230,7 @@ type substitutionCandidate struct {
 	finalScore      float64
 }
 
-// rankSubstitutionCandidates sorts accepted targets by final substitution score.
+// rankSubstitutionCandidates sorts accepted targets by score and user-facing name.
 // Implements DESIGN-002 CulinaryRoleWeighter.
 func rankSubstitutionCandidates(items []repository.FoodItemEntity, results []SimilarityResult, applyRoleWeight bool, sourceRoles []repository.ClassificationEntity) rankedSubstitutionResponse {
 	itemByID := make(map[uuid.UUID]repository.FoodItemEntity, len(items))
@@ -276,10 +258,7 @@ func rankSubstitutionCandidates(items []repository.FoodItemEntity, results []Sim
 		if candidates[i].finalScore != candidates[j].finalScore {
 			return candidates[i].finalScore > candidates[j].finalScore
 		}
-		if candidates[i].item.Name != candidates[j].item.Name {
-			return candidates[i].item.Name < candidates[j].item.Name
-		}
-		return candidates[i].item.ID.String() < candidates[j].item.ID.String()
+		return candidates[i].item.Name < candidates[j].item.Name
 	})
 
 	response := rankedSubstitutionResponse{
@@ -302,7 +281,6 @@ func similarityMetadataFromResult(result SimilarityResult) SimilarityMetadata {
 		ItemID:           result.ItemID,
 		Score:            result.Score,
 		Tier:             result.Tier,
-		ColorHex:         result.ColorHex,
 		ImageURL:         result.ImageURL,
 		MatchingQuantity: result.MatchingQuantity,
 	}

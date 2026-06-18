@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"strconv"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -38,6 +38,72 @@ type SearchController struct {
 	service      SearchService
 	autocomplete AutocompleteService
 	history      SearchHistoryAppender
+}
+
+// searchResponseDTO is the public HTTP payload for successful search responses.
+// Implements DESIGN-002 SearchController.
+type searchResponseDTO struct {
+	Items              []foodObjectDTO         `json:"items"`
+	TotalCount         int                     `json:"totalCount"`
+	Page               int                     `json:"page"`
+	SimilarityScores   []float64               `json:"similarityScores"`
+	SimilarityMetadata []similarityMetadataDTO `json:"similarityMetadata"`
+	Warnings           []string                `json:"warnings"`
+	Cache              *searchCacheMetadataDTO `json:"cache,omitempty"`
+}
+
+// autocompleteResponseDTO is the public HTTP payload for successful autocomplete responses.
+// Implements DESIGN-002 SearchController.
+type autocompleteResponseDTO struct {
+	Items []autocompleteItemDTO   `json:"items"`
+	Cache *searchCacheMetadataDTO `json:"cache,omitempty"`
+}
+
+// foodObjectDTO is the narrow public Food Object search result.
+// Implements DESIGN-002 SearchController.
+type foodObjectDTO struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	PhysicalState string `json:"physicalState"`
+	ImageURL      string `json:"imageUrl"`
+}
+
+// autocompleteItemDTO is one ranked autocomplete suggestion.
+// Implements DESIGN-002 AutocompleteRanker.
+type autocompleteItemDTO struct {
+	ItemID              string `json:"itemId"`
+	Label               string `json:"label"`
+	ExactMatch          bool   `json:"exactMatch"`
+	LevenshteinDistance int    `json:"levenshteinDistance"`
+	Length              int    `json:"length"`
+	Rank                int    `json:"rank"`
+}
+
+// similarityMetadataDTO is one public similarity display metadata entry.
+// Implements DESIGN-003 SimilarityIndicatorMapper.
+type similarityMetadataDTO struct {
+	ItemID           string  `json:"itemId"`
+	Score            float64 `json:"score"`
+	Tier             string  `json:"tier"`
+	ImageURL         string  `json:"imageUrl"`
+	MatchingQuantity float64 `json:"matchingQuantity"`
+}
+
+// searchCacheMetadataDTO is cache metadata safe to expose over HTTP.
+// Implements DESIGN-011 RedisCache response metadata.
+type searchCacheMetadataDTO struct {
+	Status        string `json:"status"`
+	Namespace     string `json:"namespace"`
+	SchemaVersion string `json:"schemaVersion"`
+	TTLSeconds    int64  `json:"ttlSeconds"`
+}
+
+// searchRejectionDTO is the public rejected-search payload.
+// Implements DESIGN-002 SearchController.
+type searchRejectionDTO struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Field   string `json:"field,omitempty"`
 }
 
 // Implements DESIGN-002 SearchController compile-time route controller contract.
@@ -99,7 +165,11 @@ func (c *SearchController) Search(ctx *fiber.Ctx) error {
 	if err := c.appendAuthenticatedHistory(ctx, req); err != nil {
 		return err
 	}
-	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: searchResponseData(response)})
+	data, err := envelopeData(searchResponseData(response))
+	if err != nil {
+		return err
+	}
+	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: data})
 }
 
 // Autocomplete returns ranked food and meal suggestions in the shared response envelope.
@@ -109,14 +179,15 @@ func (c *SearchController) Autocomplete(ctx *fiber.Ctx) error {
 		return fiber.ErrNotFound
 	}
 	query := ctx.Query("query")
-	if query == "" {
-		query = ctx.Query("q")
-	}
 	response, err := c.autocomplete.Autocomplete(ctx.UserContext(), query, repositoryContextFromAuth(ctx))
 	if err != nil {
 		return err
 	}
-	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: autocompleteResponseData(response)})
+	data, err := envelopeData(autocompleteResponseData(response))
+	if err != nil {
+		return err
+	}
+	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: data})
 }
 
 // repositoryContextFromAuth derives repository context from trusted authentication state.
@@ -145,164 +216,93 @@ func (c *SearchController) appendAuthenticatedHistory(ctx *fiber.Ctx, req search
 // ParseSearchRequest converts a validated Fiber body to a backend SearchRequest.
 // Implements DESIGN-002 SearchController.
 func ParseSearchRequest(ctx *fiber.Ctx) (search.SearchRequest, error) {
-	body := map[string]any{}
-	if err := ctx.BodyParser(&body); err != nil {
+	var dto validatedSearchRequestBodyDTO
+	if err := ctx.BodyParser(&dto); err != nil {
 		return search.SearchRequest{}, err
 	}
-	req := search.SearchRequest{
-		Query:   body["query"].(string),
-		Mode:    search.SearchMode(body["mode"].(string)),
-		Page:    parsePage(body["page"]),
-		Filters: parseFilters(body["filters"]),
-	}
-	if inputs, ok := body["substitutionInputs"]; ok {
-		req.SubstitutionInputs = parseSubstitutionInputs(inputs)
-	}
-	if rawDailyDietID, ok := body["dailyDietId"].(string); ok && rawDailyDietID != "" {
-		id, err := uuid.Parse(rawDailyDietID)
-		if err != nil {
-			return search.SearchRequest{}, err
-		}
-		req.DailyDietID = &id
-	}
-	return req, nil
+	return searchRequestFromValidatedDTO(dto)
 }
 
-// parsePage converts validated JSON page values to an integer.
-// Implements DESIGN-002 PaginationHandler.
-func parsePage(value any) int {
-	switch page := value.(type) {
-	case float64:
-		return int(page)
-	case int:
-		return page
-	case string:
-		parsed, _ := strconv.Atoi(page)
-		return parsed
-	default:
-		return 1
-	}
-}
-
-// parseFilters converts validated JSON filter values to service filters.
-// Implements DESIGN-002 FilterProcessor.
-func parseFilters(value any) []search.SearchFilter {
-	items, ok := value.([]any)
-	if !ok {
-		return []search.SearchFilter{}
-	}
-	filters := make([]search.SearchFilter, 0, len(items))
-	for _, item := range items {
-		filter := item.(map[string]any)
-		filters = append(filters, search.SearchFilter{FilterID: filter["filterId"].(string), Kind: search.SearchFilterKind(filter["kind"].(string)), Include: filter["include"].(bool)})
-	}
-	return filters
-}
-
-// parseSubstitutionInputs converts validated JSON substitution values to service inputs.
+// searchResponseData maps service search output to the OpenAPI response DTO.
 // Implements DESIGN-002 SearchController.
-func parseSubstitutionInputs(value any) []search.SubstitutionInput {
-	items, ok := value.([]any)
-	if !ok {
-		return []search.SubstitutionInput{}
-	}
-	inputs := make([]search.SubstitutionInput, 0, len(items))
-	for _, item := range items {
-		input := item.(map[string]any)
-		foodObjectID, _ := uuid.Parse(input["foodObjectId"].(string))
-		inputs = append(inputs, search.SubstitutionInput{FoodObjectID: foodObjectID, Quantity: parseQuantity(input["quantity"]), Unit: input["unit"].(string)})
-	}
-	return inputs
-}
-
-// parseQuantity converts validated JSON quantities to float values.
-// Implements DESIGN-002 SearchController.
-func parseQuantity(value any) float64 {
-	switch quantity := value.(type) {
-	case float64:
-		return quantity
-	case int:
-		return float64(quantity)
-	case string:
-		parsed, _ := strconv.ParseFloat(quantity, 64)
-		return parsed
-	default:
-		return 0
+func searchResponseData(response search.SearchResponse) searchResponseDTO {
+	return searchResponseDTO{
+		Items:              foodItemsData(response.Items),
+		TotalCount:         response.TotalCount,
+		Page:               response.Page,
+		SimilarityScores:   response.SimilarityScores,
+		SimilarityMetadata: similarityMetadataData(response.SimilarityMetadata),
+		Warnings:           response.Warnings,
+		Cache:              searchCacheData(response.Cache),
 	}
 }
 
-// searchResponseData maps service search output to the OpenAPI response shape.
+// autocompleteResponseData maps autocomplete output to the OpenAPI response DTO.
 // Implements DESIGN-002 SearchController.
-func searchResponseData(response search.SearchResponse) map[string]any {
-	data := map[string]any{
-		"items":              foodItemsData(response.Items),
-		"totalCount":         response.TotalCount,
-		"page":               response.Page,
-		"similarityScores":   response.SimilarityScores,
-		"similarityMetadata": similarityMetadataData(response.SimilarityMetadata),
-		"warnings":           response.Warnings,
+func autocompleteResponseData(response search.AutocompleteResponse) autocompleteResponseDTO {
+	return autocompleteResponseDTO{
+		Items: autocompleteItemsData(response.Items),
+		Cache: searchCacheData(response.Cache),
 	}
-	if response.Cache != nil {
-		data["cache"] = map[string]any{"status": string(response.Cache.Status), "namespace": response.Cache.Namespace, "schemaVersion": response.Cache.SchemaVersion, "ttlSeconds": response.Cache.TTLSeconds}
-	}
-	return data
-}
-
-// autocompleteResponseData maps autocomplete output to the OpenAPI response shape.
-// Implements DESIGN-002 SearchController.
-func autocompleteResponseData(response search.AutocompleteResponse) map[string]any {
-	data := map[string]any{"items": autocompleteItemsData(response.Items)}
-	if response.Cache != nil {
-		data["cache"] = map[string]any{"status": string(response.Cache.Status), "namespace": response.Cache.Namespace, "schemaVersion": response.Cache.SchemaVersion, "ttlSeconds": response.Cache.TTLSeconds}
-	}
-	return data
 }
 
 // autocompleteItemsData maps ranked autocomplete entries to response items.
 // Implements DESIGN-002 AutocompleteRanker.
-func autocompleteItemsData(items []search.RankedAutocomplete) []map[string]any {
-	data := make([]map[string]any, 0, len(items))
+func autocompleteItemsData(items []search.RankedAutocomplete) []autocompleteItemDTO {
+	data := make([]autocompleteItemDTO, 0, len(items))
 	for _, item := range items {
-		data = append(data, map[string]any{"itemId": item.ItemID, "label": item.Label, "exactMatch": item.ExactMatch, "levenshteinDistance": item.LevenshteinDistance, "length": item.Length, "rank": item.Rank})
+		data = append(data, autocompleteItemDTO{ItemID: item.ItemID, Label: item.Label, ExactMatch: item.ExactMatch, LevenshteinDistance: item.LevenshteinDistance, Length: item.Length, Rank: item.Rank})
 	}
 	return data
 }
 
 // foodItemsData maps repository food entities to response items.
 // Implements DESIGN-002 SearchController.
-func foodItemsData(items []repository.FoodItemEntity) []map[string]any {
-	data := make([]map[string]any, 0, len(items))
+func foodItemsData(items []repository.FoodItemEntity) []foodObjectDTO {
+	data := make([]foodObjectDTO, 0, len(items))
 	for _, item := range items {
-		data = append(data, map[string]any{"id": item.ID.String(), "name": item.Name, "physicalState": string(item.PhysicalState), "imageUrl": item.ImageURL})
+		data = append(data, foodObjectDTO{ID: item.ID.String(), Name: item.Name, PhysicalState: string(item.PhysicalState), ImageURL: item.ImageURL})
 	}
 	return data
 }
 
 // similarityMetadataData maps similarity metadata to response items.
 // Implements DESIGN-003 SimilarityIndicatorMapper.
-func similarityMetadataData(metadata []search.SimilarityMetadata) []map[string]any {
-	data := make([]map[string]any, 0, len(metadata))
+func similarityMetadataData(metadata []search.SimilarityMetadata) []similarityMetadataDTO {
+	data := make([]similarityMetadataDTO, 0, len(metadata))
 	for _, item := range metadata {
-		data = append(data, map[string]any{
-			"itemId":           item.ItemID.String(),
-			"score":            item.Score,
-			"tier":             string(item.Tier),
-			"colorHex":         item.ColorHex,
-			"imageUrl":         item.ImageURL,
-			"matchingQuantity": item.MatchingQuantity,
-		})
+		data = append(data, similarityMetadataDTO{ItemID: item.ItemID.String(), Score: item.Score, Tier: string(item.Tier), ImageURL: item.ImageURL, MatchingQuantity: item.MatchingQuantity})
 	}
 	return data
 }
 
+// searchCacheData maps internal cache metadata to the public HTTP DTO.
+// Implements DESIGN-011 RedisCache response metadata.
+func searchCacheData(cache *search.CacheMetadata) *searchCacheMetadataDTO {
+	if cache == nil {
+		return nil
+	}
+	return &searchCacheMetadataDTO{Status: string(cache.Status), Namespace: cache.Namespace, SchemaVersion: cache.SchemaVersion, TTLSeconds: cache.TTLSeconds}
+}
+
 // searchRejectionData maps rejected search details to the error response shape.
 // Implements DESIGN-002 SearchController.
-func searchRejectionData(rejection search.SearchRejection) map[string]any {
-	data := map[string]any{"code": rejection.Code, "message": rejection.Message}
-	if rejection.Field != "" {
-		data["field"] = rejection.Field
+func searchRejectionData(rejection search.SearchRejection) searchRejectionDTO {
+	return searchRejectionDTO{Code: rejection.Code, Message: rejection.Message, Field: rejection.Field}
+}
+
+// envelopeData converts typed route DTOs into the current shared envelope map.
+// Implements DESIGN-017 GlobalExceptionHandler.
+func envelopeData(dto any) (map[string]any, error) {
+	payload, err := json.Marshal(dto)
+	if err != nil {
+		return nil, fmt.Errorf("marshal response DTO: %w", err)
 	}
-	return data
+	data := map[string]any{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return nil, fmt.Errorf("map response DTO: %w", err)
+	}
+	return data, nil
 }
 
 // searchFiltersHash stores a stable non-PII fingerprint for filter context.

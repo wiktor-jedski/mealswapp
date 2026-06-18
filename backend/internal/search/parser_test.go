@@ -26,14 +26,14 @@ func TestSearchContractDTOsCarryDesignFields(t *testing.T) {
 		SubstitutionInputs: []SubstitutionInput{{
 			FoodObjectID: foodObjectID,
 			Quantity:     12.5,
-			Unit:         "gram",
+			Unit:         "g",
 		}},
 		DailyDietID: &dailyDietID,
 	}
 	if req.Filters[0].FilterID != "vegetable" || req.Filters[0].Kind != SearchFilterKindFoodCategory || !req.Filters[0].Include {
 		t.Fatalf("filter DTO = %+v", req.Filters[0])
 	}
-	if req.SubstitutionInputs[0].FoodObjectID != foodObjectID || req.SubstitutionInputs[0].Quantity != 12.5 || req.SubstitutionInputs[0].Unit != "gram" {
+	if req.SubstitutionInputs[0].FoodObjectID != foodObjectID || req.SubstitutionInputs[0].Quantity != 12.5 || req.SubstitutionInputs[0].Unit != "g" {
 		t.Fatalf("substitution input DTO = %+v", req.SubstitutionInputs[0])
 	}
 	if req.DailyDietID == nil || *req.DailyDietID != dailyDietID {
@@ -101,13 +101,13 @@ func TestPaginateClampsPageSizeToTenAndCalculatesOffset(t *testing.T) {
 	}
 }
 
-func TestSelectStrategyFromQueryShape(t *testing.T) {
+func TestSelectStrategyFromMode(t *testing.T) {
 	dailyDietID := uuid.MustParse("61e0cae4-0f45-4854-8ac5-b228214cdd1d")
 	foodObjectID := uuid.MustParse("2d4a5f20-c55f-4ba7-9751-779e682f7063")
 	substitutionInputs := []SubstitutionInput{{
 		FoodObjectID: foodObjectID,
 		Quantity:     1,
-		Unit:         "gram",
+		Unit:         "g",
 	}}
 
 	for name, req := range map[string]SearchRequest{
@@ -126,25 +126,25 @@ func TestSelectStrategyFromQueryShape(t *testing.T) {
 			Mode:  SearchModeDailyDietAlternative,
 			Page:  1,
 		},
-		"daily diet id": {
+		"catalog mode with daily diet id remains catalog": {
 			Query:       "tomato",
 			Mode:        SearchModeCatalog,
 			Page:        1,
 			DailyDietID: &dailyDietID,
 		},
-		"single substitution input wins over catalog": {
+		"catalog mode with substitution input remains catalog": {
 			Query:              "tomato",
 			Mode:               SearchModeCatalog,
 			Page:               1,
 			SubstitutionInputs: substitutionInputs,
 		},
-		"multiple substitution inputs win over daily diet": {
+		"daily diet mode with substitution inputs remains daily diet": {
 			Query: "tomato",
 			Mode:  SearchModeDailyDietAlternative,
 			Page:  1,
 			SubstitutionInputs: []SubstitutionInput{
 				substitutionInputs[0],
-				{FoodObjectID: uuid.MustParse("90d5ff43-3451-444d-88c9-0af96b6938f9"), Quantity: 2, Unit: "gram"},
+				{FoodObjectID: uuid.MustParse("90d5ff43-3451-444d-88c9-0af96b6938f9"), Quantity: 2, Unit: "g"},
 			},
 			DailyDietID: &dailyDietID,
 		},
@@ -154,15 +154,15 @@ func TestSelectStrategyFromQueryShape(t *testing.T) {
 			t.Fatalf("%s parse error = %v", name, err)
 		}
 		switch name {
-		case "catalog mode":
+		case "catalog mode", "catalog mode with daily diet id remains catalog", "catalog mode with substitution input remains catalog":
 			if parsed.Strategy != SearchStrategyCatalog {
 				t.Fatalf("%s strategy = %q", name, parsed.Strategy)
 			}
-		case "substitution mode", "single substitution input wins over catalog", "multiple substitution inputs win over daily diet":
+		case "substitution mode":
 			if parsed.Strategy != SearchStrategySubstitution {
 				t.Fatalf("%s strategy = %q", name, parsed.Strategy)
 			}
-		case "daily diet mode", "daily diet id":
+		case "daily diet mode", "daily diet mode with substitution inputs remains daily diet":
 			if parsed.Strategy != SearchStrategyDailyDietAlternative {
 				t.Fatalf("%s strategy = %q", name, parsed.Strategy)
 			}

@@ -165,6 +165,69 @@ func composedSearchGateCacheKey(req search.SearchRequest) string {
 	return string(req.Mode) + "|" + req.Query + "|" + string(rune(req.Page))
 }
 
+func TestSearchControllerRemainingFailurePaths(t *testing.T) {
+	validBody := []byte(`{"mode":"catalog","query":"apple","page":1}`)
+
+	service := &fakeSearchService{err: search.ErrDailyDietIDRequired}
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).Routes()})
+	resp, err := app.Test(searchHTTPPost(validBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("daily diet id failure = %d", resp.StatusCode)
+	}
+
+	autocomplete := &fakeAutocompleteService{err: errors.New("repository failed")}
+	app = mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(&fakeSearchService{}).WithAutocompleteService(autocomplete).Routes()})
+	resp, err = app.Test(httptest.NewRequest(fiber.MethodGet, "/api/v1/search/autocomplete?query=apple", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("autocomplete failure = %d", resp.StatusCode)
+	}
+
+	direct := fiber.New()
+	controller := NewSearchController(&fakeSearchService{})
+	direct.Post("/search", controller.Search)
+	resp, err = direct.Test(httptest.NewRequest(fiber.MethodPost, "/search", bytes.NewBufferString("{")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("direct parse failure = %d", resp.StatusCode)
+	}
+	direct.Get("/autocomplete", controller.Autocomplete)
+	resp, err = direct.Test(httptest.NewRequest(fiber.MethodGet, "/autocomplete", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("disabled autocomplete = %d", resp.StatusCode)
+	}
+
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	history := &fakeSearchHistoryAppender{err: errors.New("history failed")}
+	app = mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(&fakeSearchService{response: search.SearchResponse{Page: 1}}).WithSearchHistoryAppender(history).Routes()})
+	req := searchHTTPPost(validBody)
+	addCookies(req, authCookies)
+	resp, err = app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusInternalServerError || history.calls != 1 {
+		t.Fatalf("history failure = %d calls=%d", resp.StatusCode, history.calls)
+	}
+}
+
 func TestSearchControllerReturnsCatalogResultsEnvelope(t *testing.T) {
 	service := &fakeSearchService{response: search.SearchResponse{
 		Items:            []repository.FoodItemEntity{{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), Name: "Apple", PhysicalState: repository.PhysicalStateSolid}},
@@ -175,7 +238,6 @@ func TestSearchControllerReturnsCatalogResultsEnvelope(t *testing.T) {
 			ItemID:           uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 			Score:            0.91,
 			Tier:             search.SimilarityTierExcellent,
-			ColorHex:         "#1B7F4C",
 			ImageURL:         "/assets/similarity/excellent.svg",
 			MatchingQuantity: 42,
 		}},

@@ -35,11 +35,11 @@ type SearchFilterKind string
 
 // Implements DESIGN-002 FilterProcessor supported filter kinds.
 const (
-	SearchFilterKindFoodCategory   SearchFilterKind = "food_category"
-	SearchFilterKindCulinaryRole   SearchFilterKind = "culinary_role"
-	SearchFilterKindFoodObjectType SearchFilterKind = "food_object_type"
-	SearchFilterKindAllergen       SearchFilterKind = "allergen"
-	SearchFilterKindDietaryPreset  SearchFilterKind = "dietary_preset"
+	SearchFilterKindFoodCategory  SearchFilterKind = "food_category"
+	SearchFilterKindCulinaryRole  SearchFilterKind = "culinary_role"
+	SearchFilterKindPhysicalState SearchFilterKind = "physical_state"
+	SearchFilterKindAllergen      SearchFilterKind = "allergen"
+	SearchFilterKindDietaryPreset SearchFilterKind = "dietary_preset"
 )
 
 // SearchFilter carries one include/exclude search constraint.
@@ -69,7 +69,8 @@ type SearchRequest struct {
 	DailyDietID        *uuid.UUID
 }
 
-// SearchResponse carries deterministic paged search output.
+// SearchResponse carries deterministic paged internal service/cache output.
+// It is not the public HTTP response DTO.
 // Implements DESIGN-002 QueryParser.
 type SearchResponse struct {
 	Items              []repository.FoodItemEntity
@@ -79,7 +80,7 @@ type SearchResponse struct {
 	SimilarityMetadata []SimilarityMetadata
 	Warnings           []string
 	Rejection          *SearchRejection
-	Cache              *CacheMetadata `json:",omitempty"`
+	Cache              *CacheMetadata `json:"cache,omitempty"`
 }
 
 // WarningCacheUnavailable reports cache read/write degradation while preserving catalog fallback.
@@ -92,7 +93,6 @@ type SimilarityMetadata struct {
 	ItemID           uuid.UUID
 	Score            float64
 	Tier             SimilarityTier
-	ColorHex         string
 	ImageURL         string
 	MatchingQuantity float64
 }

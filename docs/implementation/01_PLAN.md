@@ -69,7 +69,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 ### Phase 06: Subscription and Entitlement Enforcement
 
 - Implement ARCH-007.
-- Add free/trial/paid entitlement model, 3-search free limit, mode gating, Stripe checkout/webhooks, webhook idempotency, trial creation on social login, and reconciliation job.
+- Add free/trial/paid entitlement model, 3-search free limit, mode gating, Stripe checkout/webhooks, webhook idempotency, trial creation on social login, and reconciliation job. `POST /api/v1/search` may remain anonymous for catalog search, but Ingredient List/Substitution, Daily Diet, and Daily Diet Alternative access must be checked against active trial/paid entitlement and usage limits before dispatch, in line with SW-REQ-052.
 - Apply the cross-phase mutation idempotency standard to checkout/subscription creation and Stripe webhook processing. Store provider event IDs before side effects when possible, and ensure duplicate webhook delivery does not duplicate entitlement history or usage effects.
 - Use the installed `golang-security` agent skill during implementation and review of entitlement enforcement, Stripe webhook verification, and billing endpoints.
 - Use Stripe CLI sandbox forwarding and event triggers to verify webhook signatures, retries, duplicate delivery, and failure handling locally.

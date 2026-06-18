@@ -39,6 +39,16 @@ type searchCacheEntry struct {
 	value SearchResponse
 }
 
+type searchCacheWithoutMetadata struct{}
+
+func (searchCacheWithoutMetadata) GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, error) {
+	return SearchResponse{}, false, nil
+}
+
+func (searchCacheWithoutMetadata) SetSearchResponse(context.Context, SearchRequest, SearchResponse) error {
+	return nil
+}
+
 func (c *searchCacheStub) GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, error) {
 	c.gets++
 	return c.response.value, c.hit, c.getErr
@@ -197,6 +207,43 @@ func TestCatalogServiceSearchReturnsCacheUnavailableWarningOnFallback(t *testing
 	}
 	if response.Cache != nil {
 		t.Fatalf("cache write failure advertised metadata = %+v", response.Cache)
+	}
+}
+
+func TestSortCatalogItemsOrdersByNameAndPreservesRepositoryOrderForDuplicateFixture(t *testing.T) {
+	firstAppleID := uuid.MustParse("00000000-0000-0000-0000-000000000003")
+	secondAppleID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	items := []repository.FoodItemEntity{
+		{ID: firstAppleID, Name: "Apple"},
+		{ID: uuid.MustParse("00000000-0000-0000-0000-000000000002"), Name: "Banana"},
+		{ID: secondAppleID, Name: "Apple"},
+	}
+
+	sortCatalogItems(items)
+
+	if items[0].ID != firstAppleID || items[1].ID != secondAppleID || items[2].Name != "Banana" {
+		t.Fatalf("sorted items = %+v", items)
+	}
+}
+
+func TestCatalogServiceCoversValidationAndMetadataFallbacks(t *testing.T) {
+	service := NewCatalogService(&catalogRepositoryStub{}, nil)
+	if _, err := service.Search(context.Background(), SearchRequest{Mode: SearchModeCatalog, Page: 1}); err == nil {
+		t.Fatal("Search() accepted an empty query")
+	}
+	if page := normalizedPage(0); page != 1 {
+		t.Fatalf("normalizedPage(0) = %d", page)
+	}
+	if metadata := searchResponseCacheMetadata(searchCacheWithoutMetadata{}, SearchRequest{}, CacheStatusMiss); metadata != nil {
+		t.Fatalf("metadata without provider = %+v", metadata)
+	}
+	warnings := appendWarningOnce(nil, WarningCacheUnavailable)
+	if len(warnings) != 1 || warnings[0] != WarningCacheUnavailable {
+		t.Fatalf("warnings = %#v", warnings)
+	}
+	response, err := service.Search(context.Background(), SearchRequest{Query: "swap", Mode: SearchModeSubstitution, Page: 1})
+	if err != nil || response.Rejection == nil || response.Rejection.Field != "mode" {
+		t.Fatalf("wrong-mode response=%+v err=%v", response, err)
 	}
 }
 
