@@ -38,6 +38,10 @@ bun test
 bun run build
 ```
 
+The Vite dev server proxies `/api` to the backend at `http://127.0.0.1:8080`
+(see `frontend/vite.config.ts`), so start the backend before `bun run dev`
+when running the full search experience locally.
+
 The Phase 00 frontend renders the application shell, theme selector, and disabled search placeholder. Search behavior is implemented in later phases.
 
 ## Backend

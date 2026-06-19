@@ -646,3 +646,11 @@ test("buildSearchQueryOptions produces distinct query keys for distinct pages", 
 	const key2 = buildSearchQueryOptions(catalogState("apple", 2), localCache).queryKey;
 	expect(key1).not.toEqual(key2);
 });
+
+// Implements DESIGN-001 SearchView empty-query guard so the initial shell does not fire a request the backend rejects.
+test("buildSearchQueryOptions disables the query when the query is blank and enables it once non-empty", () => {
+	const localCache = new LocalQueryCache({ storage: null });
+	expect(buildSearchQueryOptions(catalogState("", 1), localCache).enabled).toBe(false);
+	expect(buildSearchQueryOptions(catalogState("   ", 1), localCache).enabled).toBe(false);
+	expect(buildSearchQueryOptions(catalogState("apple", 1), localCache).enabled).toBe(true);
+});

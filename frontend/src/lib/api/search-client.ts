@@ -155,6 +155,8 @@ export function buildSearchQueryOptions(
 
 	return {
 		queryKey,
+		// Implements DESIGN-001 SearchView empty-query guard: skip the network request until a non-empty query is entered so the initial shell does not fire a request the backend rejects.
+		enabled: state.query.trim().length > 0,
 		// Implements DESIGN-001 SearchView previous-page retention via TanStack keepPreviousData.
 		placeholderData: keepPreviousData,
 		staleTime: LOCAL_CACHE_STALE_MS,
