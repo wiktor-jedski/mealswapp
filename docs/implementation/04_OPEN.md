@@ -146,6 +146,8 @@ No unresolved Phase 03 code review findings remain at this time.
 
 - Phase 05 uses TanStack Query for server state and localStorage for the SW-REQ-003 cache of the 20 most recent unique normalized request/result pairs. Cache recency is updated on reads and writes; malformed or schema-version-mismatched entries are discarded. Phase 09 remains responsible for service-worker API/image interception and broader offline hardening.
 - Phase 05 renders authenticated history and favorites in the Activity Sidebar from the existing Phase 03 generated contracts. Anonymous users receive empty/sign-in guidance, and activity API failure does not block public Catalog Search.
+- Task 138 selects the primary Food Category deterministically by classification name and ID because persistence does not yet carry an explicit primary flag. Legacy uncategorized records expose an explicit `null` primary category; newly curated searchable records should have at least one Food Category.
+- Phase 05 aggregate verification used compose host-port overrides because ports 5432 and 6379 were occupied by an unrelated workspace. `docker-compose.yml` now supports `MEALSWAPP_POSTGRES_PORT` and `MEALSWAPP_REDIS_PORT` while preserving the documented defaults; backend URLs must use the matching ports when overrides are set.
 
 ### Clarifications
 
@@ -154,7 +156,7 @@ No unresolved Phase 03 code review findings remain at this time.
 
 ### Testing coverage deviations
 
-- None accepted during planning. Phase 05 targets 100% line coverage for testable frontend source; any implementation-time exception must identify the specific file/function and rationale here.
+- Phase 05 TypeScript line coverage is 100.00% under `bun test --coverage`. Bun does not instrument Svelte component source lines, so line-percentage reporting is unavailable for `App.svelte`, `SearchShell.svelte`, `SearchControls.svelte`, `SearchSettings.svelte`, `AutocompleteDropdown.svelte`, `ResultsGrid.svelte`, `ActivitySidebar.svelte`, and `OfflineBanner.svelte`. This tooling-specific exception is accepted because every component is executed through focused Playwright workflows, including desktop/mobile, keyboard, offline, responsive, theme, and axe checks; it does not waive any untested TypeScript line.
 
 ### Actions needed
 

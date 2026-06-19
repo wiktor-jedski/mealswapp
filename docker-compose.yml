@@ -12,7 +12,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "5432:5432"
+      - "${MEALSWAPP_POSTGRES_PORT:-5432}:5432"
     volumes:
       - mealswapp-postgres:/var/lib/postgresql/data
 
@@ -25,7 +25,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "6379:6379"
+      - "${MEALSWAPP_REDIS_PORT:-6379}:6379"
 
 volumes:
   mealswapp-postgres:

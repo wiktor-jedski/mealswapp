@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -62,10 +63,31 @@ type autocompleteResponseDTO struct {
 // foodObjectDTO is the narrow public Food Object search result.
 // Implements DESIGN-002 SearchController.
 type foodObjectDTO struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	PhysicalState string `json:"physicalState"`
-	ImageURL      string `json:"imageUrl"`
+	ID                  string                     `json:"id"`
+	Name                string                     `json:"name"`
+	PhysicalState       string                     `json:"physicalState"`
+	ImageURL            string                     `json:"imageUrl"`
+	Classifications     []classificationSummaryDTO `json:"classifications"`
+	PrimaryFoodCategory *classificationSummaryDTO  `json:"primaryFoodCategory"`
+	Macros              macroSummaryDTO            `json:"macros"`
+	Calories            float64                    `json:"calories"`
+}
+
+// classificationSummaryDTO identifies a classification without leaking persistence fields.
+// Implements DESIGN-001 FoodItemViewModel and DESIGN-002 SearchController.
+type classificationSummaryDTO struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+// macroSummaryDTO exposes normalized result macros and their physical-state basis.
+// Implements DESIGN-001 MacroSummary and DESIGN-002 SearchController.
+type macroSummaryDTO struct {
+	Protein      float64 `json:"protein"`
+	Carbohydrate float64 `json:"carbohydrate"`
+	Fat          float64 `json:"fat"`
+	Basis        string  `json:"basis"`
 }
 
 // autocompleteItemDTO is one ranked autocomplete suggestion.
@@ -261,9 +283,60 @@ func autocompleteItemsData(items []search.RankedAutocomplete) []autocompleteItem
 func foodItemsData(items []repository.FoodItemEntity) []foodObjectDTO {
 	data := make([]foodObjectDTO, 0, len(items))
 	for _, item := range items {
-		data = append(data, foodObjectDTO{ID: item.ID.String(), Name: item.Name, PhysicalState: string(item.PhysicalState), ImageURL: item.ImageURL})
+		classifications, primaryCategory := classificationData(item)
+		macros := macroSummaryDTO{Protein: nonNegative(item.MacrosPer100.Protein), Carbohydrate: nonNegative(item.MacrosPer100.Carbohydrates), Fat: nonNegative(item.MacrosPer100.Fat), Basis: macroBasis(item.PhysicalState)}
+		data = append(data, foodObjectDTO{
+			ID: item.ID.String(), Name: item.Name, PhysicalState: string(item.PhysicalState), ImageURL: item.ImageURL,
+			Classifications: classifications, PrimaryFoodCategory: primaryCategory, Macros: macros,
+			Calories: macros.Protein*4 + macros.Carbohydrate*4 + macros.Fat*9,
+		})
 	}
 	return data
+}
+
+// classificationData combines and deterministically orders result classifications.
+// Implements DESIGN-001 FoodItemViewModel and DESIGN-002 SearchController.
+func classificationData(item repository.FoodItemEntity) ([]classificationSummaryDTO, *classificationSummaryDTO) {
+	entities := append([]repository.ClassificationEntity{}, item.FoodCategories...)
+	entities = append(entities, item.CulinaryRoles...)
+	sort.Slice(entities, func(i, j int) bool {
+		if entities[i].Kind != entities[j].Kind {
+			return entities[i].Kind < entities[j].Kind
+		}
+		if entities[i].Name != entities[j].Name {
+			return entities[i].Name < entities[j].Name
+		}
+		return entities[i].ID.String() < entities[j].ID.String()
+	})
+	summaries := make([]classificationSummaryDTO, 0, len(entities))
+	var primary *classificationSummaryDTO
+	for _, entity := range entities {
+		summary := classificationSummaryDTO{ID: entity.ID.String(), Name: entity.Name, Kind: string(entity.Kind)}
+		summaries = append(summaries, summary)
+		if primary == nil && entity.Kind == repository.ClassificationKindFoodCategory {
+			copy := summary
+			primary = &copy
+		}
+	}
+	return summaries, primary
+}
+
+// macroBasis maps persistence physical state to the normalized API display basis.
+// Implements DESIGN-001 MacroSummary and DESIGN-005 MacroNormalizer.
+func macroBasis(state repository.PhysicalState) string {
+	if state == repository.PhysicalStateLiquid {
+		return "100ml"
+	}
+	return "100g"
+}
+
+// nonNegative keeps malformed legacy values from violating the public result contract.
+// Implements DESIGN-002 SearchController.
+func nonNegative(value float64) float64 {
+	if value < 0 {
+		return 0
+	}
+	return value
 }
 
 // similarityMetadataData maps similarity metadata to response items.

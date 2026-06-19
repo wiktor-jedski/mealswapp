@@ -20,26 +20,32 @@
 :root {
   /* Implements DESIGN-016 ColorPalette light-mode tokens. */
   color-scheme: light;
-  --color-bg: #f7f5ef;
+  --color-bg: #f7fcf7;
   --color-surface: #ffffff;
-  --color-text: #17201b;
-  --color-muted: #59655f;
-  --color-primary: #176b55;
-  --color-accent: #b13f2f;
-  --color-border: #d8d7cf;
+  --color-text: #111827;
+  --color-muted: #6b7280;
+  --color-primary: #166534;
+  --color-on-primary: #ffffff;
+  --color-secondary: #dcfce7;
+  --color-accent: #f97316;
+  --color-error: #dc2626;
+  --color-border: #d1d5db;
   font-family: "Inter", system-ui, sans-serif;
 }
 
 :root[data-theme="dark"] {
   /* Implements DESIGN-016 ColorPalette dark-mode tokens. */
   color-scheme: dark;
-  --color-bg: #101412;
-  --color-surface: #1a201d;
-  --color-text: #f2f0e8;
-  --color-muted: #b7c0ba;
-  --color-primary: #6fc7ab;
-  --color-accent: #ef8a76;
-  --color-border: #39423d;
+  --color-bg: #0a0f0a;
+  --color-surface: #161d16;
+  --color-text: #f3f4f6;
+  --color-muted: #9ca3af;
+  --color-primary: #4ade80;
+  --color-on-primary: #0a0f0a;
+  --color-secondary: #86efac;
+  --color-accent: #ffb86c;
+  --color-error: #f87171;
+  --color-border: #3f4b42;
 }
 
 body {
@@ -52,8 +58,15 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
+}
+
+/* Implements DESIGN-016 ComponentStyles visible keyboard focus indicator. */
+:where(button, input, select, a):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .font-data {

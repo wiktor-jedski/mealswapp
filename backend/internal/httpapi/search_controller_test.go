@@ -229,8 +229,15 @@ func TestSearchControllerRemainingFailurePaths(t *testing.T) {
 }
 
 func TestSearchControllerReturnsCatalogResultsEnvelope(t *testing.T) {
+	categoryID := uuid.MustParse("00000000-0000-0000-0000-000000000010")
+	roleID := uuid.MustParse("00000000-0000-0000-0000-000000000011")
 	service := &fakeSearchService{response: search.SearchResponse{
-		Items:            []repository.FoodItemEntity{{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), Name: "Apple", PhysicalState: repository.PhysicalStateSolid}},
+		Items: []repository.FoodItemEntity{{
+			ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), Name: "Apple", PhysicalState: repository.PhysicalStateSolid,
+			MacrosPer100:   repository.MacroValues{Protein: 1, Carbohydrates: 20, Fat: 2},
+			FoodCategories: []repository.ClassificationEntity{{ID: categoryID, Name: "Fruit", Kind: repository.ClassificationKindFoodCategory}},
+			CulinaryRoles:  []repository.ClassificationEntity{{ID: roleID, Name: "Snack", Kind: repository.ClassificationKindCulinaryRole}},
+		}},
 		TotalCount:       11,
 		Page:             2,
 		SimilarityScores: []float64{0},
@@ -259,9 +266,31 @@ func TestSearchControllerReturnsCatalogResultsEnvelope(t *testing.T) {
 	if envelope.Data["totalCount"].(float64) != 11 || envelope.Data["page"].(float64) != 2 || len(envelope.Data["items"].([]any)) != 1 || len(envelope.Data["warnings"].([]any)) != 1 {
 		t.Fatalf("envelope data = %+v", envelope.Data)
 	}
+	item := envelope.Data["items"].([]any)[0].(map[string]any)
+	primary := item["primaryFoodCategory"].(map[string]any)
+	macros := item["macros"].(map[string]any)
+	if len(item["classifications"].([]any)) != 2 || primary["id"] != categoryID.String() || primary["kind"] != "food_category" {
+		t.Fatalf("classification result = %+v", item)
+	}
+	if macros["protein"].(float64) != 1 || macros["carbohydrate"].(float64) != 20 || macros["fat"].(float64) != 2 || macros["basis"] != "100g" || item["calories"].(float64) != 102 {
+		t.Fatalf("macro result = %+v", item)
+	}
 	metadata := envelope.Data["similarityMetadata"].([]any)
 	if len(metadata) != 1 || metadata[0].(map[string]any)["tier"] != "excellent" || metadata[0].(map[string]any)["matchingQuantity"].(float64) != 42 {
 		t.Fatalf("similarity metadata envelope = %+v", envelope.Data["similarityMetadata"])
+	}
+}
+
+func TestFoodItemsDataUsesLiquidBasisAndSafeLegacyDefaults(t *testing.T) {
+	items := foodItemsData([]repository.FoodItemEntity{{
+		ID: uuid.New(), Name: "Legacy liquid", PhysicalState: repository.PhysicalStateLiquid,
+		MacrosPer100: repository.MacroValues{Protein: -1, Carbohydrates: 2, Fat: -3},
+	}})
+	if len(items) != 1 || items[0].Macros.Basis != "100ml" || items[0].Macros.Protein != 0 || items[0].Macros.Carbohydrate != 2 || items[0].Macros.Fat != 0 || items[0].Calories != 8 {
+		t.Fatalf("liquid item = %+v", items)
+	}
+	if items[0].PrimaryFoodCategory != nil || len(items[0].Classifications) != 0 {
+		t.Fatalf("legacy classifications = %+v", items[0])
 	}
 }
 

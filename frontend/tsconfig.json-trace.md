@@ -9,6 +9,6 @@
 
 ## Implemented Surface
 
-- Enables TypeScript checking for `frontend/src/**/*.ts`, `frontend/src/**/*.svelte`, and Vite config.
-- Includes Bun types for frontend unit tests and bootstrap scripts.
+- Enables TypeScript checking for `frontend/src/**/*.ts`, `frontend/src/**/*.svelte`, browser fixtures, Playwright config, and Vite config.
+- Includes Bun types for frontend unit tests, browser tests, and bootstrap scripts.
 - Uses bundler module resolution for the Svelte/Vite application.

@@ -890,7 +890,7 @@ components:
           format: uuid
     FoodObject:
       type: object
-      required: [id, name, physicalState]
+      required: [id, name, physicalState, classifications, primaryFoodCategory, macros, calories]
       properties:
         id:
           type: string
@@ -905,6 +905,41 @@ components:
             - string
             - "null"
           format: uri-reference
+        classifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        primaryFoodCategory:
+          oneOf:
+            - $ref: "#/components/schemas/ClassificationSummary"
+            - type: "null"
+        macros:
+          $ref: "#/components/schemas/MacroSummary"
+        calories:
+          type: number
+          minimum: 0
+    ClassificationSummary:
+      type: object
+      required: [id, name, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [food_category, culinary_role]
+    MacroSummary:
+      type: object
+      required: [protein, carbohydrate, fat, basis]
+      properties:
+        protein: { type: number, minimum: 0 }
+        carbohydrate: { type: number, minimum: 0 }
+        fat: { type: number, minimum: 0 }
+        basis:
+          type: string
+          enum: [100g, 100ml]
     SimilarityTier:
       type: string
       enum: [excellent, good, fair, poor]

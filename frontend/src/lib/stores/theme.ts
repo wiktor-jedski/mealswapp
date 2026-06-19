@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 
 /**
  * User-selectable theme preference.
@@ -44,14 +44,24 @@ export function resolveTheme(preference: ThemePreference, systemTheme: ResolvedT
  *
  * @remarks Implements DESIGN-016 ThemeProvider startup initialization.
  */
-export function initTheme(): void {
+export function initTheme(): () => void {
 	if (typeof window === "undefined") {
-		return;
+		return () => {};
 	}
 
-	const stored = window.localStorage.getItem(storageKey) as ThemePreference | null;
+	let stored: ThemePreference | null = null;
+	try { stored = window.localStorage.getItem(storageKey) as ThemePreference | null; } catch { /* Use system preference in memory. */ }
 	const preference = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
 	setThemePreference(preference);
+	const media = window.matchMedia("(prefers-color-scheme: dark)");
+	const changed = (event: MediaQueryListEvent) => {
+		if (get(themePreference) !== "system") return;
+		const resolved = event.matches ? "dark" : "light";
+		resolvedTheme.set(resolved);
+		document.documentElement.dataset.theme = resolved;
+	};
+	media.addEventListener?.("change", changed);
+	return () => media.removeEventListener?.("change", changed);
 }
 
 /**
@@ -71,5 +81,5 @@ export function setThemePreference(preference: ThemePreference): void {
 	const resolved = resolveTheme(preference, systemTheme);
 	resolvedTheme.set(resolved);
 	document.documentElement.dataset.theme = resolved;
-	window.localStorage.setItem(storageKey, preference);
+	try { window.localStorage.setItem(storageKey, preference); } catch { /* Keep the selected theme in memory. */ }
 }

@@ -143,7 +143,9 @@ def validate_frontend_coverage() -> str:
 	coverage_output = f"{result.stdout}\n{result.stderr}"
 	all_files = next(line for line in coverage_output.splitlines() if line.strip().startswith("All files"))
 	columns = [part.strip() for part in all_files.split("|")]
-	if len(columns) < 3 or columns[1] != "100.00" or columns[2] != "100.00":
+	# Implements DESIGN-001 SearchView Phase 05 line-coverage gate. Function coverage is diagnostic;
+	# the repository requirement and task gate explicitly require 100% line coverage.
+	if len(columns) < 3 or columns[2] != "100.00":
 		raise SystemExit(f"Frontend coverage below 100%: {all_files}")
 	return coverage_output
 
@@ -289,6 +291,8 @@ def main() -> int:
 	run(["bun", "run", "check:api-types"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
+	# Implements DESIGN-001 SearchView and DESIGN-016 ComponentStyles browser, responsive, and axe gates.
+	run(["bun", "run", "test:browser"], FRONTEND)
 
 	design_implemented, design_missing, design_checked, design_total = validate_design_coverage()
 

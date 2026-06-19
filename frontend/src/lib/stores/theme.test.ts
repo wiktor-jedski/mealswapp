@@ -51,7 +51,7 @@ test("initTheme does nothing without browser globals", () => {
     value: undefined
   });
 
-  initTheme();
+  initTheme()();
 
   expect(get(themePreference)).toBe("dark");
 });
@@ -81,6 +81,32 @@ test("initTheme applies stored explicit preference", () => {
   expect(globalThis.document.documentElement.dataset.theme).toBe("light");
 });
 
+// Implements DESIGN-016 ThemeProvider live system subscription and cleanup verification.
+test("live system changes apply only in system mode and listeners are removed", () => {
+  const localStorage = createLocalStorage("system");
+  let listener: ((event: { matches: boolean }) => void) | undefined;
+  let removed = false;
+  setBrowserGlobals({ darkMode: false, localStorage, media: { add: (value) => listener = value, remove: () => removed = true } });
+  const cleanup = initTheme();
+  listener?.({ matches: true });
+  expect(get(resolvedTheme)).toBe("dark");
+  setThemePreference("light");
+  listener?.({ matches: true });
+  expect(get(resolvedTheme)).toBe("light");
+  cleanup();
+  expect(removed).toBe(true);
+});
+
+// Implements DESIGN-016 ThemeProvider storage-unavailable fallback verification.
+test("theme remains operational when storage throws", () => {
+  const storage = { getItem: () => { throw new Error("denied"); }, setItem: () => { throw new Error("denied"); } };
+  setBrowserGlobals({ darkMode: true, localStorage: storage });
+  initTheme();
+  setThemePreference("light");
+  expect(get(themePreference)).toBe("light");
+  expect(get(resolvedTheme)).toBe("light");
+});
+
 function createLocalStorage(initialValue: string) {
   const storage = new Map<string, string>([["mealswapp.theme", initialValue]]);
   return {
@@ -89,12 +115,12 @@ function createLocalStorage(initialValue: string) {
   };
 }
 
-function setBrowserGlobals(options: { darkMode: boolean; localStorage: ReturnType<typeof createLocalStorage> }) {
+function setBrowserGlobals(options: { darkMode: boolean; localStorage: ReturnType<typeof createLocalStorage>; media?: { add(listener: (event: { matches: boolean }) => void): void; remove(): void } }) {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
       localStorage: options.localStorage,
-      matchMedia: () => ({ matches: options.darkMode })
+      matchMedia: () => ({ matches: options.darkMode, addEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => options.media?.add(listener), removeEventListener: () => options.media?.remove() })
     }
   });
   Object.defineProperty(globalThis, "document", {

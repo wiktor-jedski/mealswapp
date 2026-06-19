@@ -24,6 +24,9 @@ backend/.go-mod-cache/
 .svelte-kit/
 node_modules/
 dist/
+coverage/
+playwright-report/
+test-results/
 package
 .bun-tmp/
 .bun-install/

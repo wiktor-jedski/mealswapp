@@ -11,5 +11,5 @@
 
 ## Implemented Surface
 
-- Defines Bun scripts for development, build, test, frontend checks, and OpenAPI contract generation or drift detection.
-- Declares Svelte, Vite, Tailwind, TypeScript, Bun test types, and Svelte testing dependencies.
+- Defines Bun scripts for development, build, unit/component tests, Playwright browser tests, frontend checks, and OpenAPI contract generation or drift detection.
+- Declares Svelte, Vite, Tailwind, TypeScript, TanStack Query, Bun test types, Playwright, axe, and Svelte testing dependencies.

@@ -275,6 +275,23 @@ export interface SearchRequest {
 	dailyDietId?: string;
 }
 
+// Implements DESIGN-002 SearchController frontend classification result contract.
+/** Classification identity returned with each search result. */
+export interface ClassificationSummary {
+	id: string;
+	name: string;
+	kind: "food_category" | "culinary_role";
+}
+
+// Implements DESIGN-001 MacroSummary frontend result contract.
+/** Normalized macronutrients and their physical-state display basis. */
+export interface MacroSummary {
+	protein: number;
+	carbohydrate: number;
+	fat: number;
+	basis: "100g" | "100ml";
+}
+
 // Implements DESIGN-002 SearchController frontend food-object result contract.
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
@@ -282,6 +299,10 @@ export interface FoodObject {
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
+	classifications: ClassificationSummary[];
+	primaryFoodCategory: ClassificationSummary | null;
+	macros: MacroSummary;
+	calories: number;
 }
 
 // Implements DESIGN-002 SearchController frontend similarity metadata contract.

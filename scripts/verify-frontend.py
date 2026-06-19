@@ -22,10 +22,11 @@ REQUIRED_TEXT = (
 	"Catalog",
 	"Substitution",
 	"Daily Diet",
-	"Phase 00 Shell",
-	"Search foundation",
+	"Phase 05 Search",
+	"Food discovery",
 	"Food search",
-	"Search will be implemented in Phase 05",
+	"Search settings",
+	"Search results",
 	"System",
 	"Light",
 	"Dark",
@@ -116,9 +117,9 @@ def assert_shell_dom(dom: str) -> None:
 	missing = [text for text in REQUIRED_TEXT if text not in dom]
 	if missing:
 		raise RuntimeError(f"rendered shell is missing expected text: {', '.join(missing)}")
-	if 'id="search"' not in dom or "disabled" not in dom:
-		raise RuntimeError("rendered shell is missing the disabled search input")
-	if 'aria-label="Theme preference"' not in dom:
+	if 'id="search-query"' not in dom or 'placeholder="Search foods"' not in dom:
+		raise RuntimeError("rendered shell is missing the enabled search input")
+	if 'id="sidebar-theme"' not in dom:
 		raise RuntimeError("rendered shell is missing the theme selector")
 
 
