@@ -124,6 +124,7 @@ No unresolved Phase 03 code review findings remain at this time.
 - Task 119 implementation uses schema versions `search-response-v1`, `autocomplete-response-v1`, and `similarity-calculation-v1`, with default TTLs of 5 minutes for search responses, 2 minutes for autocomplete responses, and 15 minutes for similarity calculations. DESIGN-011 requires schema versions and TTLs but does not specify concrete values.
 - Task 117 implementation treats Dietary Preset rule IDs such as `dairy`, `gluten`, and `meat` as backend-owned Exclusion Rule names, not classification rows. Until a dedicated allergen persistence model exists, repository-backed allergen filters use existing classification association IDs as the only available persisted exclusion surface.
 - Task 123 implementation keeps the current `SearchResponse` DTO stable: substitution results expose final ranking scores in `SimilarityScores`, while DESIGN-003 tier and image metadata remains verified through the internal `SimilarityResult` path until the public API response field is finalized.
+- Task 138 OpenAPI extensions are now implemented: `api/openapi.yaml` `FoodObject` schema includes classification summaries (`id`, `name`, `kind`), an explicit primary Food Category, protein/carbohydrate/fat macros with `100g`/`100ml` basis, and non-negative server-calculated calories. Backend `foodObjectDTO`, `foodItemsData` mapper, and exported `search.CalculateCalories` populate the fields. Frontend generated types regenerated and drift check passes. Task 146 is unblocked.
 
 ### Testing coverage deviations
 
@@ -134,7 +135,8 @@ No unresolved Phase 03 code review findings remain at this time.
 
 ### Actions needed
 
-- None.
+- Task 138 OpenAPI extensions are now implemented: `api/openapi.yaml` `FoodObject` schema includes classification summaries (`id`, `name`, `kind`), an explicit primary Food Category, protein/carbohydrate/fat macros with `100g`/`100ml` basis, and non-negative server-calculated calories. Backend `foodObjectDTO`, `foodItemsData` mapper, and exported `search.CalculateCalories` populate the fields. Frontend generated types regenerated and drift check passes. Task 146 is unblocked.
+- Remaining Task 138 description items (similarity presentation cleanup, deterministic ordering cleanup, naming cleanup, focused test hygiene) are intentionally split and not tracked as 04_OPEN.md action points.
 
 ### Code Review Findings
 
@@ -146,6 +148,14 @@ No unresolved Phase 03 code review findings remain at this time.
 
 - Phase 05 uses TanStack Query for server state and localStorage for the SW-REQ-003 cache of the 20 most recent unique normalized request/result pairs. Cache recency is updated on reads and writes; malformed or schema-version-mismatched entries are discarded. Phase 09 remains responsible for service-worker API/image interception and broader offline hardening.
 - Phase 05 renders authenticated history and favorites in the Activity Sidebar from the existing Phase 03 generated contracts. Anonymous users receive empty/sign-in guidance, and activity API failure does not block public Catalog Search.
+- Task 139 implementation added `@tanstack/svelte-query@^6.1.34`, `@playwright/test@^1.61.0`, and `@axe-core/playwright@^4.11.3` to `frontend/package.json` with `preview` and `test:e2e` scripts. `bunfig.toml` scopes `bun test` to `src/` to keep Playwright specs under `tests/` out of the unit test runner. The `check` script intentionally excludes `test:e2e` to keep the unit/build/drift gate deterministic and not dependent on browser binaries.
+- Task 140 implementation follows task-guidance macro key naming `protein`/`carbohydrates`/`fat`; DESIGN-001 §1 uses `protein`/`carbs`/`fat`. Task 143 (SettingsPanel) should reconcile with the design doc if a rename is desired.
+- Task 142 implementation maps HTTP 429 to `server` category and 422 to `validation` category (code `search_rejected`) since the generated `ErrorCategory` enum has no `rate_limit`/`rejection` category. This stays within the generated contract.
+- Task 143 component tests use static-source assertions rather than DOM rendering because no DOM library (jsdom/happy-dom) is installed in the Bun environment. `vite build` validates Svelte source compilation. A future phase may add happy-dom + render tests for stronger behavioral coverage.
+- Task 145 implementation added `autocomplete-controller.ts` as a helper module (injectable timers/fetch) because Bun lacks Jest-style `useFakeTimers` for `setTimeout`. This enables deterministic 150ms debounce testing. Playwright autocomplete flows are `test.skip` scaffolds pending Task 151 wiring the dropdown into `SearchShell`.
+- Task 147 implementation uses `GET /api/v1/profile` to detect signed-in state (401 = anonymous, no error), `GET /api/v1/search-history` for history, and `GET /api/v1/saved-items?kind=favorite` for favorites. All fetches use `credentials: "include"` and inline try/catch error handling that never propagates to the parent so core search stays usable.
+- Task 148 implementation is SSR-safe and delegates staleness to Task 141's `LocalQueryCache.isStale`. `OfflineBanner` is not yet wired into `SearchShell` (Task 151 scope). Tests include explicit Phase 09 service-worker non-coverage disclaimers.
+- Task 149 implementation extends the Phase 00 `theme.ts` store (preserving the public API) with live `matchMedia` system-theme subscription, `cleanupTheme()` for listener teardown, and storage-unavailable try/catch fallback. `App.svelte` calls `initTheme()` at startup but not `cleanupTheme()` — Task 151 should confirm no double-subscription on route changes.
 
 ### Clarifications
 
@@ -155,7 +165,19 @@ No unresolved Phase 03 code review findings remain at this time.
 ### Testing coverage deviations
 
 - None accepted during planning. Phase 05 targets 100% line coverage for testable frontend source; any implementation-time exception must identify the specific file/function and rationale here.
+- Task 143, 144, 147 component tests use static-source assertions rather than DOM rendering because no DOM library (jsdom/happy-dom) is installed in the Bun environment. `vite build` validates Svelte source compilation. A future phase may add happy-dom + render tests for stronger behavioral coverage.
+- Task 153 closed the remaining `.ts` line- and function-coverage gaps so `bun test --coverage` reports `All files | 100.00 | 100.00` (functions and lines). Targeted tests added: `AutocompleteController` dispose-while-in-flight abort, `currentQuery` getter, and default `setTimeout`/`clearTimeout` fallback arrows (`autocomplete-controller.ts`); `updateSubstitutionInput` no-match branch and `compareFilter`/`compareSubstitutionInput` equal-id comparators (`search.ts`); `readSystemTheme`/`ensureSystemThemeSubscription` `matchMedia`-unavailable fallbacks and the subscribe-exactly-once early return (`theme.ts`). Svelte `.svelte` components remain outside Bun's line-coverage report and are verified by static-source assertions plus Playwright e2e (75 passed, 1 scaffold skipped) and `vite build`.
+
+### Accepted accessibility deviations (Task 152)
+
+- Task 152 automated axe scans (WCAG 2.1 A/AA, `frontend/tests/accessibility.spec.ts`) report `color-contrast` (serious) violations on decorative elements that use `text-white` on mid-tone backgrounds. These are accepted visual-design limitations, not normal reading-text pairs:
+  - ResultCard similarity tier badges (`ResultCard.svelte` `tierStyles`): the "Fair" badge `bg-[var(--color-accent)] text-white` fails in both light and dark themes; the "Excellent"/"Good" badges (`bg-[var(--color-primary)]`) and the "Poor" badge (`bg-[var(--color-muted)]`) fail in dark theme.
+  - ResultCard category chips (`bg-[var(--color-muted)] text-white`) and the image placeholder text (`text-white` on `bg-[var(--color-muted)]`) fail in dark theme.
+  - SidebarComponent active search-mode button (`bg-[var(--color-primary)] text-white`) fails in dark theme.
+- The gate asserts the ONLY serious/critical axe violations are these `color-contrast` cases, then re-runs axe with `color-contrast` disabled to confirm the rest of the composed shell is clean. Normal reading-text pairs (body `--color-text` and muted `--color-muted` labels on `--color-bg`/`--color-surface`) are explicitly verified to meet WCAG 2.1 AA 4.5:1 in both light and dark themes.
+- Follow-up: a future visual-design pass should introduce theme-aware on-accent/on-muted text tokens (or darker/lighter badge backgrounds) so the decorative badges, chips, placeholder, and active sidebar button meet 4.5:1 in both themes. This is a design change, not a Task 152 minor a11y fix (aria-labels, focus styles, and labels were already in place from earlier Phase 05 tasks).
 
 ### Actions needed
 
-- None.
+- Task 138 OpenAPI extensions are implemented (see Phase 04 Actions needed). Task 146 is unblocked.
+- `initPreferences()` (Task 143) is not yet called at app startup in `App.svelte`; saved unit preferences do not restore on page reload until Task 151 integration wires it alongside `initTheme()`.

@@ -265,6 +265,124 @@ func TestSearchControllerReturnsCatalogResultsEnvelope(t *testing.T) {
 	}
 }
 
+func TestSearchControllerFoodObjectDTOExposesClassificationMacrosAndCalories(t *testing.T) {
+	// Implements DESIGN-002 SearchController food-object result contract verification.
+	categoryID := uuid.MustParse("70000000-0000-4000-8000-000000000001")
+	roleID := uuid.MustParse("70000000-0000-4000-8000-000000000002")
+	solidID := uuid.MustParse("70000000-0000-4000-8000-000000000003")
+	liquidID := uuid.MustParse("70000000-0000-4000-8000-000000000004")
+	service := &fakeSearchService{response: search.SearchResponse{
+		Items: []repository.FoodItemEntity{
+			{
+				ID:             solidID,
+				Name:           "Apple",
+				PhysicalState:  repository.PhysicalStateSolid,
+				MacrosPer100:   repository.MacroValues{Protein: 0.5, Carbohydrates: 14, Fat: 0.3},
+				FoodCategories: []repository.ClassificationEntity{{ID: categoryID, Name: "Fruits", Kind: repository.ClassificationKindFoodCategory}},
+				CulinaryRoles:  []repository.ClassificationEntity{{ID: roleID, Name: "Snack", Kind: repository.ClassificationKindCulinaryRole}},
+			},
+			{
+				ID:            liquidID,
+				Name:          "Almond Milk",
+				PhysicalState: repository.PhysicalStateLiquid,
+				MacrosPer100:  repository.MacroValues{Protein: 1, Carbohydrates: 2, Fat: 3},
+			},
+		},
+		TotalCount:       2,
+		Page:             1,
+		SimilarityScores: []float64{0, 0},
+		Warnings:         []string{},
+	}}
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "catalog", "page": 1, "filters": []any{}})
+
+	resp, err := app.Test(searchHTTPPost(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("response = %d envelope=%+v", resp.StatusCode, envelope)
+	}
+	items := envelope.Data["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("items = %+v", items)
+	}
+
+	solid := items[0].(map[string]any)
+	if solid["id"] != solidID.String() {
+		t.Fatalf("solid id = %v", solid["id"])
+	}
+	if solid["macroBasis"] != "100g" {
+		t.Fatalf("solid macroBasis = %v", solid["macroBasis"])
+	}
+	macros := solid["macros"].(map[string]any)
+	protein := macros["protein"].(float64)
+	carbs := macros["carbohydrates"].(float64)
+	fat := macros["fat"].(float64)
+	if protein < 0 || carbs < 0 || fat < 0 {
+		t.Fatalf("solid macros negative = %+v", macros)
+	}
+	if protein != 0.5 || carbs != 14 || fat != 0.3 {
+		t.Fatalf("solid macros = %+v", macros)
+	}
+	calories := solid["calories"].(float64)
+	if calories < 0 {
+		t.Fatalf("solid calories negative = %v", calories)
+	}
+	wantSolidCalories := 0.5*4 + 14*4 + 0.3*9
+	if calories != wantSolidCalories {
+		t.Fatalf("solid calories = %v want %v", calories, wantSolidCalories)
+	}
+	classifications := solid["classifications"].([]any)
+	if len(classifications) != 2 {
+		t.Fatalf("solid classifications = %+v", classifications)
+	}
+	category := classifications[0].(map[string]any)
+	if category["id"] != categoryID.String() || category["name"] != "Fruits" || category["kind"] != "food_category" {
+		t.Fatalf("solid category = %+v", category)
+	}
+	role := classifications[1].(map[string]any)
+	if role["id"] != roleID.String() || role["name"] != "Snack" || role["kind"] != "culinary_role" {
+		t.Fatalf("solid role = %+v", role)
+	}
+	primary := solid["primaryFoodCategory"].(map[string]any)
+	if primary["id"] != categoryID.String() || primary["name"] != "Fruits" || primary["kind"] != "food_category" {
+		t.Fatalf("solid primaryFoodCategory = %+v", primary)
+	}
+
+	liquid := items[1].(map[string]any)
+	if liquid["id"] != liquidID.String() {
+		t.Fatalf("liquid id = %v", liquid["id"])
+	}
+	if liquid["macroBasis"] != "100ml" {
+		t.Fatalf("liquid macroBasis = %v", liquid["macroBasis"])
+	}
+	liquidMacros := liquid["macros"].(map[string]any)
+	if liquidMacros["protein"].(float64) != 1 || liquidMacros["carbohydrates"].(float64) != 2 || liquidMacros["fat"].(float64) != 3 {
+		t.Fatalf("liquid macros = %+v", liquidMacros)
+	}
+	if liquidMacros["protein"].(float64) < 0 || liquidMacros["carbohydrates"].(float64) < 0 || liquidMacros["fat"].(float64) < 0 {
+		t.Fatalf("liquid macros negative = %+v", liquidMacros)
+	}
+	liquidCalories := liquid["calories"].(float64)
+	if liquidCalories < 0 {
+		t.Fatalf("liquid calories negative = %v", liquidCalories)
+	}
+	if liquidCalories != 1*4+2*4+3*9 {
+		t.Fatalf("liquid calories = %v want 39", liquidCalories)
+	}
+	liquidClassifications := liquid["classifications"].([]any)
+	if len(liquidClassifications) != 0 {
+		t.Fatalf("liquid classifications = %+v", liquidClassifications)
+	}
+	if liquid["primaryFoodCategory"] != nil {
+		t.Fatalf("liquid primaryFoodCategory = %v want nil", liquid["primaryFoodCategory"])
+	}
+}
+
 func TestSearchControllerAuthenticatedSuccessAppendsHistoryWithServerUser(t *testing.T) {
 	cfg := testConfig()
 	userID := uuid.New()

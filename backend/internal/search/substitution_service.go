@@ -94,7 +94,7 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 
 	calculation, similarityWarnings, err := s.compareMacrosWithCache(ctx, req.SubstitutionInputs, ComparisonRequest{
 		SourceMacros:        source.macros,
-		SourceCalories:      macroCalories(source.macros),
+		SourceCalories:      CalculateCalories(source.macros),
 		Targets:             substitutionTargets(candidates),
 		MatchType:           MatchTypeCalorie,
 		SimilarityThreshold: defaultSimilarityThreshold,
@@ -206,7 +206,7 @@ func substitutionTargets(items []repository.FoodItemEntity) []TargetMacroVector 
 		targets = append(targets, TargetMacroVector{
 			ItemID:              item.ID,
 			Macros:              item.MacrosPer100,
-			CaloriesPerBaseUnit: macroCalories(item.MacrosPer100) / 100,
+			CaloriesPerBaseUnit: CalculateCalories(item.MacrosPer100) / 100,
 			ProteinPerBaseUnit:  item.MacrosPer100.Protein / 100,
 		})
 	}
@@ -313,8 +313,8 @@ func culinaryRoleMatchCount(candidateRoles []repository.ClassificationEntity, so
 	return count
 }
 
-// macroCalories derives calories from protein, carbohydrate, and fat grams.
+// CalculateCalories derives calories from protein, carbohydrate, and fat grams.
 // Implements DESIGN-003 CosineSimilarityCalculator.
-func macroCalories(macros repository.MacroValues) float64 {
+func CalculateCalories(macros repository.MacroValues) float64 {
 	return macros.Protein*4 + macros.Carbohydrates*4 + macros.Fat*9
 }

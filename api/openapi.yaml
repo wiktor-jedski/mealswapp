@@ -888,9 +888,41 @@ components:
         dailyDietId:
           type: string
           format: uuid
+    # Implements DESIGN-002 SearchController classification summary contract.
+    ClassificationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum: [food_category, culinary_role]
+    # Implements DESIGN-002 SearchController macro profile contract.
+    MacroProfile:
+      type: object
+      additionalProperties: false
+      required: [protein, carbohydrates, fat]
+      properties:
+        protein:
+          type: number
+          minimum: 0
+        carbohydrates:
+          type: number
+          minimum: 0
+        fat:
+          type: number
+          minimum: 0
+    # Implements DESIGN-002 SearchController food-object result contract.
     FoodObject:
       type: object
-      required: [id, name, physicalState]
+      additionalProperties: false
+      required: [id, name, physicalState, classifications, primaryFoodCategory, macros, macroBasis, calories]
       properties:
         id:
           type: string
@@ -905,6 +937,22 @@ components:
             - string
             - "null"
           format: uri-reference
+        classifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        primaryFoodCategory:
+          oneOf:
+            - $ref: "#/components/schemas/ClassificationSummary"
+            - type: "null"
+        macros:
+          $ref: "#/components/schemas/MacroProfile"
+        macroBasis:
+          type: string
+          enum: [100g, 100ml]
+        calories:
+          type: number
+          minimum: 0
     SimilarityTier:
       type: string
       enum: [excellent, good, fair, poor]

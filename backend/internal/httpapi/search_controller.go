@@ -62,10 +62,31 @@ type autocompleteResponseDTO struct {
 // foodObjectDTO is the narrow public Food Object search result.
 // Implements DESIGN-002 SearchController.
 type foodObjectDTO struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	PhysicalState string `json:"physicalState"`
-	ImageURL      string `json:"imageUrl"`
+	ID                  string                     `json:"id"`
+	Name                string                     `json:"name"`
+	PhysicalState       string                     `json:"physicalState"`
+	ImageURL            string                     `json:"imageUrl"`
+	Classifications     []classificationSummaryDTO `json:"classifications"`
+	PrimaryFoodCategory *classificationSummaryDTO  `json:"primaryFoodCategory"`
+	Macros              macroProfileDTO            `json:"macros"`
+	MacroBasis          string                     `json:"macroBasis"`
+	Calories            float64                    `json:"calories"`
+}
+
+// classificationSummaryDTO is the public classification identity summary.
+// Implements DESIGN-002 SearchController.
+type classificationSummaryDTO struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+}
+
+// macroProfileDTO is the public protein/carbohydrate/fat macro profile.
+// Implements DESIGN-002 SearchController.
+type macroProfileDTO struct {
+	Protein       float64 `json:"protein"`
+	Carbohydrates float64 `json:"carbohydrates"`
+	Fat           float64 `json:"fat"`
 }
 
 // autocompleteItemDTO is one ranked autocomplete suggestion.
@@ -261,9 +282,57 @@ func autocompleteItemsData(items []search.RankedAutocomplete) []autocompleteItem
 func foodItemsData(items []repository.FoodItemEntity) []foodObjectDTO {
 	data := make([]foodObjectDTO, 0, len(items))
 	for _, item := range items {
-		data = append(data, foodObjectDTO{ID: item.ID.String(), Name: item.Name, PhysicalState: string(item.PhysicalState), ImageURL: item.ImageURL})
+		data = append(data, foodObjectDTO{
+			ID:                  item.ID.String(),
+			Name:                item.Name,
+			PhysicalState:       string(item.PhysicalState),
+			ImageURL:            item.ImageURL,
+			Classifications:     classificationSummariesData(item.FoodCategories, item.CulinaryRoles),
+			PrimaryFoodCategory: primaryFoodCategoryData(item.FoodCategories),
+			Macros:              macroProfileData(item.MacrosPer100),
+			MacroBasis:          macroBasisForState(item.PhysicalState),
+			Calories:            search.CalculateCalories(item.MacrosPer100),
+		})
 	}
 	return data
+}
+
+// classificationSummariesData maps food categories and culinary roles to public classification summaries.
+// Implements DESIGN-002 SearchController.
+func classificationSummariesData(foodCategories []repository.ClassificationEntity, culinaryRoles []repository.ClassificationEntity) []classificationSummaryDTO {
+	data := make([]classificationSummaryDTO, 0, len(foodCategories)+len(culinaryRoles))
+	for _, category := range foodCategories {
+		data = append(data, classificationSummaryDTO{ID: category.ID.String(), Name: category.Name, Kind: string(category.Kind)})
+	}
+	for _, role := range culinaryRoles {
+		data = append(data, classificationSummaryDTO{ID: role.ID.String(), Name: role.Name, Kind: string(role.Kind)})
+	}
+	return data
+}
+
+// primaryFoodCategoryData returns the first food category summary or nil when absent.
+// Implements DESIGN-002 SearchController.
+func primaryFoodCategoryData(foodCategories []repository.ClassificationEntity) *classificationSummaryDTO {
+	if len(foodCategories) == 0 {
+		return nil
+	}
+	category := foodCategories[0]
+	return &classificationSummaryDTO{ID: category.ID.String(), Name: category.Name, Kind: string(category.Kind)}
+}
+
+// macroProfileData maps repository macro values to the public macro profile.
+// Implements DESIGN-002 SearchController.
+func macroProfileData(macros repository.MacroValues) macroProfileDTO {
+	return macroProfileDTO{Protein: macros.Protein, Carbohydrates: macros.Carbohydrates, Fat: macros.Fat}
+}
+
+// macroBasisForState derives the 100g/100ml macro basis from physical state.
+// Implements DESIGN-002 SearchController.
+func macroBasisForState(state repository.PhysicalState) string {
+	if state == repository.PhysicalStateLiquid {
+		return "100ml"
+	}
+	return "100g"
 }
 
 // similarityMetadataData maps similarity metadata to response items.
