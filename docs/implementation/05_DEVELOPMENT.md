@@ -22,6 +22,18 @@ Copy `.env.example` into a local `.env` if shell-based loading is preferred. The
 
 ## Local Services
 
+Start PostgreSQL, Redis, the backend, and the frontend together from the repository root:
+
+```sh
+bash scripts/start-dev.sh
+```
+
+The command keeps the backend and frontend attached to the terminal. Press `Ctrl-C`
+to stop both application processes. PostgreSQL and Redis remain available for the
+next development session.
+
+To start only PostgreSQL and Redis:
+
 ```sh
 bash scripts/start-services.sh
 ```
