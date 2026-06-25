@@ -14,21 +14,23 @@ experience against the Phase 04 generated OpenAPI contracts.
 The implemented frontend surface composes a `SearchView` shell: typed search
 state and request construction, a 20-entry localStorage LRU query cache, a
 TanStack Query generated search/autocomplete API client, settings controls
-(macro toggles and metric/imperial preference), Catalog/Substitution/Daily Diet
+(metric/imperial unit preference), Catalog/Substitution/Daily Diet
 Alternative mode controls, 150ms-debounced autocomplete with keyboard focus
-navigation, a paginated results grid with image fallback and similarity
-presentation, a collapsible activity sidebar with history/favorites, an offline
-and stale-data banner, theme persistence and resolution, a 12-column responsive
-layout, Playwright end-to-end workflows with `@axe-core/playwright` checks, and
-aggregate coverage gates.
+navigation, selected FoodObject hydration through `GET /api/v1/food-objects/{id}`,
+a paginated results grid with image fallback and similarity presentation, a
+collapsible activity sidebar with history/favorites, an offline and stale-data
+banner, theme persistence and resolution with an explicit light/dark sidebar
+toggle, a 12-column responsive layout, Playwright end-to-end workflows with
+`@axe-core/playwright` checks, and aggregate coverage gates.
 
 The frontend consumes the Phase 04 generated search/autocomplete contracts. The
 `ServiceWorker` static aspect of DESIGN-001 (offline asset/API/image
 interception) is **not** implemented in Phase 05 and is explicitly deferred to
 Phase 09. SW-REQ-006 (multi-meal Daily Diet aggregation) is **not** claimed by
 Phase 05 and remains Phase 07 scope alongside the saved-diet model and
-optimization worker; Phase 05 only exposes the designed Daily Diet Alternative
-request/rejection flow.
+optimization worker; Phase 05 keeps only the Daily Diet Alternative scaffold and
+does not claim Daily Diet Alternative execution, field-level rejection UX, saved
+diet data, or optimization job behavior.
 
 ## Automated Evidence
 
@@ -93,8 +95,8 @@ Observed results from task `153`:
 ### Functional Checks
 
 1. **Default search state (SW-REQ-001):** On first load, confirm the Search Mode
-   is `Catalog` and all macronutrient toggles (Carbohydrates, Fats, Proteins) are
-   enabled.
+   is `Catalog`, unit preferences load with safe defaults, and result cards show
+   protein, carbohydrate, and fat values when results are available.
 2. **Debounce timing (SW-REQ-002):** Type rapidly into the search bar; confirm
    no request fires before `150ms` and exactly one request fires after the final
    keystroke.
@@ -105,15 +107,16 @@ Observed results from task `153`:
    confirm exact matches rank ahead of fuzzy matches and equal scores stay
    deterministic across repeated calls.
 5. **Substitution Inputs (SW-REQ-005):** Switch to Substitution mode, select an
-   autocomplete item, and press `Enter`; confirm one Substitution Input is
-   added. Add and remove inputs and confirm quantities and canonical units reach
+   autocomplete item, and press `Enter`; confirm the selected FoodObject hydrates
+   through `/api/v1/food-objects/{id}` and one Substitution Input is added. Add
+   and remove inputs and confirm quantities and canonical units reach
    `SearchRequest`.
-6. **Daily Diet Alternative:** Switch to Daily Diet Alternative mode and submit
-   a request before Phase 07 data exists; confirm the Phase 04 structured
-   rejection (`phase_07_saved_diet_unavailable`) is surfaced and no job behavior
-   runs. SW-REQ-006 multi-meal aggregation is Phase 07 scope.
-7. **UI toggle positioning (SW-REQ-007):** Confirm search mode toggles sit above
-   the search bar and above the macronutrient toggle bar.
+6. **Daily Diet Alternative scaffold:** Switch to Daily Diet Alternative mode;
+   confirm the scaffold is visible and does not create Phase 07 job behavior.
+   SW-REQ-006 multi-meal aggregation, saved-diet data, optimization jobs, and
+   field-level rejection UX are Phase 07 scope.
+7. **UI toggle positioning (SW-REQ-007):** Confirm search mode controls sit
+   above the search bar and settings controls.
 8. **Filters and pagination (SW-REQ-010):** Apply food-category/allergen/dietary
    filters; confirm results respect them. Confirm no page renders more than `10`
    items and previous results stay visible during page loads.
@@ -133,8 +136,8 @@ Observed results from task `153`:
    against a running API; confirm `75 passed`, `1 skipped`.
 2. Covered workflows include keyboard-only Catalog and Substitution flows at
    desktop and mobile sizes, autocomplete selection, pagination, cache reuse,
-   history/favorites, offline cached display, timeout retry, and the empty
-   state.
+   history/favorites, offline cached display, timeout retry, selected FoodObject
+   hydration, and the empty state.
 3. The single skipped spec is the autocomplete Playwright scaffold pending
    `SearchShell` wiring, documented in `docs/implementation/04_OPEN.md`; the
    autocomplete behavior is otherwise covered by fake-timer unit tests and
@@ -183,24 +186,26 @@ Observed results from task `153`:
 #### Desktop Keyboard Acceptance Test
 
 On a desktop viewport, tab into the search bar and type a query; after
-`150ms` the autocomplete dropdown expands downward in document flow without
-overlapping existing UI. Press `Tab` to advance focus through ranked suggestions
-and `Shift+Tab` to reverse; the active option is visually indicated. Press
+`150ms` the autocomplete dropdown opens below the input as a positioned overlay
+without shifting page layout or obscuring the typed input. Press `Tab` to
+advance focus through ranked suggestions and `Shift+Tab` to reverse; the active
+option is visually indicated. Press
 `Enter` to select the active suggestion; in Substitution mode this adds one
-Substitution Input above the macronutrient toggle bar, and in Catalog mode this
-runs the search. Press `Escape` to dismiss the dropdown without selection. Tab
-through the macro toggles, mode controls, pagination controls, and sidebar
-entries; confirm visible focus and reachable, named controls throughout.
+Substitution Input above the settings controls, and in Catalog mode this runs
+the search. Press `Escape` to dismiss the dropdown without selection. Tab
+through the unit preference controls, mode controls, pagination controls, and
+sidebar entries; confirm visible focus and reachable, named controls throughout.
 
 #### Mobile Keyboard/Touch Acceptance Test
 
 On a `320px`-wide mobile viewport, tap the search bar and type; the
-autocomplete dropdown expands downward without horizontal scrolling. Tap a
+autocomplete dropdown opens below the input without horizontal scrolling or
+layout shift. Tap a
 suggestion to select it. Use the mobile sidebar toggle to open and close the
 activity sidebar; confirm single-column layout and that history/favorites
-restore search state. Toggle the theme switcher and confirm the preference
-persists across a reload. Confirm no content is clipped and all controls remain
-operable by touch.
+restore search state. Toggle the light/dark theme switcher and confirm the
+preference persists across a reload. Confirm no content is clipped and all
+controls remain operable by touch.
 
 ## Traceability
 
@@ -222,14 +227,14 @@ Related Phase 05 task IDs:
 - `140` search state and request builder.
 - `141` local query LRU cache (SW-REQ-003).
 - `142` generated search API client.
-- `143` search settings controls (macro toggles, unit preference).
+- `143` search settings controls (unit preference).
 - `144` search modes and Substitution Inputs (SW-REQ-005, SW-REQ-007).
 - `145` autocomplete interaction (SW-REQ-002, SW-REQ-004, SW-REQ-008,
   SW-REQ-009).
 - `146` search results grid (SW-REQ-010, SW-REQ-011, SW-REQ-012).
 - `147` activity sidebar (SW-REQ-013).
 - `148` offline and stale indicator.
-- `149` theme persistence (SW-REQ-015).
+- `149` theme persistence with explicit light/dark sidebar toggle (SW-REQ-015).
 - `150` responsive style system (SW-REQ-014, SW-REQ-089).
 - `151` search workflow integration.
 - `152` browser accessibility and responsive gate.
@@ -243,9 +248,9 @@ Requirement coverage:
 - `SW-REQ-003` Local Query Caching: tasks `141`, `151`.
 - `SW-REQ-004` Autocomplete Ranking Priority: tasks `145`, `151` (server ranking
   consumed by the frontend).
-- `SW-REQ-005` Ingredient List Accumulation: tasks `144`, `151`.
+- `SW-REQ-005` Ingredient List Accumulation: tasks `142`, `144`, `151`.
 - `SW-REQ-006` Search Mode: Daily Diet: **Phase 07 scope.** Phase 05 exposes
-  only the designed Daily Diet Alternative request/rejection flow.
+  only the Daily Diet Alternative scaffold.
 - `SW-REQ-007` UI Toggle Positioning: tasks `144`, `150`.
 - `SW-REQ-008` Search Bar Expansion: tasks `145`, `151`.
 - `SW-REQ-009` Keyboard Navigation: Autocomplete: tasks `145`, `152`.
@@ -289,10 +294,17 @@ Requirement coverage:
   Follow-up: a future visual-design pass should introduce theme-aware
   on-accent/on-muted text tokens so the decorative badges, chips, placeholder,
   and active sidebar button meet 4.5:1 in both themes.
-- **Macro toggle key naming:** Task `140` follows task-guidance macro key naming
-  `protein`/`carbohydrates`/`fat`; DESIGN-001 §1 uses `protein`/`carbs`/`fat`.
-  This is reconciled at the settings layer and documented in
-  `docs/implementation/04_OPEN.md`.
+- **Macro visibility controls:** Phase 05 intentionally does not implement
+  macro visibility toggles. Result cards always show the required protein,
+  carbohydrate, and fat values from the generated search contract; SettingsPanel
+  scope is limited to unit and theme preferences.
+- **Daily Diet Alternative behavior:** Phase 05 intentionally keeps Daily Diet
+  Alternative as a scaffold only. Full execution, saved-diet data, optimization
+  jobs, and field-level rejection UX move to Phase 07.
+- **Theme sidebar option:** The sidebar intentionally exposes a simple
+  light/dark toggle. `system` remains supported inside `ThemeProvider` for
+  first-load defaults and live system-theme resolution, but is not a visible
+  sidebar option.
 - **HTTP status mapping:** Task `142` maps `429` to `server` category and `422`
   to `validation` category (`search_rejected`) because the generated
   `ErrorCategory` enum has no `rate_limit`/`rejection` category. This stays
@@ -305,15 +317,16 @@ Requirement coverage:
 
 Accept Phase 05 after the automated evidence remains green and the
 project-owner checks confirm: the search shell loads against the live API;
-Catalog is the initial mode with all macros enabled; 150ms debounce and 20-entry
-LRU caching behave; autocomplete ranking and keyboard navigation work;
-Substitution Inputs accumulate and reach `SearchRequest`; the Daily Diet
-Alternative rejection is surfaced without Phase 07 job behavior (SW-REQ-006
-remains Phase 07); filters and pagination respect the 10-item limit; the
+Catalog is the initial mode; unit preferences load and persist; 150ms debounce
+and 20-entry LRU caching behave; autocomplete ranking and keyboard navigation work;
+selected FoodObject hydration works for Substitution Inputs; Substitution Inputs
+accumulate and reach `SearchRequest`; the Daily Diet Alternative scaffold does
+not start Phase 07 job behavior (SW-REQ-006 remains Phase 07); filters and
+pagination respect the 10-item limit; the
 activity sidebar shows history/favorites and restores search state; offline and
-stale indicators show without claiming service-worker interception; theme
-preference persists; the 12-column desktop grid and `320px` no-scroll mobile
-layout render with the documented style guide; desktop and mobile keyboard and
-visual acceptance tests pass; and the accepted color-contrast and Svelte
+stale indicators show without claiming service-worker interception; the explicit
+light/dark theme preference persists; the 12-column desktop grid and `320px`
+no-scroll mobile layout render with the documented style guide; desktop and
+mobile keyboard and visual acceptance tests pass; and the accepted color-contrast and Svelte
 component coverage deviations remain documented in
 `docs/implementation/04_OPEN.md`.

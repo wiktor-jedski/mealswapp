@@ -4,7 +4,7 @@
 **Static aspects covered:** SearchController, AutocompleteRanker, QueryParser, PaginationHandler, FilterProcessor, CulinaryRoleWeighter.
 
 ### 0. Static Aspect Responsibilities
-- `SearchController`: owns Fiber endpoint handlers, request validation, service orchestration, and response envelopes.
+- `SearchController`: owns Fiber endpoint handlers, request validation, service orchestration, selected-item FoodObject hydration, and response envelopes.
 - `AutocompleteRanker`: owns exact-match, Levenshtein, and string-length ranking.
 - `QueryParser`: owns normalization and strategy selection for Catalog Search, Substitution Search, and Daily Diet Alternative Search.
 - `PaginationHandler`: owns page bounds, page size of 10, offsets, and response metadata.
@@ -21,6 +21,7 @@
 - `interface SearchFilter { filterId: string; kind: "food_category" | "culinary_role" | "food_object_type" | "allergen" | "dietary_preset"; include: boolean }`
 - `interface RankedAutocomplete { itemId: string; label: string; exactMatch: boolean; levenshteinDistance: number; length: number; rank: number }`
 - `interface SearchCandidate { item: FoodObject; textScore: number; similarityScore?: number; culinaryRoleMatchCount: number; finalScore: number }`
+- `interface FoodObjectEnvelope { status: "ok"; requestId: string; data: FoodObject }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Validate `page >= 1`, `query` length, filter shape, Substitution Input quantities, and allowed `mode`.
@@ -48,6 +49,7 @@
 ### 4. Component Interfaces
 - `func (c *SearchController) Search(ctx *fiber.Ctx) error`
 - `func (c *SearchController) Autocomplete(ctx *fiber.Ctx) error`
+- `func (c *SearchController) GetFoodObject(ctx *fiber.Ctx) error`
 - `func ParseSearchRequest(ctx *fiber.Ctx) (SearchRequest, error)`
 - `func BuildParsedQuery(req SearchRequest) ParsedQuery`
 - `func RankAutocomplete(query string, candidates []FoodItem) []RankedAutocomplete`

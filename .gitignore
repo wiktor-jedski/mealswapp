@@ -27,6 +27,7 @@ dist/
 package
 .bun-tmp/
 .bun-install/
+*.tsbuildinfo
 
 ### Playwright ###
 # Browser test output directories (artifacts, traces, screenshots, reports)
