@@ -96,12 +96,18 @@ export class AutocompleteController {
 	 */
 	dispose(): void {
 		this.disposed = true;
+		this.cancel();
+	}
+
+	/** Cancels pending or in-flight autocomplete work while keeping the controller reusable. */
+	cancel(): void {
 		if (this.timer !== undefined) {
 			this.clearTimer(this.timer);
 			this.timer = undefined;
 		}
 		if (this.inflight) {
-			this.inflight.abort(new DOMException("Autocomplete disposed", "AbortError"));
+			this.inflight.abort(new DOMException("Autocomplete cancelled", "AbortError"));
+			this.inflight = undefined;
 		}
 	}
 

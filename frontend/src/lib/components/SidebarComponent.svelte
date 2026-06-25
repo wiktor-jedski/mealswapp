@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { searchStore, setQuery, setMode } from "../stores/search";
+  import { setQuery, setMode } from "../stores/search";
   import {
     sidebarStore,
     toggleCollapsed,
@@ -8,7 +8,8 @@
     setMobileOpen,
     initSidebar
   } from "../stores/sidebar";
-  import SettingsPanel from "./SettingsPanel.svelte";
+  import { resolvedTheme, setThemePreference } from "../stores/theme";
+  import { preferencesStore, setUnitSystem } from "../stores/preferences";
   import type {
     ProfileData,
     ProfileEnvelope,
@@ -18,8 +19,9 @@
     SearchHistoryEnvelope,
     SearchMode
   } from "../api/generated";
+  import type { UnitSystem } from "../stores/preferences";
 
-  // Implements DESIGN-001 SidebarComponent navigation, history, favorites, settings, and responsive collapse.
+  // Implements DESIGN-001 SidebarComponent navigation, history, favorites, units, and responsive collapse.
 
   /** Authenticated profile endpoint used to detect signed-in state without exposing tokens. */
   const PROFILE_ENDPOINT = "/api/v1/profile";
@@ -30,14 +32,10 @@
   /** Authenticated saved-items list endpoint filtered to favorites, served by ARCH-008 SavedDataRepository. */
   const SAVED_ITEMS_FAVORITES_ENDPOINT = "/api/v1/saved-items?kind=favorite";
 
-  /**
-   * Mode options rendered in the sidebar for Catalog, Substitution, and Daily Diet
-   * Alternative navigation. Selecting one calls `setMode` via {@link onModeSelect}.
-   */
-  const modeOptions: { value: SearchMode; id: string; label: string }[] = [
-    { value: "catalog", id: "sidebar-mode-catalog", label: "Catalog" },
-    { value: "substitution", id: "sidebar-mode-substitution", label: "Substitution" },
-    { value: "daily_diet_alternative", id: "sidebar-mode-daily-diet", label: "Daily Diet Alternative" }
+  /** Account-level unit options rendered as a compact sidebar preference row. */
+  const unitSystems: { value: UnitSystem; label: string }[] = [
+    { value: "metric", label: "Metric" },
+    { value: "imperial", label: "Imperial" }
   ];
 
   /** Authenticated profile loaded from `/api/v1/profile`; `null` while loading or anonymous. */
@@ -60,9 +58,6 @@
   let favoritesLoading = false;
   /** Inline favorites error message; never propagated to the parent so core search stays usable. */
   let favoritesError: string | null = null;
-
-  /** Local settings-panel visibility flag, toggled by the Settings entry point. */
-  let settingsOpen = false;
 
   onMount(() => {
     initSidebar();
@@ -187,15 +182,14 @@
     setMobileOpen(false);
   }
 
-  /** Switches the active search mode and closes the mobile sidebar so the results area is reachable. */
-  function onModeSelect(mode: SearchMode): void {
-    setMode(mode);
-    setMobileOpen(false);
-  }
-
-  /** Toggles the local settings panel visibility without navigating away from search. */
-  function onSettingsToggle(): void {
-    settingsOpen = !settingsOpen;
+  /**
+   * Converts the current resolved theme into an explicit binary light/dark preference.
+   * The default stored `system` preference keeps following OS changes until this button is used.
+   *
+   * @remarks Implements DESIGN-016 ThemeProvider binary sidebar theme switch.
+   */
+  function onThemeToggle(): void {
+    setThemePreference($resolvedTheme === "dark" ? "light" : "dark");
   }
 
   /** Branding shown in the sidebar header; falls back to the product name when the profile has no display name. */
@@ -204,7 +198,7 @@
 
 <!-- Implements DESIGN-001 SidebarComponent -->
 <aside
-  class="desktop-sidebar-left flex flex-col gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:sticky sm:top-0 sm:h-screen sm:border-b-0 sm:border-r sm:pr-5 {$sidebarStore.collapsed ? 'sm:w-14 sm:p-2' : 'sm:w-60'}"
+  class="desktop-sidebar-left flex flex-col gap-2 overflow-hidden border-b border-[var(--color-border)] bg-[var(--color-surface)] p-3 transition-[width,padding-right] duration-200 ease-out motion-reduce:transition-none sm:sticky sm:top-0 sm:h-screen sm:border-b-0 sm:border-r {$sidebarStore.collapsed ? 'sm:w-14' : 'sm:w-60 sm:pr-5'}"
   aria-label="Activity sidebar"
   data-sidebar
   data-collapsed={$sidebarStore.collapsed}
@@ -240,7 +234,7 @@
   <!-- Implements DESIGN-001 SidebarComponent content: visible on mobile only when mobileOpen, on desktop only when not collapsed. -->
   <div
     id="activity-sidebar-content"
-    class="grid gap-4 {$sidebarStore.mobileOpen ? 'block' : 'hidden'} {$sidebarStore.collapsed ? 'sm:hidden' : 'sm:grid'}"
+    class="sidebar-animated-content grid gap-4 {$sidebarStore.mobileOpen ? 'block' : 'hidden'} sm:grid"
     data-sidebar-content
   >
     <!-- Implements DESIGN-001 SidebarComponent mobile close button: visible only on small screens when the sidebar is open. -->
@@ -258,94 +252,103 @@
 
     <h1 class="text-2xl font-semibold">{branding}</h1>
 
-    <!-- Implements DESIGN-001 SidebarComponent search-mode navigation. -->
-    <nav class="flex flex-col gap-1" aria-label="Search mode navigation" data-sidebar-modes>
-      {#each modeOptions as option}
-        <button
-          id={option.id}
-          type="button"
-          class="rounded px-2 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          class:bg-[var(--color-primary)]={$searchStore.mode === option.value}
-          class:text-white={$searchStore.mode === option.value}
-          aria-pressed={$searchStore.mode === option.value}
-          on:click={() => onModeSelect(option.value)}
-        >
-          {option.label}
-        </button>
-      {/each}
-    </nav>
-
-    {#if authenticating}
-      <p class="text-sm text-[var(--color-muted)]" data-sidebar-loading>Loading activity…</p>
-    {:else if !authenticated}
-      <!-- Implements DESIGN-001 SidebarComponent anonymous empty/sign-in guidance. -->
-      <p class="text-sm" data-sidebar-anonymous>
-        Sign in to see your history and favorites.
-      </p>
-    {:else}
-      <!-- Implements DESIGN-001 SidebarComponent authenticated search history list loaded from generated Phase 03 contracts. -->
-      <section class="grid gap-2" aria-label="Search history" data-sidebar-history>
-        <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">History</h2>
-        {#if historyError}
-          <p class="text-sm text-[var(--color-muted)]" data-sidebar-history-error>{historyError}</p>
-        {:else if historyLoading}
-          <p class="text-sm text-[var(--color-muted)]">Loading…</p>
-        {:else if history.length === 0}
-          <p class="text-sm text-[var(--color-muted)]">No recent searches.</p>
-        {:else}
-          <ul class="grid gap-1">
-            {#each history as entry}
-              <li>
-                <button
-                  type="button"
-                  class="w-full truncate rounded px-2 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                  data-sidebar-history-entry={entry.id}
-                  on:click={() => onHistoryEntrySelect(entry)}
-                >
-                  {entry.query}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-
-      <!-- Implements DESIGN-001 SidebarComponent authenticated favorites list loaded from generated Phase 03 contracts. -->
-      <section class="grid gap-2" aria-label="Favorites" data-sidebar-favorites>
-        <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">Favorites</h2>
-        {#if favoritesError}
-          <p class="text-sm text-[var(--color-muted)]" data-sidebar-favorites-error>{favoritesError}</p>
-        {:else if favoritesLoading}
-          <p class="text-sm text-[var(--color-muted)]">Loading…</p>
-        {:else if favorites.length === 0}
-          <p class="text-sm text-[var(--color-muted)]">No favorites yet.</p>
-        {:else}
-          <ul class="grid gap-1">
-            {#each favorites as favorite}
-              <li class="truncate px-2 py-1 text-sm" data-sidebar-favorite={favorite.itemId}>
-                {favorite.itemId}
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-
-      <!-- Implements DESIGN-001 SidebarComponent settings entry point. -->
+    <!-- Implements DESIGN-016 ThemeProvider binary light/dark switch placed under the sidebar brand. -->
+    <div class="flex items-center justify-between gap-3 rounded-full border border-[var(--color-border)] bg-[var(--color-bg)] p-1.5 shadow-sm" data-sidebar-theme-toggle>
+      <span class="sr-only">Current theme: {$resolvedTheme}</span>
+      <span class="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-accent)]" aria-hidden="true">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="2" />
+          <path d="M12 2v3M12 19v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </span>
       <button
         type="button"
-        class="self-start rounded border border-[var(--color-border)] px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-        aria-expanded={settingsOpen}
-        on:click={onSettingsToggle}
-        data-sidebar-settings
+        class="relative h-8 w-14 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+        aria-label="Theme preference"
+        aria-pressed={$resolvedTheme === "dark"}
+        on:click={onThemeToggle}
       >
-        Settings
+        <span
+          class="absolute top-1/2 h-6 w-6 -translate-y-1/2 rounded-full bg-[var(--color-primary)] shadow transition-[left]"
+          style:left={$resolvedTheme === "dark" ? "calc(100% - 1.75rem)" : "0.25rem"}
+          aria-hidden="true"
+        ></span>
       </button>
-      {#if settingsOpen}
-        <SettingsPanel />
-      {/if}
+      <span class="flex h-8 w-8 items-center justify-center rounded-full text-[var(--color-primary)]" aria-hidden="true">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none">
+          <path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 7 7 0 1 0 20.5 15.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+        </svg>
+      </span>
+    </div>
 
-      {#if authError}
-        <p class="text-sm text-[var(--color-muted)]" data-sidebar-auth-error>{authError}</p>
+    <!-- Implements DESIGN-001 SidebarComponent account-level unit preference control. -->
+    <div class="flex items-center gap-2" data-sidebar-units>
+      <label class="text-sm text-[var(--color-muted)]" for="sidebar-unit-system">Units:</label>
+      <select
+        id="sidebar-unit-system"
+        class="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+        value={$preferencesStore.unitSystem}
+        on:change={(event) => setUnitSystem((event.currentTarget as HTMLSelectElement).value as UnitSystem)}
+      >
+        {#each unitSystems as unit (unit.value)}
+          <option value={unit.value}>{unit.label}</option>
+        {/each}
+      </select>
+    </div>
+
+    {#if !authenticating}
+      {#if !authenticated}
+        <!-- Implements DESIGN-001 SidebarComponent anonymous empty/sign-in guidance. -->
+        <p class="text-sm" data-sidebar-anonymous>
+          Sign in to see your history and favorites.
+        </p>
+      {:else}
+        <!-- Implements DESIGN-001 SidebarComponent authenticated search history list loaded from generated Phase 03 contracts. -->
+        <section class="grid gap-2" aria-label="Search history" data-sidebar-history>
+          <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">History</h2>
+          {#if historyError}
+            <p class="text-sm text-[var(--color-muted)]" data-sidebar-history-error>{historyError}</p>
+          {:else if !historyLoading && history.length === 0}
+            <p class="text-sm text-[var(--color-muted)]">No recent searches.</p>
+          {:else if !historyLoading}
+            <ul class="grid gap-1">
+              {#each history as entry}
+                <li>
+                  <button
+                    type="button"
+                    class="w-full truncate rounded px-2 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    data-sidebar-history-entry={entry.id}
+                    on:click={() => onHistoryEntrySelect(entry)}
+                  >
+                    {entry.query}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+
+        <!-- Implements DESIGN-001 SidebarComponent authenticated favorites list loaded from generated Phase 03 contracts. -->
+        <section class="grid gap-2" aria-label="Favorites" data-sidebar-favorites>
+          <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">Favorites</h2>
+          {#if favoritesError}
+            <p class="text-sm text-[var(--color-muted)]" data-sidebar-favorites-error>{favoritesError}</p>
+          {:else if !favoritesLoading && favorites.length === 0}
+            <p class="text-sm text-[var(--color-muted)]">No favorites yet.</p>
+          {:else if !favoritesLoading}
+            <ul class="grid gap-1">
+              {#each favorites as favorite}
+                <li class="truncate px-2 py-1 text-sm" data-sidebar-favorite={favorite.itemId}>
+                  {favorite.itemId}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+
+        {#if authError}
+          <p class="text-sm text-[var(--color-muted)]" data-sidebar-auth-error>{authError}</p>
+        {/if}
       {/if}
     {/if}
   </div>

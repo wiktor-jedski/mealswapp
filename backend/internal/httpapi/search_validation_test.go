@@ -32,6 +32,12 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 	if resp.StatusCode != fiber.StatusOK || calls != 1 {
 		t.Fatalf("valid search = %d calls=%d", resp.StatusCode, calls)
 	}
+	validSubstitutionBody := `{"query":"","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":100,"unit":"ml"}]}`
+	resp = postSearchValidation(t, app, validSubstitutionBody)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || calls != 2 {
+		t.Fatalf("valid substitution = %d calls=%d", resp.StatusCode, calls)
+	}
 
 	for name, body := range map[string]string{
 		"empty query":                  `{"query":"   ","mode":"catalog","page":1}`,
@@ -59,7 +65,7 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 			t.Fatalf("%s response = %d %+v", name, resp.StatusCode, envelope)
 		}
 	}
-	if calls != 1 {
+	if calls != 2 {
 		t.Fatalf("invalid search dispatched handler calls=%d", calls)
 	}
 }

@@ -67,3 +67,34 @@ button,
 input {
   font: inherit;
 }
+
+/* Implements DESIGN-001 SidebarComponent desktop collapse animation with delayed visibility hiding. */
+@media (min-width: 640px) {
+  .sidebar-animated-content {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+    transition:
+      opacity 150ms ease-out 200ms,
+      transform 150ms ease-out 200ms,
+      visibility 0s linear 200ms;
+  }
+
+  [data-collapsed="true"] .sidebar-animated-content {
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-0.5rem);
+    transition:
+      opacity 0s linear,
+      transform 0s linear,
+      visibility 0s linear;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-animated-content {
+    transition: none;
+  }
+}

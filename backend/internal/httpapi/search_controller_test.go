@@ -144,7 +144,7 @@ func (c *composedSearchGateCache) GetSearchResponse(_ context.Context, req searc
 	if !ok {
 		return search.SearchResponse{}, false, nil
 	}
-	cached.Cache = &search.CacheMetadata{Status: search.CacheStatusHit, Namespace: "search", SchemaVersion: "search-response-v1", TTLSeconds: 300}
+	cached.Cache = &search.CacheMetadata{Status: search.CacheStatusHit, Namespace: "search", SchemaVersion: "search-response-v2", TTLSeconds: 300}
 	return cached, true, nil
 }
 
@@ -158,7 +158,7 @@ func (c *composedSearchGateCache) SetSearchResponse(_ context.Context, req searc
 }
 
 func (c *composedSearchGateCache) SearchResponseCacheMetadata(search.SearchRequest, search.CacheStatus) *search.CacheMetadata {
-	return &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v1", TTLSeconds: 300}
+	return &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v2", TTLSeconds: 300}
 }
 
 func composedSearchGateCacheKey(req search.SearchRequest) string {
@@ -553,7 +553,7 @@ func TestSearchControllerRealRouteSubstitutionDispatchesToSubstitutionService(t 
 	)
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).Routes()})
 	body := searchRequestBody(t, map[string]any{
-		"query":   "milk",
+		"query":   "",
 		"mode":    "substitution",
 		"page":    1,
 		"filters": []any{},
@@ -580,6 +580,14 @@ func TestSearchControllerRealRouteSubstitutionDispatchesToSubstitutionService(t 
 	metadata := envelope.Data["similarityMetadata"].([]any)
 	if len(metadata) != 1 || metadata[0].(map[string]any)["itemId"] != targetID.String() || metadata[0].(map[string]any)["tier"] != "excellent" {
 		t.Fatalf("similarity metadata = %+v", metadata)
+	}
+	summary := envelope.Data["sourceSummary"].(map[string]any)
+	if summary["totalGrams"].(float64) != 0 || summary["totalMilliliters"].(float64) != 100 {
+		t.Fatalf("source summary amounts = %+v", summary)
+	}
+	macros := summary["macros"].(map[string]any)
+	if macros["protein"].(float64) != 3 || macros["carbohydrates"].(float64) != 5 || macros["fat"].(float64) != 1 {
+		t.Fatalf("source summary macros = %+v", summary)
 	}
 }
 
@@ -672,7 +680,7 @@ func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing
 		t.Fatalf("catalog results were not repository-to-route sorted: %+v", items)
 	}
 	cacheData := envelope.Data["cache"].(map[string]any)
-	if cacheData["status"] != "miss" || cacheData["namespace"] != "search" || cacheData["schemaVersion"] != "search-response-v1" || cacheData["ttlSeconds"] != float64(300) {
+	if cacheData["status"] != "miss" || cacheData["namespace"] != "search" || cacheData["schemaVersion"] != "search-response-v2" || cacheData["ttlSeconds"] != float64(300) {
 		t.Fatalf("cache miss metadata = %+v", cacheData)
 	}
 
@@ -687,7 +695,7 @@ func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing
 		t.Fatalf("hit response=%d repo=%d cache=%+v history calls=%d envelope=%+v", resp.StatusCode, repo.searches, cache, history.calls, envelope)
 	}
 	cacheData = envelope.Data["cache"].(map[string]any)
-	if cacheData["status"] != "hit" || cacheData["schemaVersion"] != "search-response-v1" {
+	if cacheData["status"] != "hit" || cacheData["schemaVersion"] != "search-response-v2" {
 		t.Fatalf("cache hit metadata = %+v", cacheData)
 	}
 

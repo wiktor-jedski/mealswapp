@@ -3,28 +3,11 @@ import type {
 	SearchFilter,
 	SearchMode,
 	SearchRequest,
-	SubstitutionInput
+	SubstitutionInput,
+	FoodObject
 } from "../api/generated";
 
 // Implements DESIGN-001 SearchView typed search state, mode transitions, and SearchRequest construction.
-
-/**
- * Macro display toggle keys shared by the search state and the SettingsPanel.
- *
- * @remarks Implements DESIGN-001 SearchView SettingsPanel macro toggle state.
- */
-export type MacroToggleKey = "protein" | "carbohydrates" | "fat";
-
-/**
- * Enabled-macro flags shared between search state and the SettingsPanel.
- *
- * @remarks Implements DESIGN-001 SearchView SettingsPanel macro toggle state.
- */
-export interface EnabledMacros {
-	protein: boolean;
-	carbohydrates: boolean;
-	fat: boolean;
-}
 
 /**
  * Typed SPA search state backing the SearchView.
@@ -34,33 +17,35 @@ export interface EnabledMacros {
 export interface SearchState {
 	mode: SearchMode;
 	query: string;
+	submittedQuery: string;
+	searchSubmitted: boolean;
 	filters: SearchFilter[];
 	page: number;
 	substitutionInputs: SubstitutionInput[];
+	substitutionInputLabels: Record<string, string>;
+	substitutionInputItems: Record<string, FoodObject>;
 	dailyDietId: string | undefined;
-	enabledMacros: EnabledMacros;
 	loading: boolean;
 	error: string | null;
 }
 
 /**
- * Default Catalog-mode search state with all macro toggles enabled.
+ * Default Catalog-mode search state.
  *
- * @remarks Implements DESIGN-001 SearchView startup initialization (mode = "catalog" and all macro toggles enabled).
+ * @remarks Implements DESIGN-001 SearchView startup initialization (mode = "catalog").
  */
 export function createInitialSearchState(): SearchState {
 	return {
 		mode: "catalog",
 		query: "",
+		submittedQuery: "",
+		searchSubmitted: false,
 		filters: [],
 		page: 1,
 		substitutionInputs: [],
+		substitutionInputLabels: {},
+		substitutionInputItems: {},
 		dailyDietId: undefined,
-		enabledMacros: {
-			protein: true,
-			carbohydrates: true,
-			fat: true
-		},
 		loading: false,
 		error: null
 	};
@@ -83,7 +68,11 @@ export function setMode(mode: SearchMode): void {
 		...state,
 		mode,
 		page: 1,
+		submittedQuery: "",
 		substitutionInputs: mode === "substitution" ? state.substitutionInputs : [],
+		substitutionInputLabels: mode === "substitution" ? state.substitutionInputLabels : {},
+		substitutionInputItems: mode === "substitution" ? state.substitutionInputItems : {},
+		searchSubmitted: false,
 		dailyDietId: mode === "daily_diet_alternative" ? state.dailyDietId : undefined
 	}));
 }
@@ -97,6 +86,35 @@ export function setQuery(query: string): void {
 	searchStore.update((state) => ({
 		...state,
 		query,
+		page: 1
+	}));
+}
+
+/**
+ * Commits the current or provided free-text query for server-side result loading.
+ *
+ * @remarks Implements DESIGN-001 SearchView committed Catalog search execution.
+ */
+export function submitSearch(query?: string): void {
+	searchStore.update((state) => ({
+		...state,
+		query: query ?? state.query,
+		submittedQuery: query ?? state.query,
+		searchSubmitted: (query ?? state.query).trim().length > 0,
+		page: 1
+	}));
+}
+
+/**
+ * Commits the current Substitution Input list for server-side substitution result loading.
+ *
+ * @remarks Implements DESIGN-001 SearchView explicit two-step Substitution Search execution.
+ */
+export function requestSubstitutionSearch(): void {
+	searchStore.update((state) => ({
+		...state,
+		submittedQuery: "",
+		searchSubmitted: state.mode === "substitution" && state.substitutionInputs.length > 0,
 		page: 1
 	}));
 }
@@ -157,12 +175,45 @@ export function setPage(page: number): void {
  *
  * @remarks Implements DESIGN-001 SearchView Substitution Input composition.
  */
-export function addSubstitutionInput(input: SubstitutionInput): void {
+export function addSubstitutionInput(input: SubstitutionInput, label?: string, item?: FoodObject): void {
 	searchStore.update((state) => ({
 		...state,
 		substitutionInputs: mergeSubstitutionInput(state.substitutionInputs, input),
+		substitutionInputLabels: {
+			...state.substitutionInputLabels,
+			[input.foodObjectId]: item?.name ?? label ?? state.substitutionInputLabels[input.foodObjectId] ?? input.foodObjectId
+		},
+		substitutionInputItems: {
+			...state.substitutionInputItems,
+			...(item ? { [input.foodObjectId]: item } : {})
+		},
+		searchSubmitted: false,
 		page: 1
 	}));
+}
+
+/**
+ * Stores full FoodObject display data for an existing Substitution Input without changing list order.
+ *
+ * @remarks Implements DESIGN-001 SearchView selected Substitution Input hydration.
+ */
+export function setSubstitutionInputItem(item: FoodObject): void {
+	searchStore.update((state) => {
+		if (!state.substitutionInputs.some((input) => input.foodObjectId === item.id)) {
+			return state;
+		}
+		return {
+			...state,
+			substitutionInputLabels: {
+				...state.substitutionInputLabels,
+				[item.id]: item.name
+			},
+			substitutionInputItems: {
+				...state.substitutionInputItems,
+				[item.id]: item
+			}
+		};
+	});
 }
 
 /**
@@ -171,13 +222,20 @@ export function addSubstitutionInput(input: SubstitutionInput): void {
  * @remarks Implements DESIGN-001 SearchView Substitution Input composition.
  */
 export function removeSubstitutionInput(foodObjectId: string): void {
-	searchStore.update((state) => ({
-		...state,
-		substitutionInputs: state.substitutionInputs.filter(
+	searchStore.update((state) => {
+		const substitutionInputs = state.substitutionInputs.filter(
 			(existing) => existing.foodObjectId !== foodObjectId
-		),
-		page: 1
-	}));
+		);
+		return {
+			...state,
+			substitutionInputs,
+			filters: substitutionInputs.length === 0 ? [] : state.filters,
+			substitutionInputLabels: omitKey(state.substitutionInputLabels, foodObjectId),
+			substitutionInputItems: omitKey(state.substitutionInputItems, foodObjectId),
+			searchSubmitted: false,
+			page: 1
+		};
+	});
 }
 
 /**
@@ -196,6 +254,7 @@ export function updateSubstitutionInput(
 				? { ...existing, ...patch }
 				: existing
 		),
+		searchSubmitted: false,
 		page: 1
 	}));
 }
@@ -210,21 +269,6 @@ export function setDailyDietId(dailyDietId: string | undefined): void {
 		...state,
 		dailyDietId,
 		page: 1
-	}));
-}
-
-/**
- * Toggles one macro display flag.
- *
- * @remarks Implements DESIGN-001 SearchView SettingsPanel macro toggle handling.
- */
-export function toggleMacro(macro: MacroToggleKey): void {
-	searchStore.update((state) => ({
-		...state,
-		enabledMacros: {
-			...state.enabledMacros,
-			[macro]: !state.enabledMacros[macro]
-		}
 	}));
 }
 
@@ -333,6 +377,11 @@ function mergeSubstitutionInput(
 		return [...inputs, input];
 	}
 	return inputs.map((item) => (item.foodObjectId === input.foodObjectId ? input : item));
+}
+
+function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+	const { [key]: _removed, ...rest } = record;
+	return rest;
 }
 
 function compareFilter(a: SearchFilter, b: SearchFilter): number {

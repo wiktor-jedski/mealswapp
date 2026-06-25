@@ -45,15 +45,15 @@ func ValidateSearchRequestBody(body map[string]any) error {
 	if !ok {
 		return errors.New("query is required")
 	}
-	if _, err := security.NormalizeInput(security.InputFieldSearchQuery, query); err != nil {
-		return errors.New("query is invalid")
-	}
 	mode, ok := body["mode"].(string)
 	if !ok {
 		return errors.New("mode is required")
 	}
 	if _, err := security.NormalizeInput(security.InputFieldSearchMode, mode); err != nil {
 		return errors.New("mode is invalid")
+	}
+	if err := validateSearchQueryForMode(mode, query); err != nil {
+		return err
 	}
 	if err := validateSearchPageValue(body["page"]); err != nil {
 		return err
@@ -109,14 +109,14 @@ func ParseValidatedSearchRequestBody(body map[string]any) (search.SearchRequest,
 // searchRequestFromValidatedDTO maps the typed request DTO into the search contract.
 // Implements DESIGN-002 QueryParser and DESIGN-010 RequestValidator.
 func searchRequestFromValidatedDTO(dto validatedSearchRequestBodyDTO) (search.SearchRequest, error) {
-	if strings.TrimSpace(dto.Query) == "" {
-		return search.SearchRequest{}, errors.New("query is required")
-	}
 	if strings.TrimSpace(dto.Mode) == "" {
 		return search.SearchRequest{}, errors.New("mode is required")
 	}
 	if dto.Page == nil {
 		return search.SearchRequest{}, errors.New("page is required")
+	}
+	if err := validateSearchQueryForMode(dto.Mode, dto.Query); err != nil {
+		return search.SearchRequest{}, err
 	}
 	if err := validateSearchModeDTOShape(dto); err != nil {
 		return search.SearchRequest{}, err
@@ -144,6 +144,18 @@ func searchRequestFromValidatedDTO(dto validatedSearchRequestBodyDTO) (search.Se
 	}
 	req.SubstitutionInputs = inputs
 	return req, nil
+}
+
+// validateSearchQueryForMode applies mode-specific query requirements.
+// Implements DESIGN-010 RequestValidator and DESIGN-002 QueryParser.
+func validateSearchQueryForMode(mode string, query string) error {
+	if strings.TrimSpace(query) == "" && search.SearchMode(mode) == search.SearchModeSubstitution {
+		return nil
+	}
+	if _, err := security.NormalizeInput(security.InputFieldSearchQuery, query); err != nil {
+		return errors.New("query is invalid")
+	}
+	return nil
 }
 
 // validateSearchModeShape validates that optional body fields match the requested search mode.

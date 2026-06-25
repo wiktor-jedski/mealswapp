@@ -291,6 +291,15 @@ export interface MacroProfile {
 	fat: number;
 }
 
+// Implements DESIGN-002 SearchController frontend substitution source summary contract.
+/** Macro and amount totals for the user's selected substitution input list. */
+export interface SourceSummary {
+	macros: MacroProfile;
+	calories: number;
+	totalGrams: number;
+	totalMilliliters: number;
+}
+
 // Implements DESIGN-002 SearchController frontend food-object result contract.
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
@@ -304,6 +313,10 @@ export interface FoodObject {
 	macroBasis: "100g" | "100ml";
 	calories: number;
 }
+
+// Implements DESIGN-002 SearchController frontend food-object detail contract.
+/** Successful food-object detail response envelope. */
+export type FoodObjectEnvelope = Envelope<FoodObject>;
 
 // Implements DESIGN-002 SearchController frontend similarity metadata contract.
 /** User-facing nutritional similarity tier. */
@@ -344,6 +357,7 @@ export interface SearchResponse extends Record<string, unknown> {
 	page: number;
 	similarityScores: number[];
 	similarityMetadata: SimilarityMetadata[];
+	sourceSummary?: SourceSummary;
 	warnings: string[];
 	cache?: CacheMetadata;
 }

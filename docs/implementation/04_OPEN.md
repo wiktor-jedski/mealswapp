@@ -161,6 +161,7 @@ No unresolved Phase 03 code review findings remain at this time.
 
 - Resolved by project-owner decision: Task 138 extends each search-result item with server-derived classification summaries (`id`, `name`, and `kind`), an explicit primary Food Category, protein/carbohydrate/fat macros with a `100g` or `100ml` basis, and calories. OpenAPI and generated frontend types must expose these fields before Task 146 implements result cards and category placeholders.
 - Resolved by project-owner decision: SW-REQ-006 multi-meal Daily Diet aggregation moves to Phase 07 alongside the saved-diet model and optimization worker. Phase 05 continues to expose the designed Daily Diet Alternative request/rejection flow but does not claim SW-REQ-006 compliance.
+- Step B UI iteration adds `GET /api/v1/food-objects/{id}` as a small UX support endpoint so autocomplete-selected Substitution Inputs can hydrate into the same rich FoodObject card view as Catalog-added items. The endpoint reuses the existing FoodObject DTO/OpenAPI schema and does not change autocomplete ranking or substitution-search behavior.
 
 ### Testing coverage deviations
 

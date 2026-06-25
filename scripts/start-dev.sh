@@ -24,6 +24,18 @@ done
 
 bash "$ROOT_DIR/scripts/start-services.sh"
 
+echo "Applying backend migrations..."
+(
+    cd "$ROOT_DIR/backend"
+    go run ./cmd/migrate up
+)
+
+echo "Seeding development data..."
+(
+    cd "$ROOT_DIR/backend"
+    go run ./cmd/seed
+)
+
 echo "Starting backend at http://localhost:${MEALSWAPP_HTTP_PORT:-8080}..."
 (
     cd "$ROOT_DIR/backend"

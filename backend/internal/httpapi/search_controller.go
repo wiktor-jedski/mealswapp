@@ -48,6 +48,7 @@ type searchResponseDTO struct {
 	Page               int                     `json:"page"`
 	SimilarityScores   []float64               `json:"similarityScores"`
 	SimilarityMetadata []similarityMetadataDTO `json:"similarityMetadata"`
+	SourceSummary      *sourceSummaryDTO       `json:"sourceSummary,omitempty"`
 	Warnings           []string                `json:"warnings"`
 	Cache              *searchCacheMetadataDTO `json:"cache,omitempty"`
 }
@@ -87,6 +88,15 @@ type macroProfileDTO struct {
 	Protein       float64 `json:"protein"`
 	Carbohydrates float64 `json:"carbohydrates"`
 	Fat           float64 `json:"fat"`
+}
+
+// sourceSummaryDTO reports the user's substitution input totals without cross-basis mass/volume assumptions.
+// Implements DESIGN-002 SearchController.
+type sourceSummaryDTO struct {
+	Macros           macroProfileDTO `json:"macros"`
+	Calories         float64         `json:"calories"`
+	TotalGrams       float64         `json:"totalGrams"`
+	TotalMilliliters float64         `json:"totalMilliliters"`
 }
 
 // autocompleteItemDTO is one ranked autocomplete suggestion.
@@ -253,6 +263,7 @@ func searchResponseData(response search.SearchResponse) searchResponseDTO {
 		Page:               response.Page,
 		SimilarityScores:   response.SimilarityScores,
 		SimilarityMetadata: similarityMetadataData(response.SimilarityMetadata),
+		SourceSummary:      sourceSummaryData(response.SourceSummary),
 		Warnings:           response.Warnings,
 		Cache:              searchCacheData(response.Cache),
 	}
@@ -282,19 +293,25 @@ func autocompleteItemsData(items []search.RankedAutocomplete) []autocompleteItem
 func foodItemsData(items []repository.FoodItemEntity) []foodObjectDTO {
 	data := make([]foodObjectDTO, 0, len(items))
 	for _, item := range items {
-		data = append(data, foodObjectDTO{
-			ID:                  item.ID.String(),
-			Name:                item.Name,
-			PhysicalState:       string(item.PhysicalState),
-			ImageURL:            item.ImageURL,
-			Classifications:     classificationSummariesData(item.FoodCategories, item.CulinaryRoles),
-			PrimaryFoodCategory: primaryFoodCategoryData(item.FoodCategories),
-			Macros:              macroProfileData(item.MacrosPer100),
-			MacroBasis:          macroBasisForState(item.PhysicalState),
-			Calories:            search.CalculateCalories(item.MacrosPer100),
-		})
+		data = append(data, foodItemData(item))
 	}
 	return data
+}
+
+// foodItemData maps one repository food entity to the public FoodObject DTO.
+// Implements DESIGN-002 SearchController.
+func foodItemData(item repository.FoodItemEntity) foodObjectDTO {
+	return foodObjectDTO{
+		ID:                  item.ID.String(),
+		Name:                item.Name,
+		PhysicalState:       string(item.PhysicalState),
+		ImageURL:            item.ImageURL,
+		Classifications:     classificationSummariesData(item.FoodCategories, item.CulinaryRoles),
+		PrimaryFoodCategory: primaryFoodCategoryData(item.FoodCategories),
+		Macros:              macroProfileData(item.MacrosPer100),
+		MacroBasis:          macroBasisForState(item.PhysicalState),
+		Calories:            search.CalculateCalories(item.MacrosPer100),
+	}
 }
 
 // classificationSummariesData maps food categories and culinary roles to public classification summaries.
@@ -324,6 +341,20 @@ func primaryFoodCategoryData(foodCategories []repository.ClassificationEntity) *
 // Implements DESIGN-002 SearchController.
 func macroProfileData(macros repository.MacroValues) macroProfileDTO {
 	return macroProfileDTO{Protein: macros.Protein, Carbohydrates: macros.Carbohydrates, Fat: macros.Fat}
+}
+
+// sourceSummaryData maps substitution input totals to the public response DTO.
+// Implements DESIGN-002 SearchController.
+func sourceSummaryData(summary *search.SubstitutionSourceSummary) *sourceSummaryDTO {
+	if summary == nil {
+		return nil
+	}
+	return &sourceSummaryDTO{
+		Macros:           macroProfileData(summary.Macros),
+		Calories:         summary.Calories,
+		TotalGrams:       summary.TotalGrams,
+		TotalMilliliters: summary.TotalMilliliters,
+	}
 }
 
 // macroBasisForState derives the 100g/100ml macro basis from physical state.

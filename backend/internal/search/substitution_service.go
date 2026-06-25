@@ -91,6 +91,7 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 	if err != nil {
 		return SearchResponse{}, err
 	}
+	candidates = excludeSubstitutionSources(candidates, req.SubstitutionInputs)
 
 	calculation, similarityWarnings, err := s.compareMacrosWithCache(ctx, req.SubstitutionInputs, ComparisonRequest{
 		SourceMacros:        source.macros,
@@ -115,6 +116,7 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 		Page:               req.Page,
 		SimilarityScores:   ranked.scores,
 		SimilarityMetadata: ranked.metadata,
+		SourceSummary:      source.summary,
 		Warnings:           warnings,
 	}, nil
 }
@@ -147,13 +149,16 @@ func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs
 // substitutionSource carries the combined source Macro Profile for Substitution Search.
 // Implements DESIGN-002 SearchController.
 type substitutionSource struct {
-	macros repository.MacroValues
+	macros  repository.MacroValues
+	summary *SubstitutionSourceSummary
 }
 
 // combineSourceMacros combines one or more Substitution Inputs into one Macro Profile.
 // Implements DESIGN-002 SearchController.
 func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []SubstitutionInput) (substitutionSource, []repository.ClassificationEntity, []string, *SearchRejection) {
 	total := repository.MacroValues{}
+	totalGrams := 0.0
+	totalMilliliters := 0.0
 	var firstRoles []repository.ClassificationEntity
 	warnings := []string{}
 	for index, input := range inputs {
@@ -165,7 +170,7 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 			warnings = append(warnings, fmt.Sprintf("skipped source %s load_failed", input.FoodObjectID))
 			continue
 		}
-		baseQuantity, _, err := sourceBaseQuantity(input, food)
+		baseQuantity, baseUnit, err := sourceBaseQuantity(input, food)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("skipped source %s conversion_failed", input.FoodObjectID))
 			continue
@@ -174,6 +179,11 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 		total.Protein += scaled.Protein
 		total.Carbohydrates += scaled.Carbohydrates
 		total.Fat += scaled.Fat
+		if baseUnit == "ml" {
+			totalMilliliters += baseQuantity
+		} else {
+			totalGrams += baseQuantity
+		}
 		if index == 0 {
 			firstRoles = food.CulinaryRoles
 		}
@@ -181,7 +191,15 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 	if _, err := NormalizeMacroVector(total); err != nil {
 		return substitutionSource{}, nil, warnings, &SearchRejection{Code: "rejected_search", Message: "substitution inputs do not produce a usable macro profile", Field: "substitutionInputs"}
 	}
-	return substitutionSource{macros: total}, firstRoles, warnings, nil
+	return substitutionSource{
+		macros: total,
+		summary: &SubstitutionSourceSummary{
+			Macros:           total,
+			Calories:         CalculateCalories(total),
+			TotalGrams:       totalGrams,
+			TotalMilliliters: totalMilliliters,
+		},
+	}, firstRoles, warnings, nil
 }
 
 // sourceBaseQuantity converts an input quantity into the food item's macro storage basis.
@@ -196,6 +214,23 @@ func sourceBaseQuantity(input SubstitutionInput, food repository.FoodItemEntity)
 	}
 	quantity, err := repository.ConvertUnit(input.Quantity, input.Unit, baseUnit)
 	return quantity, baseUnit, err
+}
+
+// excludeSubstitutionSources removes input Food Objects from substitute candidates.
+// Implements DESIGN-002 SearchController.
+func excludeSubstitutionSources(items []repository.FoodItemEntity, inputs []SubstitutionInput) []repository.FoodItemEntity {
+	sourceIDs := make(map[uuid.UUID]struct{}, len(inputs))
+	for _, input := range inputs {
+		sourceIDs[input.FoodObjectID] = struct{}{}
+	}
+	filtered := make([]repository.FoodItemEntity, 0, len(items))
+	for _, item := range items {
+		if _, isSource := sourceIDs[item.ID]; isSource {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
 }
 
 // substitutionTargets adapts repository food items into DESIGN-003 comparison targets.

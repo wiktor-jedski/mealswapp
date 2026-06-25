@@ -62,21 +62,29 @@ async function stubSearch(page: Page): Promise<void> {
 }
 
 // Implements DESIGN-001 ResultsGrid 10-item page cap and required card data (scaffold for Task 151).
-test("renders at most 10 result cards per page with name, macros, and similarity", async ({ page }) => {
+test("renders at most 10 Catalog result cards per page without match percentages", async ({ page }) => {
   await stubSearch(page);
   await page.goto("/");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
 
   const cards = page.locator("[data-result-card]");
   await expect(cards).toHaveCount(10);
   await expect(page.locator("[data-result-name]").first()).toBeVisible();
   await expect(page.locator("[data-result-macros]").first()).toBeVisible();
-  await expect(page.locator("[data-result-similarity]").first()).toBeVisible();
+  await expect(page.locator("[data-result-calories]").first()).toContainText("Calories");
+  await expect(page.locator("[data-result-macro-basis]").first()).toHaveText("values per 100 g");
+  await expect(page.locator("[data-result-categories]").first()).toBeVisible();
+  await expect(page.locator("[data-result-similarity]")).toHaveCount(0);
+  await expect(page.getByText(/% match/)).toHaveCount(0);
 });
 
 // Implements DESIGN-001 ResultsGrid pagination forward/backward with disabled boundaries (scaffold for Task 151).
 test("paginates forward and backward with disabled boundaries", async ({ page }) => {
   await stubSearch(page);
   await page.goto("/");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
 
   await expect(page.locator("[data-results-prev]")).toBeDisabled();
   await expect(page.locator("[data-results-next]")).toBeEnabled();
@@ -92,6 +100,8 @@ test("paginates forward and backward with disabled boundaries", async ({ page })
 test("shows a category placeholder for items without an image", async ({ page }) => {
   await stubSearch(page);
   await page.goto("/");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
   await expect(page.locator("[data-result-placeholder]").first()).toBeVisible();
 });
 
@@ -116,5 +126,7 @@ test("shows the empty state when the search returns zero results", async ({ page
     });
   });
   await page.goto("/");
+  await page.getByLabel("Food search").fill("missing");
+  await page.getByLabel("Food search").press("Enter");
   await expect(page.locator("[data-results-empty]")).toHaveText("No results found.");
 });

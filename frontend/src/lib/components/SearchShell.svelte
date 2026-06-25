@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { themePreference, setThemePreference } from "../stores/theme";
   import {
     searchStore,
     setQuery,
+    submitSearch,
     addSubstitutionInput,
-    addFilter,
-    removeFilter
+    setSubstitutionInputItem,
+    updateSubstitutionInput
   } from "../stores/search";
+  import { sidebarStore } from "../stores/sidebar";
   import type {
-    SearchFilterKind,
+    SearchMode,
     SearchRejection,
     RankedAutocomplete
   } from "../api/generated";
@@ -17,156 +18,109 @@
   import AutocompleteDropdown from "./AutocompleteDropdown.svelte";
   import SubstitutionInputs from "./SubstitutionInputs.svelte";
   import DailyDietControls from "./DailyDietControls.svelte";
-  import SettingsPanel from "./SettingsPanel.svelte";
   import SearchResults from "./SearchResults.svelte";
   import OfflineBanner from "./OfflineBanner.svelte";
+  import { fetchFoodObject } from "../api/search-client";
+  import { preferencesStore } from "../stores/preferences";
+  import { displayUnitForBasis } from "../units";
 
-  // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, filters, settings, results, and offline status.
+  // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, results, and offline status.
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
   let rejection: SearchRejection | null = null;
 
-  /** Draft state for the minimal filter composer wiring the search store filter capability. */
-  let draftFilterId = "";
-  let draftFilterKind: SearchFilterKind = "food_category";
-  let draftFilterInclude = true;
+  /** True while an explicit submitted search request is fetching results. */
+  let searchInFlight = false;
 
-  /** Filter kind options mirroring the generated `SearchFilterKind` union. */
-  const filterKinds: SearchFilterKind[] = [
-    "food_category",
-    "culinary_role",
-    "physical_state",
-    "allergen",
-    "dietary_preset"
-  ];
+  /** Mode-specific input guidance for the primary SearchView combobox. */
+  const searchPlaceholders: Record<SearchMode, string> = {
+    catalog: "Search foods, meals, or ingredients…",
+    substitution: "Search a food to add as a substitution target…",
+    daily_diet_alternative: "Search within a saved daily diet or paste its ID…"
+  };
+
+  /** Active mode mirrored from the store for shell-level conditional rendering and focus keys. */
+  $: activeMode = $searchStore.mode;
 
   /**
    * Handles autocomplete selection: in Substitution mode adds a Substitution Input from the
-   * suggestion's food object id; otherwise sets the query to the suggestion label so results update.
+   * suggestion's food object id; otherwise commits the selected suggestion label as the search.
    */
   function onAutocompleteSelect(item: RankedAutocomplete): void {
-    if ($searchStore.mode === "substitution") {
-      addSubstitutionInput({ foodObjectId: item.itemId, quantity: 100, unit: "g" });
+    if (activeMode === "substitution") {
+      addSubstitutionInput(
+        {
+          foodObjectId: item.itemId,
+          quantity: 100,
+          unit: $preferencesStore.unitSystem === "imperial" ? "oz" : "g"
+        },
+        item.label
+      );
+      void hydrateSubstitutionInput(item.itemId);
+      setQuery("");
     } else {
       setQuery(item.label);
+      submitSearch(item.label);
     }
   }
 
-  /** Adds the draft filter to the search store, resetting the id field. Empty ids are ignored. */
-  function addFilterInput(): void {
-    const trimmed = draftFilterId.trim();
-    if (trimmed.length === 0) {
-      return;
+  /**
+   * Hydrates autocomplete-selected Substitution Inputs with rich FoodObject display data.
+   * Failures are intentionally silent because the fallback label card remains usable.
+   */
+  async function hydrateSubstitutionInput(foodObjectId: string): Promise<void> {
+    try {
+      const item = await fetchFoodObject(foodObjectId, new AbortController().signal);
+      setSubstitutionInputItem(item);
+      updateSubstitutionInput(foodObjectId, {
+        unit: displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)
+      });
+    } catch {
+      // Implements DESIGN-001 SearchView resilient selected-item hydration fallback.
     }
-    addFilter({ filterId: trimmed, kind: draftFilterKind, include: draftFilterInclude });
-    draftFilterId = "";
+  }
+
+  /** Commits typed text only for result-searching modes; Substitution uses autocomplete as an item picker. */
+  function onAutocompleteSubmit(query: string): void {
+    if (activeMode !== "substitution") {
+      submitSearch(query);
+    }
   }
 </script>
 
-<!-- Implements DESIGN-001 SearchView, SidebarComponent, SettingsPanel, and DESIGN-016 LayoutGrid (12-column desktop, single-column below 640px). -->
+<!-- Implements DESIGN-001 SearchView, SidebarComponent, and DESIGN-016 LayoutGrid (viewport-left sidebar, centered content below 1280px). -->
 <main class="min-h-screen">
-  <!-- Implements DESIGN-016 LayoutGrid: 12-column grid above 640px, single column below 640px, max-width 1280px. -->
-  <section class="mx-auto grid min-h-screen max-w-7xl gap-6 px-4 py-6 sm:grid-cols-12 sm:px-6">
-    <!-- Implements DESIGN-001 SidebarComponent placed in the left 3-column grid cell; Task 147 renders the full activity sidebar. -->
-    <aside class="sm:col-span-3">
+  <!-- Implements DESIGN-016 LayoutGrid: full-width grid above 640px so SidebarComponent sits on the viewport's far-left edge. -->
+  <section class="grid min-h-screen gap-6 px-4 py-6 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none sm:px-0 sm:py-0 {$sidebarStore.collapsed ? 'sm:grid-cols-[3.5rem_minmax(0,1fr)]' : 'sm:grid-cols-[15rem_minmax(0,1fr)]'}">
+    <!-- Implements DESIGN-001 SidebarComponent placed in the viewport-left grid column. -->
+    <aside>
       <SidebarComponent />
     </aside>
 
-    <div class="flex flex-col gap-5 sm:col-span-9">
-      <header class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="font-data text-xs uppercase text-[var(--color-muted)]">Phase 05 Search</p>
-          <h2 class="mt-1 text-xl font-semibold">Search modes</h2>
-        </div>
-        <select
-          class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
-          value={$themePreference}
-          on:change={(event) => setThemePreference(event.currentTarget.value as "system" | "light" | "dark")}
-          aria-label="Theme preference"
-        >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </header>
-
-      <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → filters → macro controls → results → offline status. -->
+    <div class="flex w-full max-w-5xl flex-col gap-5 sm:mx-auto sm:px-6 sm:py-6">
+      <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
       <SearchModes />
 
       <AutocompleteDropdown
         query={$searchStore.query}
+        placeholder={searchPlaceholders[activeMode]}
+        focusKey={activeMode}
+        searching={searchInFlight}
         onQueryInput={setQuery}
+        onSubmit={onAutocompleteSubmit}
         onSelect={onAutocompleteSelect}
       />
 
-      {#if $searchStore.mode === "substitution"}
+      {#if activeMode === "substitution"}
         <SubstitutionInputs />
-      {:else if $searchStore.mode === "daily_diet_alternative"}
+      {:else if activeMode === "daily_diet_alternative"}
         <DailyDietControls {rejection} />
       {/if}
 
-      <!-- Implements DESIGN-001 SearchView filter composer wiring the search store filter state. -->
-      <section class="grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-label="Search filters">
-        <div class="flex flex-wrap items-center gap-2">
-          <label class="sr-only" for="filter-id">Filter id</label>
-          <input
-            id="filter-id"
-            class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            type="text"
-            placeholder="Filter id"
-            bind:value={draftFilterId}
-            on:keydown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addFilterInput();
-              }
-            }}
-          />
-          <label class="sr-only" for="filter-kind">Filter kind</label>
-          <select
-            id="filter-kind"
-            class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            bind:value={draftFilterKind}
-          >
-            {#each filterKinds as kind (kind)}
-              <option value={kind}>{kind}</option>
-            {/each}
-          </select>
-          <label class="flex items-center gap-1 text-sm" for="filter-include">
-            <input id="filter-include" type="checkbox" class="h-4 w-4" bind:checked={draftFilterInclude} />
-            Include
-          </label>
-          <button
-            type="button"
-            class="rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            on:click={addFilterInput}
-          >
-            Add filter
-          </button>
-        </div>
-
-        {#if $searchStore.filters.length > 0}
-          <ul class="grid gap-1" data-active-filters>
-            {#each $searchStore.filters as filter (filter.filterId)}
-              <li class="flex items-center justify-between rounded border border-[var(--color-border)] px-2 py-1 text-sm" data-filter-id={filter.filterId}>
-                <span>{filter.filterId} ({filter.kind}, {filter.include ? "include" : "exclude"})</span>
-                <button
-                  type="button"
-                  class="rounded border border-[var(--color-border)] px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                  on:click={() => removeFilter(filter.filterId)}
-                  data-filter-remove={filter.filterId}
-                >
-                  Remove
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </section>
-
-      <SettingsPanel />
-
-      <SearchResults onRejection={(r) => (rejection = r)} />
+      <SearchResults
+        onRejection={(r) => (rejection = r)}
+        onSearchInFlightChange={(searching) => (searchInFlight = searching)}
+      />
 
       <OfflineBanner />
     </div>

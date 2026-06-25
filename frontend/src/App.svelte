@@ -16,7 +16,7 @@
     }
   });
 
-  // Implements DESIGN-016 ThemeProvider, DESIGN-001 SettingsPanel persistence, and DESIGN-001 OfflineBanner lifecycle.
+  // Implements DESIGN-016 ThemeProvider, DESIGN-001 SidebarComponent unit preference persistence, and DESIGN-001 OfflineBanner lifecycle.
   $effect(() => {
     initPreferences();
     initTheme();

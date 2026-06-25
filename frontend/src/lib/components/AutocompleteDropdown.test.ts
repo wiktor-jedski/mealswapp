@@ -19,7 +19,7 @@ import {
 // only on demand. This deterministically proves no request fires before 150ms and exactly one
 // request fires for the final keystroke. Component structure (ARIA combobox/listbox, keyboard
 // handlers, ranked order, document-flow container, traceability) is verified via static-source
-// assertions on the Svelte source, mirroring the SettingsPanel/SubstitutionInputs test approach.
+// assertions on the Svelte source, mirroring the static component test approach.
 // `vite build` compiles the component, validating the Svelte source at build time.
 
 const source = readFileSync(join(import.meta.dir, "AutocompleteDropdown.svelte"), "utf8");
@@ -216,6 +216,64 @@ test("dispose cancels the pending debounce timer so no request fires", async () 
 	expect(calls.length).toBe(0);
 });
 
+// Implements DESIGN-001 AutocompleteDropdown reusable cancellation verification.
+test("cancel clears pending autocomplete work without disposing the controller", async () => {
+	const clock = new FakeClock();
+	const { fetch, calls } = makeFetchRecorder({ items: [] });
+	const controller = new AutocompleteController({
+		setTimeout: clock.setTimeout,
+		clearTimeout: clock.clearTimeout,
+		fetch
+	});
+
+	controller.input("app");
+	expect(clock.pendingCount).toBe(1);
+
+	controller.cancel();
+	expect(clock.pendingCount).toBe(0);
+
+	controller.input("apple");
+	await clock.fire();
+	expect(calls.length).toBe(1);
+	expect(calls[0]?.query).toBe("apple");
+
+	controller.dispose();
+});
+
+// Implements DESIGN-001 AutocompleteDropdown reusable cancellation abort verification.
+test("cancel aborts an in-flight autocomplete request", async () => {
+	const clock = new FakeClock();
+	let resolveFirst!: (value: AutocompleteResponse) => void;
+	const firstPromise = new Promise<AutocompleteResponse>((resolve) => {
+		resolveFirst = resolve;
+	});
+	const calls: Array<{ query: string; signal: AbortSignal }> = [];
+	const fetch = (query: string, signal: AbortSignal): Promise<AutocompleteResponse> => {
+		calls.push({ query, signal });
+		return firstPromise;
+	};
+	const received: RankedAutocomplete[][] = [];
+	const controller = new AutocompleteController({
+		setTimeout: clock.setTimeout,
+		clearTimeout: clock.clearTimeout,
+		fetch,
+		onResults: (items) => received.push(items)
+	});
+
+	controller.input("app");
+	await clock.fire();
+	expect(calls.length).toBe(1);
+
+	controller.cancel();
+	expect(calls[0]?.signal.aborted).toBe(true);
+
+	resolveFirst({ items: [makeItem("apple", "Apple", 1)] });
+	await Promise.resolve();
+	expect(received.length).toBe(0);
+
+	controller.dispose();
+});
+
 // Implements DESIGN-001 AutocompleteDropdown in-flight supersession verification.
 test("a new keystroke aborts an in-flight request and commits only the latest results", async () => {
 	const clock = new FakeClock();
@@ -356,6 +414,38 @@ test("declares combobox input, listbox container, option roles, aria-expanded, a
 	expect(source).toContain("aria-activedescendant");
 });
 
+// Implements DESIGN-001 AutocompleteDropdown typed-query submit verification.
+test("declares typed-query submission without requiring an active suggestion", () => {
+	expect(source).toContain("export let onSubmit");
+	expect(source).toContain("onSubmit(query)");
+	expect(source).toContain("query.trim().length > 0");
+	expect(source).toContain("activeIndex = -1");
+});
+
+// Implements DESIGN-001 SearchView mode-specific search guidance verification.
+test("declares a placeholder prop for mode-specific search guidance", () => {
+	expect(source).toContain('export let placeholder = "Search foods, meals, or ingredients…"');
+	expect(source).toContain("{placeholder}");
+});
+
+// Implements DESIGN-001 SearchView initial and mode-change search focus verification.
+test("declares a focus key that focuses the combobox on initial load and mode changes", () => {
+	expect(source).toContain("export let focusKey");
+	expect(source).toContain("focusSearchInput(focusKey, inputEl)");
+	expect(source).toContain("await tick()");
+	expect(source).toContain("element.focus()");
+});
+
+// Implements DESIGN-001 SearchView submitted-search spinner verification.
+test("declares an inline spinner for submitted result-search loading", () => {
+	expect(source).toContain("export let searching = false");
+	expect(source).toContain("{#if searching}");
+	expect(source).toContain("data-search-spinner");
+	expect(source).toContain('aria-label="Searching"');
+	expect(source).toContain("motion-safe:animate-spin");
+	expect(source).toContain("pr-10");
+});
+
 // Implements DESIGN-001 AutocompleteDropdown server-ranked display order in markup verification.
 test("renders items via #each in received order without client-side sorting", () => {
 	expect(source).toContain("{#each items as item, index (item.itemId)}");
@@ -364,32 +454,39 @@ test("renders items via #each in received order without client-side sorting", ()
 	expect(source).not.toContain(".toSorted(");
 });
 
-// Implements DESIGN-001 AutocompleteDropdown downward document-flow container verification.
-test("listbox container expands in document flow without absolute or floating positioning", () => {
-	expect(source).toContain('class="grid gap-1"');
-	expect(source).not.toContain("absolute");
-	expect(source).not.toContain("fixed");
+// Implements DESIGN-001 AutocompleteDropdown floating overlay verification.
+test("listbox floats over page content without pushing the results layout down", () => {
+	expect(source).toContain('class="relative grid gap-1"');
+	expect(source).toContain("absolute left-0 top-full");
+	expect(source).toContain("z-20");
+	expect(source).toContain("w-full");
+	expect(source).toContain("shadow-lg");
 	expect(source).not.toContain("float-right");
 	expect(source).not.toContain("float-left");
-	expect(source).not.toContain("z-");
 });
 
 // Implements DESIGN-001 AutocompleteDropdown keyboard navigation handlers verification.
-test("Tab, Shift+Tab, Enter, and Escape keydown handlers move focus, select, and dismiss", () => {
+test("Tab, ArrowUp, ArrowDown, Enter, and Escape keydown handlers move, select, and dismiss", () => {
 	expect(source).toContain("on:keydown={onInputKeydown}");
 	expect(source).toContain('case "Tab"');
+	expect(source).toContain('case "ArrowDown"');
+	expect(source).toContain('case "ArrowUp"');
 	expect(source).toContain("event.shiftKey ? -1 : 1");
 	expect(source).toContain('case "Enter"');
 	expect(source).toContain("selectActive()");
 	expect(source).toContain('case "Escape"');
 	expect(source).toContain("dismiss()");
 	expect(source).toContain("moveActive");
+	expect(source).toContain("moveActive(1, false)");
+	expect(source).toContain("moveActive(-1, false)");
 	expect(source).toContain("option?.focus()");
 });
 
 // Implements DESIGN-001 AutocompleteDropdown selection callback wiring verification.
 test("Enter and option click both invoke the onSelect prop with the active item", () => {
 	expect(source).toContain("export let onSelect: (item: RankedAutocomplete) => void");
+	expect(source).toContain("suppressedSelectedQuery = item.label");
+	expect(source).toContain("controller.cancel()");
 	expect(source).toContain("onSelect(item)");
 	expect(source).toContain("onOptionClick");
 });

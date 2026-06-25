@@ -1,14 +1,12 @@
 <script lang="ts">
-  import type { FoodObject, SimilarityMetadata } from "../api/generated";
+  import type { FoodObject, SimilarityMetadata, SourceSummary } from "../api/generated";
   import ResultCard from "./ResultCard.svelte";
+  import SourceSummaryCard from "./SourceSummaryCard.svelte";
 
   // Implements DESIGN-001 ResultsGrid container: stable card layout, pagination controls, image fallback, and similarity badges.
 
   /** Maximum number of result cards rendered per page (deterministic Phase 04 page size of 10). */
   const PAGE_SIZE = 10;
-
-  /** Number of skeleton placeholders shown while the first page loads with no previous results. */
-  const SKELETON_COUNT = 3;
 
   /** Search result items for the current page; the grid never renders more than PAGE_SIZE cards. */
   export let results: FoodObject[] = [];
@@ -19,11 +17,20 @@
   /** Parallel similarity score array used as a fallback when metadata is absent for an item. */
   export let similarityScores: number[] = [];
 
-  /** True while a search request is in flight; previous results stay visible when present. */
-  export let loading: boolean = false;
+  /** Whether similarity match badges should be shown for this search mode. */
+  export let showSimilarity: boolean = true;
+
+  /** Optional substitution source totals rendered before substitution results. */
+  export let sourceSummary: SourceSummary | null = null;
+
+  /** Optional Catalog action for adding a full result item to the Substitution Input list. */
+  export let onAddToSubstitution: ((item: FoodObject) => void) | null = null;
 
   /** User-facing error message; when non-null the grid renders the error state instead of results. */
   export let error: string | null = null;
+
+  /** True while the explicit submitted search request is in flight. */
+  export let loading: boolean = false;
 
   /** Total result count used to derive pagination boundaries. */
   export let totalCount: number = 0;
@@ -63,31 +70,23 @@
 >
   {#if error}
     <div class="text-sm text-[var(--color-accent)]" role="alert" data-results-error>{error}</div>
-  {:else if loading && pagedResults.length === 0}
-    <ul class="grid gap-3" data-results-skeletons>
-      {#each Array.from({ length: SKELETON_COUNT }) as _, index (index)}
-        <li
-          class="h-32 animate-pulse rounded border border-[var(--color-border)] bg-[var(--color-muted)]"
-          data-result-skeleton
-        ></li>
-      {/each}
-    </ul>
-  {:else if pagedResults.length === 0}
+  {:else if pagedResults.length === 0 && !loading}
     <p class="text-sm text-[var(--color-muted)]" data-results-empty>No results found.</p>
   {:else}
-    {#if loading}
-      <div class="text-sm text-[var(--color-muted)]" data-results-loading-overlay aria-live="polite">
-        Loading…
-      </div>
-    {/if}
-
     <ul class="grid gap-3" data-results-list>
+      {#if showSimilarity && sourceSummary}
+        <li>
+          <SourceSummaryCard {sourceSummary} />
+        </li>
+      {/if}
+
       {#each pagedResults as item, index (item.id)}
         <li>
           <ResultCard
             item={item}
-            similarity={findSimilarity(item.id)}
-            fallbackScore={similarityScores[index] ?? null}
+            similarity={showSimilarity ? findSimilarity(item.id) : null}
+            fallbackScore={showSimilarity ? similarityScores[index] ?? null : null}
+            {onAddToSubstitution}
           />
         </li>
       {/each}

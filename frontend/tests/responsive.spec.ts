@@ -45,6 +45,22 @@ async function stubApi(page: Page): Promise<void> {
   });
 }
 
+/** Sets the resolved document theme through the binary sidebar switch only when needed. */
+async function setResolvedTheme(page: Page, target: "light" | "dark"): Promise<void> {
+  const current = await page.locator("html").getAttribute("data-theme");
+  if (current !== target) {
+    const toggle = page.getByLabel("Theme preference");
+    const openedSidebar = !(await toggle.isVisible());
+    if (openedSidebar) {
+      await page.getByLabel("Open activity sidebar").click();
+    }
+    await toggle.click();
+    if (openedSidebar) {
+      await page.getByLabel("Close activity sidebar").click();
+    }
+  }
+}
+
 // Implements DESIGN-016 LayoutGrid no-horizontal-scroll above 320px verification.
 test("no horizontal scrollbar at a 320px viewport width", async ({ page }) => {
   await stubApi(page);
@@ -61,8 +77,8 @@ test("no horizontal scrollbar at a 320px viewport width", async ({ page }) => {
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.innerWidth);
 });
 
-// Implements DESIGN-016 LayoutGrid 12-column desktop grid with sidebar left of main content.
-test("desktop layout places the sidebar left of the main content in a 12-column grid", async ({ page }) => {
+// Implements DESIGN-016 LayoutGrid viewport-left desktop sidebar verification.
+test("desktop layout places the sidebar at the viewport's far-left edge", async ({ page }) => {
   await stubApi(page);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/");
@@ -74,15 +90,14 @@ test("desktop layout places the sidebar left of the main content in a 12-column 
   const mainBox = await main.boundingBox();
   expect(asideBox).not.toBeNull();
   expect(mainBox).not.toBeNull();
-  // Sidebar sits to the left of the main content on the same row.
+  // Sidebar is flush to the viewport's left edge and sits left of the main content.
+  expect(asideBox!.x).toBe(0);
   expect(asideBox!.x).toBeLessThan(mainBox!.x);
   expect(asideBox!.y).toBe(mainBox!.y);
 
-  // The sidebar spans 3 of 12 columns and the main content spans 9 (3 + 9 = 12).
-  const asideSpan = await aside.evaluate((el) => getComputedStyle(el).gridColumnEnd);
-  const mainSpan = await main.evaluate((el) => getComputedStyle(el).gridColumnEnd);
-  expect(asideSpan).toBe("span 3");
-  expect(mainSpan).toBe("span 9");
+  // The outer grid owns a fixed sidebar column and a flexible content column.
+  const gridTemplateColumns = await page.locator("main > section").evaluate((el) => getComputedStyle(el).gridTemplateColumns);
+  expect(gridTemplateColumns).toContain("240px");
 });
 
 // Implements DESIGN-016 LayoutGrid single-column mobile layout with sidebar stacked above main content.
@@ -125,7 +140,7 @@ test("light and dark design tokens match the documented style guide", async ({ p
   await stubApi(page);
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  await page.getByLabel("Theme preference").selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
   const lightTokens = await page.evaluate(() => ({
@@ -147,7 +162,7 @@ test("light and dark design tokens match the documented style guide", async ({ p
   expect(normalizeHex(lightTokens.accent)).toBe("#f97316");
   expect(normalizeHex(lightTokens.error)).toBe("#dc2626");
 
-  await page.getByLabel("Theme preference").selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
   const darkTokens = await page.evaluate(() => ({
@@ -175,27 +190,25 @@ test("captures desktop and mobile screenshots in light and dark themes", async (
   await stubApi(page);
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  const select = page.getByLabel("Theme preference");
-
   // Desktop light.
   await page.setViewportSize({ width: 1280, height: 720 });
-  await select.selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-desktop-light.png`, fullPage: true });
 
   // Desktop dark.
-  await select.selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-desktop-dark.png`, fullPage: true });
 
   // Mobile light.
   await page.setViewportSize({ width: 390, height: 844 });
-  await select.selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-mobile-light.png`, fullPage: true });
 
   // Mobile dark.
-  await select.selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-mobile-dark.png`, fullPage: true });
 

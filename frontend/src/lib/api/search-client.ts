@@ -7,6 +7,8 @@ import type {
 	AutocompleteEnvelope,
 	AutocompleteResponse,
 	Envelope,
+	FoodObject,
+	FoodObjectEnvelope,
 	SearchRequest,
 	SearchResponse,
 	SearchResponseEnvelope
@@ -22,6 +24,9 @@ const SEARCH_ENDPOINT = "/api/v1/search";
 
 /** Base path of the GET autocomplete endpoint served by ARCH-002 SearchController. */
 const AUTOCOMPLETE_ENDPOINT = "/api/v1/search/autocomplete";
+
+/** Base path of the GET food-object detail endpoint served by ARCH-002 SearchController. */
+const FOOD_OBJECT_ENDPOINT = "/api/v1/food-objects";
 
 /** Search request budget after which the client aborts and surfaces a retryable timeout. */
 export const SEARCH_TIMEOUT_MS = 10_000;
@@ -138,6 +143,25 @@ export async function fetchAutocomplete(query: string, signal: AbortSignal): Pro
 }
 
 /**
+ * GETs `/api/v1/food-objects/{id}` with `credentials: "include"` and the provided AbortSignal,
+ * then decodes the generated {@link FoodObjectEnvelope} into a {@link FoodObject}. Non-2xx
+ * envelopes throw {@link SearchClientError}.
+ *
+ * @remarks Implements DESIGN-001 SearchView selected Substitution Input hydration over generated envelopes.
+ */
+export async function fetchFoodObject(id: string, signal: AbortSignal): Promise<FoodObject> {
+	const response = await fetch(`${FOOD_OBJECT_ENDPOINT}/${encodeURIComponent(id)}`, {
+		method: "GET",
+		credentials: "include",
+		headers: {
+			Accept: "application/json"
+		},
+		signal
+	});
+	return decodeFoodObjectResponse(response);
+}
+
+/**
  * Builds TanStack Query options for the search query backed by {@link searchRequestKey} as the
  * stable query key, the local query cache for hit/miss behavior, a 10-second timeout, and
  * `placeholderData: keepPreviousData` so previous-page results remain visible during page loads.
@@ -152,11 +176,15 @@ export function buildSearchQueryOptions(
 	const requestKey = searchRequestKey(state);
 	const request = buildSearchRequest(state);
 	const queryKey: SearchQueryKey = [SEARCH_QUERY_NAMESPACE, requestKey];
+	const enabled =
+		state.mode === "substitution"
+			? state.searchSubmitted && state.substitutionInputs.length > 0
+			: state.query.trim().length > 0;
 
 	return {
 		queryKey,
-		// Implements DESIGN-001 SearchView empty-query guard: skip the network request until a non-empty query is entered so the initial shell does not fire a request the backend rejects.
-		enabled: state.query.trim().length > 0,
+		// Implements DESIGN-001 SearchView execution guard: Catalog/Daily require submitted text; Substitution requires the explicit two-step search action with at least one input.
+		enabled,
 		// Implements DESIGN-001 SearchView previous-page retention via TanStack keepPreviousData.
 		placeholderData: keepPreviousData,
 		staleTime: LOCAL_CACHE_STALE_MS,
@@ -362,6 +390,40 @@ async function decodeAutocompleteResponse(response: Response): Promise<Autocompl
 	return envelope.data;
 }
 
+async function decodeFoodObjectResponse(response: Response): Promise<FoodObject> {
+	const status = response.status;
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch {
+		throw new SearchClientError(
+			mapAppError(undefined, status, fallbackMessageForCategory(categoryForStatus(status))),
+			status
+		);
+	}
+
+	if (!response.ok) {
+		const envelope = readEnvelope(body);
+		const fallback = fallbackMessageForCategory(categoryForStatus(status));
+		const appError = mapAppError(envelope?.error ?? undefined, status, fallback);
+		attachRequestId(appError, envelope?.requestId);
+		throw new SearchClientError(appError, status);
+	}
+
+	const envelope = body as FoodObjectEnvelope | null;
+	if (!envelope || typeof envelope !== "object" || envelope.data === undefined || envelope.data === null) {
+		const appError: AppError = {
+			category: "server",
+			code: "malformed_envelope",
+			message: fallbackMessageForCategory("server"),
+			retryable: true
+		};
+		attachRequestId(appError, envelope?.requestId);
+		throw new SearchClientError(appError, status);
+	}
+	return envelope.data;
+}
+
 function readEnvelope(body: unknown): Envelope | null {
 	if (typeof body !== "object" || body === null) {
 		return null;
@@ -386,6 +448,8 @@ function categoryForStatus(status: number): AppError["category"] {
 			return "validation";
 		case 429:
 			return "server";
+		case 404:
+			return "validation";
 		case 503:
 			return "dependency";
 		default:
@@ -405,6 +469,8 @@ function defaultCodeForStatus(status: number): string {
 			return "search_rejected";
 		case 429:
 			return "rate_limited";
+		case 404:
+			return "not_found";
 		case 503:
 			return "dependency_unavailable";
 		default:

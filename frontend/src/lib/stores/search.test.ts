@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { get } from "svelte/store";
-import type { SearchRequest } from "../api/generated";
+import type { FoodObject, SearchRequest } from "../api/generated";
 import {
 	addFilter,
 	addSubstitutionInput,
@@ -8,6 +8,7 @@ import {
 	createInitialSearchState,
 	removeFilter,
 	removeSubstitutionInput,
+	requestSubstitutionSearch,
 	resetSearch,
 	searchRequestKey,
 	searchStore,
@@ -18,7 +19,8 @@ import {
 	setMode,
 	setPage,
 	setQuery,
-	toggleMacro,
+	setSubstitutionInputItem,
+	submitSearch,
 	updateSubstitutionInput
 } from "./search";
 import type { SearchState } from "./search";
@@ -26,6 +28,20 @@ import type { SearchState } from "./search";
 afterEach(() => {
 	resetSearch();
 });
+
+function foodObject(id = "food-1", name = "Apple"): FoodObject {
+	return {
+		id,
+		name,
+		physicalState: "solid",
+		imageUrl: null,
+		classifications: [{ id: "cat-fruit", name: "Fruit", kind: "food_category" }],
+		primaryFoodCategory: { id: "cat-fruit", name: "Fruit", kind: "food_category" },
+		macros: { protein: 1, carbohydrates: 14, fat: 0 },
+		macroBasis: "100g",
+		calories: 52
+	};
+}
 
 // Implements DESIGN-001 SearchView initial mode verification.
 test("createInitialSearchState defaults to catalog mode", () => {
@@ -38,20 +54,16 @@ test("searchStore starts in catalog mode with empty query and page 1", () => {
 	const state = get(searchStore);
 	expect(state.mode).toBe("catalog");
 	expect(state.query).toBe("");
+	expect(state.submittedQuery).toBe("");
+	expect(state.searchSubmitted).toBe(false);
 	expect(state.page).toBe(1);
 	expect(state.filters).toEqual([]);
 	expect(state.substitutionInputs).toEqual([]);
+	expect(state.substitutionInputLabels).toEqual({});
+	expect(state.substitutionInputItems).toEqual({});
 	expect(state.dailyDietId).toBeUndefined();
 	expect(state.loading).toBe(false);
 	expect(state.error).toBeNull();
-});
-
-// Implements DESIGN-001 SearchView macro toggle default verification.
-test("all macro toggles start enabled", () => {
-	const { enabledMacros } = get(searchStore);
-	expect(enabledMacros.protein).toBe(true);
-	expect(enabledMacros.carbohydrates).toBe(true);
-	expect(enabledMacros.fat).toBe(true);
 });
 
 // Implements DESIGN-001 SearchView mode transition verification.
@@ -65,6 +77,10 @@ test("setMode clears substitution inputs when leaving substitution mode and rese
 	const state = get(searchStore);
 	expect(state.mode).toBe("catalog");
 	expect(state.substitutionInputs).toEqual([]);
+	expect(state.substitutionInputLabels).toEqual({});
+	expect(state.substitutionInputItems).toEqual({});
+	expect(state.submittedQuery).toBe("");
+	expect(state.searchSubmitted).toBe(false);
 	expect(state.page).toBe(1);
 });
 
@@ -91,6 +107,7 @@ test("setMode keeps compatible state when reselecting the same mode", () => {
 
 	const state = get(searchStore);
 	expect(state.substitutionInputs).toHaveLength(1);
+	expect(state.substitutionInputItems["food-1"]).toBeUndefined();
 	expect(state.page).toBe(1);
 });
 
@@ -100,6 +117,35 @@ test("setQuery resets page to 1", () => {
 	setQuery("apple");
 	expect(get(searchStore).page).toBe(1);
 	expect(get(searchStore).query).toBe("apple");
+	expect(get(searchStore).submittedQuery).toBe("");
+	expect(get(searchStore).searchSubmitted).toBe(false);
+});
+
+// Implements DESIGN-001 SearchView committed query verification.
+test("submitSearch commits the current or provided query and resets page", () => {
+	setQuery("apple");
+	setPage(3);
+	submitSearch();
+	expect(get(searchStore).submittedQuery).toBe("apple");
+	expect(get(searchStore).searchSubmitted).toBe(true);
+	expect(get(searchStore).page).toBe(1);
+
+	submitSearch("yogurt");
+	expect(get(searchStore).query).toBe("yogurt");
+	expect(get(searchStore).submittedQuery).toBe("yogurt");
+	expect(get(searchStore).searchSubmitted).toBe(true);
+});
+
+// Implements DESIGN-001 SearchView explicit two-step Substitution Search verification.
+test("requestSubstitutionSearch submits only when substitution inputs exist", () => {
+	setMode("substitution");
+	requestSubstitutionSearch();
+	expect(get(searchStore).searchSubmitted).toBe(false);
+
+	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" }, "Apple");
+	requestSubstitutionSearch();
+	expect(get(searchStore).submittedQuery).toBe("");
+	expect(get(searchStore).searchSubmitted).toBe(true);
 });
 
 // Implements DESIGN-001 SearchView filter change pagination reset verification.
@@ -140,14 +186,22 @@ test("substitution input add, update, and remove reset page to 1", () => {
 	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" });
 	expect(get(searchStore).page).toBe(1);
 
+	requestSubstitutionSearch();
+	expect(get(searchStore).searchSubmitted).toBe(true);
+
 	setPage(6);
 	updateSubstitutionInput("food-1", { quantity: 200 });
 	expect(get(searchStore).page).toBe(1);
+	expect(get(searchStore).searchSubmitted).toBe(false);
 	expect(get(searchStore).substitutionInputs[0]?.quantity).toBe(200);
+
+	requestSubstitutionSearch();
+	expect(get(searchStore).searchSubmitted).toBe(true);
 
 	setPage(6);
 	removeSubstitutionInput("food-1");
 	expect(get(searchStore).page).toBe(1);
+	expect(get(searchStore).searchSubmitted).toBe(false);
 	expect(get(searchStore).substitutionInputs).toEqual([]);
 });
 
@@ -155,11 +209,70 @@ test("substitution input add, update, and remove reset page to 1", () => {
 test("addSubstitutionInput replaces existing inputs with the same food object id", () => {
 	setMode("substitution");
 	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" });
-	addSubstitutionInput({ foodObjectId: "food-1", quantity: 200, unit: "ml" });
+	addSubstitutionInput({ foodObjectId: "food-1", quantity: 200, unit: "ml" }, "Apple");
 
 	const inputs = get(searchStore).substitutionInputs;
 	expect(inputs).toHaveLength(1);
 	expect(inputs[0]).toEqual({ foodObjectId: "food-1", quantity: 200, unit: "ml" });
+	expect(get(searchStore).substitutionInputLabels["food-1"]).toBe("Apple");
+});
+
+// Implements DESIGN-001 SearchView Catalog-to-Substitution selected item display data verification.
+test("addSubstitutionInput can preserve full FoodObject display data for catalog-added items", () => {
+	setMode("substitution");
+	const item = foodObject();
+	addSubstitutionInput({ foodObjectId: item.id, quantity: 100, unit: "g" }, item.name, item);
+
+	const state = get(searchStore);
+	expect(state.substitutionInputLabels[item.id]).toBe("Apple");
+	expect(state.substitutionInputItems[item.id]).toEqual(item);
+
+	removeSubstitutionInput(item.id);
+	expect(get(searchStore).substitutionInputItems[item.id]).toBeUndefined();
+});
+
+// Implements DESIGN-001 SearchView substitution filter cleanup verification.
+test("removeSubstitutionInput clears filters when the input list becomes empty", () => {
+	setMode("substitution");
+	const item = foodObject();
+	addSubstitutionInput({ foodObjectId: item.id, quantity: 100, unit: "g" }, item.name, item);
+	setFilters([{ filterId: "cat-fruit", kind: "food_category", include: true }]);
+
+	removeSubstitutionInput(item.id);
+
+	const state = get(searchStore);
+	expect(state.substitutionInputs).toEqual([]);
+	expect(state.filters).toEqual([]);
+	expect(state.searchSubmitted).toBe(false);
+});
+
+// Implements DESIGN-001 SearchView selected Substitution Input hydration verification.
+test("setSubstitutionInputItem hydrates display data without reordering the input list", () => {
+	setMode("substitution");
+	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" }, "Apple");
+	addSubstitutionInput({ foodObjectId: "food-2", quantity: 50, unit: "g" }, "Pear");
+	const hydrated = foodObject("food-1", "Apple Hydrated");
+
+	setSubstitutionInputItem(hydrated);
+
+	const state = get(searchStore);
+	expect(state.substitutionInputs.map((input) => input.foodObjectId)).toEqual(["food-1", "food-2"]);
+	expect(state.substitutionInputLabels["food-1"]).toBe("Apple Hydrated");
+	expect(state.substitutionInputItems["food-1"]).toEqual(hydrated);
+});
+
+// Implements DESIGN-001 SearchView selected Substitution Input hydration race verification.
+test("setSubstitutionInputItem ignores late hydration after an input is removed", () => {
+	setMode("substitution");
+	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" }, "Apple");
+	removeSubstitutionInput("food-1");
+
+	setSubstitutionInputItem(foodObject("food-1", "Apple Hydrated"));
+
+	const state = get(searchStore);
+	expect(state.substitutionInputs).toEqual([]);
+	expect(state.substitutionInputLabels["food-1"]).toBeUndefined();
+	expect(state.substitutionInputItems["food-1"]).toBeUndefined();
 });
 
 // Implements DESIGN-001 SearchView daily diet id pagination reset verification.
@@ -177,19 +290,6 @@ test("setPage updates the page index without resetting other state", () => {
 	setPage(5);
 	expect(get(searchStore).page).toBe(5);
 	expect(get(searchStore).query).toBe("apple");
-});
-
-// Implements DESIGN-001 SearchView macro toggle verification.
-test("toggleMacro flips each macro flag independently", () => {
-	toggleMacro("protein");
-	expect(get(searchStore).enabledMacros.protein).toBe(false);
-	expect(get(searchStore).enabledMacros.carbohydrates).toBe(true);
-
-	toggleMacro("carbohydrates");
-	expect(get(searchStore).enabledMacros.carbohydrates).toBe(false);
-
-	toggleMacro("fat");
-	expect(get(searchStore).enabledMacros.fat).toBe(false);
 });
 
 // Implements DESIGN-001 SearchView loading and error flag verification.
@@ -215,20 +315,18 @@ test("resetSearch restores the default catalog state", () => {
 	setQuery("flour");
 	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" });
 	setPage(4);
-	toggleMacro("protein");
 
 	resetSearch();
 
 	const state = get(searchStore);
 	expect(state.mode).toBe("catalog");
 	expect(state.query).toBe("");
+	expect(state.submittedQuery).toBe("");
+	expect(state.searchSubmitted).toBe(false);
 	expect(state.substitutionInputs).toEqual([]);
+	expect(state.substitutionInputLabels).toEqual({});
+	expect(state.substitutionInputItems).toEqual({});
 	expect(state.page).toBe(1);
-	expect(state.enabledMacros).toEqual({
-		protein: true,
-		carbohydrates: true,
-		fat: true
-	});
 });
 
 // Implements DESIGN-001 SearchView catalog request construction verification.

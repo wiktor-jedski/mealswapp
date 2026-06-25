@@ -28,6 +28,22 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 const categoryNames = ["Fruit", "Vegetable", "Dairy", "Meat"] as const;
 const tiers = ["excellent", "good", "fair", "poor"] as const;
 
+/** Sets the resolved document theme through the binary sidebar switch only when needed. */
+async function setResolvedTheme(page: Page, target: "light" | "dark"): Promise<void> {
+  const current = await page.locator("html").getAttribute("data-theme");
+  if (current !== target) {
+    const toggle = page.getByLabel("Theme preference");
+    const openedSidebar = !(await toggle.isVisible());
+    if (openedSidebar) {
+      await page.getByLabel("Open activity sidebar").click();
+    }
+    await toggle.click();
+    if (openedSidebar) {
+      await page.getByLabel("Close activity sidebar").click();
+    }
+  }
+}
+
 /** Builds a deterministic 12-item search response so the 10-item page cap leaves a enabled Next button. */
 function buildSearchEnvelope(): SearchResponseEnvelope {
   const items: SearchResponse["items"] = Array.from({ length: 12 }, (_, i) => ({
@@ -180,24 +196,19 @@ async function readColorTokens(page: Page): Promise<{ bg: string; surface: strin
 test("keyboard-only Catalog workflow reaches the search bar, renders results, and keeps focus visible", async ({ page }) => {
   await stubApi(page);
   await page.goto("/");
-  await expect(page.locator("[data-result-card]")).toHaveCount(10);
+  await expect(page.locator("[data-results-grid]")).toHaveCount(0);
 
   // Tab from the page body to the autocomplete combobox using keyboard only.
   await tabUntilActiveMatches(page, "#autocomplete-input");
   await expect(page.locator("#autocomplete-input")).toBeFocused();
 
-  // Type a search query using the keyboard only; results update via the search store.
+  // Type and submit a search query using the keyboard only; results update after Enter.
   await page.keyboard.type("apple");
+  await page.keyboard.press("Enter");
   await expect(page.locator("[data-result-card]")).toHaveCount(10);
 
-  // Let the 150ms autocomplete debounce settle past the last keystroke so no pending fetch can
-  // reopen the dropdown after dismissal (mobile typing is slow enough to leave a pending timer).
+  // Let the 150ms autocomplete debounce settle past submission and confirm Enter dismissed the list.
   await page.waitForTimeout(250);
-  await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
-  // Guard against a late debounce reopen by waiting past the window and re-asserting hidden.
-  await page.waitForTimeout(200);
   await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
 
   // Tab forward to the results pagination Next button, proving results are keyboard navigable.
@@ -222,21 +233,25 @@ test("keyboard-only Substitution workflow switches mode, adds an input, and sear
   await expect(page.locator("#search-mode-substitution")).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator('section[aria-label="Substitution inputs"]')).toBeVisible();
+  await expect(page.locator("#autocomplete-input")).toBeFocused();
 
-  // Tab to the food object id input and type a value using the keyboard only.
-  await tabUntilActiveMatches(page, "#substitution-food-object-id");
-  await page.keyboard.type("food-apple");
+  // Pick the source item from the auto-focused search bar.
+  await page.keyboard.type("apple");
+  await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("[data-food-object-id='food-apple']")).toHaveText("Apple");
+  await expect(page.locator("[data-result-card]")).toHaveCount(0);
 
-  // Tab to the Add button (no rows yet, so it is the only button in the section) and activate it.
-  await tabUntilActiveMatches(page, 'section[aria-label="Substitution inputs"] button');
-  await expect(page.locator('section[aria-label="Substitution inputs"] button')).toBeFocused();
+  // Tab to the explicit two-step search button and activate it.
+  await tabUntilActiveMatches(page, "[data-substitution-search]");
+  await expect(page.locator("[data-substitution-search]")).toBeFocused();
   await page.keyboard.press("Enter");
 
-  // The Substitution Input row appears; the substitution search fires from the store update.
-  await expect(page.locator("[data-food-object-id='food-apple']")).toBeVisible();
+  // Results render only after the explicit substitution search action.
   await expect(page.locator("[data-result-card]")).toHaveCount(10);
 
-  // Focus is visible on the keyboard-focused Add button after activation.
+  // Focus is visible on the keyboard-focused Find substitutions button after activation.
   await expectFocusIndicatorVisible(page);
 });
 
@@ -246,6 +261,8 @@ test("axe scan reports no serious or critical violations outside documented colo
   test.setTimeout(120_000);
   await stubApi(page);
   await page.goto("/");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
   await expect(page.locator("[data-result-card]")).toHaveCount(10);
 
   // Full axe run: the only accepted serious/critical violations are color-contrast on decorative elements.
@@ -283,10 +300,8 @@ test("normal-text color pairs meet WCAG 2.1 AA 4.5:1 in light and dark themes", 
   await stubApi(page);
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  const select = page.getByLabel("Theme preference");
-
   // Light theme normal-text pairs: body text and muted labels on bg/surface.
-  await select.selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   const light = await readColorTokens(page);
   expect(contrastRatio(light.text, light.bg)).toBeGreaterThanOrEqual(4.5);
@@ -295,7 +310,7 @@ test("normal-text color pairs meet WCAG 2.1 AA 4.5:1 in light and dark themes", 
   expect(contrastRatio(light.muted, light.surface)).toBeGreaterThanOrEqual(4.5);
 
   // Dark theme normal-text pairs: body text and muted labels on bg/surface.
-  await select.selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const dark = await readColorTokens(page);
   expect(contrastRatio(dark.text, dark.bg)).toBeGreaterThanOrEqual(4.5);
@@ -309,7 +324,7 @@ test("interactive controls have accessible names", async ({ page }) => {
   await stubApi(page);
   await page.goto("/");
 
-  // Catalog state: sidebar, mode controls, search bar, filter composer, and settings controls.
+  // Catalog state: sidebar, mode controls, search bar, unit preference, and results.
   const nameRules = ["button-name", "label", "link-name", "select-name", "aria-input-field-name"];
   const catalogResults = await new AxeBuilder({ page }).withRules(nameRules).analyze();
   expect(
@@ -339,27 +354,25 @@ test("captures responsive light and dark layouts at desktop and mobile sizes", a
   await stubApi(page);
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
-  const select = page.getByLabel("Theme preference");
-
   // Desktop light.
   await page.setViewportSize({ width: 1280, height: 720 });
-  await select.selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/a11y-desktop-light.png`, fullPage: true });
 
   // Desktop dark.
-  await select.selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/a11y-desktop-dark.png`, fullPage: true });
 
   // Mobile light.
   await page.setViewportSize({ width: 390, height: 844 });
-  await select.selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/a11y-mobile-light.png`, fullPage: true });
 
   // Mobile dark.
-  await select.selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.screenshot({ path: `${SCREENSHOT_DIR}/a11y-mobile-dark.png`, fullPage: true });
 

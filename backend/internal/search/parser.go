@@ -15,10 +15,6 @@ const PageSize = 10
 // BuildParsedQuery normalizes request text and resolves search strategy.
 // Implements DESIGN-002 QueryParser.
 func BuildParsedQuery(req SearchRequest) (ParsedQuery, error) {
-	normalizedQuery, err := security.NormalizeInput(security.InputFieldSearchQuery, req.Query)
-	if err != nil {
-		return ParsedQuery{}, fmt.Errorf("query is invalid: %w", err)
-	}
 	pageText := strconv.Itoa(req.Page)
 	if _, err := security.NormalizeInput(security.InputFieldPagination, pageText); err != nil {
 		return ParsedQuery{}, fmt.Errorf("page is invalid: %w", err)
@@ -27,14 +23,31 @@ func BuildParsedQuery(req SearchRequest) (ParsedQuery, error) {
 	if err != nil {
 		return ParsedQuery{}, err
 	}
+	normalizedText, err := normalizeQueryForStrategy(req.Query, strategy)
+	if err != nil {
+		return ParsedQuery{}, err
+	}
 	limit, offset := Paginate(req.Page, PageSize)
 	return ParsedQuery{
-		NormalizedText: normalizedQuery.Value,
-		Tokens:         strings.Fields(normalizedQuery.Value),
+		NormalizedText: normalizedText,
+		Tokens:         strings.Fields(normalizedText),
 		Strategy:       strategy,
 		Limit:          limit,
 		Offset:         offset,
 	}, nil
+}
+
+// normalizeQueryForStrategy applies query text requirements for each search strategy.
+// Implements DESIGN-002 QueryParser.
+func normalizeQueryForStrategy(query string, strategy SearchStrategy) (string, error) {
+	if strings.TrimSpace(query) == "" && strategy == SearchStrategySubstitution {
+		return "", nil
+	}
+	normalizedQuery, err := security.NormalizeInput(security.InputFieldSearchQuery, query)
+	if err != nil {
+		return "", fmt.Errorf("query is invalid: %w", err)
+	}
+	return normalizedQuery.Value, nil
 }
 
 // SelectStrategy resolves the search operation from the requested mode.

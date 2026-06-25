@@ -10,11 +10,13 @@ import { join } from "node:path";
 // these tests assert the Svelte source declares the documented sidebar
 // behaviors: desktop-left placement, collapse/expand toggle, mobile toggle,
 // authenticated history and favorites loaded through generated Phase 03
-// contracts, anonymous sign-in guidance, history-entry selection restoring
-// search state, and API failures that never block core search. `vite build`
+// contracts, unit preference control, anonymous sign-in guidance, history-entry selection restoring
+// search state, and API failures that never block core search. Sidebar search-mode buttons
+// are intentionally omitted because mode switching lives in the main view. `vite build`
 // compiles the component, validating the Svelte source at build time.
 
 const source = readFileSync(join(import.meta.dir, "SidebarComponent.svelte"), "utf8");
+const appCss = readFileSync(join(import.meta.dir, "../../app.css"), "utf8");
 
 function countOccurrences(haystack: string, needle: string): number {
 	return haystack.split(needle).length - 1;
@@ -42,7 +44,14 @@ test("declares a desktop collapse toggle that hides content when collapsed", () 
 	// Collapse shrinks the desktop width and hides the inner content block on sm+.
 	expect(source).toContain("sm:w-14");
 	expect(source).toContain("sm:w-60");
-	expect(source).toContain("$sidebarStore.collapsed ? 'sm:hidden' : 'sm:grid'");
+	expect(source).not.toContain("sm:p-2");
+	expect(source).toContain("transition-[width,padding-right]");
+	expect(source).toContain("motion-reduce:transition-none");
+	expect(source).toContain("sidebar-animated-content");
+	expect(appCss).toContain("opacity 150ms ease-out 200ms");
+	expect(appCss).toContain("visibility 0s linear 200ms");
+	expect(appCss).toContain("[data-collapsed=\"true\"] .sidebar-animated-content");
+	expect(appCss).toContain("opacity 0s linear");
 });
 
 // Implements DESIGN-001 SidebarComponent mobile toggle behavior verification.
@@ -112,27 +121,44 @@ test("wraps profile, history, and favorites fetches in try/catch that sets inlin
 	expect(source).not.toContain("throw new SearchClientError");
 });
 
-// Implements DESIGN-001 SidebarComponent search-mode navigation verification.
-test("declares Catalog, Substitution, and Daily Diet Alternative mode buttons bound to setMode", () => {
-	expect(source).toContain('id: "sidebar-mode-catalog"');
-	expect(source).toContain('id: "sidebar-mode-substitution"');
-	expect(source).toContain('id: "sidebar-mode-daily-diet"');
-	expect(source).toContain('value: "catalog"');
-	expect(source).toContain('value: "substitution"');
-	expect(source).toContain('value: "daily_diet_alternative"');
-	expect(source).toContain("setMode(mode)");
-	expect(source).toContain("on:click={() => onModeSelect(option.value)}");
-	expect(source).toContain("$searchStore.mode === option.value");
-	expect(source).toContain("aria-pressed={$searchStore.mode === option.value}");
+// Implements DESIGN-001 SidebarComponent duplicate search-mode navigation removal verification.
+test("does not declare duplicate search-mode buttons in the sidebar", () => {
+	expect(source).not.toContain("data-sidebar-modes");
+	expect(source).not.toContain('aria-label="Search mode navigation"');
+	expect(source).not.toContain('id: "sidebar-mode-catalog"');
+	expect(source).not.toContain('id: "sidebar-mode-substitution"');
+	expect(source).not.toContain('id: "sidebar-mode-daily-diet"');
+	expect(source).not.toContain("onModeSelect");
+	expect(source).not.toContain("searchStore");
 });
 
-// Implements DESIGN-001 SidebarComponent settings entry point verification.
-test("declares a settings entry point that toggles the SettingsPanel inline", () => {
-	expect(source).toContain("data-sidebar-settings");
-	expect(source).toContain("onSettingsToggle");
-	expect(source).toContain("settingsOpen");
-	expect(source).toContain("aria-expanded={settingsOpen}");
-	expect(source).toContain("<SettingsPanel />");
+// Implements DESIGN-001 SidebarComponent unit preference row verification.
+test("declares a compact account-level unit preference row", () => {
+	expect(source).toContain('import { preferencesStore, setUnitSystem } from "../stores/preferences"');
+	expect(source).toContain('data-sidebar-units');
+	expect(source).toContain('for="sidebar-unit-system"');
+	expect(source).toContain("Units:");
+	expect(source).toContain("$preferencesStore.unitSystem");
+	expect(source).toContain("setUnitSystem");
+	expect(source).toContain('value: "metric"');
+	expect(source).toContain('value: "imperial"');
+	expect(source).not.toContain("<SettingsPanel");
+	expect(source).not.toContain("data-sidebar-settings");
+});
+
+// Implements DESIGN-016 ThemeProvider binary sidebar switch verification.
+test("declares a binary light/dark theme switch directly under the sidebar brand", () => {
+	const brandPos = source.indexOf('<h1 class="text-2xl font-semibold">{branding}</h1>');
+	const switchPos = source.indexOf("data-sidebar-theme-toggle");
+	expect(brandPos).toBeGreaterThan(-1);
+	expect(switchPos).toBeGreaterThan(brandPos);
+	expect(source).toContain('import { resolvedTheme, setThemePreference } from "../stores/theme"');
+	expect(source).toContain("onThemeToggle");
+	expect(source).toContain('aria-label="Theme preference"');
+	expect(source).toContain('aria-pressed={$resolvedTheme === "dark"}');
+	expect(source).toContain('setThemePreference($resolvedTheme === "dark" ? "light" : "dark")');
+	expect(source).toContain("Current theme: {$resolvedTheme}");
+	expect(source).toContain("<svg");
 });
 
 // Implements DESIGN-001 SidebarComponent traceability verification.

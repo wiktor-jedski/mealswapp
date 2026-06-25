@@ -7,8 +7,8 @@ import { join } from "node:path";
 // No DOM library (jsdom/happy-dom) is installed and Bun's isolated install-cache layout
 // breaks `svelte/server` rendering, so the component is not rendered in a Bun unit test.
 // These tests assert the Svelte source declares the three mode controls bound to `setMode`,
-// with `aria-pressed` reflecting `$searchStore.mode`, visible labels, focus states, and a
-// traceability comment. `vite build` compiles the component (it is wired into SearchShell),
+// with `aria-pressed` reflecting `$searchStore.mode`, visible labels, plain active-mode help,
+// centered layout, focus states, and a traceability comment. `vite build` compiles the component (it is wired into SearchShell),
 // validating the Svelte source at build time.
 
 const source = readFileSync(join(import.meta.dir, "SearchModes.svelte"), "utf8");
@@ -43,6 +43,18 @@ test("mode buttons call setMode and reflect active state via aria-pressed and $s
 test("uses a labelled nav landmark and cites the DESIGN source", () => {
 	expect(source).toContain('aria-label="Search modes"');
 	expect(source).toContain("<!-- Implements DESIGN-001 SearchView mode controls");
+});
+
+// Implements DESIGN-001 SearchView mode explanation verification.
+test("shows centered plain text explaining the active mode", () => {
+	expect(source).toContain("description: \"Find foods, meals, or ingredients by name.\"");
+	expect(source).toContain("description: \"Find alternatives for a food using quantity and unit context.\"");
+	expect(source).toContain("description: \"Search for replacements within a saved daily diet.\"");
+	expect(source).toContain("activeDescription");
+	expect(source).toContain("data-search-mode-description");
+	expect(source).toContain("justify-items-center");
+	expect(source).toContain("justify-center");
+	expect(source).toContain("text-center");
 });
 
 // Implements DESIGN-001 SearchView mode controls keyboard focus verification.

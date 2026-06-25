@@ -1,21 +1,18 @@
 import { writable } from "svelte/store";
 
-// Implements DESIGN-001 SettingsPanel unit-system preference persistence independent of server availability.
+// Implements DESIGN-001 SidebarComponent unit-system preference persistence independent of server availability.
 
 /**
- * Supported measurement unit systems for the SettingsPanel.
+ * Supported measurement unit systems for the sidebar unit preference row.
  *
- * @remarks Implements DESIGN-001 SettingsPanel unit preference controls.
+ * @remarks Implements DESIGN-001 SidebarComponent unit preference controls.
  */
 export type UnitSystem = "metric" | "imperial";
 
 /**
- * Locally persisted search-display preferences owned by the SettingsPanel.
+ * Locally persisted account-display preferences owned by the sidebar unit preference row.
  *
- * @remarks Implements DESIGN-001 LocalStorageManager settings persistence. Macro
- * toggles are intentionally not duplicated here; they live in `search.ts` and are
- * toggled through `toggleMacro` so the typed `SearchState` stays the single source
- * of truth for macro display flags.
+ * @remarks Implements DESIGN-001 LocalStorageManager settings persistence.
  */
 export interface SearchPreferences {
   unitSystem: UnitSystem;
@@ -32,16 +29,16 @@ export const PREFERENCES_STORAGE_KEY = "mealswapp.preferences";
  * Returns the default preferences: metric units. Used as the fallback whenever stored
  * preferences are missing, malformed, or fail validation.
  *
- * @remarks Implements DESIGN-001 SettingsPanel default unit preference.
+ * @remarks Implements DESIGN-001 SidebarComponent default unit preference.
  */
 export function createDefaultPreferences(): SearchPreferences {
   return { unitSystem: "metric" };
 }
 
 /**
- * Svelte writable store holding the current SettingsPanel preferences.
+ * Svelte writable store holding the current account-display preferences.
  *
- * @remarks Implements DESIGN-001 SettingsPanel Svelte store initialization.
+ * @remarks Implements DESIGN-001 SidebarComponent unit preference store initialization.
  */
 export const preferencesStore = writable<SearchPreferences>(createDefaultPreferences());
 
@@ -99,7 +96,7 @@ export function initPreferences(): void {
  * Updates the active unit system in the store and persists it to localStorage. Safe
  * during SSR and when localStorage throws (e.g. quota exceeded or disabled).
  *
- * @remarks Implements DESIGN-001 SettingsPanel unit preference persistence.
+ * @remarks Implements DESIGN-001 SidebarComponent unit preference persistence.
  */
 export function setUnitSystem(unit: UnitSystem): void {
   preferencesStore.update((prefs) => ({ ...prefs, unitSystem: unit }));
@@ -121,7 +118,7 @@ export function setUnitSystem(unit: UnitSystem): void {
 /**
  * Resets the preferences store to defaults without touching localStorage. Used by tests.
  *
- * @remarks Implements DESIGN-001 SettingsPanel default restoration.
+ * @remarks Implements DESIGN-001 SidebarComponent default restoration.
  */
 export function resetPreferences(): void {
   preferencesStore.set(createDefaultPreferences());

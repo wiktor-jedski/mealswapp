@@ -35,6 +35,36 @@ async function stubApi(page: Page): Promise<void> {
 	await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, emptySearch));
 }
 
+async function stubApiWithResults(page: Page): Promise<void> {
+	await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+	await page.route(/\/api\/v1\/search$/, (route) =>
+		fulfillJson(route, 200, {
+			status: "ok",
+			requestId: "autocomplete-search-results",
+			data: {
+				items: [
+					{
+						id: "food-apple",
+						name: "Apple",
+						physicalState: "solid",
+						imageUrl: null,
+						classifications: [{ id: "cat-fruit", name: "Fruit", kind: "food_category" }],
+						primaryFoodCategory: { id: "cat-fruit", name: "Fruit", kind: "food_category" },
+						macros: { protein: 0, carbohydrates: 14, fat: 0 },
+						macroBasis: "100g",
+						calories: 52
+					}
+				],
+				totalCount: 1,
+				page: 1,
+				similarityScores: [],
+				similarityMetadata: [],
+				warnings: []
+			}
+		} satisfies SearchResponseEnvelope)
+	);
+}
+
 /** Scoped combobox locator for the autocomplete search bar (the theme select is also a combobox). */
 function searchCombobox(page: Page) {
 	return page.getByRole("combobox", { name: "Food search" });
@@ -43,6 +73,13 @@ function searchCombobox(page: Page) {
 /** Scoped option locator within the autocomplete listbox (the theme select also exposes options). */
 function autocompleteOptions(page: Page) {
 	return page.getByRole("listbox", { name: "Autocomplete suggestions" }).getByRole("option");
+}
+
+async function resultGridDocumentTop(page: Page): Promise<number> {
+	return page.locator("[data-results-grid]").evaluate((element) => {
+		const rect = element.getBoundingClientRect();
+		return rect.top + window.scrollY;
+	});
 }
 
 // Implements DESIGN-001 AutocompleteDropdown ranked display after debounce.
@@ -60,11 +97,60 @@ test("types in the search bar and verifies ranked suggestions appear after the 1
 	await expect(autocompleteOptions(page).nth(2)).toHaveText("Snapple");
 });
 
+// Implements DESIGN-001 SearchView initial and mode-change search focus verification.
+test("focuses the search bar on initial load and after mode changes", async ({ page }) => {
+	await stubApi(page);
+	await page.goto("/");
+
+	const input = searchCombobox(page);
+	await expect(input).toBeFocused();
+	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find foods, meals, or ingredients by name.");
+
+	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
+	await expect(input).toBeFocused();
+	await expect(input).toHaveAttribute("placeholder", "Search a food to add as a substitution target…");
+	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find alternatives for a food using quantity and unit context.");
+
+	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
+	await expect(input).toBeFocused();
+	await expect(input).toHaveAttribute("placeholder", "Search within a saved daily diet or paste its ID…");
+	await expect(page.locator("[data-search-mode-description]")).toHaveText("Search for replacements within a saved daily diet.");
+
+	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Catalog" }).click();
+	await expect(input).toBeFocused();
+	await expect(input).toHaveAttribute("placeholder", "Search foods, meals, or ingredients…");
+	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find foods, meals, or ingredients by name.");
+});
+
+// Implements DESIGN-001 SidebarComponent duplicate search-mode navigation removal verification.
+test("keeps search-mode buttons only in the main view, not in the sidebar", async ({ page }) => {
+	await stubApi(page);
+	await page.goto("/");
+
+	await expect(page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Catalog" })).toBeVisible();
+	await expect(page.locator("[data-sidebar-modes]")).toHaveCount(0);
+	await expect(page.getByRole("navigation", { name: "Search mode navigation" })).toHaveCount(0);
+});
+
+// Implements DESIGN-001 AutocompleteDropdown floating overlay layout verification.
+test("opening autocomplete suggestions does not push results down", async ({ page }) => {
+	await stubApiWithResults(page);
+	await page.goto("/");
+
+	await searchCombobox(page).fill("apple");
+	await searchCombobox(page).press("Enter");
+	await expect(page.locator("[data-results-grid]")).toBeVisible();
+	const before = await resultGridDocumentTop(page);
+
+	await searchCombobox(page).fill("app");
+	await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeVisible();
+	const after = await resultGridDocumentTop(page);
+
+	expect(after).toBeLessThanOrEqual(before);
+});
+
 // Implements DESIGN-001 AutocompleteDropdown Tab/Shift+Tab focus movement.
 //
-// The dropdown pre-activates the first option (activeIndex 0) when results arrive, so the first
-// Tab moves focus to the second option; Shift+Tab moves backward. See the follow-up note in the
-// completion report about the pre-activation behavior for the Task 152 a11y gate.
 test("Tab moves focus forward through options and Shift+Tab moves it backward", async ({ page }) => {
 	await stubApi(page);
 	await page.goto("/");
@@ -74,15 +160,15 @@ test("Tab moves focus forward through options and Shift+Tab moves it backward", 
 	const input = searchCombobox(page);
 	await input.focus();
 	await page.keyboard.press("Tab");
-	await expect(autocompleteOptions(page).nth(1)).toBeFocused();
+	await expect(autocompleteOptions(page).nth(0)).toBeFocused();
 	await page.keyboard.press("Tab");
-	await expect(autocompleteOptions(page).nth(2)).toBeFocused();
-	await page.keyboard.press("Shift+Tab");
 	await expect(autocompleteOptions(page).nth(1)).toBeFocused();
+	await page.keyboard.press("Shift+Tab");
+	await expect(autocompleteOptions(page).nth(0)).toBeFocused();
 });
 
-// Implements DESIGN-001 AutocompleteDropdown Enter selects the active option.
-test("Enter selects the active option and invokes the onSelect handler", async ({ page }) => {
+// Implements DESIGN-001 AutocompleteDropdown ArrowUp/ArrowDown option movement.
+test("ArrowDown moves the active suggestion instead of moving the text caret", async ({ page }) => {
 	await stubApi(page);
 	await page.goto("/");
 	await searchCombobox(page).fill("app");
@@ -90,11 +176,30 @@ test("Enter selects the active option and invokes the onSelect handler", async (
 
 	const input = searchCombobox(page);
 	await input.focus();
-	// The first option is pre-active; Enter selects it without Tabbing.
+	await page.keyboard.press("ArrowDown");
+
+	await expect(input).toBeFocused();
+	await expect(autocompleteOptions(page).nth(0)).toHaveAttribute("aria-selected", "true");
+	await expect(autocompleteOptions(page).nth(1)).toHaveAttribute("aria-selected", "false");
+
+	await page.keyboard.press("Enter");
+	await expect(input).toHaveValue("Apple");
+	await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
+});
+
+// Implements DESIGN-001 AutocompleteDropdown Enter submits the typed query without requiring suggestion selection.
+test("Enter submits the typed query without selecting the top suggestion", async ({ page }) => {
+	await stubApi(page);
+	await page.goto("/");
+	await searchCombobox(page).fill("app");
+	await page.getByRole("listbox", { name: "Autocomplete suggestions" }).waitFor();
+
+	const input = searchCombobox(page);
+	await input.focus();
 	await page.keyboard.press("Enter");
 
-	// onSelect sets the query to the selected suggestion label in Catalog mode.
-	await expect(input).toHaveValue("Apple");
+	await expect(input).toHaveValue("app");
+	await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
 });
 
 // Implements DESIGN-001 AutocompleteDropdown Escape dismissal.
@@ -113,7 +218,7 @@ test("Escape dismisses the dropdown and returns focus to the combobox", async ({
 });
 
 // Implements DESIGN-001 AutocompleteDropdown ARIA combobox/listbox state.
-test("combobox exposes aria-expanded, aria-controls, and aria-selected on the active option", async ({ page }) => {
+test("combobox exposes aria-expanded, aria-controls, and inactive suggestions before navigation", async ({ page }) => {
 	await stubApi(page);
 	await page.goto("/");
 	await searchCombobox(page).fill("app");
@@ -125,6 +230,7 @@ test("combobox exposes aria-expanded, aria-controls, and aria-selected on the ac
 	expect(listboxId).toBeTruthy();
 	await expect(page.locator(`#${listboxId}`)).toHaveAttribute("role", "listbox");
 
-	// The first option is pre-active (aria-selected true) before any Tab.
-	await expect(autocompleteOptions(page).nth(0)).toHaveAttribute("aria-selected", "true");
+	await expect(input).not.toHaveAttribute("aria-activedescendant", /.+/);
+	await expect(autocompleteOptions(page).nth(0)).toHaveAttribute("aria-selected", "false");
+	await expect(autocompleteOptions(page).nth(1)).toHaveAttribute("aria-selected", "false");
 });

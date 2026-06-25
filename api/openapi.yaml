@@ -403,6 +403,34 @@ paths:
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
+  /api/v1/food-objects/{id}:
+    get:
+      operationId: getApiV1FoodObject
+      summary: Return one food object for selected-item hydration
+      description: Optional cookie authentication scopes food-object visibility when a session is present.
+      security:
+        - {}
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/FoodObject"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/account/export:
     get:
       operationId: getApiV1AccountExport
@@ -537,6 +565,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/SearchResponseEnvelope"
+    FoodObject:
+      description: Food-object detail envelope for selected-item hydration.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/FoodObjectEnvelope"
     Autocomplete:
       description: Autocomplete response envelope with ranked suggestions and cache metadata.
       content:
@@ -918,6 +952,23 @@ components:
         fat:
           type: number
           minimum: 0
+    # Implements DESIGN-002 SearchController substitution source summary contract.
+    SourceSummary:
+      type: object
+      additionalProperties: false
+      required: [macros, calories, totalGrams, totalMilliliters]
+      properties:
+        macros:
+          $ref: "#/components/schemas/MacroProfile"
+        calories:
+          type: number
+          minimum: 0
+        totalGrams:
+          type: number
+          minimum: 0
+        totalMilliliters:
+          type: number
+          minimum: 0
     # Implements DESIGN-002 SearchController food-object result contract.
     FoodObject:
       type: object
@@ -1023,6 +1074,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SimilarityMetadata"
+        sourceSummary:
+          $ref: "#/components/schemas/SourceSummary"
         warnings:
           type: array
           description: Degraded or diagnostic search warnings. Values can include stable warning codes such as cache_unavailable and contextual diagnostics such as excluded filters or skipped similarity targets.
@@ -1042,6 +1095,17 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/SearchResponse"
+    FoodObjectEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/FoodObject"
     SearchRejectionEnvelope:
       type: object
       required: [status, requestId, data, error]

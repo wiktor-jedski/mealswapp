@@ -27,14 +27,17 @@ REQUIRED_MARKERS = (
 	"SearchMode:",
 	"SearchFilterKind:",
 	"SearchRequest:",
+	"SourceSummary:",
 	"CacheMetadata:",
 	"SearchResponse:",
+	"FoodObjectEnvelope:",
 	"SearchResponseEnvelope:",
 	"SearchRejectionEnvelope:",
 	"AutocompleteResponse:",
 	"AutocompleteEnvelope:",
 	"/api/v1/search:",
 	"/api/v1/search/autocomplete:",
+	"/api/v1/food-objects/{id}:",
 	"/api/v1/auth/register:",
 	"/api/v1/auth/login:",
 	"/api/v1/auth/logout:",
@@ -344,6 +347,15 @@ export interface MacroProfile {
 	fat: number;
 }
 
+// Implements DESIGN-002 SearchController frontend substitution source summary contract.
+/** Macro and amount totals for the user's selected substitution input list. */
+export interface SourceSummary {
+\tmacros: MacroProfile;
+\tcalories: number;
+\ttotalGrams: number;
+\ttotalMilliliters: number;
+}
+
 // Implements DESIGN-002 SearchController frontend food-object result contract.
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
@@ -357,6 +369,10 @@ export interface FoodObject {
 	macroBasis: "100g" | "100ml";
 	calories: number;
 }
+
+// Implements DESIGN-002 SearchController frontend food-object detail contract.
+/** Successful food-object detail response envelope. */
+export type FoodObjectEnvelope = Envelope<FoodObject>;
 
 // Implements DESIGN-002 SearchController frontend similarity metadata contract.
 /** User-facing nutritional similarity tier. */
@@ -397,6 +413,7 @@ export interface SearchResponse extends Record<string, unknown> {
 \tpage: number;
 \tsimilarityScores: number[];
 \tsimilarityMetadata: SimilarityMetadata[];
+\tsourceSummary?: SourceSummary;
 \twarnings: string[];
 \tcache?: CacheMetadata;
 }

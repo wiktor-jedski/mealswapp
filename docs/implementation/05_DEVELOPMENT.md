@@ -28,9 +28,10 @@ Start PostgreSQL, Redis, the backend, and the frontend together from the reposit
 bash scripts/start-dev.sh
 ```
 
-The command keeps the backend and frontend attached to the terminal. Press `Ctrl-C`
-to stop both application processes. PostgreSQL and Redis remain available for the
-next development session.
+The command starts local services, applies backend migrations, seeds deterministic
+development data, and keeps the backend and frontend attached to the terminal.
+Press `Ctrl-C` to stop both application processes. PostgreSQL and Redis remain
+available for the next development session.
 
 To start only PostgreSQL and Redis:
 
@@ -61,6 +62,7 @@ The Phase 00 frontend renders the application shell, theme selector, and disable
 ```sh
 cd backend
 go run ./cmd/migrate up
+go run ./cmd/seed
 go run ./cmd/api
 go test ./...
 ```

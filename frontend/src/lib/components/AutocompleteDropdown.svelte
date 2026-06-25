@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, tick } from "svelte";
   import type { RankedAutocomplete } from "../api/generated";
   import { AutocompleteController, AUTOCOMPLETE_DEBOUNCE_MS } from "./autocomplete-controller";
 
@@ -14,11 +14,23 @@
   /** Called when the user selects a suggestion via Enter or option click. */
   export let onSelect: (item: RankedAutocomplete) => void;
 
+  /** Called when the user commits the typed query without selecting a suggestion. */
+  export let onSubmit: (query: string) => void = () => {};
+
   /**
    * Optional input-event forwarder so a wired parent can capture typing into the search store.
    * Defaults to a no-op so the component stays self-contained before Task 151 wires it.
    */
   export let onQueryInput: (value: string) => void = () => {};
+
+  /** Mode-specific guidance shown before the user enters a query. */
+  export let placeholder = "Search foods, meals, or ingredients…";
+
+  /** Changes when the parent wants the combobox to receive focus, e.g. initial load or mode switch. */
+  export let focusKey: string | number = 0;
+
+  /** True while an explicit submitted search request is fetching results. */
+  export let searching = false;
 
   /** Stable id linking the combobox input to its listbox via `aria-controls`. */
   const listboxId = "autocomplete-listbox";
@@ -28,13 +40,15 @@
   let activeIndex = -1;
   let listboxEl: HTMLUListElement | undefined;
   let inputEl: HTMLInputElement | undefined;
+  let lastFocusedKey: string | number | null = null;
+  let suppressedSelectedQuery: string | null = null;
 
   const controller = new AutocompleteController({
     delayMs: AUTOCOMPLETE_DEBOUNCE_MS,
     onResults: (next) => {
       items = next;
       isOpen = next.length > 0;
-      activeIndex = next.length > 0 ? 0 : -1;
+      activeIndex = -1;
     },
     onError: () => {
       items = [];
@@ -45,11 +59,31 @@
 
   onDestroy(() => controller.dispose());
 
-  // Implements DESIGN-001 AutocompleteDropdown 150ms-debounced fetch driven by query prop changes.
-  $: if (query !== undefined) controller.input(query);
+  // Implements DESIGN-001 AutocompleteDropdown 150ms-debounced fetch driven by user-typed query prop changes.
+  $: if (query !== undefined) {
+    if (suppressedSelectedQuery === query) {
+      suppressedSelectedQuery = null;
+      controller.cancel();
+    } else {
+      controller.input(query);
+    }
+  }
+
+  // Implements DESIGN-001 SearchView search-bar focus on initial load and mode changes.
+  $: focusSearchInput(focusKey, inputEl);
+
+  async function focusSearchInput(nextFocusKey: string | number, element: HTMLInputElement | undefined): Promise<void> {
+    if (!element || nextFocusKey === lastFocusedKey) {
+      return;
+    }
+    lastFocusedKey = nextFocusKey;
+    await tick();
+    element.focus();
+  }
 
   /** Forwards typing to the parent so the search store can update the `query` prop. */
   function onInput(event: Event): void {
+    suppressedSelectedQuery = null;
     onQueryInput((event.currentTarget as HTMLInputElement).value);
   }
 
@@ -67,19 +101,25 @@
     const item = items[activeIndex];
     dismiss();
     if (item) {
+      suppressedSelectedQuery = item.label;
+      controller.cancel();
       onSelect(item);
     }
     inputEl?.focus();
   }
 
-  /** Moves the active option by `direction` (1 forward, -1 backward) with wrap-around and focus. */
-  function moveActive(direction: 1 | -1): void {
+  /** Moves the active option by `direction` (1 forward, -1 backward) with wrap-around. */
+  function moveActive(direction: 1 | -1, focusOption = true): void {
     if (!isOpen || items.length === 0) {
       return;
     }
-    activeIndex = (activeIndex + direction + items.length) % items.length;
+    activeIndex = activeIndex < 0
+      ? direction === 1 ? 0 : items.length - 1
+      : (activeIndex + direction + items.length) % items.length;
     const option = listboxEl?.children.item(activeIndex) as HTMLElement | null;
-    option?.focus();
+    if (focusOption) {
+      option?.focus();
+    }
   }
 
   function onInputKeydown(event: KeyboardEvent): void {
@@ -91,10 +131,27 @@
         event.preventDefault();
         moveActive(event.shiftKey ? -1 : 1);
         break;
+      case "ArrowDown":
+        if (isOpen && items.length > 0) {
+          event.preventDefault();
+          moveActive(1, false);
+        }
+        break;
+      case "ArrowUp":
+        if (isOpen && items.length > 0) {
+          event.preventDefault();
+          moveActive(-1, false);
+        }
+        break;
       case "Enter":
         if (isOpen && activeIndex >= 0) {
           event.preventDefault();
           selectActive();
+        } else if (query.trim().length > 0) {
+          event.preventDefault();
+          dismiss();
+          controller.cancel();
+          onSubmit(query);
         }
         break;
       case "Escape":
@@ -114,6 +171,14 @@
       event.preventDefault();
       activeIndex = index;
       moveActive(event.shiftKey ? -1 : 1);
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      activeIndex = index;
+      moveActive(1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      activeIndex = index;
+      moveActive(-1);
     } else if (event.key === "Enter") {
       event.preventDefault();
       activeIndex = index;
@@ -132,28 +197,40 @@
 </script>
 
 <!-- Implements DESIGN-001 AutocompleteDropdown -->
-<div class="grid gap-1">
+<div class="relative grid gap-1">
   <label class="sr-only" for="autocomplete-input">Food search</label>
   <input
     id="autocomplete-input"
     bind:this={inputEl}
     type="text"
-    class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+    class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
     role="combobox"
     aria-expanded={isOpen}
     aria-controls={listboxId}
     aria-autocomplete="list"
     aria-activedescendant={isOpen && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+    {placeholder}
     value={query}
     on:input={onInput}
     on:keydown={onInputKeydown}
   />
 
+  {#if searching}
+    <div
+      class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)] motion-safe:animate-spin"
+      role="status"
+      aria-label="Searching"
+      data-search-spinner
+    >
+      <span class="sr-only">Searching</span>
+    </div>
+  {/if}
+
   {#if isOpen && items.length > 0}
     <ul
       id={listboxId}
       bind:this={listboxEl}
-      class="grid gap-0 m-0 list-none rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-0"
+      class="absolute left-0 top-full z-20 mt-1 grid w-full gap-0 m-0 list-none rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-0 shadow-lg"
       role="listbox"
       aria-label="Autocomplete suggestions"
     >

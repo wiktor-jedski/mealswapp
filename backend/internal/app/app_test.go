@@ -96,6 +96,7 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 		{fiber.MethodDelete, "/api/v1/account", ""},
 		{fiber.MethodPost, "/api/v1/search", `{"query":"milk","mode":"catalog","page":1,"filters":[]}`},
 		{fiber.MethodGet, "/api/v1/search/autocomplete?query=milk", ""},
+		{fiber.MethodGet, "/api/v1/food-objects/71000000-0000-4000-8000-000000000001", ""},
 	}
 	for _, check := range checks {
 		req := httptest.NewRequest(check.method, check.path, strings.NewReader(check.body))

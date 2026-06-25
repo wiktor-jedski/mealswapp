@@ -55,6 +55,25 @@ func TestSearchRequestFromValidatedDTORejectsInvalidShapes(t *testing.T) {
 	}
 }
 
+func TestSearchRequestFromValidatedDTOAllowsSubstitutionWithoutQuery(t *testing.T) {
+	page := 1
+	quantity := 100.0
+	input := validatedSubstitutionInputDTO{FoodObjectID: "2d4a5f20-c55f-4ba7-9751-779e682f7063", Quantity: &quantity, Unit: "ml"}
+
+	req, err := searchRequestFromValidatedDTO(validatedSearchRequestBodyDTO{
+		Query:              "",
+		Mode:               string(search.SearchModeSubstitution),
+		Page:               &page,
+		SubstitutionInputs: []validatedSubstitutionInputDTO{input},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Query != "" || req.Mode != search.SearchModeSubstitution || len(req.SubstitutionInputs) != 1 {
+		t.Fatalf("request = %+v", req)
+	}
+}
+
 func TestDecodeValidatedSearchRequestBodyErrors(t *testing.T) {
 	if _, err := decodeValidatedSearchRequestBody(map[string]any{"query": make(chan int)}); err == nil {
 		t.Fatal("unsupported JSON value accepted")

@@ -2,10 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 // Implements DESIGN-016 ThemeProvider browser persistence and live system-theme subscription.
 //
-// The theme `<select>` already lives in SearchShell.svelte (Phase 00 Task 4 wired it to
-// `setThemePreference`), so these flows exercise the real running app. Task 151 will
-// extend the sidebar/shell theme selector surface; the cases below stay valid because
-// they target the existing control and the document-root `data-theme` token.
+// The binary theme switch lives in SidebarComponent and converts the default system
+// preference into an explicit light/dark choice when the user toggles it.
 
 /** Stubs the autocomplete and search endpoints so the SearchShell renders without a backend. */
 async function stubApi(page: Page): Promise<void> {
@@ -29,19 +27,35 @@ async function stubApi(page: Page): Promise<void> {
   });
 }
 
+/** Sets the resolved document theme through the binary sidebar switch only when needed. */
+async function setResolvedTheme(page: Page, target: "light" | "dark"): Promise<void> {
+  const current = await page.locator("html").getAttribute("data-theme");
+  if (current !== target) {
+    const toggle = page.getByLabel("Theme preference");
+    const openedSidebar = !(await toggle.isVisible());
+    if (openedSidebar) {
+      await page.getByLabel("Open activity sidebar").click();
+    }
+    await toggle.click();
+    if (openedSidebar) {
+      await page.getByLabel("Close activity sidebar").click();
+    }
+  }
+}
+
 // Implements DESIGN-016 ThemeProvider explicit override persistence across reload verification.
 test("explicit dark theme selection persists across a reload", async ({ page }) => {
   await stubApi(page);
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
 
-  await page.getByLabel("Theme preference").selectOption("dark");
+  await setResolvedTheme(page, "dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
   await page.reload();
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.getByLabel("Theme preference")).toHaveValue("dark");
+  await expect(page.getByLabel("Theme preference")).toHaveAttribute("aria-pressed", "true");
 });
 
 // Implements DESIGN-016 ThemeProvider explicit light override ignores system changes verification.
@@ -50,7 +64,7 @@ test("explicit light override ignores a live switch to system dark", async ({ pa
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
 
-  await page.getByLabel("Theme preference").selectOption("light");
+  await setResolvedTheme(page, "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
   // System flips to dark while the user explicitly chose light; the resolved theme stays light.
@@ -65,7 +79,6 @@ test("system preference follows a live system theme change", async ({ page }) =>
   await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
 
-  await page.getByLabel("Theme preference").selectOption("system");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
   await page.emulateMedia({ colorScheme: "dark" });

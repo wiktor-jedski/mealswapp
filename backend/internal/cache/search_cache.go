@@ -19,7 +19,7 @@ import (
 const (
 	// SearchSchemaVersion isolates Redis entries when search response shape changes.
 	// Implements DESIGN-011 RedisCache schema-version isolation.
-	SearchSchemaVersion = "search-response-v1"
+	SearchSchemaVersion = "search-response-v2"
 	// AutocompleteSchemaVersion isolates Redis entries when autocomplete response shape changes.
 	// Implements DESIGN-011 RedisCache schema-version isolation.
 	AutocompleteSchemaVersion = "autocomplete-response-v1"

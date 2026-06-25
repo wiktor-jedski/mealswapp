@@ -11,7 +11,16 @@ import type {
 	SearchResponse,
 	SearchResponseEnvelope
 } from "./generated";
-import { createInitialSearchState, resetSearch, searchStore, setQuery, type SearchState } from "../stores/search";
+import {
+	addSubstitutionInput,
+	createInitialSearchState,
+	requestSubstitutionSearch,
+	resetSearch,
+	searchStore,
+	setMode,
+	setQuery,
+	type SearchState
+} from "../stores/search";
 import { LocalQueryCache } from "../cache/local-query-cache";
 import {
 	LOCAL_CACHE_STALE_MS,
@@ -20,6 +29,7 @@ import {
 	buildSearchQueryOptions,
 	createSearchQueryOptions,
 	fetchAutocomplete,
+	fetchFoodObject,
 	fetchSearch,
 	mapAppError
 } from "./search-client";
@@ -119,6 +129,24 @@ function makeAutocompleteResponse(): AutocompleteResponse {
 
 function makeAutocompleteEnvelope(): AutocompleteEnvelope {
 	return { status: "ok", requestId: "req-auto-1", data: makeAutocompleteResponse() };
+}
+
+function makeFoodObjectEnvelope() {
+	return {
+		status: "ok",
+		requestId: "req-food-1",
+		data: {
+			id: "food-1",
+			name: "Apple",
+			physicalState: "solid",
+			imageUrl: null,
+			classifications: [{ id: "cat-1", name: "Fruit", kind: "food_category" }],
+			primaryFoodCategory: { id: "cat-1", name: "Fruit", kind: "food_category" },
+			macros: { protein: 0.5, carbohydrates: 14, fat: 0.3 },
+			macroBasis: "100g",
+			calories: 60.7
+		}
+	} as const;
 }
 
 const originalFetch = globalThis.fetch;
@@ -387,6 +415,39 @@ test("fetchAutocomplete maps 429 to retryable server category", async () => {
 	}
 });
 
+// Implements DESIGN-001 SearchView selected Substitution Input hydration request verification.
+test("fetchFoodObject GETs /api/v1/food-objects/{id} with credentials", async () => {
+	fetchMock.enqueueResponse(jsonResponse(200, makeFoodObjectEnvelope()));
+
+	const result = await fetchFoodObject("food 1", new AbortController().signal);
+
+	expect(result.name).toBe("Apple");
+	expect(result.macros.carbohydrates).toBe(14);
+	const call = lastCall();
+	expect(call.url).toBe("/api/v1/food-objects/food%201");
+	expect(call.init.method).toBe("GET");
+	expect(call.init.credentials).toBe("include");
+	expect(call.init.body).toBeUndefined();
+});
+
+// Implements DESIGN-001 SearchView selected Substitution Input hydration error mapping verification.
+test("fetchFoodObject maps 404 to not found SearchClientError", async () => {
+	fetchMock.enqueueResponse(jsonResponse(404, {
+		status: "error",
+		requestId: "req-food-404",
+		error: { category: "validation", code: "not_found", message: "resource not found", retryable: false }
+	}));
+
+	try {
+		await fetchFoodObject("missing", new AbortController().signal);
+	} catch (error) {
+		const clientError = error as SearchClientError;
+		expect(clientError.status).toBe(404);
+		expect(clientError.appError.code).toBe("not_found");
+		expect(clientError.appError.requestId).toBe("req-food-404");
+	}
+});
+
 // Implements DESIGN-001 SearchView stable query-key derivation verification (step 6).
 test("buildSearchQueryOptions uses [search, searchRequestKey] as stable query key", () => {
 	const state = catalogState("apple", 1);
@@ -647,10 +708,16 @@ test("buildSearchQueryOptions produces distinct query keys for distinct pages", 
 	expect(key1).not.toEqual(key2);
 });
 
-// Implements DESIGN-001 SearchView empty-query guard so the initial shell does not fire a request the backend rejects.
-test("buildSearchQueryOptions disables the query when the query is blank and enables it once non-empty", () => {
+// Implements DESIGN-001 SearchView execution guard so the shell does not fire premature requests.
+test("buildSearchQueryOptions enables Catalog text searches and explicit Substitution searches only", () => {
 	const localCache = new LocalQueryCache({ storage: null });
 	expect(buildSearchQueryOptions(catalogState("", 1), localCache).enabled).toBe(false);
 	expect(buildSearchQueryOptions(catalogState("   ", 1), localCache).enabled).toBe(false);
 	expect(buildSearchQueryOptions(catalogState("apple", 1), localCache).enabled).toBe(true);
+
+	setMode("substitution");
+	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" }, "Apple");
+	expect(buildSearchQueryOptions(get(searchStore), localCache).enabled).toBe(false);
+	requestSubstitutionSearch();
+	expect(buildSearchQueryOptions(get(searchStore), localCache).enabled).toBe(true);
 });

@@ -28,26 +28,58 @@ test("binds FoodObject imageUrl, name, classifications, macros, macroBasis, and 
 	expect(source).toContain("item.macros.fat");
 });
 
+// Implements DESIGN-001 SearchView Catalog-to-Substitution action verification.
+test("can expose an optional add-to-substitutions action for Catalog result cards", () => {
+	expect(source).toContain("export let onAddToSubstitution");
+	expect(source).toContain("data-result-add-substitution");
+	expect(source).toContain("absolute bottom-4 right-4");
+	expect(source).toContain("pr-12");
+	expect(source).toContain("aria-label={`Add ${item.name} to substitutions`}");
+	expect(source).toContain("<span class=\"-translate-y-px leading-none\" aria-hidden=\"true\">+</span>");
+	expect(source).toContain("onAddToSubstitution?.(item)");
+	expect(source).not.toContain("hover:bg-[var(--color-accent)]");
+});
+
 // Implements DESIGN-001 ResultsGrid Food Category classifications filtering verification.
 test("renders Food Category classifications filtered by kind === food_category", () => {
 	expect(source).toContain("foodCategories");
 	expect(source).toContain('classification.kind === "food_category"');
 	expect(source).toContain("{#each foodCategories as category (category.id)}");
 	expect(source).toContain("{category.name}");
+	expect(source).toContain("flex flex-wrap");
 });
 
 // Implements DESIGN-001 ResultsGrid macro basis label verification.
-test("macro basis renders a per-100g / per-100ml label", () => {
-	expect(source).toContain('"per 100ml"');
-	expect(source).toContain('"per 100g"');
+test("macro basis follows the sidebar unit preference", () => {
+	expect(source).toContain("preferencesStore");
+	expect(source).toContain("macroBasisDisplayLabel(item.macroBasis, $preferencesStore.unitSystem)");
 	expect(source).toContain("macroBasisLabel");
 	expect(source).toContain("data-result-macro-basis");
 });
 
 // Implements DESIGN-001 ResultsGrid calories display verification.
-test("calories are rendered with the macro basis label", () => {
+test("calories are rendered as a nutrition row", () => {
 	expect(source).toContain("data-result-calories");
-	expect(source).toContain("{item.calories} kcal {macroBasisLabel}");
+	expect(source).toContain("<dt");
+	expect(source).toContain("Calories");
+	expect(source).toContain("{formatDisplayQuantity(displayCalories)} kcal");
+});
+
+// Implements DESIGN-001 ResultsGrid standardized card layout verification.
+test("places name above media, nutrition beside the icon, and tags below", () => {
+	const namePos = source.indexOf("data-result-name");
+	const imagePos = source.indexOf("data-result-image-wrapper");
+	const macrosPos = source.indexOf("data-result-macros");
+	const categoriesPos = source.indexOf("data-result-categories");
+
+	expect(namePos).toBeGreaterThan(-1);
+	expect(imagePos).toBeGreaterThan(namePos);
+	expect(macrosPos).toBeGreaterThan(imagePos);
+	expect(categoriesPos).toBeGreaterThan(macrosPos);
+	expect(source).toContain("sm:grid-cols-[96px_1fr]");
+	expect(source).toContain("grid h-24 content-between");
+	expect(source).toContain("grid-cols-[5rem_auto]");
+	expect(source).not.toContain("justify-between");
 });
 
 // Implements DESIGN-001 ResultsGrid similarity score and tier display verification.
@@ -58,6 +90,18 @@ test("binds SimilarityMetadata score and tier and imports the generated types", 
 	expect(source).toContain("similarity?.tier");
 	expect(source).toContain("data-result-similarity-score");
 	expect(source).toContain("data-result-similarity-tier");
+});
+
+// Implements DESIGN-001 ResultsGrid backend-calculated replacement quantity verification.
+test("renders backend matching quantity with physical-state-aware units", () => {
+	expect(source).toContain("similarity.matchingQuantity");
+	expect(source).toContain("matchingQuantityLabel");
+	expect(source).toContain("displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)");
+	expect(source).toContain("convertQuantity(similarity.matchingQuantity");
+	expect(source).toContain("unitLabel(matchingQuantityDisplayUnit)");
+	expect(source).toContain("macroScale = similarity ? similarity.matchingQuantity / 100 : 1");
+	expect(source).toContain("macroContextLabel = matchingQuantityLabel ? `for about ${matchingQuantityLabel}` : macroBasisLabel");
+	expect(source).toContain("formatDisplayQuantity(displayMacros.protein)");
 });
 
 // Implements DESIGN-001 ResultsGrid similarity tier badge styling verification.

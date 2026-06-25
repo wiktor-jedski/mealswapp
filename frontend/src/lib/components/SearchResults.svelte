@@ -1,5 +1,6 @@
 <script lang="ts">
   import { get } from "svelte/store";
+  import { derived } from "svelte/store";
   import { createQuery } from "@tanstack/svelte-query";
   import {
     createSearchQueryOptions,
@@ -7,10 +8,12 @@
     LOCAL_CACHE_STALE_MS
   } from "../api/search-client";
   import { createLocalQueryCache } from "../cache/local-query-cache";
-  import { searchStore, setPage, searchRequestKey } from "../stores/search";
+  import { addSubstitutionInput, searchStore, setPage, searchRequestKey } from "../stores/search";
   import { offlineStatus, setShowingCached } from "../stores/offline";
+  import { preferencesStore } from "../stores/preferences";
+  import { displayUnitForBasis } from "../units";
   import ResultsGrid from "./ResultsGrid.svelte";
-  import type { SearchRejection } from "../api/generated";
+  import type { FoodObject, SearchRejection } from "../api/generated";
 
   // Implements DESIGN-001 SearchView results composition: TanStack Query over generated envelopes, ResultsGrid wiring, and Daily Diet rejection lift.
 
@@ -18,20 +21,34 @@
    * Optional callback lifting a structured {@link SearchRejection} (derived from a 422
    * `SearchClientError`) to the shell so `DailyDietControls` can render rejection detail.
    */
-  let { onRejection = () => {} }: { onRejection?: (r: SearchRejection | null) => void } = $props();
+  let {
+    onRejection = () => {},
+    onSearchInFlightChange = () => {}
+  }: {
+    onRejection?: (r: SearchRejection | null) => void;
+    onSearchInFlightChange?: (searching: boolean) => void;
+  } = $props();
 
   /** Local query cache used by the search client for offline reuse and LRU persistence. */
   const localCache = createLocalQueryCache();
 
-  /** Derived TanStack Query options store bridging the search store to `createQuery`. */
-  const optionsStore = createSearchQueryOptions(searchStore, localCache);
+  const initialState = get(searchStore);
 
-  // Bridges the derived options store to a rune so createQuery re-evaluates on search-store changes.
+  // Implements DESIGN-001 SearchView committed server-side search execution.
+  const committedSearchStore = derived(searchStore, ($state) => ({
+    ...$state,
+    query: $state.submittedQuery
+  }));
+
+  /** Derived TanStack Query options store bridging the committed search store to `createQuery`. */
+  const optionsStore = createSearchQueryOptions(committedSearchStore, localCache);
+
+  // Bridges the derived options store to a rune so createQuery re-evaluates on committed search changes.
   let currentOptions = $state(get(optionsStore));
   $effect(() => optionsStore.subscribe((o) => { currentOptions = o; }));
 
-  // Bridges the search store to a rune for template reads (page) and cache-key derivation.
-  let state = $state(get(searchStore));
+  // Bridges the immediate search store to a rune for template reads (page) and cache-key derivation.
+  let state = $state(initialState);
   $effect(() => searchStore.subscribe((s) => { state = s; }));
 
   // Bridges the online flag to a rune, only updating on change to avoid write-back loops.
@@ -67,7 +84,7 @@
   $effect(() => {
     const data = query.data;
     if (!online && data) {
-      const key = searchRequestKey(state);
+      const key = searchRequestKey({ ...state, query: state.submittedQuery });
       setShowingCached(localCache.has(key) && !localCache.isStale(key, LOCAL_CACHE_STALE_MS));
     }
   });
@@ -80,16 +97,45 @@
         : "Search failed."
       : null
   );
+
+  /** True only when the current search-mode request is explicitly eligible to render results. */
+  let hasStartedSearching = $derived(currentOptions.enabled === true);
+
+  /** True only for explicit submitted result-search requests, not autocomplete suggestions. */
+  let searchInFlight = $derived(hasStartedSearching && query.isFetching === true);
+
+  // Lifts submitted-search loading state so the shell can render the spinner inside the search input.
+  $effect(() => {
+    onSearchInFlightChange(searchInFlight);
+  });
+
+  /** Adds a full Catalog result to the Substitution Input list while preserving display data. */
+  function addCatalogResultToSubstitutions(item: FoodObject): void {
+    addSubstitutionInput(
+      {
+        foodObjectId: item.id,
+        quantity: 100,
+        unit: displayUnitForBasis(item.macroBasis, get(preferencesStore).unitSystem)
+      },
+      item.name,
+      item
+    );
+  }
 </script>
 
 <!-- Implements DESIGN-001 SearchView ResultsGrid wiring from TanStack Query result. -->
-<ResultsGrid
-  results={query.data?.items ?? []}
-  similarityMetadata={query.data?.similarityMetadata ?? []}
-  similarityScores={query.data?.similarityScores ?? []}
-  loading={query.isFetching}
-  error={errorMessage}
-  totalCount={query.data?.totalCount ?? 0}
-  page={state.page}
-  onPageChange={setPage}
-/>
+{#if hasStartedSearching}
+  <ResultsGrid
+    results={query.data?.items ?? []}
+    similarityMetadata={query.data?.similarityMetadata ?? []}
+    similarityScores={query.data?.similarityScores ?? []}
+    sourceSummary={query.data?.sourceSummary ?? null}
+    showSimilarity={state.mode !== "catalog"}
+    onAddToSubstitution={state.mode === "catalog" ? addCatalogResultToSubstitutions : null}
+    error={errorMessage}
+    loading={searchInFlight}
+    totalCount={query.data?.totalCount ?? 0}
+    page={state.page}
+    onPageChange={setPage}
+  />
+{/if}

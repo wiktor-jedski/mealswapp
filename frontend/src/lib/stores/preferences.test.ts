@@ -10,7 +10,7 @@ import {
 	setUnitSystem
 } from "./preferences";
 
-// Implements DESIGN-001 SettingsPanel unit preference persistence and restore verification.
+// Implements DESIGN-001 SidebarComponent unit preference persistence and restore verification.
 
 const originalWindow = globalThis.window;
 
@@ -33,12 +33,12 @@ afterEach(() => {
 	resetPreferences();
 });
 
-// Implements DESIGN-001 SettingsPanel default unit preference verification.
+// Implements DESIGN-001 SidebarComponent default unit preference verification.
 test("createDefaultPreferences defaults to metric units", () => {
 	expect(createDefaultPreferences()).toEqual({ unitSystem: "metric" });
 });
 
-// Implements DESIGN-001 SettingsPanel initial store value verification.
+// Implements DESIGN-001 SidebarComponent initial unit preference store value verification.
 test("preferencesStore starts with metric unit system", () => {
 	expect(get(preferencesStore).unitSystem).toBe("metric");
 });
@@ -159,7 +159,7 @@ test("setUnitSystem is safe and updates the store when window is undefined", () 
 	expect(get(preferencesStore).unitSystem).toBe("imperial");
 });
 
-// Implements DESIGN-001 SettingsPanel persistence round-trip verification.
+// Implements DESIGN-001 SidebarComponent persistence round-trip verification.
 test("unit changes persist across initPreferences calls backed by the same storage", () => {
 	const storage = createStorage();
 	setWindowGlobals(storage);
