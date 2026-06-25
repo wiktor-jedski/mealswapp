@@ -82,6 +82,9 @@ async function resultGridDocumentTop(page: Page): Promise<number> {
 	});
 }
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-002, SW-REQ-008, SW-REQ-009.
 // Implements DESIGN-001 AutocompleteDropdown ranked display after debounce.
 test("types in the search bar and verifies ranked suggestions appear after the 150ms debounce", async ({ page }) => {
 	await stubApi(page);
@@ -132,6 +135,9 @@ test("keeps search-mode buttons only in the main view, not in the sidebar", asyn
 	await expect(page.getByRole("navigation", { name: "Search mode navigation" })).toHaveCount(0);
 });
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-008.
 // Implements DESIGN-001 AutocompleteDropdown floating overlay layout verification.
 test("opening autocomplete suggestions does not push results down", async ({ page }) => {
 	await stubApiWithResults(page);
@@ -149,6 +155,9 @@ test("opening autocomplete suggestions does not push results down", async ({ pag
 	expect(after).toBeLessThanOrEqual(before);
 });
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-009, SW-REQ-086.
 // Implements DESIGN-001 AutocompleteDropdown Tab/Shift+Tab focus movement.
 //
 test("Tab moves focus forward through options and Shift+Tab moves it backward", async ({ page }) => {
@@ -167,6 +176,9 @@ test("Tab moves focus forward through options and Shift+Tab moves it backward", 
 	await expect(autocompleteOptions(page).nth(0)).toBeFocused();
 });
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-009, SW-REQ-086.
 // Implements DESIGN-001 AutocompleteDropdown ArrowUp/ArrowDown option movement.
 test("ArrowDown moves the active suggestion instead of moving the text caret", async ({ page }) => {
 	await stubApi(page);
@@ -202,6 +214,9 @@ test("Enter submits the typed query without selecting the top suggestion", async
 	await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
 });
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-009, SW-REQ-086.
 // Implements DESIGN-001 AutocompleteDropdown Escape dismissal.
 test("Escape dismisses the dropdown and returns focus to the combobox", async ({ page }) => {
 	await stubApi(page);
@@ -217,6 +232,9 @@ test("Escape dismisses the dropdown and returns focus to the combobox", async ({
 	await expect(input).toBeFocused();
 });
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-009, SW-REQ-085, SW-REQ-086.
 // Implements DESIGN-001 AutocompleteDropdown ARIA combobox/listbox state.
 test("combobox exposes aria-expanded, aria-controls, and inactive suggestions before navigation", async ({ page }) => {
 	await stubApi(page);

@@ -140,6 +140,9 @@ async function stubCoreApi(page: Page, search: SearchResponseEnvelope = searchEn
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, search));
 }
 
+// Verifies IT-ARCH-001-001.
+// Verifies ARCH-001.
+// Traces SW-REQ-001, SW-REQ-010, SW-REQ-011.
 // Implements DESIGN-001 SearchView initial empty-results suppression verification.
 test("initial Catalog view hides search results until the user enters a query", async ({ page }) => {
   await stubCoreApi(page, searchEnvelope(5, 1));
@@ -151,6 +154,9 @@ test("initial Catalog view hides search results until the user enters a query", 
   await expect(page.locator("[data-results-grid]")).toBeVisible();
 });
 
+// Verifies IT-ARCH-001-001.
+// Verifies ARCH-001.
+// Traces SW-REQ-001, SW-REQ-010, SW-REQ-011, SW-REQ-012.
 // Implements DESIGN-001 SearchView initial Catalog search verification.
 test("initial Catalog search renders ranked results after typing a query", async ({ page }) => {
   await stubCoreApi(page, searchEnvelope(5, 1));
@@ -162,6 +168,9 @@ test("initial Catalog search renders ranked results after typing a query", async
   await expect(page.locator("[data-result-name]").first()).toContainText("Food");
 });
 
+// Verifies IT-ARCH-001-002.
+// Verifies ARCH-001.
+// Traces SW-REQ-002, SW-REQ-008, SW-REQ-009.
 // Implements DESIGN-001 SearchView debounced autocomplete verification.
 test("autocomplete shows ranked suggestions after the 150ms debounce", async ({ page }) => {
   await stubCoreApi(page);
@@ -174,6 +183,9 @@ test("autocomplete shows ranked suggestions after the 150ms debounce", async ({ 
   await expect(listbox.getByRole("option").nth(1)).toHaveText("Applesauce");
 });
 
+// Verifies IT-ARCH-001-001.
+// Verifies ARCH-001.
+// Traces SW-REQ-001, SW-REQ-010, SW-REQ-011.
 // Implements DESIGN-001 SearchView committed server-side search verification.
 test("typing a query waits for Enter before sending the final search text", async ({ page }) => {
   let searchRequestCount = 0;
@@ -213,6 +225,9 @@ test("typing a zero-result query does not flash skeleton result rows", async ({ 
   await expect(page.locator("[data-results-empty]")).toHaveText("No results found.");
 });
 
+// Verifies IT-ARCH-001-003.
+// Verifies ARCH-001.
+// Traces SW-REQ-005, SW-REQ-007, SW-REQ-011, SW-REQ-018, SW-REQ-025.
 // Implements DESIGN-001 SearchView Substitution Input search verification.
 test("Substitution Input search sends inputs and renders ranked results", async ({ page }) => {
   let seenRequestBody: SearchRequest | null = null;
@@ -250,6 +265,9 @@ test("Substitution Input search sends inputs and renders ranked results", async 
   expect(seenRequestBody!.substitutionInputs?.[0]?.quantity).toBe(150);
 });
 
+// Verifies IT-ARCH-001-003.
+// Verifies ARCH-001.
+// Traces SW-REQ-005, SW-REQ-007, SW-REQ-011, SW-REQ-025.
 // Implements DESIGN-001 SearchView Catalog-to-Substitution selected item verification.
 test("Catalog results can add full item data to the substitution input list", async ({ page }) => {
   const seenRequests: SearchRequest[] = [];
@@ -306,6 +324,9 @@ test("Daily Diet Alternative search shows the structured 422 rejection", async (
   await expect(page.locator("[data-rejection-message]")).toContainText("No daily diet alternative");
 });
 
+// Verifies IT-ARCH-001-001.
+// Verifies ARCH-001.
+// Traces SW-REQ-010, SW-REQ-011.
 // Implements DESIGN-001 SearchView pagination verification.
 test("pagination loads page 2 and reflects the page in the request", async ({ page }) => {
   let lastPage: number | null = null;
@@ -325,6 +346,9 @@ test("pagination loads page 2 and reflects the page in the request", async ({ pa
   await expect.poll(() => lastPage).toBe(2);
 });
 
+// Verifies IT-ARCH-001-004.
+// Verifies ARCH-001.
+// Traces SW-REQ-003, SW-REQ-088.
 // Implements DESIGN-001 SearchView local cache reuse verification.
 test("repeating the same search reuses the cache without a second network call", async ({ page }) => {
   let appleRequestCount = 0;
@@ -349,6 +373,9 @@ test("repeating the same search reuses the cache without a second network call",
   expect(appleRequestCount).toBe(1);
 });
 
+// Verifies IT-ARCH-001-005.
+// Verifies ARCH-001.
+// Traces SW-REQ-013, SW-REQ-048.
 // Implements DESIGN-001 SidebarComponent authenticated history and favorites verification.
 test("authenticated sidebar loads search history and favorites", async ({ page }) => {
   await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 200, profileEnvelope));
@@ -366,6 +393,9 @@ test("authenticated sidebar loads search history and favorites", async ({ page }
   await expect(page.locator("[data-sidebar-favorite='food-apple']")).toBeVisible();
 });
 
+// Verifies IT-ARCH-001-005.
+// Verifies ARCH-001.
+// Traces SW-REQ-013.
 // Implements DESIGN-001 SidebarComponent account-level unit preference verification.
 test("sidebar unit preference changes between metric and imperial", async ({ page }) => {
   await stubCoreApi(page);
@@ -382,6 +412,9 @@ test("sidebar unit preference changes between metric and imperial", async ({ pag
   await expect(units).toHaveValue("imperial");
 });
 
+// Verifies IT-ARCH-001-004.
+// Verifies ARCH-001.
+// Traces SW-REQ-003, SW-REQ-087, SW-REQ-088.
 // Implements DESIGN-001 OfflineBanner offline cached-result display verification.
 test("going offline shows the OfflineBanner while cached results remain visible", async ({ page }) => {
   await stubCoreApi(page, searchEnvelope(6, 1));
@@ -398,6 +431,9 @@ test("going offline shows the OfflineBanner while cached results remain visible"
   await page.context().setOffline(false);
 });
 
+// Verifies IT-ARCH-001-004.
+// Verifies ARCH-001.
+// Traces SW-REQ-077, SW-REQ-087.
 // Implements DESIGN-001 SearchView 10-second timeout handling verification.
 test("a slow search surfaces an error and a retry succeeds", async ({ page }) => {
   test.setTimeout(30_000);
@@ -432,6 +468,9 @@ test("a zero-result search shows the empty state", async ({ page }) => {
   await expect(page.locator("[data-results-empty]")).toHaveText("No results found.");
 });
 
+// Verifies IT-ARCH-001-005.
+// Verifies ARCH-001.
+// Traces SW-REQ-015.
 // Implements DESIGN-016 ThemeProvider explicit selection restoration across reload verification.
 test("explicit theme selection restores across a reload", async ({ page }) => {
   await stubCoreApi(page);

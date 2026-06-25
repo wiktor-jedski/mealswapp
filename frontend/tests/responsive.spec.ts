@@ -39,7 +39,26 @@ async function stubApi(page: Page): Promise<void> {
       body: JSON.stringify({
         status: "ok",
         requestId: "responsive-stub",
-        data: { items: [], totalCount: 0, page: 1, similarityScores: [], similarityMetadata: [], warnings: [] }
+        data: {
+          items: [
+            {
+              id: "food-responsive-1",
+              name: "Responsive Apple",
+              physicalState: "solid",
+              imageUrl: null,
+              classifications: [{ id: "cat-fruit", name: "Fruit", kind: "food_category" }],
+              primaryFoodCategory: { id: "cat-fruit", name: "Fruit", kind: "food_category" },
+              macros: { protein: 1, carbohydrates: 14, fat: 0.2 },
+              macroBasis: "100g",
+              calories: 62
+            }
+          ],
+          totalCount: 1,
+          page: 1,
+          similarityScores: [],
+          similarityMetadata: [],
+          warnings: []
+        }
       })
     });
   });
@@ -61,6 +80,9 @@ async function setResolvedTheme(page: Page, target: "light" | "dark"): Promise<v
   }
 }
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-014, SW-REQ-089.
 // Implements DESIGN-016 LayoutGrid no-horizontal-scroll above 320px verification.
 test("no horizontal scrollbar at a 320px viewport width", async ({ page }) => {
   await stubApi(page);
@@ -77,6 +99,9 @@ test("no horizontal scrollbar at a 320px viewport width", async ({ page }) => {
   expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.innerWidth);
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-014, SW-REQ-089.
 // Implements DESIGN-016 LayoutGrid viewport-left desktop sidebar verification.
 test("desktop layout places the sidebar at the viewport's far-left edge", async ({ page }) => {
   await stubApi(page);
@@ -100,6 +125,9 @@ test("desktop layout places the sidebar at the viewport's far-left edge", async 
   expect(gridTemplateColumns).toContain("240px");
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-014, SW-REQ-089.
 // Implements DESIGN-016 LayoutGrid single-column mobile layout with sidebar stacked above main content.
 test("mobile layout stacks the sidebar above the main content in a single column", async ({ page }) => {
   await stubApi(page);
@@ -121,20 +149,29 @@ test("mobile layout stacks the sidebar above the main content in a single column
   expect(asideSpan).toBe("auto");
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-089.
 // Implements DESIGN-016 TypographySystem Inter UI text and Roboto Mono data labels verification.
 test("UI text uses Inter and data labels use Roboto Mono", async ({ page }) => {
   await stubApi(page);
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
+  await expect(page.locator("[data-result-macros]")).toBeVisible();
 
   const heading = page.getByRole("heading", { name: "Mealswapp", level: 1 });
-  const dataLabel = page.locator(".font-data").first();
+  const dataLabel = page.locator("[data-result-macros]");
   const headingFont = await heading.evaluate((el) => getComputedStyle(el).fontFamily);
   const dataFont = await dataLabel.evaluate((el) => getComputedStyle(el).fontFamily);
   expect(headingFont.toLowerCase()).toContain("inter");
   expect(dataFont.toLowerCase()).toContain("roboto mono");
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-015, SW-REQ-089.
 // Implements DESIGN-016 ColorPalette exact light and dark design tokens verification.
 test("light and dark design tokens match the documented style guide", async ({ page }) => {
   await stubApi(page);

@@ -192,6 +192,9 @@ async function readColorTokens(page: Page): Promise<{ bg: string; surface: strin
   }));
 }
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-085, SW-REQ-086.
 // Implements DESIGN-016 ComponentStyles keyboard-only Catalog workflow at desktop and mobile sizes.
 test("keyboard-only Catalog workflow reaches the search bar, renders results, and keeps focus visible", async ({ page }) => {
   await stubApi(page);
@@ -223,6 +226,10 @@ test("keyboard-only Catalog workflow reaches the search bar, renders results, an
   await expect(page.locator("[data-results-page]")).toHaveText("Page 2 of 2");
 });
 
+// Verifies IT-ARCH-001-003.
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-005, SW-REQ-025, SW-REQ-085, SW-REQ-086.
 // Implements DESIGN-016 ComponentStyles keyboard-only Substitution workflow at desktop and mobile sizes.
 test("keyboard-only Substitution workflow switches mode, adds an input, and searches via keyboard", async ({ page }) => {
   await stubApi(page);
@@ -255,6 +262,9 @@ test("keyboard-only Substitution workflow switches mode, adds an input, and sear
   await expectFocusIndicatorVisible(page);
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-085, SW-REQ-086.
 // Implements DESIGN-016 ComponentStyles automated axe scan at desktop and mobile sizes (WCAG 2.1 A/AA).
 test("axe scan reports no serious or critical violations outside documented color-contrast deviations", async ({ page }) => {
   // Two axe runs (full + color-contrast-disabled) are slow under mobile emulation.
@@ -295,6 +305,9 @@ test("axe scan reports no serious or critical violations outside documented colo
   ).toEqual([]);
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-085, SW-REQ-089.
 // Implements DESIGN-016 ComponentStyles normal-text WCAG 2.1 AA 4.5:1 contrast in light and dark themes.
 test("normal-text color pairs meet WCAG 2.1 AA 4.5:1 in light and dark themes", async ({ page }) => {
   await stubApi(page);
@@ -319,6 +332,9 @@ test("normal-text color pairs meet WCAG 2.1 AA 4.5:1 in light and dark themes", 
   expect(contrastRatio(dark.muted, dark.surface)).toBeGreaterThanOrEqual(4.5);
 });
 
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-085, SW-REQ-086.
 // Implements DESIGN-016 ComponentStyles accessible control names via axe name rules (button-name, label, link-name, select-name, aria-input-field-name).
 test("interactive controls have accessible names", async ({ page }) => {
   await stubApi(page);

@@ -4,12 +4,13 @@
 
 ## Scope
 
-Phase 05 covers tasks `138`-`154`. Task `138` was a Phase 04 cleanup task that
+Phase 05 covers tasks `138`-`155`. Task `138` was a Phase 04 cleanup task that
 unblocked Phase 05 by extending every search-result item with server-derived
 classification summaries (`id`, `name`, `kind`), an explicit primary Food
 Category, protein/carbohydrate/fat macros with a `100g` or `100ml` basis, and
-server-calculated calories. Tasks `139`-`154` build the frontend search
-experience against the Phase 04 generated OpenAPI contracts.
+server-calculated calories. Tasks `139`-`155` build the frontend search
+experience against the Phase 04 generated OpenAPI contracts and verify the
+ARCH-001 frontend integration obligations.
 
 The implemented frontend surface composes a `SearchView` shell: typed search
 state and request construction, a 20-entry localStorage LRU query cache, a
@@ -21,7 +22,8 @@ a paginated results grid with image fallback and similarity presentation, a
 collapsible activity sidebar with history/favorites, an offline and stale-data
 banner, theme persistence and resolution with an explicit light/dark sidebar
 toggle, a 12-column responsive layout, Playwright end-to-end workflows with
-`@axe-core/playwright` checks, and aggregate coverage gates.
+`@axe-core/playwright` checks, aggregate coverage gates, and ARCH-001 SWE.5
+integration-verification obligations.
 
 The frontend consumes the Phase 04 generated search/autocomplete contracts. The
 `ServiceWorker` static aspect of DESIGN-001 (offline asset/API/image
@@ -35,7 +37,7 @@ diet data, or optimization job behavior.
 ## Automated Evidence
 
 Run from the repository root unless noted. These commands were actually run
-during tasks `153`-`154`:
+during tasks `153`-`155`:
 
 ```sh
 cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun test
@@ -240,6 +242,7 @@ Related Phase 05 task IDs:
 - `152` browser accessibility and responsive gate.
 - `153` coverage and aggregate gate.
 - `154` acceptance documentation (this document).
+- `155` ARCH-001 SWE.5 integration verification.
 
 Requirement coverage:
 
