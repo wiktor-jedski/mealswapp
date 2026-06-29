@@ -22,12 +22,8 @@ REQUIRED_TEXT = (
 	"Mealswapp",
 	"Catalog",
 	"Substitution",
-	"Daily Diet",
-	"Phase 05 Search",
+	"Daily Diet Alternative",
 	"Food search",
-	"System",
-	"Light",
-	"Dark",
 )
 SEARCH_INPUT_RE = re.compile(r'<input[^>]*id="autocomplete-input"[^>]*>')
 
@@ -123,6 +119,8 @@ def assert_shell_dom(dom: str) -> None:
 		raise RuntimeError("autocomplete search input must not be disabled in Phase 05")
 	if 'aria-label="Theme preference"' not in dom:
 		raise RuntimeError("rendered shell is missing the theme selector")
+	if "data-sidebar-theme-toggle" not in dom:
+		raise RuntimeError("rendered shell is missing the sidebar theme toggle")
 
 
 def capture_screenshot(browser: str, url: str, artifact_dir: Path, name: str, width: int, height: int) -> Path:
