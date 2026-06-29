@@ -65,6 +65,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Implement ARCH-001 and ARCH-016 user-facing search shell.
 - Add Svelte stores, TanStack Query API client, sidebar, search mode controls, unit and theme settings, autocomplete keyboard navigation, results grid, pagination, theme provider, responsive layout, placeholder images, and local query cache.
 - Add Playwright browser coverage and `@axe-core/playwright` accessibility checks while building the search UI so keyboard and WCAG regressions are caught before Phase 09 hardening.
+- Use Svelte 5 runes for handwritten `.svelte` component props/state/derived/effect logic. Keep shared cross-component application stores as plain `svelte/store` TypeScript modules unless a later migration provides equal testability and framework-boundary clarity.
 - Exit criteria: default search state, 150ms debounce, local cache LRU, responsive UI, light/dark persistence, and result rendering satisfy SW-REQ-001 through SW-REQ-005, SW-REQ-007 through SW-REQ-015, and SW-REQ-089. SW-REQ-006 Daily Diet aggregation is deferred to Phase 07.
 
 ### Phase 06: Subscription and Entitlement Enforcement

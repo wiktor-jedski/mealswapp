@@ -11,6 +11,12 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
+// Implements DESIGN-010 RequestValidator and DESIGN-002 SearchController defensive collection limits.
+const (
+	maxSearchFilters      = 20
+	maxSubstitutionInputs = 20
+)
+
 // validatedSearchRequestBodyDTO represents the typed search request shape after route validation.
 // Implements DESIGN-010 RequestValidator and DESIGN-002 QueryParser.
 type validatedSearchRequestBodyDTO struct {
@@ -250,6 +256,9 @@ func validateSearchFilters(value any) error {
 	if !ok {
 		return errors.New("filters are invalid")
 	}
+	if len(items) > maxSearchFilters {
+		return errors.New("too many filters")
+	}
 	for _, item := range items {
 		filter, ok := item.(map[string]any)
 		if !ok {
@@ -282,6 +291,9 @@ func validateSubstitutionInputs(value any) error {
 	items, ok := value.([]any)
 	if !ok {
 		return errors.New("substitution inputs are invalid")
+	}
+	if len(items) > maxSubstitutionInputs {
+		return errors.New("too many substitution inputs")
 	}
 	for _, item := range items {
 		input, ok := item.(map[string]any)

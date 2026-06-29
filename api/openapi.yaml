@@ -908,6 +908,7 @@ components:
           $ref: "#/components/schemas/SearchMode"
         filters:
           type: array
+          maxItems: 20
           default: []
           items:
             $ref: "#/components/schemas/SearchFilter"
@@ -917,6 +918,7 @@ components:
           maximum: 10000
         substitutionInputs:
           type: array
+          maxItems: 20
           items:
             $ref: "#/components/schemas/SubstitutionInput"
         dailyDietId:
