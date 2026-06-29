@@ -59,6 +59,9 @@ test("declares a mobile-only open toggle and a mobile-only close button bound to
 	expect(source).toContain("mobile-sidebar-toggle");
 	expect(source).toContain("data-sidebar-mobile-toggle");
 	expect(source).toContain("sm:hidden");
+	expect(source).toContain('aria-label="Open activity sidebar"');
+	expect(source).toContain('<span aria-hidden="true">☰</span>');
+	expect(source).not.toContain("☰ Activity");
 	expect(source).toContain("toggleMobileOpen");
 	expect(source).toContain("sidebar-mobile-close");
 	expect(source).toContain("data-sidebar-mobile-close");
@@ -102,7 +105,7 @@ test("selecting a history entry calls setQuery with the query and setMode with t
 	expect(source).toContain("setQuery(entry.query)");
 	expect(source).toContain("setMode(entry.mode)");
 	expect(source).toContain("isSearchMode(entry.mode)");
-	expect(source).toContain("on:click={() => onHistoryEntrySelect(entry)}");
+	expect(source).toContain("onclick={() => onHistoryEntrySelect(entry)}");
 	expect(source).toContain("data-sidebar-history-entry={entry.id}");
 });
 

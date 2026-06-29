@@ -28,7 +28,8 @@ afterEach(() => {
 			window.localStorage.removeItem(PREFERENCES_STORAGE_KEY);
 		}
 	} catch {
-		// ignore
+		resetPreferences();
+		return;
 	}
 	resetPreferences();
 });

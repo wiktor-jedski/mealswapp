@@ -39,25 +39,25 @@
   ];
 
   /** Authenticated profile loaded from `/api/v1/profile`; `null` while loading or anonymous. */
-  let profile: ProfileData | null = null;
+  let profile = $state<ProfileData | null>(null);
   /** True while the profile probe is in flight; gates the anonymous guidance block. */
-  let authenticating = true;
+  let authenticating = $state(true);
   /** True when the profile probe returned a valid profile envelope. */
-  let authenticated = false;
+  let authenticated = $state(false);
   /** Inline auth-probe error message; never propagated to the parent so core search stays usable. */
-  let authError: string | null = null;
+  let authError = $state<string | null>(null);
 
   /** Authenticated search-history entries loaded from `/api/v1/search-history`. */
-  let history: SearchHistoryEntry[] = [];
-  let historyLoading = false;
+  let history = $state<SearchHistoryEntry[]>([]);
+  let historyLoading = $state(false);
   /** Inline history error message; never propagated to the parent so core search stays usable. */
-  let historyError: string | null = null;
+  let historyError = $state<string | null>(null);
 
   /** Authenticated favorite saved items loaded from `/api/v1/saved-items?kind=favorite`. */
-  let favorites: SavedItem[] = [];
-  let favoritesLoading = false;
+  let favorites = $state<SavedItem[]>([]);
+  let favoritesLoading = $state(false);
   /** Inline favorites error message; never propagated to the parent so core search stays usable. */
-  let favoritesError: string | null = null;
+  let favoritesError = $state<string | null>(null);
 
   onMount(() => {
     initSidebar();
@@ -193,7 +193,7 @@
   }
 
   /** Branding shown in the sidebar header; falls back to the product name when the profile has no display name. */
-  $: branding = profile?.displayName && profile.displayName.length > 0 ? profile.displayName : "Mealswapp";
+  let branding = $derived(profile?.displayName && profile.displayName.length > 0 ? profile.displayName : "Mealswapp");
 </script>
 
 <!-- Implements DESIGN-001 SidebarComponent -->
@@ -208,14 +208,14 @@
   {#if !$sidebarStore.mobileOpen}
     <button
       type="button"
-      class="mobile-sidebar-toggle rounded border border-[var(--color-border)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] sm:hidden"
+      class="mobile-sidebar-toggle flex h-10 w-10 items-center justify-center rounded border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] sm:hidden"
       aria-label="Open activity sidebar"
       aria-expanded={false}
       aria-controls="activity-sidebar-content"
-      on:click={toggleMobileOpen}
+      onclick={toggleMobileOpen}
       data-sidebar-mobile-toggle
     >
-      ☰ Activity
+      <span aria-hidden="true">☰</span>
     </button>
   {/if}
 
@@ -225,7 +225,7 @@
     class="sidebar-collapse-toggle hidden self-end rounded border border-[var(--color-border)] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] sm:block"
     aria-label={$sidebarStore.collapsed ? "Expand sidebar" : "Collapse sidebar"}
     aria-expanded={!$sidebarStore.collapsed}
-    on:click={toggleCollapsed}
+    onclick={toggleCollapsed}
     data-sidebar-collapse
   >
     {$sidebarStore.collapsed ? "»" : "«"}
@@ -244,7 +244,7 @@
       aria-label="Close activity sidebar"
       aria-expanded={true}
       aria-controls="activity-sidebar-content"
-      on:click={() => setMobileOpen(false)}
+      onclick={() => setMobileOpen(false)}
       data-sidebar-mobile-close
     >
       ✕
@@ -266,7 +266,7 @@
         class="relative h-8 w-14 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         aria-label="Theme preference"
         aria-pressed={$resolvedTheme === "dark"}
-        on:click={onThemeToggle}
+        onclick={onThemeToggle}
       >
         <span
           class="absolute top-1/2 h-6 w-6 -translate-y-1/2 rounded-full bg-[var(--color-primary)] shadow transition-[left]"
@@ -288,7 +288,7 @@
         id="sidebar-unit-system"
         class="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         value={$preferencesStore.unitSystem}
-        on:change={(event) => setUnitSystem((event.currentTarget as HTMLSelectElement).value as UnitSystem)}
+        onchange={(event) => setUnitSystem((event.currentTarget as HTMLSelectElement).value as UnitSystem)}
       >
         {#each unitSystems as unit (unit.value)}
           <option value={unit.value}>{unit.label}</option>
@@ -318,7 +318,7 @@
                     type="button"
                     class="w-full truncate rounded px-2 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                     data-sidebar-history-entry={entry.id}
-                    on:click={() => onHistoryEntrySelect(entry)}
+                    onclick={() => onHistoryEntrySelect(entry)}
                   >
                     {entry.query}
                   </button>

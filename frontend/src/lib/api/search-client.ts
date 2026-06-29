@@ -276,6 +276,10 @@ async function runSearchQueryFn(
 		localCache.set(requestKey, request, response);
 		return response;
 	} catch (error) {
+		const cached = localCache.peek(requestKey);
+		if (cached && isOfflineFetchFailure(error)) {
+			return cached.response;
+		}
 		throw mapAbortError(error, handle.signal);
 	} finally {
 		handle.cancel();
@@ -322,6 +326,31 @@ function mapAbortError(error: unknown, signal: AbortSignal): unknown {
 	throw error;
 }
 
+/**
+ * Identifies browser-offline fetch failures that can safely fall back to a stale
+ * local-cache entry without hiding server-side API errors or user navigation aborts.
+ *
+ * @remarks Implements DESIGN-001 SearchView offline stale-cache fallback.
+ */
+function isOfflineFetchFailure(error: unknown): boolean {
+	if (typeof navigator === "undefined" || navigator.onLine !== false) {
+		return false;
+	}
+	if (error instanceof SearchClientError) {
+		return false;
+	}
+	if (error instanceof DOMException && error.name === "AbortError") {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * Decodes the generated search response envelope, mapping malformed JSON, non-2xx envelopes,
+ * and malformed success envelopes into {@link SearchClientError}.
+ *
+ * @remarks Implements DESIGN-001 SearchView generated search envelope decoding and DESIGN-017 ErrorMessageMapper error wrapping.
+ */
 async function decodeSearchResponse(response: Response): Promise<SearchResponse> {
 	const status = response.status;
 	let body: unknown;
@@ -356,6 +385,12 @@ async function decodeSearchResponse(response: Response): Promise<SearchResponse>
 	return envelope.data;
 }
 
+/**
+ * Decodes the generated autocomplete response envelope and applies the shared safe error mapping
+ * used by the search client.
+ *
+ * @remarks Implements DESIGN-001 AutocompleteDropdown generated autocomplete envelope decoding and DESIGN-017 ErrorMessageMapper error wrapping.
+ */
 async function decodeAutocompleteResponse(response: Response): Promise<AutocompleteResponse> {
 	const status = response.status;
 	let body: unknown;
@@ -390,6 +425,11 @@ async function decodeAutocompleteResponse(response: Response): Promise<Autocompl
 	return envelope.data;
 }
 
+/**
+ * Decodes the generated FoodObject detail envelope used to hydrate selected Substitution Inputs.
+ *
+ * @remarks Implements DESIGN-001 SearchView selected-item hydration envelope decoding and DESIGN-017 ErrorMessageMapper error wrapping.
+ */
 async function decodeFoodObjectResponse(response: Response): Promise<FoodObject> {
 	const status = response.status;
 	let body: unknown;
@@ -424,6 +464,12 @@ async function decodeFoodObjectResponse(response: Response): Promise<FoodObject>
 	return envelope.data;
 }
 
+/**
+ * Reads the shared generated API envelope shape from an unknown JSON body without trusting
+ * application-specific payload fields.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper generated envelope extraction.
+ */
 function readEnvelope(body: unknown): Envelope | null {
 	if (typeof body !== "object" || body === null) {
 		return null;
@@ -435,21 +481,31 @@ function readEnvelope(body: unknown): Envelope | null {
 	return candidate as Envelope;
 }
 
+/**
+ * Copies an envelope-level request id onto the mapped {@link AppError} when the nested error
+ * did not already carry one.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper request-id preservation.
+ */
 function attachRequestId(appError: AppError, requestId: string | undefined): void {
 	if (!appError.requestId && typeof requestId === "string" && requestId.length > 0) {
 		appError.requestId = requestId;
 	}
 }
 
+/**
+ * Maps HTTP status codes used by the search endpoints into the generated AppError categories.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper 400/404/422/429/503 category defaults.
+ */
 function categoryForStatus(status: number): AppError["category"] {
 	switch (status) {
 		case 400:
+		case 404:
 		case 422:
 			return "validation";
 		case 429:
 			return "server";
-		case 404:
-			return "validation";
 		case 503:
 			return "dependency";
 		default:
@@ -457,10 +513,20 @@ function categoryForStatus(status: number): AppError["category"] {
 	}
 }
 
+/**
+ * Supplies retryability defaults when a server envelope is absent or omits the flag.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper retryability defaults.
+ */
 function defaultRetryableFor(category: AppError["category"]): boolean {
 	return category === "server" || category === "dependency" || category === "network" || category === "timeout";
 }
 
+/**
+ * Supplies stable fallback error codes for status-derived {@link AppError} values.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper status-to-code defaults.
+ */
 function defaultCodeForStatus(status: number): string {
 	switch (status) {
 		case 400:
@@ -478,6 +544,11 @@ function defaultCodeForStatus(status: number): string {
 	}
 }
 
+/**
+ * Supplies user-safe fallback copy for status-derived error categories.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper safe fallback messages.
+ */
 function fallbackMessageForCategory(category: AppError["category"]): string {
 	switch (category) {
 		case "validation":
@@ -499,6 +570,11 @@ function fallbackMessageForCategory(category: AppError["category"]): string {
 	}
 }
 
+/**
+ * Runtime guard for generated AppError category values received from the server.
+ *
+ * @remarks Implements DESIGN-017 ErrorMessageMapper generated category validation.
+ */
 function isCategory(value: unknown): value is AppError["category"] {
 	return (
 		value === "validation" ||

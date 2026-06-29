@@ -130,6 +130,7 @@ export function initTheme(): void {
 		stored = window.localStorage.getItem(storageKey);
 	} catch {
 		// Storage unavailable (private mode, disabled localStorage): keep in-memory default.
+		stored = null;
 	}
 	const preference: ThemePreference =
 		stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
@@ -162,6 +163,7 @@ export function setThemePreference(preference: ThemePreference): void {
 		window.localStorage.setItem(storageKey, preference);
 	} catch {
 		// Storage unavailable or quota exceeded; the in-memory store still serves callers.
+		return;
 	}
 }
 

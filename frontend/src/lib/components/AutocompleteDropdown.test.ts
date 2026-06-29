@@ -416,7 +416,7 @@ test("declares combobox input, listbox container, option roles, aria-expanded, a
 
 // Implements DESIGN-001 AutocompleteDropdown typed-query submit verification.
 test("declares typed-query submission without requiring an active suggestion", () => {
-	expect(source).toContain("export let onSubmit");
+	expect(source).toContain("onSubmit?: (query: string) => void");
 	expect(source).toContain("onSubmit(query)");
 	expect(source).toContain("query.trim().length > 0");
 	expect(source).toContain("activeIndex = -1");
@@ -424,21 +424,22 @@ test("declares typed-query submission without requiring an active suggestion", (
 
 // Implements DESIGN-001 SearchView mode-specific search guidance verification.
 test("declares a placeholder prop for mode-specific search guidance", () => {
-	expect(source).toContain('export let placeholder = "Search foods, meals, or ingredients…"');
+	expect(source).toContain('placeholder = "Search foods, meals, or ingredients…"');
 	expect(source).toContain("{placeholder}");
+	expect(source).toContain("class=\"truncate rounded");
 });
 
 // Implements DESIGN-001 SearchView initial and mode-change search focus verification.
 test("declares a focus key that focuses the combobox on initial load and mode changes", () => {
-	expect(source).toContain("export let focusKey");
-	expect(source).toContain("focusSearchInput(focusKey, inputEl)");
+	expect(source).toContain("focusKey?: string | number");
+	expect(source).toContain("void focusSearchInput(focusKey, inputEl)");
 	expect(source).toContain("await tick()");
 	expect(source).toContain("element.focus()");
 });
 
 // Implements DESIGN-001 SearchView submitted-search spinner verification.
 test("declares an inline spinner for submitted result-search loading", () => {
-	expect(source).toContain("export let searching = false");
+	expect(source).toContain("searching = false");
 	expect(source).toContain("{#if searching}");
 	expect(source).toContain("data-search-spinner");
 	expect(source).toContain('aria-label="Searching"');
@@ -467,7 +468,7 @@ test("listbox floats over page content without pushing the results layout down",
 
 // Implements DESIGN-001 AutocompleteDropdown keyboard navigation handlers verification.
 test("Tab, ArrowUp, ArrowDown, Enter, and Escape keydown handlers move, select, and dismiss", () => {
-	expect(source).toContain("on:keydown={onInputKeydown}");
+	expect(source).toContain("onkeydown={onInputKeydown}");
 	expect(source).toContain('case "Tab"');
 	expect(source).toContain('case "ArrowDown"');
 	expect(source).toContain('case "ArrowUp"');
@@ -484,7 +485,7 @@ test("Tab, ArrowUp, ArrowDown, Enter, and Escape keydown handlers move, select, 
 
 // Implements DESIGN-001 AutocompleteDropdown selection callback wiring verification.
 test("Enter and option click both invoke the onSelect prop with the active item", () => {
-	expect(source).toContain("export let onSelect: (item: RankedAutocomplete) => void");
+	expect(source).toContain("onSelect: (item: RankedAutocomplete) => void");
 	expect(source).toContain("suppressedSelectedQuery = item.label");
 	expect(source).toContain("controller.cancel()");
 	expect(source).toContain("onSelect(item)");

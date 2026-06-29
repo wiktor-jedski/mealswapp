@@ -19,10 +19,10 @@
     searchText: string;
   };
 
-  let includeFilterQuery = "";
-  let excludeFilterQuery = "";
-  let includeFilterOpen = false;
-  let excludeFilterOpen = false;
+  let includeFilterQuery = $state("");
+  let excludeFilterQuery = $state("");
+  let includeFilterOpen = $state(false);
+  let excludeFilterOpen = $state(false);
 
   const physicalFilterOptions: Omit<SubstitutionFilterOption, "include">[] = [
     {
@@ -132,22 +132,24 @@
     }
   ];
 
-  $: selectedItems = Object.values($searchStore.substitutionInputItems);
-  $: classificationFilterOptions = selectedItems.flatMap(classificationOptionsFromItem);
-  $: includeFilterOptions = dedupeFilterOptions([
+  let selectedItems = $derived(Object.values($searchStore.substitutionInputItems));
+  let classificationFilterOptions = $derived(selectedItems.flatMap(classificationOptionsFromItem));
+  let includeFilterOptions = $derived(dedupeFilterOptions([
     ...classificationFilterOptions.map((option) => ({ ...option, include: true })),
     ...physicalFilterOptions.map((option) => ({ ...option, include: true }))
-  ]);
-  $: excludeFilterOptions = dedupeFilterOptions([
+  ]));
+  let excludeFilterOptions = $derived(dedupeFilterOptions([
     ...exclusionFilterOptions,
     ...classificationFilterOptions.map((option) => ({ ...option, include: false })),
     ...physicalFilterOptions.map((option) => ({ ...option, include: false }))
-  ]);
-  $: visibleIncludeOptions = visibleFilterOptions(includeFilterOptions, includeFilterQuery);
-  $: visibleExcludeOptions = visibleFilterOptions(excludeFilterOptions, excludeFilterQuery);
-  $: activeIncludeFilters = $searchStore.filters.filter((filter) => filter.include);
-  $: activeExcludeFilters = $searchStore.filters.filter((filter) => !filter.include);
-  $: synchronizeInputUnits($preferencesStore.unitSystem, $searchStore.substitutionInputs, $searchStore.substitutionInputItems);
+  ]));
+  let visibleIncludeOptions = $derived(visibleFilterOptions(includeFilterOptions, includeFilterQuery));
+  let visibleExcludeOptions = $derived(visibleFilterOptions(excludeFilterOptions, excludeFilterQuery));
+  let activeIncludeFilters = $derived($searchStore.filters.filter((filter) => filter.include));
+  let activeExcludeFilters = $derived($searchStore.filters.filter((filter) => !filter.include));
+  $effect(() => {
+    synchronizeInputUnits($preferencesStore.unitSystem, $searchStore.substitutionInputs, $searchStore.substitutionInputItems);
+  });
 
   /** Guards NaN/empty quantity edits so only finite values reach the store. */
   function onRowQuantityInput(foodObjectId: string, event: Event): void {
@@ -161,6 +163,11 @@
     updateSubstitutionInput(foodObjectId, {
       unit: (event.currentTarget as HTMLSelectElement).value as SubstitutionUnit
     });
+  }
+
+  function onFilterOptionMouseDown(option: SubstitutionFilterOption, event: MouseEvent): void {
+    event.preventDefault();
+    addSubstitutionFilter(option);
   }
 
   /** Human-facing label for a selected substitution input; falls back to id only for legacy stored rows. */
@@ -324,9 +331,9 @@
                     aria-label={selectedItem.primaryFoodCategory ? selectedItem.primaryFoodCategory.name : selectedItem.name}
                     data-substitution-placeholder
                   >
-                    <span class="font-data text-2xl font-semibold text-white" aria-hidden="true">{itemInitial(selectedItem)}</span>
+                    <span class="font-data text-2xl font-semibold text-[var(--color-on-muted)]" aria-hidden="true">{itemInitial(selectedItem)}</span>
                     {#if selectedItem.primaryFoodCategory}
-                      <span class="mt-1 px-1 text-xs text-white">{selectedItem.primaryFoodCategory.name}</span>
+                      <span class="mt-1 px-1 text-xs text-[var(--color-on-muted)]">{selectedItem.primaryFoodCategory.name}</span>
                     {/if}
                   </div>
                 {/if}
@@ -360,7 +367,7 @@
                 aria-label={inputLabel(input.foodObjectId)}
                 data-substitution-placeholder
               >
-                <span class="font-data text-2xl font-semibold text-white" aria-hidden="true">{inputInitial(input.foodObjectId)}</span>
+                <span class="font-data text-2xl font-semibold text-[var(--color-on-muted)]" aria-hidden="true">{inputInitial(input.foodObjectId)}</span>
               </div>
 
               <div class="hidden sm:block" aria-hidden="true"></div>
@@ -377,7 +384,7 @@
                   step="0.1"
                   value={input.quantity}
                   aria-label={`Quantity for ${inputLabel(input.foodObjectId)}`}
-                  on:input={(event) => onRowQuantityInput(input.foodObjectId, event)}
+                  oninput={(event) => onRowQuantityInput(input.foodObjectId, event)}
                 />
               </div>
 
@@ -388,7 +395,7 @@
                   class="h-8 w-[7ch] rounded border border-[var(--color-border)] bg-transparent px-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                   value={input.unit}
                   aria-label={`Unit for ${inputLabel(input.foodObjectId)}`}
-                  on:change={(event) => onRowUnitChange(input.foodObjectId, event)}
+                  onchange={(event) => onRowUnitChange(input.foodObjectId, event)}
                 >
                   {#each rowUnitOptions(selectedItem, $preferencesStore.unitSystem) as option}
                     <option value={option.value}>{option.label}</option>
@@ -402,7 +409,7 @@
             <div class="flex flex-wrap justify-start gap-1 pr-12 text-left" data-substitution-categories>
               {#if foodCategories(selectedItem).length > 0}
                 {#each foodCategories(selectedItem) as category (category.id)}
-                  <span class="rounded bg-[var(--color-muted)] px-2 py-0.5 text-xs text-white">{category.name}</span>
+                  <span class="rounded bg-[var(--color-muted)] px-2 py-0.5 text-xs text-[var(--color-on-muted)]">{category.name}</span>
                 {/each}
               {/if}
             </div>
@@ -410,9 +417,9 @@
 
           <button
             type="button"
-            class="absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-accent)] bg-[var(--color-accent)] text-xl font-semibold leading-none text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+            class="absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-accent)] bg-[var(--color-accent)] text-xl font-semibold leading-none text-[var(--color-on-accent)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
             aria-label={`Remove ${inputLabel(input.foodObjectId)} from substitutions`}
-            on:click={() => removeSubstitutionInput(input.foodObjectId)}
+            onclick={() => removeSubstitutionInput(input.foodObjectId)}
           >
             <span class="-translate-y-px leading-none" aria-hidden="true">−</span>
           </button>
@@ -439,10 +446,10 @@
           aria-controls="substitution-include-filter-options"
           placeholder="Search categories or roles…"
           bind:value={includeFilterQuery}
-          on:focus={() => (includeFilterOpen = true)}
-          on:input={() => (includeFilterOpen = true)}
-          on:keydown={(event) => onFilterInputKeydown(visibleIncludeOptions, event)}
-          on:blur={() => setTimeout(() => (includeFilterOpen = false), 100)}
+          onfocus={() => (includeFilterOpen = true)}
+          oninput={() => (includeFilterOpen = true)}
+          onkeydown={(event) => onFilterInputKeydown(visibleIncludeOptions, event)}
+          onblur={() => setTimeout(() => (includeFilterOpen = false), 100)}
           data-substitution-include-filter
         />
         {#if includeFilterOpen}
@@ -459,7 +466,7 @@
                   class="grid w-full gap-0.5 rounded px-2 py-1.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                   role="option"
                   aria-selected="false"
-                  on:mousedown|preventDefault={() => addSubstitutionFilter(option)}
+                  onmousedown={(event) => onFilterOptionMouseDown(option, event)}
                 >
                   <span>{option.label}</span>
                   <span class="text-xs text-[var(--color-muted)]">{option.description}</span>
@@ -483,10 +490,10 @@
           aria-controls="substitution-exclude-filter-options"
           placeholder="Search allergies or diets…"
           bind:value={excludeFilterQuery}
-          on:focus={() => (excludeFilterOpen = true)}
-          on:input={() => (excludeFilterOpen = true)}
-          on:keydown={(event) => onFilterInputKeydown(visibleExcludeOptions, event)}
-          on:blur={() => setTimeout(() => (excludeFilterOpen = false), 100)}
+          onfocus={() => (excludeFilterOpen = true)}
+          oninput={() => (excludeFilterOpen = true)}
+          onkeydown={(event) => onFilterInputKeydown(visibleExcludeOptions, event)}
+          onblur={() => setTimeout(() => (excludeFilterOpen = false), 100)}
           data-substitution-exclude-filter
         />
         {#if excludeFilterOpen}
@@ -503,7 +510,7 @@
                   class="grid w-full gap-0.5 rounded px-2 py-1.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                   role="option"
                   aria-selected="false"
-                  on:mousedown|preventDefault={() => addSubstitutionFilter(option)}
+                  onmousedown={(event) => onFilterOptionMouseDown(option, event)}
                 >
                   <span>{option.label}</span>
                   <span class="text-xs text-[var(--color-muted)]">{option.description}</span>
@@ -524,10 +531,10 @@
           {#each activeIncludeFilters as filter (filterKey(filter))}
             <button
               type="button"
-              class="rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              class="rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] px-2 py-0.5 text-xs text-[var(--color-on-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
               title={filterDescription(filter)}
               aria-label={`Remove include filter ${filterLabel(filter)}`}
-              on:click={() => removeSubstitutionFilter(filter)}
+              onclick={() => removeSubstitutionFilter(filter)}
             >
               {filterLabel(filter)} ×
             </button>
@@ -543,10 +550,10 @@
           {#each activeExcludeFilters as filter (filterKey(filter))}
             <button
               type="button"
-              class="rounded-full border border-[var(--color-accent)] bg-[var(--color-accent)] px-2 py-0.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              class="rounded-full border border-[var(--color-accent)] bg-[var(--color-accent)] px-2 py-0.5 text-xs text-[var(--color-on-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
               title={filterDescription(filter)}
               aria-label={`Remove exclude filter ${filterLabel(filter)}`}
-              on:click={() => removeSubstitutionFilter(filter)}
+              onclick={() => removeSubstitutionFilter(filter)}
             >
               {filterLabel(filter)} ×
             </button>
@@ -561,7 +568,7 @@
     type="button"
     class="justify-self-start rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
     disabled={$searchStore.substitutionInputs.length === 0}
-    on:click={requestSubstitutionSearch}
+    onclick={requestSubstitutionSearch}
     data-substitution-search
   >
     Find substitutions

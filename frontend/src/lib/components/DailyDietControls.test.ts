@@ -22,7 +22,7 @@ test("daily diet id input is UUID-shaped and bound to setDailyDietId", () => {
 	expect(source).toContain("pattern=");
 	expect(source).toContain("[0-9a-fA-F]");
 	expect(source).toContain("$searchStore.dailyDietId");
-	expect(source).toContain("on:input={onDailyDietIdInput}");
+	expect(source).toContain("oninput={onDailyDietIdInput}");
 });
 
 // Implements DESIGN-001 SearchView Phase 04 structured rejection display surface verification.

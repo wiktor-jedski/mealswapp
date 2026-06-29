@@ -36,7 +36,7 @@ test("mode buttons call setMode and reflect active state via aria-pressed and $s
 	expect(source).toContain("setMode");
 	expect(source).toContain("$searchStore.mode");
 	expect(source).toContain("aria-pressed");
-	expect(source).toContain("on:click={() => setMode(option.value)}");
+	expect(source).toContain("onclick={() => setMode(option.value)}");
 });
 
 // Implements DESIGN-001 SearchView mode controls landmark and traceability verification.

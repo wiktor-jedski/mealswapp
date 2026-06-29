@@ -6,25 +6,25 @@
   // Implements DESIGN-001 ResultsGrid substitution source summary card.
 
   /** Backend-calculated totals for the user's selected substitution input list. */
-  export let sourceSummary: SourceSummary;
+  let { sourceSummary }: { sourceSummary: SourceSummary } = $props();
 
   /** Display mass total in the active sidebar unit system, keeping mass separate from volume. */
-  $: massUnit = ($preferencesStore.unitSystem === "imperial" ? "oz" : "g") satisfies SubstitutionUnit;
+  let massUnit = $derived.by<SubstitutionUnit>(() => $preferencesStore.unitSystem === "imperial" ? "oz" : "g");
 
   /** Display volume total in the active sidebar unit system, keeping volume separate from mass. */
-  $: volumeUnit = ($preferencesStore.unitSystem === "imperial" ? "fl_oz" : "ml") satisfies SubstitutionUnit;
+  let volumeUnit = $derived.by<SubstitutionUnit>(() => $preferencesStore.unitSystem === "imperial" ? "fl_oz" : "ml");
 
   /** User-facing mass amount. */
-  $: displayGrams = convertQuantity(sourceSummary.totalGrams, "g", massUnit);
+  let displayGrams = $derived(convertQuantity(sourceSummary.totalGrams, "g", massUnit));
 
   /** User-facing volume amount. */
-  $: displayMilliliters = convertQuantity(sourceSummary.totalMilliliters, "ml", volumeUnit);
+  let displayMilliliters = $derived(convertQuantity(sourceSummary.totalMilliliters, "ml", volumeUnit));
 
   /** True when the input list contains at least one solid/mass-based amount. */
-  $: hasMass = sourceSummary.totalGrams > 0;
+  let hasMass = $derived(sourceSummary.totalGrams > 0);
 
   /** True when the input list contains at least one liquid/volume-based amount. */
-  $: hasVolume = sourceSummary.totalMilliliters > 0;
+  let hasVolume = $derived(sourceSummary.totalMilliliters > 0);
 
   function macroValue(value: number): string {
     return formatDisplayQuantity(value);

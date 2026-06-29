@@ -60,7 +60,7 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 
 // Implements DESIGN-001 SearchView submitted-search spinner wiring verification.
 test("passes submitted search loading state into the autocomplete search bar", () => {
-	expect(source).toContain("let searchInFlight = false");
+	expect(source).toContain("let searchInFlight = $state(false)");
 	expect(source).toContain("searching={searchInFlight}");
 	expect(source).toContain("onSearchInFlightChange");
 	expect(source).toContain("searchInFlight = searching");
@@ -79,14 +79,14 @@ test("hydrates substitution autocomplete selections with food-object detail data
 test("passes mode-specific placeholder guidance to the search input", () => {
 	expect(source).toContain("const searchPlaceholders: Record<SearchMode, string>");
 	expect(source).toContain("catalog: \"Search foods, meals, or ingredients…\"");
-	expect(source).toContain("substitution: \"Search a food to add as a substitution target…\"");
-	expect(source).toContain("daily_diet_alternative: \"Search within a saved daily diet or paste its ID…\"");
+	expect(source).toContain("substitution: \"Add a substitution target…\"");
+	expect(source).toContain("daily_diet_alternative: \"Search a saved daily diet…\"");
 	expect(source).toContain("placeholder={searchPlaceholders[activeMode]}");
 });
 
 // Implements DESIGN-001 SearchView initial and mode-change search focus verification.
 test("passes the active mode as the autocomplete focus key", () => {
-	expect(source).toContain("$: activeMode = $searchStore.mode");
+	expect(source).toContain("let activeMode = $derived($searchStore.mode)");
 	expect(source).toContain("focusKey={activeMode}");
 });
 

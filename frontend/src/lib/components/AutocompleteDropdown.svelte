@@ -5,41 +5,45 @@
 
   // Implements DESIGN-001 AutocompleteDropdown ranked suggestion display, keyboard focus movement, selection, and dismissal.
 
-  /**
-   * Current query text. The parent owns typing and feeds debounced updates through this prop;
-   * the dropdown reacts to changes and schedules a 150ms-debounced autocomplete fetch.
-   */
-  export let query: string;
-
-  /** Called when the user selects a suggestion via Enter or option click. */
-  export let onSelect: (item: RankedAutocomplete) => void;
-
-  /** Called when the user commits the typed query without selecting a suggestion. */
-  export let onSubmit: (query: string) => void = () => {};
-
-  /**
-   * Optional input-event forwarder so a wired parent can capture typing into the search store.
-   * Defaults to a no-op so the component stays self-contained before Task 151 wires it.
-   */
-  export let onQueryInput: (value: string) => void = () => {};
-
-  /** Mode-specific guidance shown before the user enters a query. */
-  export let placeholder = "Search foods, meals, or ingredients…";
-
-  /** Changes when the parent wants the combobox to receive focus, e.g. initial load or mode switch. */
-  export let focusKey: string | number = 0;
-
-  /** True while an explicit submitted search request is fetching results. */
-  export let searching = false;
+  let {
+    query,
+    onSelect,
+    onSubmit = () => {},
+    onQueryInput = () => {},
+    placeholder = "Search foods, meals, or ingredients…",
+    focusKey = 0,
+    searching = false
+  }: {
+    /**
+     * Current query text. The parent owns typing and feeds debounced updates through this prop;
+     * the dropdown reacts to changes and schedules a 150ms-debounced autocomplete fetch.
+     */
+    query: string;
+    /** Called when the user selects a suggestion via Enter or option click. */
+    onSelect: (item: RankedAutocomplete) => void;
+    /** Called when the user commits the typed query without selecting a suggestion. */
+    onSubmit?: (query: string) => void;
+    /**
+     * Optional input-event forwarder so a wired parent can capture typing into the search store.
+     * Defaults to a no-op so the component stays self-contained before Task 151 wires it.
+     */
+    onQueryInput?: (value: string) => void;
+    /** Mode-specific guidance shown before the user enters a query. */
+    placeholder?: string;
+    /** Changes when the parent wants the combobox to receive focus, e.g. initial load or mode switch. */
+    focusKey?: string | number;
+    /** True while an explicit submitted search request is fetching results. */
+    searching?: boolean;
+  } = $props();
 
   /** Stable id linking the combobox input to its listbox via `aria-controls`. */
   const listboxId = "autocomplete-listbox";
 
-  let items: RankedAutocomplete[] = [];
-  let isOpen = false;
-  let activeIndex = -1;
-  let listboxEl: HTMLUListElement | undefined;
-  let inputEl: HTMLInputElement | undefined;
+  let items = $state<RankedAutocomplete[]>([]);
+  let isOpen = $state(false);
+  let activeIndex = $state(-1);
+  let listboxEl = $state<HTMLUListElement | undefined>(undefined);
+  let inputEl = $state<HTMLInputElement | undefined>(undefined);
   let lastFocusedKey: string | number | null = null;
   let suppressedSelectedQuery: string | null = null;
 
@@ -60,17 +64,19 @@
   onDestroy(() => controller.dispose());
 
   // Implements DESIGN-001 AutocompleteDropdown 150ms-debounced fetch driven by user-typed query prop changes.
-  $: if (query !== undefined) {
+  $effect(() => {
     if (suppressedSelectedQuery === query) {
       suppressedSelectedQuery = null;
       controller.cancel();
     } else {
       controller.input(query);
     }
-  }
+  });
 
   // Implements DESIGN-001 SearchView search-bar focus on initial load and mode changes.
-  $: focusSearchInput(focusKey, inputEl);
+  $effect(() => {
+    void focusSearchInput(focusKey, inputEl);
+  });
 
   async function focusSearchInput(nextFocusKey: string | number, element: HTMLInputElement | undefined): Promise<void> {
     if (!element || nextFocusKey === lastFocusedKey) {
@@ -190,7 +196,7 @@
     }
   }
 
-  function onOptionClick(item: RankedAutocomplete, index: number): void {
+  function onOptionClick(index: number): void {
     activeIndex = index;
     selectActive();
   }
@@ -203,7 +209,7 @@
     id="autocomplete-input"
     bind:this={inputEl}
     type="text"
-    class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+    class="truncate rounded border border-[var(--color-border)] bg-transparent px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
     role="combobox"
     aria-expanded={isOpen}
     aria-controls={listboxId}
@@ -211,8 +217,8 @@
     aria-activedescendant={isOpen && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
     {placeholder}
     value={query}
-    on:input={onInput}
-    on:keydown={onInputKeydown}
+    oninput={onInput}
+    onkeydown={onInputKeydown}
   />
 
   {#if searching}
@@ -242,8 +248,8 @@
           aria-selected={index === activeIndex}
           tabindex={index === activeIndex ? 0 : -1}
           class:bg-[var(--color-muted)]={index === activeIndex}
-          on:click={() => onOptionClick(item, index)}
-          on:keydown={(event) => onOptionKeydown(event, index)}
+          onclick={() => onOptionClick(index)}
+          onkeydown={(event) => onOptionKeydown(event, index)}
         >
           {item.label}
         </li>

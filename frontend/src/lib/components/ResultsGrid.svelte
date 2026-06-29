@@ -8,53 +8,57 @@
   /** Maximum number of result cards rendered per page (deterministic Phase 04 page size of 10). */
   const PAGE_SIZE = 10;
 
-  /** Search result items for the current page; the grid never renders more than PAGE_SIZE cards. */
-  export let results: FoodObject[] = [];
-
-  /** Similarity metadata rows matched to result items by `itemId`. */
-  export let similarityMetadata: SimilarityMetadata[] = [];
-
-  /** Parallel similarity score array used as a fallback when metadata is absent for an item. */
-  export let similarityScores: number[] = [];
-
-  /** Whether similarity match badges should be shown for this search mode. */
-  export let showSimilarity: boolean = true;
-
-  /** Optional substitution source totals rendered before substitution results. */
-  export let sourceSummary: SourceSummary | null = null;
-
-  /** Optional Catalog action for adding a full result item to the Substitution Input list. */
-  export let onAddToSubstitution: ((item: FoodObject) => void) | null = null;
-
-  /** User-facing error message; when non-null the grid renders the error state instead of results. */
-  export let error: string | null = null;
-
-  /** True while the explicit submitted search request is in flight. */
-  export let loading: boolean = false;
-
-  /** Total result count used to derive pagination boundaries. */
-  export let totalCount: number = 0;
-
-  /** Current one-based page index. */
-  export let page: number = 1;
-
-  /** Called with the next page index when the user clicks Previous or Next. */
-  export let onPageChange: (page: number) => void = () => {};
+  let {
+    results = [],
+    similarityMetadata = [],
+    similarityScores = [],
+    showSimilarity = true,
+    sourceSummary = null,
+    onAddToSubstitution = null,
+    error = null,
+    loading = false,
+    totalCount = 0,
+    page = 1,
+    onPageChange = () => {}
+  }: {
+    /** Search result items for the current page; the grid never renders more than PAGE_SIZE cards. */
+    results?: FoodObject[];
+    /** Similarity metadata rows matched to result items by `itemId`. */
+    similarityMetadata?: SimilarityMetadata[];
+    /** Parallel similarity score array used as a fallback when metadata is absent for an item. */
+    similarityScores?: number[];
+    /** Whether similarity match badges should be shown for this search mode. */
+    showSimilarity?: boolean;
+    /** Optional substitution source totals rendered before substitution results. */
+    sourceSummary?: SourceSummary | null;
+    /** Optional Catalog action for adding a full result item to the Substitution Input list. */
+    onAddToSubstitution?: ((item: FoodObject) => void) | null;
+    /** User-facing error message; when non-null the grid renders the error state instead of results. */
+    error?: string | null;
+    /** True while the explicit submitted search request is in flight. */
+    loading?: boolean;
+    /** Total result count used to derive pagination boundaries. */
+    totalCount?: number;
+    /** Current one-based page index. */
+    page?: number;
+    /** Called with the next page index when the user clicks Previous or Next. */
+    onPageChange?: (page: number) => void;
+  } = $props();
 
   /** Cards rendered for the current page, capped at PAGE_SIZE so no page renders more than 10 items. */
-  $: pagedResults = results.slice(0, PAGE_SIZE);
+  let pagedResults = $derived(results.slice(0, PAGE_SIZE));
 
   /** Total page count derived from totalCount and the fixed page size, with a minimum of one page. */
-  $: totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  let totalPages = $derived(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
 
   /** Previous button is disabled on page one. */
-  $: hasPrev = page > 1;
+  let hasPrev = $derived(page > 1);
 
   /** Next button is disabled on the last page. */
-  $: hasNext = page < totalPages;
+  let hasNext = $derived(page < totalPages);
 
   /** Lookup of similarity metadata by item id for per-card matching. */
-  $: similarityByItemId = new Map(similarityMetadata.map((meta) => [meta.itemId, meta]));
+  let similarityByItemId = $derived(new Map(similarityMetadata.map((meta) => [meta.itemId, meta])));
 
   /** Returns the similarity metadata row matching `itemId`, or null when no row exists. */
   function findSimilarity(itemId: string): SimilarityMetadata | null {
@@ -96,7 +100,7 @@
       <button
         type="button"
         class="rounded border border-[var(--color-border)] px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-        on:click={() => onPageChange(page - 1)}
+        onclick={() => onPageChange(page - 1)}
         disabled={!hasPrev}
         data-results-prev
       >
@@ -106,7 +110,7 @@
       <button
         type="button"
         class="rounded border border-[var(--color-border)] px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-        on:click={() => onPageChange(page + 1)}
+        onclick={() => onPageChange(page + 1)}
         disabled={!hasNext}
         data-results-next
       >

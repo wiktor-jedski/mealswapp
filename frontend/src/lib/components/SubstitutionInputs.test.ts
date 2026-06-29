@@ -71,8 +71,8 @@ test("maps user-facing substitution filters to backend filter kinds", () => {
 test("removal calls removeSubstitutionInput and row edits call updateSubstitutionInput", () => {
 	expect(source).toContain("removeSubstitutionInput(input.foodObjectId)");
 	expect(source).toContain("updateSubstitutionInput");
-	expect(source).toContain("on:input={(event) => onRowQuantityInput(input.foodObjectId, event)}");
-	expect(source).toContain("on:change={(event) => onRowUnitChange(input.foodObjectId, event)}");
+	expect(source).toContain("oninput={(event) => onRowQuantityInput(input.foodObjectId, event)}");
+	expect(source).toContain("onchange={(event) => onRowUnitChange(input.foodObjectId, event)}");
 });
 
 // Implements DESIGN-001 SearchView human-facing substitution input label verification.

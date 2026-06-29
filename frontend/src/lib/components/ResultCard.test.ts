@@ -30,7 +30,7 @@ test("binds FoodObject imageUrl, name, classifications, macros, macroBasis, and 
 
 // Implements DESIGN-001 SearchView Catalog-to-Substitution action verification.
 test("can expose an optional add-to-substitutions action for Catalog result cards", () => {
-	expect(source).toContain("export let onAddToSubstitution");
+	expect(source).toContain("onAddToSubstitution?: ((item: FoodObject) => void) | null");
 	expect(source).toContain("data-result-add-substitution");
 	expect(source).toContain("absolute bottom-4 right-4");
 	expect(source).toContain("pr-12");
@@ -99,8 +99,8 @@ test("renders backend matching quantity with physical-state-aware units", () => 
 	expect(source).toContain("displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)");
 	expect(source).toContain("convertQuantity(similarity.matchingQuantity");
 	expect(source).toContain("unitLabel(matchingQuantityDisplayUnit)");
-	expect(source).toContain("macroScale = similarity ? similarity.matchingQuantity / 100 : 1");
-	expect(source).toContain("macroContextLabel = matchingQuantityLabel ? `for about ${matchingQuantityLabel}` : macroBasisLabel");
+	expect(source).toContain("macroScale = $derived(similarity ? similarity.matchingQuantity / 100 : 1)");
+	expect(source).toContain("macroContextLabel = $derived(matchingQuantityLabel ? `for about ${matchingQuantityLabel}` : macroBasisLabel)");
 	expect(source).toContain("formatDisplayQuantity(displayMacros.protein)");
 });
 
@@ -122,8 +122,8 @@ test("placeholder selects primaryFoodCategory then the first Food Category class
 });
 
 // Implements DESIGN-001 ResultsGrid broken-image fallback verification.
-test("on:error handler toggles imageFailed and renders a category placeholder element", () => {
-	expect(source).toContain("on:error={onImageError}");
+test("onerror handler toggles imageFailed and renders a category placeholder element", () => {
+	expect(source).toContain("onerror={onImageError}");
 	expect(source).toContain("onImageError");
 	expect(source).toContain("imageFailed");
 	expect(source).toContain("showImage");

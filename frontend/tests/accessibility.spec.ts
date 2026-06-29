@@ -13,13 +13,9 @@ import type {
 // visible focus indicators, accessible control names, automated axe scans (WCAG 2.1 A/AA),
 // normal-text WCAG 2.1 AA 4.5:1 color contrast, and responsive light/dark screenshots.
 //
-// Accepted color-contrast deviation: decorative badges, category chips, the image placeholder
-// text, and the active sidebar mode button render `text-white` on mid-tone backgrounds that
-// axe flags as serious color-contrast violations in dark mode (and the orange "Fair" tier
-// badge fails in both themes). These are documented in docs/implementation/04_OPEN.md
-// (Phase 05) as visual-design limitations; they are not normal reading-text pairs. The axe
-// scan below asserts the ONLY serious/critical violations are these documented color-contrast
-// cases, then re-runs with color-contrast disabled to confirm the rest of the shell is clean.
+// Theme-aware on-primary/on-accent/on-muted tokens keep decorative badges, chips,
+// placeholders, and icon buttons above WCAG 2.1 AA contrast while preserving the
+// Phase 05 visual palette.
 
 const SCREENSHOT_DIR = "test-results/accessibility";
 
@@ -183,12 +179,27 @@ function contrastRatio(foreground: string, background: string): number {
 }
 
 /** Reads the active theme's design tokens from the document root. */
-async function readColorTokens(page: Page): Promise<{ bg: string; surface: string; text: string; muted: string }> {
+async function readColorTokens(page: Page): Promise<{
+  bg: string;
+  surface: string;
+  text: string;
+  muted: string;
+  primary: string;
+  accent: string;
+  onPrimary: string;
+  onAccent: string;
+  onMuted: string;
+}> {
   return page.evaluate(() => ({
     bg: getComputedStyle(document.documentElement).getPropertyValue("--color-bg").trim(),
     surface: getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim(),
     text: getComputedStyle(document.documentElement).getPropertyValue("--color-text").trim(),
-    muted: getComputedStyle(document.documentElement).getPropertyValue("--color-muted").trim()
+    muted: getComputedStyle(document.documentElement).getPropertyValue("--color-muted").trim(),
+    primary: getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim(),
+    accent: getComputedStyle(document.documentElement).getPropertyValue("--color-accent").trim(),
+    onPrimary: getComputedStyle(document.documentElement).getPropertyValue("--color-on-primary").trim(),
+    onAccent: getComputedStyle(document.documentElement).getPropertyValue("--color-on-accent").trim(),
+    onMuted: getComputedStyle(document.documentElement).getPropertyValue("--color-on-muted").trim()
   }));
 }
 
@@ -266,8 +277,7 @@ test("keyboard-only Substitution workflow switches mode, adds an input, and sear
 // Verifies ARCH-001.
 // Traces SW-REQ-085, SW-REQ-086.
 // Implements DESIGN-016 ComponentStyles automated axe scan at desktop and mobile sizes (WCAG 2.1 A/AA).
-test("axe scan reports no serious or critical violations outside documented color-contrast deviations", async ({ page }) => {
-  // Two axe runs (full + color-contrast-disabled) are slow under mobile emulation.
+test("axe scan reports no serious or critical violations", async ({ page }) => {
   test.setTimeout(120_000);
   await stubApi(page);
   await page.goto("/");
@@ -275,33 +285,16 @@ test("axe scan reports no serious or critical violations outside documented colo
   await page.getByLabel("Food search").press("Enter");
   await expect(page.locator("[data-result-card]")).toHaveCount(10);
 
-  // Full axe run: the only accepted serious/critical violations are color-contrast on decorative elements.
   const full = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const serious = full.violations.filter(
     (violation) => violation.impact === "critical" || violation.impact === "serious"
   );
-  const nonContrast = serious.filter((violation) => violation.id !== "color-contrast");
   const seriousSummary = serious
     .map((violation) => `${violation.id} (${violation.impact}): ${violation.help}`)
     .join("\n");
   expect(
-    nonContrast,
-    `unexpected serious/critical violations outside documented color-contrast deviations:\n${seriousSummary}`
-  ).toEqual([]);
-
-  // Re-run with color-contrast disabled to confirm the rest of the composed shell is clean.
-  const reRun = await new AxeBuilder({ page })
-    .withTags([...WCAG_TAGS])
-    .disableRules(["color-contrast"])
-    .analyze();
-  const reSerious = reRun.violations.filter(
-    (violation) => violation.impact === "critical" || violation.impact === "serious"
-  );
-  expect(
-    reSerious,
-    `unexpected serious/critical violations with color-contrast disabled:\n${reSerious
-      .map((violation) => `${violation.id} (${violation.impact}): ${violation.help}`)
-      .join("\n")}`
+    serious,
+    `unexpected serious/critical violations:\n${seriousSummary}`
   ).toEqual([]);
 });
 
@@ -321,6 +314,9 @@ test("normal-text color pairs meet WCAG 2.1 AA 4.5:1 in light and dark themes", 
   expect(contrastRatio(light.text, light.surface)).toBeGreaterThanOrEqual(4.5);
   expect(contrastRatio(light.muted, light.bg)).toBeGreaterThanOrEqual(4.5);
   expect(contrastRatio(light.muted, light.surface)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(light.onPrimary, light.primary)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(light.onAccent, light.accent)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(light.onMuted, light.muted)).toBeGreaterThanOrEqual(4.5);
 
   // Dark theme normal-text pairs: body text and muted labels on bg/surface.
   await setResolvedTheme(page, "dark");
@@ -330,6 +326,9 @@ test("normal-text color pairs meet WCAG 2.1 AA 4.5:1 in light and dark themes", 
   expect(contrastRatio(dark.text, dark.surface)).toBeGreaterThanOrEqual(4.5);
   expect(contrastRatio(dark.muted, dark.bg)).toBeGreaterThanOrEqual(4.5);
   expect(contrastRatio(dark.muted, dark.surface)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(dark.onPrimary, dark.primary)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(dark.onAccent, dark.accent)).toBeGreaterThanOrEqual(4.5);
+  expect(contrastRatio(dark.onMuted, dark.muted)).toBeGreaterThanOrEqual(4.5);
 });
 
 // Verifies IT-ARCH-001-006.

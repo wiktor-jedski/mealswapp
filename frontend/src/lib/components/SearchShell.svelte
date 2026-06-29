@@ -27,20 +27,20 @@
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, results, and offline status.
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
-  let rejection: SearchRejection | null = null;
+  let rejection = $state<SearchRejection | null>(null);
 
   /** True while an explicit submitted search request is fetching results. */
-  let searchInFlight = false;
+  let searchInFlight = $state(false);
 
   /** Mode-specific input guidance for the primary SearchView combobox. */
   const searchPlaceholders: Record<SearchMode, string> = {
     catalog: "Search foods, meals, or ingredients…",
-    substitution: "Search a food to add as a substitution target…",
-    daily_diet_alternative: "Search within a saved daily diet or paste its ID…"
+    substitution: "Add a substitution target…",
+    daily_diet_alternative: "Search a saved daily diet…"
   };
 
   /** Active mode mirrored from the store for shell-level conditional rendering and focus keys. */
-  $: activeMode = $searchStore.mode;
+  let activeMode = $derived($searchStore.mode);
 
   /**
    * Handles autocomplete selection: in Substitution mode adds a Substitution Input from the
@@ -77,6 +77,7 @@
       });
     } catch {
       // Implements DESIGN-001 SearchView resilient selected-item hydration fallback.
+      return;
     }
   }
 

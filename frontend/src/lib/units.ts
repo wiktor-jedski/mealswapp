@@ -6,8 +6,18 @@ import type { UnitSystem } from "./stores/preferences";
 const GRAMS_PER_OUNCE = 28.349523125;
 const MILLILITERS_PER_FLUID_OUNCE = 29.5735295625;
 
+/**
+ * Macro basis values exposed by the generated FoodObject contract.
+ *
+ * @remarks Implements DESIGN-001 ResultsGrid macro basis display contract.
+ */
 export type MacroBasis = FoodObject["macroBasis"];
 
+/**
+ * One selectable unit option for quantity controls.
+ *
+ * @remarks Implements DESIGN-001 SettingsPanel unit preference control options.
+ */
 export interface UnitOption {
 	value: SubstitutionUnit;
 	label: string;

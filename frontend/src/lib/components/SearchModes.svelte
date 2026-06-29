@@ -30,7 +30,9 @@
   ];
 
   /** Plain active-mode explanation shown below the centered mode buttons. */
-  $: activeDescription = modeOptions.find((option) => option.value === $searchStore.mode)?.description ?? "";
+  let activeDescription = $derived(
+    modeOptions.find((option) => option.value === $searchStore.mode)?.description ?? ""
+  );
 </script>
 
 <!-- Implements DESIGN-001 SearchView mode controls positioned above the search bar and macro controls. -->
@@ -43,7 +45,7 @@
         class="rounded border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         class:border-[var(--color-primary)]={$searchStore.mode === option.value}
         aria-pressed={$searchStore.mode === option.value}
-        on:click={() => setMode(option.value)}
+        onclick={() => setMode(option.value)}
       >
         {option.label}
       </button>

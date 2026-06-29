@@ -100,6 +100,16 @@ export class LocalQueryCache {
 	}
 
 	/**
+	 * Returns the entry for `requestKey` without refreshing LRU recency. Used when
+	 * callers need to preserve stale metadata while rendering an offline fallback.
+	 *
+	 * @remarks Implements DESIGN-001 LocalStorageManager stale state reporting.
+	 */
+	peek(requestKey: string): LocalQueryCacheEntry | null {
+		return this.entriesByKey.get(requestKey) ?? null;
+	}
+
+	/**
 	 * Inserts or replaces the entry for `requestKey`, evicting the least-recently-accessed
 	 * entry when the cache exceeds {@link MAX_ENTRIES}.
 	 *
@@ -172,6 +182,7 @@ export class LocalQueryCache {
 		try {
 			raw = this.storage.getItem(STORAGE_KEY);
 		} catch {
+			// Storage reads are optional; the cache remains usable in memory.
 			return;
 		}
 		if (raw === null) {
@@ -181,6 +192,7 @@ export class LocalQueryCache {
 		try {
 			parsed = JSON.parse(raw);
 		} catch {
+			// Malformed persisted cache data is ignored instead of blocking search.
 			return;
 		}
 		if (!isStoredPayload(parsed)) {
@@ -221,6 +233,7 @@ export class LocalQueryCache {
 			this.storage.setItem(STORAGE_KEY, JSON.stringify(payload));
 		} catch {
 			// Quota exceeded or storage disabled; the in-memory map still serves callers.
+			return;
 		}
 	}
 }
@@ -241,6 +254,7 @@ export function createLocalQueryCache(): LocalQueryCache {
 		window.localStorage.removeItem(probeKey);
 		return new LocalQueryCache({ storage: window.localStorage });
 	} catch {
+		// Storage is unavailable or disabled; fall back to an in-memory cache.
 		return new LocalQueryCache({ storage: null });
 	}
 }
@@ -253,6 +267,11 @@ function isStoredPayload(value: unknown): value is StoredPayload {
 	return Array.isArray(candidate.entries);
 }
 
+/**
+ * Runtime guard for persisted local-query cache entries loaded from localStorage.
+ *
+ * @remarks Implements DESIGN-001 LocalStorageManager cache-entry schema validation.
+ */
 function isValidEntry(value: unknown): value is LocalQueryCacheEntry {
 	if (typeof value !== "object" || value === null) {
 		return false;

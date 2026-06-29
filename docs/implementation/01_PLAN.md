@@ -82,6 +82,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Implement ARCH-004.
 - Add Redis-backed optimization jobs, LP constraint/objective construction, worker process, status polling, 30-second solver timeout, infeasible handling, and up to 3 alternatives.
 - Implement the SW-REQ-006 Daily Diet client and API model for selecting and aggregating multiple meals into a one-day collection, then use that persisted collection as optimization input.
+- Before expanding the Phase 05 Daily Diet scaffold, refactor frontend search state from the broad `SearchState` shape into a discriminated union or nested per-mode state so Catalog, Substitution, and Daily Diet combinations that are impossible in the product are impossible to represent in TypeScript.
 - Add the dedicated saved-diet persistence model and enable `saved_items` rows with kind `saved_diet`; until this phase, repositories must reject attempts to save that reserved kind.
 - Lint optimization-job OpenAPI contract additions with Redocly CLI.
 - Exit criteria: users can build a multi-meal one-day collection satisfying SW-REQ-006; the API returns 202 with job ID; the worker stores completed/failed results; and LP tests validate macro tolerance, exclusions, diversity penalty, and timeout behavior.
@@ -90,6 +91,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 
 - Implement ARCH-009 and ARCH-012.
 - Add admin-only endpoints/UI, external search proxy for USDA/OpenFoodFacts, normalization warnings, curated import, manual item CRUD, classification management, user admin actions, and audit persistence.
+- Before expanding admin classification management or localization-sensitive filter UI, replace Phase 05 frontend-hardcoded substitution filter options with a backend-owned filter-option source, such as `/api/v1/search/filter-options?mode=substitution`, backed by persisted classification/allergen vocabularies and backend-defined dietary-preset policy.
 - Add an explicit user-owned custom food item persistence model before enabling user custom-item export/deletion. Distinguish global curated `food_items` from user-owned custom items with a clear owner predicate, account-export inclusion rules, and account-deletion cleanup behavior.
 - Apply the cross-phase mutation idempotency standard to admin import confirmation, user-owned custom item creation, and any other non-idempotent admin or user-data creation endpoint. Use source-provider/external-ID natural keys where they exist, and `Idempotency-Key` where they do not.
 - Extend `InputNormalizer` with typed rules for admin-authored names and provider text introduced by curation flows.
@@ -106,6 +108,7 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Complete client ARCH-011 service worker behavior plus cross-cutting requirements.
 - Add offline cached search/image behavior, stale indicators, retry manager integration, accessibility pass, Playwright browser coverage, monitoring alerts, backup/retention checks, and deployment config for GCP services.
 - Extend Playwright and `@axe-core/playwright` coverage for offline, degradation, keyboard, responsive, and WCAG acceptance paths.
+- Add a DOM-backed Svelte component test harness, such as happy-dom with `@testing-library/svelte`, if isolated component behavioral coverage is still needed beyond Phase 05 static-source assertions, `vite build`, and Playwright browser coverage.
 - Install and use the `gcp-cloud-run` agent skill when implementing Cloud Run deployment, restricted ingress, Cloud SQL, Memorystore, Secret Manager, and monitoring configuration.
 - Add signed, single-use email-verification tokens and outbound email delivery before production paid-feature unlocks can rely on email-and-password verification. Cover token expiry, replay rejection, provider failure handling, and abuse controls.
 - Add and validate production Google and Apple OAuth provider gateway configuration before enabling live external login. Cover Secret Manager-backed credentials, deployed callback URLs, provider redirect URI allowlists, callback exchange failures, and fail-closed behavior when configuration is incomplete.

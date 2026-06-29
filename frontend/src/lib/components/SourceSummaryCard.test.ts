@@ -8,7 +8,7 @@ const source = readFileSync(join(import.meta.dir, "SourceSummaryCard.svelte"), "
 
 // Implements DESIGN-001 ResultsGrid substitution source summary verification.
 test("renders Your Meal source totals with mass and volume kept separate", () => {
-	expect(source).toContain("export let sourceSummary");
+	expect(source).toContain("let { sourceSummary }: { sourceSummary: SourceSummary } = $props()");
 	expect(source).toContain("Your Meal");
 	expect(source).toContain("data-source-summary-card");
 	expect(source).toContain("data-source-summary-amount");

@@ -72,6 +72,7 @@ export function initPreferences(): void {
   try {
     raw = window.localStorage.getItem(PREFERENCES_STORAGE_KEY);
   } catch {
+    // Storage reads are optional; metric units keep the page usable.
     preferencesStore.set(createDefaultPreferences());
     return;
   }
@@ -85,6 +86,7 @@ export function initPreferences(): void {
   try {
     parsed = JSON.parse(raw);
   } catch {
+    // Malformed persisted preferences are ignored instead of blocking the UI.
     preferencesStore.set(createDefaultPreferences());
     return;
   }
@@ -112,6 +114,7 @@ export function setUnitSystem(unit: UnitSystem): void {
     );
   } catch {
     // Storage unavailable or quota exceeded; the in-memory store still serves callers.
+    return;
   }
 }
 

@@ -196,6 +196,18 @@ test("isStale reports stale for missing or aged entries and fresh for recent one
 	expect(cache.isStale("key", 500)).toBe(true);
 });
 
+// Implements DESIGN-001 LocalStorageManager stale metadata preservation verification.
+test("peek returns a cached entry without refreshing stale metadata", () => {
+	const now = { value: 1000 };
+	const cache = new LocalQueryCache({ storage: null, now: () => now.value });
+	cache.set("key", { query: "a", mode: "catalog", page: 1 }, makeResponse(0));
+
+	now.value = 1600;
+
+	expect(cache.peek("key")?.response.items[0]?.id).toBe("food-0");
+	expect(cache.isStale("key", 500)).toBe(true);
+});
+
 // Implements DESIGN-001 LocalStorageManager storage-unavailable fallback verification.
 test("localStorage setItem failures degrade to in-memory cache without throwing", () => {
 	const storage = new SetItemThrowingStorage();

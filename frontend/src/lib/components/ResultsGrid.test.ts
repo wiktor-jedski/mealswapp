@@ -25,16 +25,17 @@ test("imports ResultCard and generated types without handwritten duplicates", ()
 
 // Implements DESIGN-001 ResultsGrid documented props verification.
 test("declares the documented container props", () => {
-	expect(source).toContain("export let results");
-	expect(source).toContain("export let similarityMetadata");
-	expect(source).toContain("export let similarityScores");
-	expect(source).toContain("export let showSimilarity");
-	expect(source).toContain("export let sourceSummary");
-	expect(source).toContain("export let onAddToSubstitution");
-	expect(source).toContain("export let error");
-	expect(source).toContain("export let totalCount");
-	expect(source).toContain("export let page");
-	expect(source).toContain("export let onPageChange");
+	expect(source).toContain("} = $props()");
+	expect(source).toContain("results?: FoodObject[]");
+	expect(source).toContain("similarityMetadata?: SimilarityMetadata[]");
+	expect(source).toContain("similarityScores?: number[]");
+	expect(source).toContain("showSimilarity?: boolean");
+	expect(source).toContain("sourceSummary?: SourceSummary | null");
+	expect(source).toContain("onAddToSubstitution?: ((item: FoodObject) => void) | null");
+	expect(source).toContain("error?: string | null");
+	expect(source).toContain("totalCount?: number");
+	expect(source).toContain("page?: number");
+	expect(source).toContain("onPageChange?: (page: number) => void");
 });
 
 // Implements DESIGN-001 ResultsGrid maximum-10-item page cap verification.
@@ -105,8 +106,8 @@ test("retains previous results while loading without rendering flickering loadin
 
 // Implements DESIGN-001 ResultsGrid pagination page-request wiring verification.
 test("Previous and Next buttons call onPageChange with page - 1 and page + 1", () => {
-	expect(source).toContain("on:click={() => onPageChange(page - 1)}");
-	expect(source).toContain("on:click={() => onPageChange(page + 1)}");
+	expect(source).toContain("onclick={() => onPageChange(page - 1)}");
+	expect(source).toContain("onclick={() => onPageChange(page + 1)}");
 	expect(source).toContain("data-results-prev");
 	expect(source).toContain("data-results-next");
 	expect(source).toContain("data-results-page");
@@ -114,8 +115,8 @@ test("Previous and Next buttons call onPageChange with page - 1 and page + 1", (
 
 // Implements DESIGN-001 ResultsGrid pagination disabled-boundaries verification.
 test("Previous and Next disabled bindings derive from page and totalPages", () => {
-	expect(source).toContain("hasPrev = page > 1");
-	expect(source).toContain("hasNext = page < totalPages");
+	expect(source).toContain("hasPrev = $derived(page > 1)");
+	expect(source).toContain("hasNext = $derived(page < totalPages)");
 	expect(source).toContain("disabled={!hasPrev}");
 	expect(source).toContain("disabled={!hasNext}");
 	expect(source).toContain("Math.ceil(totalCount / PAGE_SIZE)");

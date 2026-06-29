@@ -3,10 +3,10 @@
 
   // Implements DESIGN-001 OfflineBanner online/offline and stale-data indicators.
 
-  $: online = $offlineStatus.online;
-  $: showingCached = $offlineStatus.showingCached;
-  $: showingStale = $offlineStatus.showingStale;
-  $: message = resolveOfflineBannerMessage(online, showingCached, showingStale);
+  let online = $derived($offlineStatus.online);
+  let showingCached = $derived($offlineStatus.showingCached);
+  let showingStale = $derived($offlineStatus.showingStale);
+  let message = $derived(resolveOfflineBannerMessage(online, showingCached, showingStale));
 
   function resolveOfflineBannerMessage(
     online: boolean,

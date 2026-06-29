@@ -12,7 +12,7 @@ const source = readFileSync(join(import.meta.dir, "SearchResults.svelte"), "utf8
 // Implements DESIGN-001 SearchView committed server-side query execution verification.
 test("uses the committed query for server-side search execution", () => {
 	expect(source).toContain("const committedSearchStore = derived(searchStore");
-	expect(source).toContain("query: $state.submittedQuery");
+	expect(source).toContain("query: storeState.submittedQuery");
 	expect(source).toContain("createSearchQueryOptions(committedSearchStore, localCache)");
 	expect(source).not.toContain("setTimeout(() =>");
 });
@@ -20,12 +20,15 @@ test("uses the committed query for server-side search execution", () => {
 // Implements DESIGN-001 SearchView committed offline cache-key verification.
 test("uses the committed query for offline cache indicator lookup", () => {
 	expect(source).toContain("searchRequestKey({ ...state, query: state.submittedQuery })");
+	expect(source).toContain("setShowingCached");
+	expect(source).toContain("setShowingStale");
+	expect(source).toContain("const isStaleCachedResult = localCache.isStale(key, LOCAL_CACHE_STALE_MS)");
 });
 
 // Implements DESIGN-001 SearchView immediate non-query state update verification.
 test("keeps immediate search state available for visible pagination state", () => {
-	expect(source).toContain("let state = $state(initialState)");
-	expect(source).toContain("searchStore.subscribe((s) => { state = s; })");
+	expect(source).toContain("let state = $derived($searchStore)");
+	expect(source).not.toContain("searchStore.subscribe");
 });
 
 // Implements DESIGN-001 SearchView initial empty-results suppression verification.
@@ -53,7 +56,7 @@ test("suppresses similarity display for Catalog results", () => {
 test("adds full Catalog result items to the Substitution Input list", () => {
 	expect(source).toContain("addCatalogResultToSubstitutions");
 	expect(source).toContain("addSubstitutionInput");
-	expect(source).toContain("displayUnitForBasis(item.macroBasis, get(preferencesStore).unitSystem)");
+	expect(source).toContain("displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)");
 	expect(source).toContain('onAddToSubstitution={state.mode === "catalog" ? addCatalogResultToSubstitutions : null}');
 });
 

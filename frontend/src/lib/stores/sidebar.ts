@@ -68,6 +68,7 @@ export function initSidebar(): void {
 	try {
 		raw = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
 	} catch {
+		// Storage reads are optional; default closed mobile state keeps the page usable.
 		sidebarStore.set(createInitialSidebarState());
 		return;
 	}
@@ -81,6 +82,7 @@ export function initSidebar(): void {
 	try {
 		parsed = JSON.parse(raw);
 	} catch {
+		// Malformed persisted UI state is ignored instead of blocking the sidebar.
 		sidebarStore.set(createInitialSidebarState());
 		return;
 	}
@@ -147,5 +149,6 @@ function persistSidebarCollapsed(collapsed: boolean): void {
 		);
 	} catch {
 		// Storage unavailable or quota exceeded; the in-memory store still serves callers.
+		return;
 	}
 }

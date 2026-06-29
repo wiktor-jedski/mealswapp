@@ -150,6 +150,7 @@ function makeFoodObjectEnvelope() {
 }
 
 const originalFetch = globalThis.fetch;
+const originalNavigator = globalThis.navigator;
 const fetchMock = new FetchMock();
 
 beforeEach(() => {
@@ -159,6 +160,14 @@ beforeEach(() => {
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
+	if (originalNavigator === undefined) {
+		delete (globalThis as { navigator?: unknown }).navigator;
+	} else {
+		Object.defineProperty(globalThis, "navigator", {
+			configurable: true,
+			value: originalNavigator
+		});
+	}
 	resetSearch();
 });
 
@@ -182,6 +191,13 @@ function asJson(init: RequestInit): Record<string, unknown> {
 		throw new Error("FetchMock: request body missing");
 	}
 	return JSON.parse(init.body as string) as Record<string, unknown>;
+}
+
+function setNavigatorOnline(onLine: boolean): void {
+	Object.defineProperty(globalThis, "navigator", {
+		configurable: true,
+		value: { onLine }
+	});
 }
 
 async function tick(): Promise<void> {
@@ -365,6 +381,9 @@ test("mapAppError derives category, code, and retryability from status when enve
 	expect(mapAppError(undefined, 422, fallback).category).toBe("validation");
 	expect(mapAppError(undefined, 422, fallback).code).toBe("search_rejected");
 
+	expect(mapAppError(undefined, 404, fallback).category).toBe("validation");
+	expect(mapAppError(undefined, 404, fallback).code).toBe("not_found");
+
 	expect(mapAppError(undefined, 429, fallback).category).toBe("server");
 	expect(mapAppError(undefined, 429, fallback).retryable).toBe(true);
 	expect(mapAppError(undefined, 429, fallback).code).toBe("rate_limited");
@@ -524,6 +543,27 @@ test("queryFn fetches when local cache entry is stale", async () => {
 	const result = await invokeQueryFn(options, new AbortController().signal);
 	expect(result).toEqual(makeSearchResponse(2, 1));
 	expect(fetchMock.calls.length).toBe(1);
+});
+
+// Implements DESIGN-001 SearchView offline stale-cache fallback verification.
+test("queryFn returns stale cached response when browser is offline and fetch fails", async () => {
+	const now = { value: 1_000_000 };
+	const localCache = new LocalQueryCache({ storage: null, now: () => now.value });
+	const state = catalogState("apple", 1);
+	const options = buildSearchQueryOptions(state, localCache);
+	const requestKey = options.queryKey[1];
+	const staleCached = makeSearchResponse(1, 1);
+	localCache.set(requestKey, { query: "apple", mode: "catalog", page: 1 }, staleCached);
+
+	now.value += LOCAL_CACHE_STALE_MS + 1;
+	setNavigatorOnline(false);
+	fetchMock.enqueueProvider(() => Promise.reject(new TypeError("Failed to fetch")));
+
+	const result = await invokeQueryFn(options, new AbortController().signal);
+
+	expect(result).toEqual(staleCached);
+	expect(fetchMock.calls.length).toBe(1);
+	expect(localCache.isStale(requestKey, LOCAL_CACHE_STALE_MS)).toBe(true);
 });
 
 // Implements DESIGN-001 SearchView 10-second timeout cancellation verification.

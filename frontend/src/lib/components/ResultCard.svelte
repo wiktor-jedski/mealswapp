@@ -11,83 +11,87 @@
 
   // Implements DESIGN-001 ResultsGrid result card: image fallback, classifications, macros with basis, calories, and similarity badge.
 
-  /** Food object rendered by this card. */
-  export let item: FoodObject;
-
-  /** Similarity metadata matched to this item by `itemId`; null when no similarity row exists (e.g. Catalog mode). */
-  export let similarity: SimilarityMetadata | null = null;
-
-  /** Optional fallback similarity score from the parallel `similarityScores` array; used only when metadata is absent. */
-  export let fallbackScore: number | null = null;
-
-  /** Optional action that adds this full Catalog item to the Substitution Input list. */
-  export let onAddToSubstitution: ((item: FoodObject) => void) | null = null;
+  let {
+    item,
+    similarity = null,
+    fallbackScore = null,
+    onAddToSubstitution = null
+  }: {
+    /** Food object rendered by this card. */
+    item: FoodObject;
+    /** Similarity metadata matched to this item by `itemId`; null when no similarity row exists (e.g. Catalog mode). */
+    similarity?: SimilarityMetadata | null;
+    /** Optional fallback similarity score from the parallel `similarityScores` array; used only when metadata is absent. */
+    fallbackScore?: number | null;
+    /** Optional action that adds this full Catalog item to the Substitution Input list. */
+    onAddToSubstitution?: ((item: FoodObject) => void) | null;
+  } = $props();
 
   /** True when the item image failed to load and the category placeholder should replace it. */
-  let imageFailed = false;
+  let imageFailed = $state(false);
 
   /** Food Category classifications (kind === "food_category") rendered as visible chips. */
-  $: foodCategories = item.classifications.filter(
+  let foodCategories = $derived(item.classifications.filter(
     (classification) => classification.kind === "food_category"
-  );
+  ));
 
   /** Primary Food Category used for the image placeholder when no image is provided or the image fails to load. */
-  $: placeholderCategory = item.primaryFoodCategory ?? foodCategories[0] ?? null;
+  let placeholderCategory = $derived(item.primaryFoodCategory ?? foodCategories[0] ?? null);
 
   /** Initial shown inside the category placeholder tile. */
-  $: placeholderInitial = placeholderCategory
+  let placeholderInitial = $derived(placeholderCategory
     ? placeholderCategory.name.charAt(0).toUpperCase()
-    : "?";
+    : "?");
 
   /** Human-readable nutrition basis label, following the sidebar unit preference. */
-  $: macroBasisLabel = macroBasisDisplayLabel(item.macroBasis, $preferencesStore.unitSystem);
+  let macroBasisLabel = $derived(macroBasisDisplayLabel(item.macroBasis, $preferencesStore.unitSystem));
 
   /** Metric unit returned by the backend-calculated replacement quantity. */
-  $: matchingQuantityMetricUnit = item.macroBasis === "100ml" ? "ml" : "g";
+  let matchingQuantityMetricUnit = $derived.by<"ml" | "g">(() => item.macroBasis === "100ml" ? "ml" : "g");
 
   /** Unit used to display the backend-calculated replacement quantity. */
-  $: matchingQuantityDisplayUnit = displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem);
+  let matchingQuantityDisplayUnit = $derived(displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem));
 
   /** User-facing rounded replacement quantity calculated by the backend. */
-  $: matchingQuantityLabel = similarity
+  let matchingQuantityLabel = $derived(similarity
     ? `${formatDisplayQuantity(convertQuantity(similarity.matchingQuantity, matchingQuantityMetricUnit, matchingQuantityDisplayUnit))} ${unitLabel(matchingQuantityDisplayUnit)}`
-    : null;
+    : null);
 
   /** Scale factor for substitution result macros; Catalog cards remain on the per-100 basis. */
-  $: macroScale = similarity ? similarity.matchingQuantity / 100 : 1;
+  let macroScale = $derived(similarity ? similarity.matchingQuantity / 100 : 1);
 
   /** User-facing macro values for the rendered card context. */
-  $: displayMacros = {
+  let displayMacros = $derived({
     protein: item.macros.protein * macroScale,
     carbohydrates: item.macros.carbohydrates * macroScale,
     fat: item.macros.fat * macroScale
-  };
+  });
 
   /** User-facing calories for the rendered card context. */
-  $: displayCalories = item.calories * macroScale;
+  let displayCalories = $derived(item.calories * macroScale);
 
   /** Context label below the macro table. */
-  $: macroContextLabel = matchingQuantityLabel ? `for about ${matchingQuantityLabel}` : macroBasisLabel;
+  let macroContextLabel = $derived(matchingQuantityLabel ? `for about ${matchingQuantityLabel}` : macroBasisLabel);
 
   /** Resolved similarity score: prefer metadata, fall back to the parallel scores array. */
-  $: similarityScore = similarity?.score ?? fallbackScore;
+  let similarityScore = $derived(similarity?.score ?? fallbackScore);
 
   /** Resolved similarity tier; null when no metadata is available. */
-  $: similarityTier = similarity?.tier ?? null;
+  let similarityTier = $derived(similarity?.tier ?? null);
 
   /** True when an <img> should be rendered: the item provides a URL and it has not failed. */
-  $: showImage = Boolean(item.imageUrl) && !imageFailed;
+  let showImage = $derived(Boolean(item.imageUrl) && !imageFailed);
 
   /** Tailwind classes and short label for each similarity tier badge. */
   const tierStyles: Record<SimilarityTier, { label: string; classes: string }> = {
-    excellent: { label: "Excellent", classes: "bg-[var(--color-primary)] text-white" },
-    good: { label: "Good", classes: "bg-[var(--color-primary)] text-white" },
-    fair: { label: "Fair", classes: "bg-[var(--color-accent)] text-white" },
-    poor: { label: "Poor", classes: "bg-[var(--color-muted)] text-white" }
+    excellent: { label: "Excellent", classes: "bg-[var(--color-primary)] text-[var(--color-on-primary)]" },
+    good: { label: "Good", classes: "bg-[var(--color-primary)] text-[var(--color-on-primary)]" },
+    fair: { label: "Fair", classes: "bg-[var(--color-accent)] text-[var(--color-on-accent)]" },
+    poor: { label: "Poor", classes: "bg-[var(--color-muted)] text-[var(--color-on-muted)]" }
   };
 
   /** Resets the broken-image flag whenever the item's image URL changes so a new image retries. */
-  $: resetBrokenImage(item.imageUrl);
+  $effect(() => resetBrokenImage(item.imageUrl));
 
   function resetBrokenImage(_imageUrl: string | null | undefined): void {
     imageFailed = false;
@@ -119,7 +123,7 @@
           src={item.imageUrl ?? undefined}
           alt={item.name}
           loading="lazy"
-          on:error={onImageError}
+          onerror={onImageError}
           data-result-image
         />
       {:else}
@@ -129,9 +133,9 @@
           aria-label={placeholderCategory ? placeholderCategory.name : item.name}
           data-result-placeholder
         >
-          <span class="font-data text-2xl font-semibold text-white" aria-hidden="true">{placeholderInitial}</span>
+          <span class="font-data text-2xl font-semibold text-[var(--color-on-muted)]" aria-hidden="true">{placeholderInitial}</span>
           {#if placeholderCategory}
-            <span class="mt-1 px-1 text-xs text-white">{placeholderCategory.name}</span>
+            <span class="mt-1 px-1 text-xs text-[var(--color-on-muted)]">{placeholderCategory.name}</span>
           {/if}
         </div>
       {/if}
@@ -163,7 +167,7 @@
   {#if foodCategories.length > 0}
     <div class="flex flex-wrap justify-start gap-1 pr-12 text-left" data-result-categories>
       {#each foodCategories as category (category.id)}
-        <span class="rounded bg-[var(--color-muted)] px-2 py-0.5 text-xs text-white">{category.name}</span>
+        <span class="rounded bg-[var(--color-muted)] px-2 py-0.5 text-xs text-[var(--color-on-muted)]">{category.name}</span>
       {/each}
     </div>
   {/if}
@@ -171,9 +175,9 @@
   {#if onAddToSubstitution}
     <button
       type="button"
-      class="absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] text-xl font-semibold leading-none text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+      class="absolute bottom-4 right-4 flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-primary)] bg-[var(--color-primary)] text-xl font-semibold leading-none text-[var(--color-on-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
       aria-label={`Add ${item.name} to substitutions`}
-      on:click={() => onAddToSubstitution?.(item)}
+      onclick={() => onAddToSubstitution?.(item)}
       data-result-add-substitution
     >
       <span class="-translate-y-px leading-none" aria-hidden="true">+</span>

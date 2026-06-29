@@ -33,6 +33,9 @@
   --color-primary: #166534;
   --color-secondary: #dcfce7;
   --color-accent: #f97316;
+  --color-on-primary: #ffffff;
+  --color-on-accent: #111827;
+  --color-on-muted: #ffffff;
   --color-error: #dc2626;
   --color-border: #e0e0e0;
   font-family: var(--font-ui);
@@ -48,6 +51,9 @@
   --color-primary: #4ade80;
   --color-secondary: #86efac;
   --color-accent: #ffb86c;
+  --color-on-primary: #0a0f0a;
+  --color-on-accent: #111827;
+  --color-on-muted: #0a0f0a;
   --color-error: #f87171;
   --color-border: #39423d;
 }
