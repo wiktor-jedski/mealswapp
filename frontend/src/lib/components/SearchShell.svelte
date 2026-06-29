@@ -1,54 +1,129 @@
 <script lang="ts">
-  import { themePreference, setThemePreference } from "../stores/theme";
+  import {
+    searchStore,
+    setQuery,
+    submitSearch,
+    addSubstitutionInput,
+    setSubstitutionInputItem,
+    updateSubstitutionInput
+  } from "../stores/search";
+  import { sidebarStore } from "../stores/sidebar";
+  import type {
+    SearchMode,
+    SearchRejection,
+    RankedAutocomplete
+  } from "../api/generated";
+  import SidebarComponent from "./SidebarComponent.svelte";
+  import SearchModes from "./SearchModes.svelte";
+  import AutocompleteDropdown from "./AutocompleteDropdown.svelte";
+  import SubstitutionInputs from "./SubstitutionInputs.svelte";
+  import DailyDietControls from "./DailyDietControls.svelte";
+  import SearchResults from "./SearchResults.svelte";
+  import OfflineBanner from "./OfflineBanner.svelte";
+  import { fetchFoodObject } from "../api/search-client";
+  import { preferencesStore } from "../stores/preferences";
+  import { displayUnitForBasis } from "../units";
 
-  // Implements DESIGN-001 SidebarComponent search-mode shell labels.
-  const modes = ["Catalog", "Substitution", "Daily Diet"];
+  // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, results, and offline status.
+
+  /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
+  let rejection = $state<SearchRejection | null>(null);
+
+  /** True while an explicit submitted search request is fetching results. */
+  let searchInFlight = $state(false);
+
+  /** Mode-specific input guidance for the primary SearchView combobox. */
+  const searchPlaceholders: Record<SearchMode, string> = {
+    catalog: "Search foods, meals, or ingredients…",
+    substitution: "Add a substitution target…",
+    daily_diet_alternative: "Search a saved daily diet…"
+  };
+
+  /** Active mode mirrored from the store for shell-level conditional rendering and focus keys. */
+  let activeMode = $derived($searchStore.mode);
+
+  /**
+   * Handles autocomplete selection: in Substitution mode adds a Substitution Input from the
+   * suggestion's food object id; otherwise commits the selected suggestion label as the search.
+   */
+  function onAutocompleteSelect(item: RankedAutocomplete): void {
+    if (activeMode === "substitution") {
+      addSubstitutionInput(
+        {
+          foodObjectId: item.itemId,
+          quantity: 100,
+          unit: $preferencesStore.unitSystem === "imperial" ? "oz" : "g"
+        },
+        item.label
+      );
+      void hydrateSubstitutionInput(item.itemId);
+      setQuery("");
+    } else {
+      setQuery(item.label);
+      submitSearch(item.label);
+    }
+  }
+
+  /**
+   * Hydrates autocomplete-selected Substitution Inputs with rich FoodObject display data.
+   * Failures are intentionally silent because the fallback label card remains usable.
+   */
+  async function hydrateSubstitutionInput(foodObjectId: string): Promise<void> {
+    try {
+      const item = await fetchFoodObject(foodObjectId, new AbortController().signal);
+      setSubstitutionInputItem(item);
+      updateSubstitutionInput(foodObjectId, {
+        unit: displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)
+      });
+    } catch {
+      // Implements DESIGN-001 SearchView resilient selected-item hydration fallback.
+      return;
+    }
+  }
+
+  /** Commits typed text only for result-searching modes; Substitution uses autocomplete as an item picker. */
+  function onAutocompleteSubmit(query: string): void {
+    if (activeMode !== "substitution") {
+      submitSearch(query);
+    }
+  }
 </script>
 
-<!-- Implements DESIGN-001 SearchView, SidebarComponent, SettingsPanel, and DESIGN-016 LayoutGrid. -->
+<!-- Implements DESIGN-001 SearchView, SidebarComponent, and DESIGN-016 LayoutGrid (viewport-left sidebar, centered content below 1280px). -->
 <main class="min-h-screen">
-  <section class="mx-auto grid min-h-screen max-w-6xl gap-6 px-4 py-6 sm:grid-cols-[220px_1fr] sm:px-6">
-    <aside class="border-b border-[var(--color-border)] pb-4 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-5">
-      <h1 class="text-2xl font-semibold">Mealswapp</h1>
-      <nav class="mt-6 grid gap-2" aria-label="Search modes">
-        {#each modes as mode, index}
-          <button
-            class="rounded border border-[var(--color-border)] px-3 py-2 text-left text-sm font-medium"
-            aria-current={index === 0 ? "page" : undefined}
-          >
-            {mode}
-          </button>
-        {/each}
-      </nav>
+  <!-- Implements DESIGN-016 LayoutGrid: full-width grid above 640px so SidebarComponent sits on the viewport's far-left edge. -->
+  <section class="grid min-h-screen gap-6 px-4 py-6 transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none sm:px-0 sm:py-0 {$sidebarStore.collapsed ? 'sm:grid-cols-[3.5rem_minmax(0,1fr)]' : 'sm:grid-cols-[15rem_minmax(0,1fr)]'}">
+    <!-- Implements DESIGN-001 SidebarComponent placed in the viewport-left grid column. -->
+    <aside>
+      <SidebarComponent />
     </aside>
 
-    <div class="flex flex-col gap-5">
-      <header class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="font-data text-xs uppercase text-[var(--color-muted)]">Phase 00 Shell</p>
-          <h2 class="mt-1 text-xl font-semibold">Search foundation</h2>
-        </div>
-        <select
-          class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
-          bind:value={$themePreference}
-          on:change={(event) => setThemePreference(event.currentTarget.value as "system" | "light" | "dark")}
-          aria-label="Theme preference"
-        >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </header>
+    <div class="flex w-full max-w-5xl flex-col gap-5 sm:mx-auto sm:px-6 sm:py-6">
+      <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
+      <SearchModes />
 
-      <form class="grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <label class="text-sm font-medium" for="search">Food search</label>
-        <input
-          id="search"
-          class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2"
-          placeholder="Search will be implemented in Phase 05"
-          disabled
-        />
-      </form>
+      <AutocompleteDropdown
+        query={$searchStore.query}
+        placeholder={searchPlaceholders[activeMode]}
+        focusKey={activeMode}
+        searching={searchInFlight}
+        onQueryInput={setQuery}
+        onSubmit={onAutocompleteSubmit}
+        onSelect={onAutocompleteSelect}
+      />
+
+      {#if activeMode === "substitution"}
+        <SubstitutionInputs />
+      {:else if activeMode === "daily_diet_alternative"}
+        <DailyDietControls {rejection} />
+      {/if}
+
+      <SearchResults
+        onRejection={(r) => (rejection = r)}
+        onSearchInFlightChange={(searching) => (searchInFlight = searching)}
+      />
+
+      <OfflineBanner />
     </div>
   </section>
 </main>

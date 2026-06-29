@@ -55,6 +55,15 @@ const (
 	MaxSearchPage              = 10000
 )
 
+// Implements DESIGN-002 FilterProcessor and DESIGN-013 InputNormalizer supported search filter kind tokens.
+const (
+	searchFilterKindFoodCategory  = "food_category"
+	searchFilterKindCulinaryRole  = "culinary_role"
+	searchFilterKindPhysicalState = "physical_state"
+	searchFilterKindAllergen      = "allergen"
+	searchFilterKindDietaryPreset = "dietary_preset"
+)
+
 // NormalizationResult reports accepted string normalization without exposing logs.
 // Implements DESIGN-013 InputNormalizer.
 type NormalizationResult struct {
@@ -296,7 +305,7 @@ func normalizeSearchPage(value string) (NormalizationResult, error) {
 func normalizeSearchFilterKind(value string) (NormalizationResult, error) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	switch normalized {
-	case "food_category", "culinary_role", "physical_state", "allergen", "dietary_preset":
+	case searchFilterKindFoodCategory, searchFilterKindCulinaryRole, searchFilterKindPhysicalState, searchFilterKindAllergen, searchFilterKindDietaryPreset:
 		result := NormalizationResult{Value: normalized, Changed: normalized != value}
 		if result.Changed {
 			result.Violations = []string{"filter_kind_normalized"}

@@ -17,14 +17,29 @@ VALUES
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 -- Implements DESIGN-005 FoodItemEntity deterministic development fixtures.
+-- Repair legacy local dev rows created before milk fixtures received deterministic IDs.
+WITH deterministic_food_fixtures(id, normalized_name) AS (
+    VALUES
+        ('21000000-0000-0000-0000-000000000003'::uuid, 'oat milk'),
+        ('21000000-0000-0000-0000-000000000004'::uuid, 'cow milk')
+)
+UPDATE food_items existing
+SET deleted_at = COALESCE(existing.deleted_at, now()), updated_at = now()
+FROM deterministic_food_fixtures fixture
+WHERE existing.deleted_at IS NULL
+  AND existing.normalized_name = fixture.normalized_name
+  AND existing.id <> fixture.id;
+
 INSERT INTO food_items (
     id, name, physical_state, prep_time_minutes, average_unit_weight_grams, average_serving_volume_milliliters,
     density_grams_per_milliliter, density_source_provider, density_source_food_id, density_source_kind,
     protein_per_100, carbohydrates_per_100, fat_per_100, micronutrients, image_url
 )
 VALUES
-    ('21000000-0000-0000-0000-000000000001', 'Seed Apple', 'solid', 1, 150, NULL, NULL, NULL, NULL, NULL, 0.3, 14, 0.2, '{"VitaminC":4.6}'::jsonb, 'https://example.test/seed-apple.jpg'),
-    ('21000000-0000-0000-0000-000000000002', 'Seed Yogurt', 'liquid', 0, NULL, 125, 1, 'fixture', 'seed-yogurt', 'manual', 10, 4, 2, '{"Calcium":120}'::jsonb, 'https://example.test/seed-yogurt.jpg')
+    ('21000000-0000-0000-0000-000000000001', 'Apple', 'solid', 1, 150, NULL, NULL, NULL, NULL, NULL, 0.3, 14, 0.2, '{"VitaminC":4.6}'::jsonb, 'https://example.test/apple.jpg'),
+    ('21000000-0000-0000-0000-000000000002', 'Yogurt', 'liquid', 0, NULL, 125, 1, 'fixture', 'yogurt', 'manual', 10, 4, 2, '{"Calcium":120}'::jsonb, 'https://example.test/yogurt.jpg'),
+    ('21000000-0000-0000-0000-000000000003', 'Oat Milk', 'liquid', 1, NULL, 240, 1.03, 'fixture', 'oat-milk', 'estimated', 1, 7, 1.5, '{"Calcium":120}'::jsonb, 'https://example.test/oat-milk.jpg'),
+    ('21000000-0000-0000-0000-000000000004', 'Cow Milk', 'liquid', 1, NULL, 240, 1.03, 'fixture', 'cow-milk', 'estimated', 3.4, 5, 1, '{"Calcium":120}'::jsonb, 'https://example.test/cow-milk.jpg')
 ON CONFLICT (id) DO UPDATE
 SET name = EXCLUDED.name, physical_state = EXCLUDED.physical_state,
     prep_time_minutes = EXCLUDED.prep_time_minutes, average_unit_weight_grams = EXCLUDED.average_unit_weight_grams,
@@ -41,7 +56,16 @@ VALUES
     ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001'),
     ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000101'),
     ('21000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002'),
-    ('21000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000102')
+    ('21000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000102'),
+    ('21000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000002'),
+    ('21000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000102'),
+    ('21000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000002'),
+    ('21000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000102')
+ON CONFLICT DO NOTHING;
+
+INSERT INTO food_item_allergens (food_item_id, allergen_key)
+VALUES
+    ('21000000-0000-0000-0000-000000000004', 'dairy')
 ON CONFLICT DO NOTHING;
 
 -- Implements DESIGN-005 MealEntity deterministic development fixtures.
@@ -50,8 +74,8 @@ INSERT INTO meals (
     protein_per_100, carbohydrates_per_100, fat_per_100
 )
 VALUES
-    ('22000000-0000-0000-0000-000000000001', 'single', 'Seed Apple Snack', 'solid', 1, 150, 0.3, 14, 0.2),
-    ('22000000-0000-0000-0000-000000000002', 'composite', 'Seed Breakfast Bowl', 'solid', 5, 275, NULL, NULL, NULL)
+    ('22000000-0000-0000-0000-000000000001', 'single', 'Apple Snack', 'solid', 1, 150, 0.3, 14, 0.2),
+    ('22000000-0000-0000-0000-000000000002', 'composite', 'Breakfast Bowl', 'solid', 5, 275, NULL, NULL, NULL)
 ON CONFLICT (id) DO UPDATE
 SET type = EXCLUDED.type, name = EXCLUDED.name,
     physical_state = EXCLUDED.physical_state, prep_time_minutes = EXCLUDED.prep_time_minutes,
@@ -136,7 +160,7 @@ ON CONFLICT (user_id, item_id, kind) DO NOTHING;
 
 -- Implements DESIGN-008 SearchHistoryRepository deterministic development fixtures.
 INSERT INTO search_history (id, user_id, query, mode, filters_hash)
-VALUES ('24000000-0000-0000-0000-000000000001', '23000000-0000-0000-0000-000000000001', 'seed apple', 'food', 'seed-filter')
+VALUES ('24000000-0000-0000-0000-000000000001', '23000000-0000-0000-0000-000000000001', 'apple', 'catalog', 'seed-filter')
 ON CONFLICT (id) DO UPDATE
 SET query = EXCLUDED.query, mode = EXCLUDED.mode, filters_hash = EXCLUDED.filters_hash;
 

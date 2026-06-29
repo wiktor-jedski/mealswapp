@@ -32,6 +32,14 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 	if resp.StatusCode != fiber.StatusOK || calls != 1 {
 		t.Fatalf("valid search = %d calls=%d", resp.StatusCode, calls)
 	}
+	validSubstitutionBody := `{"query":"","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":100,"unit":"ml"}]}`
+	resp = postSearchValidation(t, app, validSubstitutionBody)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || calls != 2 {
+		t.Fatalf("valid substitution = %d calls=%d", resp.StatusCode, calls)
+	}
+	tooManyFilters := strings.TrimSuffix(strings.Repeat(`{"filterId":"dairy","kind":"allergen","include":true},`, 21), ",")
+	tooManyInputs := strings.TrimSuffix(strings.Repeat(`{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"g"},`, 21), ",")
 
 	for name, body := range map[string]string{
 		"empty query":                  `{"query":"   ","mode":"catalog","page":1}`,
@@ -45,6 +53,8 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 		"string substitution quantity": `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":"12.5","unit":"g"}]}`,
 		"aliased substitution unit":    `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"gram"}]}`,
 		"fluid ounce alias":            `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"fluid_ounce"}]}`,
+		"too many filters":             `{"query":"tomato","mode":"catalog","page":1,"filters":[` + tooManyFilters + `]}`,
+		"too many substitution inputs": `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[` + tooManyInputs + `]}`,
 		"invalid daily diet id":        `{"query":"tomato","mode":"daily_diet_alternative","page":1,"dailyDietId":"not-a-uuid"}`,
 		"catalog with substitution":    `{"query":"tomato","mode":"catalog","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"g"}]}`,
 		"catalog with daily diet id":   `{"query":"tomato","mode":"catalog","page":1,"dailyDietId":"2d4a5f20-c55f-4ba7-9751-779e682f7063"}`,
@@ -59,7 +69,7 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 			t.Fatalf("%s response = %d %+v", name, resp.StatusCode, envelope)
 		}
 	}
-	if calls != 1 {
+	if calls != 2 {
 		t.Fatalf("invalid search dispatched handler calls=%d", calls)
 	}
 }

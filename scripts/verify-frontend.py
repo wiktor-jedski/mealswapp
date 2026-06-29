@@ -5,6 +5,7 @@
 import contextlib
 import argparse
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -21,15 +22,10 @@ REQUIRED_TEXT = (
 	"Mealswapp",
 	"Catalog",
 	"Substitution",
-	"Daily Diet",
-	"Phase 00 Shell",
-	"Search foundation",
+	"Daily Diet Alternative",
 	"Food search",
-	"Search will be implemented in Phase 05",
-	"System",
-	"Light",
-	"Dark",
 )
+SEARCH_INPUT_RE = re.compile(r'<input[^>]*id="autocomplete-input"[^>]*>')
 
 
 def free_port() -> int:
@@ -116,10 +112,15 @@ def assert_shell_dom(dom: str) -> None:
 	missing = [text for text in REQUIRED_TEXT if text not in dom]
 	if missing:
 		raise RuntimeError(f"rendered shell is missing expected text: {', '.join(missing)}")
-	if 'id="search"' not in dom or "disabled" not in dom:
-		raise RuntimeError("rendered shell is missing the disabled search input")
+	search_input = SEARCH_INPUT_RE.search(dom)
+	if search_input is None:
+		raise RuntimeError("rendered shell is missing the autocomplete search input")
+	if "disabled" in search_input.group(0):
+		raise RuntimeError("autocomplete search input must not be disabled in Phase 05")
 	if 'aria-label="Theme preference"' not in dom:
 		raise RuntimeError("rendered shell is missing the theme selector")
+	if "data-sidebar-theme-toggle" not in dom:
+		raise RuntimeError("rendered shell is missing the sidebar theme toggle")
 
 
 def capture_screenshot(browser: str, url: str, artifact_dir: Path, name: str, width: int, height: int) -> Path:

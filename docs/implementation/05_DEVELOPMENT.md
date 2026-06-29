@@ -22,6 +22,19 @@ Copy `.env.example` into a local `.env` if shell-based loading is preferred. The
 
 ## Local Services
 
+Start PostgreSQL, Redis, the backend, and the frontend together from the repository root:
+
+```sh
+bash scripts/start-dev.sh
+```
+
+The command starts local services, applies backend migrations, seeds deterministic
+development data, and keeps the backend and frontend attached to the terminal.
+Press `Ctrl-C` to stop both application processes. PostgreSQL and Redis remain
+available for the next development session.
+
+To start only PostgreSQL and Redis:
+
 ```sh
 bash scripts/start-services.sh
 ```
@@ -38,6 +51,10 @@ bun test
 bun run build
 ```
 
+The Vite dev server proxies `/api` to the backend at `http://127.0.0.1:8080`
+(see `frontend/vite.config.ts`), so start the backend before `bun run dev`
+when running the full search experience locally.
+
 The Phase 00 frontend renders the application shell, theme selector, and disabled search placeholder. Search behavior is implemented in later phases.
 
 ## Backend
@@ -45,6 +62,7 @@ The Phase 00 frontend renders the application shell, theme selector, and disable
 ```sh
 cd backend
 go run ./cmd/migrate up
+go run ./cmd/seed
 go run ./cmd/api
 go test ./...
 ```

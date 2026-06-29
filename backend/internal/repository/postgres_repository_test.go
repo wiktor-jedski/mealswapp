@@ -984,7 +984,7 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create banana: %v", err)
 	}
-	if _, err := foodRepo.Create(ctx, FoodItemEntity{
+	appleJuiceID, err := foodRepo.Create(ctx, FoodItemEntity{
 		Name:                            "Apple Juice",
 		PhysicalState:                   PhysicalStateLiquid,
 		DensityGramsPerMilliliter:       1.04,
@@ -993,7 +993,8 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 		MacrosPer100:                    MacroValues{Protein: 0.1, Carbohydrates: 11, Fat: 0},
 		FoodCategories:                  []ClassificationEntity{{ID: categoryID}},
 		CulinaryRoles:                   []ClassificationEntity{{ID: excludedRoleID}},
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("create apple juice: %v", err)
 	}
 
@@ -1011,6 +1012,13 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 	}
 	if total != 1 || len(items) != 1 || items[0].ID != appleID {
 		t.Fatalf("Search() total=%d items=%#v, want apple only", total, items)
+	}
+	items, total, err = foodRepo.Search(ctx, RepositoryQuery{Name: "Juice", Limit: 10})
+	if err != nil {
+		t.Fatalf("Search() infix food name error = %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].ID != appleJuiceID {
+		t.Fatalf("Search() infix food name total=%d items=%#v, want apple juice", total, items)
 	}
 	items, total, err = foodRepo.Search(ctx, RepositoryQuery{
 		RepositoryContext:       RepositoryContext{UnitSystem: UnitSystemMetric},
@@ -1125,7 +1133,15 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 		t.Fatalf("Search() filtered total=%d meals=%#v, want oat only", total, meals)
 	}
 
-	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "B", Limit: 1, Offset: 0})
+	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "Bowl", Limit: 10})
+	if err != nil {
+		t.Fatalf("Search() infix meal name error = %v", err)
+	}
+	if total != 2 || len(meals) != 2 || meals[0].ID != berryMealID || meals[1].ID != oatMealID {
+		t.Fatalf("Search() infix meal name total=%d meals=%#v, want berry then oat", total, meals)
+	}
+
+	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "Berry", Limit: 1, Offset: 0})
 	if err != nil {
 		t.Fatalf("Search() page error = %v", err)
 	}

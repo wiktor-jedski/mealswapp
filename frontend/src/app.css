@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
-/* Implements DESIGN-016 TypographySystem font defaults. */
+/* Implements DESIGN-016 TypographySystem font utilities: Inter for UI text, Roboto Mono for data labels. */
+@theme {
+  --font-ui: "Inter", system-ui, sans-serif;
+  --font-data: "Roboto Mono", ui-monospace, monospace;
+}
+
+/* Implements DESIGN-016 TypographySystem local font fallbacks (used when the families are installed locally). */
 @font-face {
   font-family: "Inter";
   font-style: normal;
@@ -18,37 +24,49 @@
 }
 
 :root {
-  /* Implements DESIGN-016 ColorPalette light-mode tokens. */
+  /* Implements DESIGN-016 ColorPalette light-mode tokens matching docs/requirements/02_STYLE_GUIDE.md. */
   color-scheme: light;
-  --color-bg: #f7f5ef;
+  --color-bg: #f7fcf7;
   --color-surface: #ffffff;
-  --color-text: #17201b;
-  --color-muted: #59655f;
-  --color-primary: #176b55;
-  --color-accent: #b13f2f;
-  --color-border: #d8d7cf;
-  font-family: "Inter", system-ui, sans-serif;
+  --color-text: #111827;
+  --color-muted: #6b7280;
+  --color-primary: #166534;
+  --color-secondary: #dcfce7;
+  --color-accent: #f97316;
+  --color-on-primary: #ffffff;
+  --color-on-accent: #111827;
+  --color-on-muted: #ffffff;
+  --color-error: #dc2626;
+  --color-border: #e0e0e0;
+  font-family: var(--font-ui);
 }
 
 :root[data-theme="dark"] {
-  /* Implements DESIGN-016 ColorPalette dark-mode tokens. */
+  /* Implements DESIGN-016 ColorPalette dark-mode tokens matching docs/requirements/02_STYLE_GUIDE.md. */
   color-scheme: dark;
-  --color-bg: #101412;
-  --color-surface: #1a201d;
-  --color-text: #f2f0e8;
-  --color-muted: #b7c0ba;
-  --color-primary: #6fc7ab;
-  --color-accent: #ef8a76;
+  --color-bg: #0a0f0a;
+  --color-surface: #161d16;
+  --color-text: #f3f4f6;
+  --color-muted: #9ca3af;
+  --color-primary: #4ade80;
+  --color-secondary: #86efac;
+  --color-accent: #ffb86c;
+  --color-on-primary: #0a0f0a;
+  --color-on-accent: #111827;
+  --color-on-muted: #0a0f0a;
+  --color-error: #f87171;
   --color-border: #39423d;
 }
 
 body {
-  /* Implements DESIGN-016 ComponentStyles base page styling. */
+  /* Implements DESIGN-016 ComponentStyles base page styling and LayoutGrid horizontal-overflow guard. */
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-x: hidden;
   background: var(--color-bg);
   color: var(--color-text);
+  font-family: var(--font-ui);
 }
 
 button,
@@ -56,6 +74,33 @@ input {
   font: inherit;
 }
 
-.font-data {
-  font-family: "Roboto Mono", ui-monospace, monospace;
+/* Implements DESIGN-001 SidebarComponent desktop collapse animation with delayed visibility hiding. */
+@media (min-width: 640px) {
+  .sidebar-animated-content {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0);
+    transition:
+      opacity 150ms ease-out 200ms,
+      transform 150ms ease-out 200ms,
+      visibility 0s linear 200ms;
+  }
+
+  [data-collapsed="true"] .sidebar-animated-content {
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-0.5rem);
+    transition:
+      opacity 0s linear,
+      transform 0s linear,
+      visibility 0s linear;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-animated-content {
+    transition: none;
+  }
 }

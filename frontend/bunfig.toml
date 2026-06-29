@@ -1,0 +1,4 @@
+# Implements DESIGN-001 SearchView deterministic unit/component test root.
+# Scoping bun test to src/ keeps Playwright specs under tests/ out of the Bun runner.
+[test]
+root = "src"

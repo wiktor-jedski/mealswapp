@@ -81,6 +81,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			cache:   redisStore,
 			ttl:     cache.DefaultAutocompleteTTL,
 		}).WithSearchHistoryAppender(userDataService),
+		httpapi.NewFoodObjectController(foodRepo),
 		httpapi.NewUserDataController(userDataService),
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),

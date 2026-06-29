@@ -4,7 +4,7 @@ FROM meals m
 WHERE ($1::boolean OR m.deleted_at IS NULL)
   AND (
       $2::text = ''
-      OR lower(btrim(m.name)) LIKE lower(btrim($2)) || '%'
+      OR lower(btrim(m.name)) LIKE '%' || lower(btrim($2)) || '%'
   )
   AND ($3::integer IS NULL OR m.prep_time_minutes <= $3)
   AND (

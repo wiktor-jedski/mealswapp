@@ -106,6 +106,11 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	db := openSeedTestDB(t)
 	ctx := context.Background()
 
+	// Regression: earlier local dev seeds created milk fixtures with random UUIDs,
+	// which conflicts with the deterministic active-name fixture insert.
+	insertLegacyActiveFoodFixture(t, ctx, db, "Oat Milk")
+	insertLegacyActiveFoodFixture(t, ctx, db, "Cow Milk")
+
 	if err := Run(ctx, db); err != nil {
 		t.Fatalf("Run() first error = %v", err)
 	}
@@ -119,6 +124,8 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	}
 
 	foodID := uuid.MustParse("21000000-0000-0000-0000-000000000001")
+	oatMilkID := uuid.MustParse("21000000-0000-0000-0000-000000000003")
+	cowMilkID := uuid.MustParse("21000000-0000-0000-0000-000000000004")
 	recipeID := uuid.MustParse("22000000-0000-0000-0000-000000000002")
 	userID := uuid.MustParse("23000000-0000-0000-0000-000000000001")
 	foodRepo := repository.NewPostgresFoodItemRepository(db)
@@ -134,6 +141,27 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	}
 	if food.MacrosPer100 != (repository.MacroValues{Protein: 0.3, Carbohydrates: 14, Fat: 0.2}) || len(food.FoodCategories) != 1 {
 		t.Fatalf("seeded food = %#v", food)
+	}
+	milkItems, total, err := foodRepo.Search(ctx, repository.RepositoryQuery{Name: "milk", Limit: 10})
+	if err != nil {
+		t.Fatalf("Search() seeded milk error = %v", err)
+	}
+	if total < 2 || !containsFoodID(milkItems, oatMilkID) || !containsFoodID(milkItems, cowMilkID) {
+		t.Fatalf("seeded milk search total=%d items=%#v", total, milkItems)
+	}
+	var legacyActiveCount int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM food_items WHERE id::text NOT LIKE '21000000-%' AND normalized_name IN ('oat milk', 'cow milk') AND deleted_at IS NULL`).Scan(&legacyActiveCount); err != nil {
+		t.Fatalf("legacy active count query: %v", err)
+	}
+	if legacyActiveCount != 0 {
+		t.Fatalf("legacy active fixture count = %d, want 0", legacyActiveCount)
+	}
+	dairyFreeItems, _, err := foodRepo.Search(ctx, repository.RepositoryQuery{Name: "milk", ExcludedAllergenKeys: []string{"dairy"}, Limit: 10})
+	if err != nil {
+		t.Fatalf("Search() seeded dairy-free milk error = %v", err)
+	}
+	if !containsFoodID(dairyFreeItems, oatMilkID) || containsFoodID(dairyFreeItems, cowMilkID) {
+		t.Fatalf("seeded dairy-free milk items=%#v", dairyFreeItems)
 	}
 
 	macros, err := mealRepo.CalculateMacros(ctx, recipeID)
@@ -179,6 +207,30 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	if imported.FoodItemID == nil || *imported.FoodItemID != foodID {
 		t.Fatalf("seeded import = %#v", imported)
 	}
+}
+
+func insertLegacyActiveFoodFixture(t *testing.T, ctx context.Context, db *pgxpool.Pool, name string) {
+	t.Helper()
+	_, err := db.Exec(ctx, `
+		INSERT INTO food_items (
+			name, physical_state, average_serving_volume_milliliters,
+			density_grams_per_milliliter, density_source_kind,
+			protein_per_100, carbohydrates_per_100, fat_per_100
+		)
+		VALUES ($1, 'liquid', 240, 1.03, 'estimated', 1, 1, 1)
+	`, name)
+	if err != nil {
+		t.Fatalf("insert legacy active food fixture %q: %v", name, err)
+	}
+}
+
+func containsFoodID(items []repository.FoodItemEntity, id uuid.UUID) bool {
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 type seedCountSnapshot struct {

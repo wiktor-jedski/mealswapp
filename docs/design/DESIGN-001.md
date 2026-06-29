@@ -10,7 +10,7 @@
 - `AutocompleteDropdown`: owns ranked suggestion display, keyboard focus movement, selection, and dismissal rules.
 - `ThemeProvider`: owns resolved theme state and delegates token application to ARCH-016.
 - `OfflineBanner`: owns online/offline and stale-data indicators.
-- `SettingsPanel`: owns unit preference, macro toggles, and theme preference controls.
+- `SettingsPanel`: owns unit preference and theme preference controls.
 - `LocalStorageManager`: owns client persistence for settings, recent searches, and query metadata.
 - `ServiceWorker`: owns offline asset/API interception and delegates cache policy to ARCH-011.
 
@@ -22,11 +22,11 @@
 - `interface FoodItemViewModel { id: string; name: string; imageUrl?: string; macros: MacroSummary; classifications: string[]; similarity?: SimilarityBadge }`
 - `interface MacroSummary { protein: number; carbs: number; fat: number; unitBasis: "100g" | "100ml" | "serving" }`
 - `interface SimilarityBadge { score: number; tier: "excellent" | "good" | "fair" | "poor"; colorHex: string; imageUrl: string }`
-- `interface AppSettings { theme: "system" | "light" | "dark"; unitSystem: "metric" | "imperial"; enabledMacros: { protein: boolean; carbs: boolean; fat: boolean } }`
+- `interface AppSettings { theme: "system" | "light" | "dark"; unitSystem: "metric" | "imperial" }`
 - `interface CachedQuery { key: string; request: SearchRequest; response: SearchResponse; storedAt: string; staleAt: string }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
-1. On app startup, load `AppSettings` from `LocalStorageManager`; default to `mode = "catalog"` and all macro toggles enabled.
+1. On app startup, load `AppSettings` from `LocalStorageManager`; default to `mode = "catalog"` with metric units unless a saved preference exists.
 2. Register the service worker and subscribe to `online` and `offline` browser events.
 3. Initialize Svelte stores for search state, settings, offline status, and current user entitlement.
 4. When the search input changes, trim the value, update state immediately, and start a 150ms debounce timer.

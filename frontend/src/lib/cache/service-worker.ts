@@ -1,3 +1,8 @@
+/**
+ * Options controlling whether the browser service-worker registration seam is enabled.
+ *
+ * @remarks Implements DESIGN-011 ServiceWorkerCache registration configuration.
+ */
 interface RegistrationOptions {
 	enabled: boolean;
 }

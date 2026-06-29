@@ -1,0 +1,253 @@
+import { expect, test, type Page } from "@playwright/test";
+
+// Implements DESIGN-016 LayoutGrid, ColorPalette, and TypographySystem responsive browser verification.
+//
+// Verifies the Phase 05 responsive style system: 12-column desktop grid with a left
+// sidebar, single-column layout below 640px, no horizontal scrolling at 320px, Inter
+// for UI text, Roboto Mono for data labels, and exact light/dark design tokens from
+// docs/requirements/02_STYLE_GUIDE.md. Captures desktop + mobile screenshots in both
+// themes for frontend verification. The ResultsGrid/ResultCard components are wired in
+// by Task 151; until then the shell's results placeholder exercises the grid container.
+
+const SCREENSHOT_DIR = "test-results/responsive";
+
+/** Normalizes a CSS hex color to a lowercase 6-digit form so `#fff` and `#ffffff` compare equal. */
+function normalizeHex(value: string): string {
+  const hex = value.trim().toLowerCase().replace(/^#/, "");
+  if (hex.length === 3) {
+    return `#${hex
+      .split("")
+      .map((c) => c + c)
+      .join("")}`;
+  }
+  return `#${hex}`;
+}
+
+/** Stubs the autocomplete and search endpoints so the SearchShell renders without a backend. */
+async function stubApi(page: Page): Promise<void> {
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "ok", requestId: "responsive-stub", data: { items: [] } })
+    });
+  });
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "ok",
+        requestId: "responsive-stub",
+        data: {
+          items: [
+            {
+              id: "food-responsive-1",
+              name: "Responsive Apple",
+              physicalState: "solid",
+              imageUrl: null,
+              classifications: [{ id: "cat-fruit", name: "Fruit", kind: "food_category" }],
+              primaryFoodCategory: { id: "cat-fruit", name: "Fruit", kind: "food_category" },
+              macros: { protein: 1, carbohydrates: 14, fat: 0.2 },
+              macroBasis: "100g",
+              calories: 62
+            }
+          ],
+          totalCount: 1,
+          page: 1,
+          similarityScores: [],
+          similarityMetadata: [],
+          warnings: []
+        }
+      })
+    });
+  });
+}
+
+/** Sets the resolved document theme through the binary sidebar switch only when needed. */
+async function setResolvedTheme(page: Page, target: "light" | "dark"): Promise<void> {
+  const current = await page.locator("html").getAttribute("data-theme");
+  if (current !== target) {
+    const toggle = page.getByLabel("Theme preference");
+    const openedSidebar = !(await toggle.isVisible());
+    if (openedSidebar) {
+      await page.getByLabel("Open activity sidebar").click();
+    }
+    await toggle.click();
+    if (openedSidebar) {
+      await page.getByLabel("Close activity sidebar").click();
+    }
+  }
+}
+
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-014, SW-REQ-089.
+// Implements DESIGN-016 LayoutGrid no-horizontal-scroll above 320px verification.
+test("no horizontal scrollbar at a 320px viewport width", async ({ page }) => {
+  await stubApi(page);
+  await page.setViewportSize({ width: 320, height: 600 });
+  await page.goto("/");
+  await expect(page.getByLabel("Food search")).toBeVisible();
+
+  const overflow = await page.evaluate(() => ({
+    docScrollWidth: document.documentElement.scrollWidth,
+    bodyScrollWidth: document.body.scrollWidth,
+    innerWidth: window.innerWidth
+  }));
+  expect(overflow.docScrollWidth).toBeLessThanOrEqual(overflow.innerWidth);
+  expect(overflow.bodyScrollWidth).toBeLessThanOrEqual(overflow.innerWidth);
+});
+
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-014, SW-REQ-089.
+// Implements DESIGN-016 LayoutGrid viewport-left desktop sidebar verification.
+test("desktop layout places the sidebar at the viewport's far-left edge", async ({ page }) => {
+  await stubApi(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+
+  const aside = page.locator("main > section > aside");
+  const main = page.locator("main > section > div");
+  await expect(aside).toBeVisible();
+  const asideBox = await aside.boundingBox();
+  const mainBox = await main.boundingBox();
+  expect(asideBox).not.toBeNull();
+  expect(mainBox).not.toBeNull();
+  // Sidebar is flush to the viewport's left edge and sits left of the main content.
+  expect(asideBox!.x).toBe(0);
+  expect(asideBox!.x).toBeLessThan(mainBox!.x);
+  expect(asideBox!.y).toBe(mainBox!.y);
+
+  // The outer grid owns a fixed sidebar column and a flexible content column.
+  const gridTemplateColumns = await page.locator("main > section").evaluate((el) => getComputedStyle(el).gridTemplateColumns);
+  expect(gridTemplateColumns).toContain("240px");
+});
+
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-014, SW-REQ-089.
+// Implements DESIGN-016 LayoutGrid single-column mobile layout with sidebar stacked above main content.
+test("mobile layout stacks the sidebar above the main content in a single column", async ({ page }) => {
+  await stubApi(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const aside = page.locator("main > section > aside");
+  const main = page.locator("main > section > div");
+  const asideBox = await aside.boundingBox();
+  const mainBox = await main.boundingBox();
+  expect(asideBox).not.toBeNull();
+  expect(mainBox).not.toBeNull();
+  // Single column: main content sits below the sidebar at the same horizontal offset.
+  expect(asideBox!.x).toBe(mainBox!.x);
+  expect(mainBox!.y).toBeGreaterThan(asideBox!.y + asideBox!.height);
+
+  // No explicit column span below the 640px breakpoint; the grid auto-flows a single column.
+  const asideSpan = await aside.evaluate((el) => getComputedStyle(el).gridColumnEnd);
+  expect(asideSpan).toBe("auto");
+});
+
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-089.
+// Implements DESIGN-016 TypographySystem Inter UI text and Roboto Mono data labels verification.
+test("UI text uses Inter and data labels use Roboto Mono", async ({ page }) => {
+  await stubApi(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
+  await expect(page.locator("[data-result-macros]")).toBeVisible();
+
+  const heading = page.getByRole("heading", { name: "Mealswapp", level: 1 });
+  const dataLabel = page.locator("[data-result-macros]");
+  const headingFont = await heading.evaluate((el) => getComputedStyle(el).fontFamily);
+  const dataFont = await dataLabel.evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(headingFont.toLowerCase()).toContain("inter");
+  expect(dataFont.toLowerCase()).toContain("roboto mono");
+});
+
+// Verifies IT-ARCH-001-006.
+// Verifies ARCH-001.
+// Traces SW-REQ-015, SW-REQ-089.
+// Implements DESIGN-016 ColorPalette exact light and dark design tokens verification.
+test("light and dark design tokens match the documented style guide", async ({ page }) => {
+  await stubApi(page);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  await setResolvedTheme(page, "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  const lightTokens = await page.evaluate(() => ({
+    bg: getComputedStyle(document.documentElement).getPropertyValue("--color-bg"),
+    surface: getComputedStyle(document.documentElement).getPropertyValue("--color-surface"),
+    text: getComputedStyle(document.documentElement).getPropertyValue("--color-text"),
+    muted: getComputedStyle(document.documentElement).getPropertyValue("--color-muted"),
+    primary: getComputedStyle(document.documentElement).getPropertyValue("--color-primary"),
+    secondary: getComputedStyle(document.documentElement).getPropertyValue("--color-secondary"),
+    accent: getComputedStyle(document.documentElement).getPropertyValue("--color-accent"),
+    error: getComputedStyle(document.documentElement).getPropertyValue("--color-error")
+  }));
+  expect(normalizeHex(lightTokens.bg)).toBe("#f7fcf7");
+  expect(normalizeHex(lightTokens.surface)).toBe("#ffffff");
+  expect(normalizeHex(lightTokens.text)).toBe("#111827");
+  expect(normalizeHex(lightTokens.muted)).toBe("#6b7280");
+  expect(normalizeHex(lightTokens.primary)).toBe("#166534");
+  expect(normalizeHex(lightTokens.secondary)).toBe("#dcfce7");
+  expect(normalizeHex(lightTokens.accent)).toBe("#f97316");
+  expect(normalizeHex(lightTokens.error)).toBe("#dc2626");
+
+  await setResolvedTheme(page, "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  const darkTokens = await page.evaluate(() => ({
+    bg: getComputedStyle(document.documentElement).getPropertyValue("--color-bg"),
+    surface: getComputedStyle(document.documentElement).getPropertyValue("--color-surface"),
+    text: getComputedStyle(document.documentElement).getPropertyValue("--color-text"),
+    muted: getComputedStyle(document.documentElement).getPropertyValue("--color-muted"),
+    primary: getComputedStyle(document.documentElement).getPropertyValue("--color-primary"),
+    secondary: getComputedStyle(document.documentElement).getPropertyValue("--color-secondary"),
+    accent: getComputedStyle(document.documentElement).getPropertyValue("--color-accent"),
+    error: getComputedStyle(document.documentElement).getPropertyValue("--color-error")
+  }));
+  expect(normalizeHex(darkTokens.bg)).toBe("#0a0f0a");
+  expect(normalizeHex(darkTokens.surface)).toBe("#161d16");
+  expect(normalizeHex(darkTokens.text)).toBe("#f3f4f6");
+  expect(normalizeHex(darkTokens.muted)).toBe("#9ca3af");
+  expect(normalizeHex(darkTokens.primary)).toBe("#4ade80");
+  expect(normalizeHex(darkTokens.secondary)).toBe("#86efac");
+  expect(normalizeHex(darkTokens.accent)).toBe("#ffb86c");
+  expect(normalizeHex(darkTokens.error)).toBe("#f87171");
+});
+
+// Implements DESIGN-016 LayoutGrid and ColorPalette screenshots suitable for frontend verification.
+test("captures desktop and mobile screenshots in light and dark themes", async ({ page }) => {
+  await stubApi(page);
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  // Desktop light.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await setResolvedTheme(page, "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-desktop-light.png`, fullPage: true });
+
+  // Desktop dark.
+  await setResolvedTheme(page, "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-desktop-dark.png`, fullPage: true });
+
+  // Mobile light.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setResolvedTheme(page, "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-mobile-light.png`, fullPage: true });
+
+  // Mobile dark.
+  await setResolvedTheme(page, "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.screenshot({ path: `${SCREENSHOT_DIR}/responsive-mobile-dark.png`, fullPage: true });
+
+  expect(true).toBe(true);
+});

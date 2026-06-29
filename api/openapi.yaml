@@ -403,6 +403,34 @@ paths:
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
+  /api/v1/food-objects/{id}:
+    get:
+      operationId: getApiV1FoodObject
+      summary: Return one food object for selected-item hydration
+      description: Optional cookie authentication scopes food-object visibility when a session is present.
+      security:
+        - {}
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/FoodObject"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/account/export:
     get:
       operationId: getApiV1AccountExport
@@ -537,6 +565,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/SearchResponseEnvelope"
+    FoodObject:
+      description: Food-object detail envelope for selected-item hydration.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/FoodObjectEnvelope"
     Autocomplete:
       description: Autocomplete response envelope with ranked suggestions and cache metadata.
       content:
@@ -874,6 +908,7 @@ components:
           $ref: "#/components/schemas/SearchMode"
         filters:
           type: array
+          maxItems: 20
           default: []
           items:
             $ref: "#/components/schemas/SearchFilter"
@@ -883,14 +918,64 @@ components:
           maximum: 10000
         substitutionInputs:
           type: array
+          maxItems: 20
           items:
             $ref: "#/components/schemas/SubstitutionInput"
         dailyDietId:
           type: string
           format: uuid
+    # Implements DESIGN-002 SearchController classification summary contract.
+    ClassificationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, name, kind]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+          enum: [food_category, culinary_role]
+    # Implements DESIGN-002 SearchController macro profile contract.
+    MacroProfile:
+      type: object
+      additionalProperties: false
+      required: [protein, carbohydrates, fat]
+      properties:
+        protein:
+          type: number
+          minimum: 0
+        carbohydrates:
+          type: number
+          minimum: 0
+        fat:
+          type: number
+          minimum: 0
+    # Implements DESIGN-002 SearchController substitution source summary contract.
+    SourceSummary:
+      type: object
+      additionalProperties: false
+      required: [macros, calories, totalGrams, totalMilliliters]
+      properties:
+        macros:
+          $ref: "#/components/schemas/MacroProfile"
+        calories:
+          type: number
+          minimum: 0
+        totalGrams:
+          type: number
+          minimum: 0
+        totalMilliliters:
+          type: number
+          minimum: 0
+    # Implements DESIGN-002 SearchController food-object result contract.
     FoodObject:
       type: object
-      required: [id, name, physicalState]
+      additionalProperties: false
+      required: [id, name, physicalState, classifications, primaryFoodCategory, macros, macroBasis, calories]
       properties:
         id:
           type: string
@@ -905,6 +990,22 @@ components:
             - string
             - "null"
           format: uri-reference
+        classifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        primaryFoodCategory:
+          oneOf:
+            - $ref: "#/components/schemas/ClassificationSummary"
+            - type: "null"
+        macros:
+          $ref: "#/components/schemas/MacroProfile"
+        macroBasis:
+          type: string
+          enum: [100g, 100ml]
+        calories:
+          type: number
+          minimum: 0
     SimilarityTier:
       type: string
       enum: [excellent, good, fair, poor]
@@ -975,6 +1076,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SimilarityMetadata"
+        sourceSummary:
+          $ref: "#/components/schemas/SourceSummary"
         warnings:
           type: array
           description: Degraded or diagnostic search warnings. Values can include stable warning codes such as cache_unavailable and contextual diagnostics such as excluded filters or skipped similarity targets.
@@ -994,6 +1097,17 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/SearchResponse"
+    FoodObjectEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/FoodObject"
     SearchRejectionEnvelope:
       type: object
       required: [status, requestId, data, error]

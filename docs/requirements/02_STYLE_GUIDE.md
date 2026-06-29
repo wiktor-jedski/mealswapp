@@ -83,6 +83,7 @@ theme: {
 - **State Management:** Global state via Svelte stores + TanStack Query for server state.
 - **Styling:** Tailwind classes in `class` attributes; avoid `<style>` blocks unless necessary.
 - **Buttons:** 4px border-radius, `transition: all 0.2s ease` via Tailwind `transition-all duration-200`.
+- **Pill controls:** Fully rounded controls are accepted for chip-like filters, badges, segmented choices, compact icon actions, and selected-state tokens where the pill shape communicates grouping or status. Pill controls must still use visible focus states, accessible names, and stable hit targets.
 - **Inputs:** White background with 1px border (`#E0E0E0`). Focus state must use Primary color.
 - **Loading States:** Use "Skeleton Screens" rather than spinning icons for Daily Diet Search results.
 
@@ -90,4 +91,3 @@ theme: {
 - **Contrast:** All Text/Background combinations must pass **WCAG 2.1 AA** (minimum 4.5:1 ratio).
 - **Responsive:** No horizontal scrolling allowed at any viewport size above 320px.
 - **Testing:** Components tested with @testing-library/svelte and Playwright for visual regression.
-

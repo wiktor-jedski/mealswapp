@@ -78,9 +78,20 @@ type SearchResponse struct {
 	Page               int
 	SimilarityScores   []float64
 	SimilarityMetadata []SimilarityMetadata
+	SourceSummary      *SubstitutionSourceSummary
 	Warnings           []string
 	Rejection          *SearchRejection
 	Cache              *CacheMetadata `json:"cache,omitempty"`
+}
+
+// SubstitutionSourceSummary reports the user's selected input list after quantity scaling.
+// It keeps mass and volume separate because density is item-specific and may be unavailable.
+// Implements DESIGN-002 SearchController.
+type SubstitutionSourceSummary struct {
+	Macros           repository.MacroValues
+	Calories         float64
+	TotalGrams       float64
+	TotalMilliliters float64
 }
 
 // WarningCacheUnavailable reports cache read/write degradation while preserving catalog fallback.

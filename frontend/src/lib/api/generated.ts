@@ -275,6 +275,31 @@ export interface SearchRequest {
 	dailyDietId?: string;
 }
 
+// Implements DESIGN-002 SearchController frontend classification summary contract.
+/** Public classification identity summary for a search result item. */
+export interface ClassificationSummary {
+	id: string;
+	name: string;
+	kind: "food_category" | "culinary_role";
+}
+
+// Implements DESIGN-002 SearchController frontend macro profile contract.
+/** Protein, carbohydrate, and fat macro values on a 100g or 100ml basis. */
+export interface MacroProfile {
+	protein: number;
+	carbohydrates: number;
+	fat: number;
+}
+
+// Implements DESIGN-002 SearchController frontend substitution source summary contract.
+/** Macro and amount totals for the user's selected substitution input list. */
+export interface SourceSummary {
+	macros: MacroProfile;
+	calories: number;
+	totalGrams: number;
+	totalMilliliters: number;
+}
+
 // Implements DESIGN-002 SearchController frontend food-object result contract.
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
@@ -282,7 +307,16 @@ export interface FoodObject {
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
+	classifications: ClassificationSummary[];
+	primaryFoodCategory: ClassificationSummary | null;
+	macros: MacroProfile;
+	macroBasis: "100g" | "100ml";
+	calories: number;
 }
+
+// Implements DESIGN-002 SearchController frontend food-object detail contract.
+/** Successful food-object detail response envelope. */
+export type FoodObjectEnvelope = Envelope<FoodObject>;
 
 // Implements DESIGN-002 SearchController frontend similarity metadata contract.
 /** User-facing nutritional similarity tier. */
@@ -323,6 +357,7 @@ export interface SearchResponse extends Record<string, unknown> {
 	page: number;
 	similarityScores: number[];
 	similarityMetadata: SimilarityMetadata[];
+	sourceSummary?: SourceSummary;
 	warnings: string[];
 	cache?: CacheMetadata;
 }

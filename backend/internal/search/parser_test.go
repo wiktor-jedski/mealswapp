@@ -86,6 +86,25 @@ func TestBuildParsedQueryNormalizesTokensAndPagination(t *testing.T) {
 	}
 }
 
+func TestBuildParsedQueryAllowsEmptySubstitutionQuery(t *testing.T) {
+	parsed, err := BuildParsedQuery(SearchRequest{
+		Query: "",
+		Mode:  SearchModeSubstitution,
+		Page:  2,
+		SubstitutionInputs: []SubstitutionInput{{
+			FoodObjectID: uuid.MustParse("2d4a5f20-c55f-4ba7-9751-779e682f7063"),
+			Quantity:     100,
+			Unit:         "ml",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.NormalizedText != "" || len(parsed.Tokens) != 0 || parsed.Strategy != SearchStrategySubstitution || parsed.Offset != PageSize {
+		t.Fatalf("parsed query = %+v", parsed)
+	}
+}
+
 func TestPaginateClampsPageSizeToTenAndCalculatesOffset(t *testing.T) {
 	limit, offset := Paginate(4, 50)
 	if limit != 10 || offset != 30 {
