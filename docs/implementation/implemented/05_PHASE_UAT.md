@@ -57,7 +57,7 @@ cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run golang
 
 Observed results from task `153`:
 
-- `bun test` passed with `203 pass`, `0 fail`.
+- `bun test` passed with `241 pass`, `0 fail`.
 - `bun test --coverage` reported `All files | 100.00 | 100.00` line and function
   coverage for testable TypeScript frontend source. Svelte `.svelte` components
   remain outside Bun's line-coverage report and are verified by static-source
@@ -148,10 +148,8 @@ Observed results from task `153`:
 ### Accessibility Checks (Keyboard, axe, WCAG AA)
 
 1. Run the `frontend/tests/accessibility.spec.ts` Playwright suite; confirm the
-   automated axe scans report only the accepted `color-contrast` violations on
-   decorative elements (see Accepted Deviations) and that re-running axe with
-   `color-contrast` disabled reports no serious or critical violations for the
-   composed shell.
+   automated axe scans report zero serious or critical violations for the
+   composed shell, including `color-contrast`.
 2. Confirm normal reading-text pairs (body `--color-text` and muted
    `--color-muted` labels on `--color-bg`/`--color-surface`) meet WCAG 2.1 AA
    4.5:1 in both light and dark themes.
@@ -285,18 +283,13 @@ Requirement coverage:
   assertions, Playwright end-to-end tests (`75 passed`, `1 skipped`), and
   `vite build`. This is the accepted Svelte-component coverage approach and is
   documented in `docs/implementation/04_OPEN.md`.
-- **Accepted color-contrast deviations (Task 152):** Automated axe scans report
-  `color-contrast` (serious) violations on decorative elements that use
-  `text-white` on mid-tone backgrounds. These are accepted visual-design
-  limitations, not normal reading-text pairs: ResultCard similarity tier badges
-  (Fair badge in both themes; Excellent/Good/Poor badges in dark theme),
-  ResultCard category chips and image placeholder text (dark theme), and the
-  SidebarComponent active search-mode button (dark theme). The gate asserts
-  these are the only serious/critical axe violations and re-runs axe with
-  `color-contrast` disabled to confirm the rest of the composed shell is clean.
-  Follow-up: a future visual-design pass should introduce theme-aware
-  on-accent/on-muted text tokens so the decorative badges, chips, placeholder,
-  and active sidebar button meet 4.5:1 in both themes.
+- **Color-contrast deviations (Task 152):** Resolved. Theme-aware
+  `--color-on-primary`, `--color-on-accent`, and `--color-on-muted` foreground
+  tokens now cover result badges, category chips, placeholder text, and
+  substitution action/filter chips. The accessibility gate requires zero serious
+  or critical axe violations without disabling `color-contrast`, and token
+  contrast checks cover normal text plus on-token foreground/background pairs in
+  light and dark themes.
 - **Macro visibility controls:** Phase 05 intentionally does not implement
   macro visibility toggles. Result cards always show the required protein,
   carbohydrate, and fat values from the generated search contract; SettingsPanel
@@ -330,6 +323,6 @@ activity sidebar shows history/favorites and restores search state; offline and
 stale indicators show without claiming service-worker interception; the explicit
 light/dark theme preference persists; the 12-column desktop grid and `320px`
 no-scroll mobile layout render with the documented style guide; desktop and
-mobile keyboard and visual acceptance tests pass; and the accepted color-contrast and Svelte
-component coverage deviations remain documented in
+mobile keyboard and visual acceptance tests pass; and the resolved color-contrast
+status plus accepted Svelte component coverage deviation remain documented in
 `docs/implementation/04_OPEN.md`.
