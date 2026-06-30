@@ -84,7 +84,29 @@ def chromium() -> str:
 		path = shutil.which(candidate)
 		if path:
 			return path
+	playwright_browser = playwright_chromium()
+	if playwright_browser:
+		return playwright_browser
 	raise RuntimeError("chromium, chromium-browser, or google-chrome is required for frontend verification")
+
+
+def playwright_chromium() -> str | None:
+	script = "import { chromium } from './node_modules/playwright/index.mjs'; console.log(chromium.executablePath());"
+	try:
+		result = subprocess.run(
+			["node", "--input-type=module", "-e", script],
+			cwd=FRONTEND,
+			check=True,
+			text=True,
+			capture_output=True,
+			env=frontend_env(),
+		)
+	except (OSError, subprocess.CalledProcessError):
+		return None
+	path = result.stdout.strip()
+	if path and Path(path).exists():
+		return path
+	return None
 
 
 def run_chromium(command: list[str], capture: bool = False) -> subprocess.CompletedProcess[str]:
