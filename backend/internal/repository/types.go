@@ -574,6 +574,8 @@ type RegistrationRepository interface {
 type EntitlementRepository interface {
 	AppendEntitlement(ctx context.Context, entitlement Entitlement) error
 	GetLatest(ctx context.Context, userID uuid.UUID) (Entitlement, error)
+	GetLatestByStripeCustomer(ctx context.Context, customerID string) (Entitlement, error)
+	GetLatestByStripeSubscription(ctx context.Context, subscriptionID string) (Entitlement, error)
 }
 
 // UsageRepository defines rolling usage persistence behavior.

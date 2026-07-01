@@ -425,3 +425,11 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 	}
 }
 
+
+func (f *fakeEntitlementRepo) GetLatestByStripeCustomer(ctx context.Context, customerID string) (repository.Entitlement, error) {
+	return repository.Entitlement{}, nil
+}
+
+func (f *fakeEntitlementRepo) GetLatestByStripeSubscription(ctx context.Context, subscriptionID string) (repository.Entitlement, error) {
+	return repository.Entitlement{}, nil
+}

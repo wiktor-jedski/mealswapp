@@ -564,3 +564,11 @@ func foodFixtureValues(id uuid.UUID) []any {
 	now := time.Now()
 	return []any{id, "Fixture", PhysicalStateSolid, 0, (*float64)(nil), (*float64)(nil), (*float64)(nil), (*string)(nil), (*string)(nil), (*string)(nil), 0.0, 0.0, 0.0, []byte(`{}`), (*string)(nil), (*time.Time)(nil), now, now}
 }
+
+func (contractEntitlementRepository) GetLatestByStripeCustomer(ctx context.Context, customerID string) (Entitlement, error) {
+	return Entitlement{}, nil
+}
+
+func (contractEntitlementRepository) GetLatestByStripeSubscription(ctx context.Context, subscriptionID string) (Entitlement, error) {
+	return Entitlement{}, nil
+}

@@ -93,6 +93,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
 		httpapi.NewSubscriptionController(cfg, subscription.NewStripeCheckoutGateway(cfg), entitlementManager, usageLimiter),
+		httpapi.NewStripeWebhookHandler(cfg, entRepo, entRepo, repository.NewPostgresSecurityAuditRepository(pg)),
 	}
 	routes := []httpapi.RouteDefinition{}
 	for _, controller := range controllers {

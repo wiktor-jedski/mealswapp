@@ -38,6 +38,16 @@ var usageWindowGetSinceSQL string
 //go:embed sql/entitlement_list_expired_trials.sql
 var entitlementListExpiredTrialsSQL string
 
+// Implements DESIGN-007 EntitlementManager latest-state by Stripe Customer query.
+//
+//go:embed sql/entitlement_get_latest_by_stripe_customer.sql
+var entitlementGetLatestByStripeCustomerSQL string
+
+// Implements DESIGN-007 EntitlementManager latest-state by Stripe Subscription query.
+//
+//go:embed sql/entitlement_get_latest_by_stripe_subscription.sql
+var entitlementGetLatestByStripeSubscriptionSQL string
+
 // Implements DESIGN-007 StripeWebhookHandler idempotency query.
 //
 //go:embed sql/processed_stripe_event_insert.sql
@@ -87,6 +97,26 @@ func (r *PostgresEntitlementRepository) GetLatest(ctx context.Context, userID uu
 		return Entitlement{}, validationError("user id is required")
 	}
 	row := r.db.QueryRow(ctx, entitlementGetLatestSQL, userID)
+	return scanEntitlement(row)
+}
+
+// GetLatestByStripeCustomer returns the most recent entitlement state for a Stripe customer.
+// Implements DESIGN-007 EntitlementManager.
+func (r *PostgresEntitlementRepository) GetLatestByStripeCustomer(ctx context.Context, customerID string) (Entitlement, error) {
+	if strings.TrimSpace(customerID) == "" {
+		return Entitlement{}, validationError("customer id is required")
+	}
+	row := r.db.QueryRow(ctx, entitlementGetLatestByStripeCustomerSQL, customerID)
+	return scanEntitlement(row)
+}
+
+// GetLatestByStripeSubscription returns the most recent entitlement state for a Stripe subscription.
+// Implements DESIGN-007 EntitlementManager.
+func (r *PostgresEntitlementRepository) GetLatestByStripeSubscription(ctx context.Context, subscriptionID string) (Entitlement, error) {
+	if strings.TrimSpace(subscriptionID) == "" {
+		return Entitlement{}, validationError("subscription id is required")
+	}
+	row := r.db.QueryRow(ctx, entitlementGetLatestByStripeSubscriptionSQL, subscriptionID)
 	return scanEntitlement(row)
 }
 
