@@ -503,6 +503,58 @@ paths:
           $ref: "#/components/responses/Disclaimer"
         "400":
           $ref: "#/components/responses/Error"
+  /api/v1/billing/checkout:
+    post:
+      operationId: postApiV1BillingCheckout
+      summary: Create a Stripe checkout session for a subscription
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/CheckoutSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "402":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/billing/webhook/stripe:
+    post:
+      operationId: postApiV1BillingWebhookStripe
+      summary: Handle Stripe asynchronous webhook events
+      parameters:
+        - $ref: "#/components/parameters/StripeSignature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Webhook processed successfully.
+        "400":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     OAuthProvider:
@@ -512,6 +564,21 @@ components:
       schema:
         type: string
         enum: [google, apple]
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Client-generated idempotency key for safe retries.
+    StripeSignature:
+      name: Stripe-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Cryptographic signature to verify the webhook authenticity.
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -543,7 +610,7 @@ components:
           schema:
             $ref: "#/components/schemas/AuthSessionEnvelope"
     Error:
-      description: User-safe gateway error. Includes 400, 401, 403, 409, 429, 503, and 504 responses.
+      description: User-safe gateway error. Includes 400, 401, 402, 403, 409, 422, 429, 503, and 504 responses.
       headers:
         Retry-After:
           schema:
@@ -612,6 +679,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/EntitlementEnvelope"
+    CheckoutSession:
+      description: Stripe checkout session response.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CheckoutSessionEnvelope"
   schemas:
     AppError:
       type: object
@@ -856,6 +929,39 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/EntitlementData"
+    CheckoutRequest:
+      type: object
+      additionalProperties: false
+      required: [priceId, successUrl, cancelUrl]
+      properties:
+        priceId:
+          type: string
+        successUrl:
+          type: string
+          format: uri
+        cancelUrl:
+          type: string
+          format: uri
+    CheckoutSessionData:
+      type: object
+      required: [sessionId, checkoutUrl]
+      properties:
+        sessionId:
+          type: string
+        checkoutUrl:
+          type: string
+          format: uri
+    CheckoutSessionEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/CheckoutSessionData"
 
     SavedItem:
       type: object
