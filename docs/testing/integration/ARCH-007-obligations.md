@@ -54,6 +54,7 @@ Anonymous, free authenticated, trial authenticated, and paid authenticated users
 4. Free users cannot dispatch multi-input Substitution, Daily Diet, or Daily Diet Alternative.
 5. Trial and paid active users can dispatch paid modes without the free usage cap.
 6. Denied requests do not write search history, cache entries, or usage records.
+7. Concurrent same-user attempts correctly respect the persisted usage limits without bypassing the cap.
 
 ### Required Evidence
 
