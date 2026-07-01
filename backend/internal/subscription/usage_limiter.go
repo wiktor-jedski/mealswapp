@@ -19,6 +19,7 @@ type UsageLimiter struct {
 }
 
 // NewUsageLimiter creates a new UsageLimiter with the specified daily limit.
+// Implements DESIGN-007 UsageLimiter.
 func NewUsageLimiter(usageRepo repository.UsageRepository, limit int) *UsageLimiter {
 	return &UsageLimiter{
 		usageRepo: usageRepo,
@@ -29,6 +30,7 @@ func NewUsageLimiter(usageRepo repository.UsageRepository, limit int) *UsageLimi
 
 // CheckAccess returns an error if the user has reached their 24-hour limit for the given feature
 // or if the feature is not allowed. It increments an in-flight counter for free users.
+// Implements DESIGN-007 UsageLimiter.
 func (l *UsageLimiter) CheckAccess(ctx context.Context, ent *repository.Entitlement, feature string, now time.Time) error {
 	// Anonymous user
 	if ent == nil {
@@ -60,13 +62,14 @@ func (l *UsageLimiter) CheckAccess(ctx context.Context, ent *repository.Entitlem
 	if window.SearchCount+l.inFlight[ent.UserID] >= l.limit {
 		return ErrUsageLimitExceeded
 	}
-	
+
 	l.inFlight[ent.UserID]++
 	return nil
 }
 
 // RecordUsage records usage in the repository if the user is bound by limits and the search was successful.
 // It decrements the in-flight counter.
+// Implements DESIGN-007 UsageLimiter.
 func (l *UsageLimiter) RecordUsage(ctx context.Context, ent *repository.Entitlement, feature string, now time.Time, success bool) error {
 	if ent == nil {
 		return nil

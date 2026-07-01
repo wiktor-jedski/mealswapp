@@ -92,7 +92,7 @@ func TestTrialTracker_ActivateFirstLoginTrial(t *testing.T) {
 // Implements DESIGN-007 TrialTracker.
 func TestTrialTracker_ExpireTrials(t *testing.T) {
 	repo := &mockEntitlementRepo{}
-	
+
 	userExpired := uuid.New()
 	userActive := uuid.New()
 	userPaid := uuid.New()
@@ -101,21 +101,21 @@ func TestTrialTracker_ExpireTrials(t *testing.T) {
 
 	repo.ents = []repository.Entitlement{
 		{
-			UserID: userExpired,
-			Tier: "trial",
-			Status: "active",
+			UserID:    userExpired,
+			Tier:      "trial",
+			Status:    "active",
 			ExpiresAt: func(timeTime time.Time) *time.Time { return &timeTime }(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)),
 		},
 		{
-			UserID: userActive,
-			Tier: "trial",
-			Status: "active",
+			UserID:    userActive,
+			Tier:      "trial",
+			Status:    "active",
 			ExpiresAt: func(timeTime time.Time) *time.Time { return &timeTime }(time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)),
 		},
 		{
-			UserID: userPaid,
-			Tier: "paid",
-			Status: "active",
+			UserID:    userPaid,
+			Tier:      "paid",
+			Status:    "active",
 			ExpiresAt: nil,
 		},
 	}

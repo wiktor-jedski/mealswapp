@@ -1,9 +1,11 @@
 package subscription
 
+// Implements DESIGN-007 UsageLimiter tests.
+
 import (
 	"context"
-	"sync"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -114,7 +116,7 @@ func TestUsageLimiter_CheckAccess(t *testing.T) {
 			}
 			limiter := NewUsageLimiter(mockRepo, 3)
 			err := limiter.CheckAccess(context.Background(), tt.ent, tt.feature, now)
-			
+
 			if tt.expectedErr != nil {
 				if err == nil || err.Error() != tt.expectedErr.Error() {
 					t.Errorf("expected error %v, got %v", tt.expectedErr, err)
@@ -197,7 +199,7 @@ func TestUsageLimiter_MissingCoverage(t *testing.T) {
 	userID := uuid.New()
 	freeEntitlement := &repository.Entitlement{UserID: userID, Tier: "free", Status: "active"}
 	paidEntitlement := &repository.Entitlement{UserID: userID, Tier: "paid", Status: "active"}
-	
+
 	// Test CheckAccess db error
 	mockRepoErr := &mockUsageRepo{
 		getUsageSinceFunc: func(ctx context.Context, u uuid.UUID, f string, since time.Time) (repository.UsageWindow, error) {

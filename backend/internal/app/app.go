@@ -22,6 +22,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/userdata"
 )
 
@@ -55,8 +56,8 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		),
 		Identities: identities, Sessions: sessions, Verification: verification, ResetTokens: verification,
 		OAuthTrial: entitlement.NewTrialTracker(repository.NewPostgresEntitlementRepository(pg), repository.NewPostgresEntitlementRepository(pg), time.Now),
-		Lockout: auth.NewAccountLockoutTracker(repository.NewPostgresAccountLockoutRepository(pg)),
-		Hasher:  auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
+		Lockout:    auth.NewAccountLockoutTracker(repository.NewPostgresAccountLockoutRepository(pg)),
+		Hasher:     auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
 	})
 	savedRepo := repository.NewPostgresSavedDataRepository(pg)
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
@@ -88,6 +89,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
+		httpapi.NewSubscriptionController(cfg, subscription.NewStripeCheckoutGateway(cfg)),
 	}
 	routes := []httpapi.RouteDefinition{}
 	for _, controller := range controllers {

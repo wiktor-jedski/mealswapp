@@ -220,10 +220,10 @@ func (c *SearchController) Search(ctx *fiber.Ctx) error {
 	if err != nil {
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed", Cause: err}
 	}
-	
+
 	feature := featureForRequest(req)
 	user, hasUser := authenticatedUser(ctx)
-	
+
 	if c.entitlements != nil {
 		if hasUser {
 			decision, err := c.entitlements.CheckEntitlement(ctx.UserContext(), user.UserID, feature)

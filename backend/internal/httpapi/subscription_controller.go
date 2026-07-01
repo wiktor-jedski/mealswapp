@@ -1,10 +1,17 @@
 package httpapi
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 )
 
@@ -26,17 +33,32 @@ type Plan struct {
 	AmountUS int // in cents
 }
 
+// CheckoutGateway creates external payment sessions.
+// Implements DESIGN-007 Stripe checkout session creation.
+type CheckoutGateway interface {
+	CreateSession(ctx context.Context, userID uuid.UUID, req PaymentIntentRequest, idempotencyKey string) (string, error)
+}
+
+// IdempotencyRecord stores the result of a checkout creation for retries.
+// Implements DESIGN-007 SubscriptionController.
+type IdempotencyRecord struct {
+	BodyHash string
+	URL      string
+}
+
 // SubscriptionController manages billing routes.
 // Implements DESIGN-007 SubscriptionController.
 type SubscriptionController struct {
 	billingConfig config.BillingConfig
 	frontendUrl   string
 	plans         map[string]Plan
+	gateway       CheckoutGateway
+	idemStore     sync.Map // map[string]IdempotencyRecord
 }
 
 // NewSubscriptionController creates a controller and maps price IDs to SW-REQ-050 amounts.
 // Implements DESIGN-007 SubscriptionController initialization.
-func NewSubscriptionController(cfg config.Config) *SubscriptionController {
+func NewSubscriptionController(cfg config.Config, gateway CheckoutGateway) *SubscriptionController {
 	return &SubscriptionController{
 		billingConfig: cfg.Billing,
 		frontendUrl:   cfg.FrontendOrigin,
@@ -44,7 +66,58 @@ func NewSubscriptionController(cfg config.Config) *SubscriptionController {
 			cfg.Billing.MonthlyPlanPriceID: {Label: "monthly", AmountUS: 300},
 			cfg.Billing.AnnualPlanPriceID:  {Label: "annual", AmountUS: 2500},
 		},
+		gateway: gateway,
 	}
+}
+
+// CreateCheckout handles creating a new checkout session.
+// Implements DESIGN-007 CreateCheckout endpoint.
+func (c *SubscriptionController) CreateCheckout(ctx *fiber.Ctx) error {
+	user, ok := authenticatedUser(ctx)
+	if !ok {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	idempotencyKey := ctx.Get("Idempotency-Key")
+	if idempotencyKey == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Idempotency-Key header is required"})
+	}
+
+	var req PaymentIntentRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request payload"})
+	}
+
+	bodyBytes, _ := json.Marshal(req)
+	bodyHash := fmt.Sprintf("%x", sha256.Sum256(bodyBytes))
+
+	if record, exists := c.idemStore.Load(idempotencyKey); exists {
+		idem := record.(IdempotencyRecord)
+		if idem.BodyHash != bodyHash {
+			return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Idempotency-Key reused with different body"})
+		}
+		return ctx.JSON(fiber.Map{"url": idem.URL})
+	}
+
+	if _, validPrice := c.plans[req.PriceID]; !validPrice {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid price ID"})
+	}
+
+	if err := c.ValidateRedirectURLs(req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	url, err := c.gateway.CreateSession(ctx.Context(), user.UserID, req, idempotencyKey)
+	if err != nil {
+		return ctx.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "billing service unavailable"})
+	}
+
+	c.idemStore.Store(idempotencyKey, IdempotencyRecord{
+		BodyHash: bodyHash,
+		URL:      url,
+	})
+
+	return ctx.JSON(fiber.Map{"url": url})
 }
 
 // ValidateRedirectURLs ensures the provided URLs match the configured origins.
@@ -68,4 +141,18 @@ func (c *SubscriptionController) ValidateRedirectURLs(req PaymentIntentRequest) 
 	}
 
 	return nil
+}
+
+// Routes returns the endpoints provided by the SubscriptionController.
+// Implements DESIGN-007 SubscriptionController.
+func (c *SubscriptionController) Routes() []RouteDefinition {
+	return []RouteDefinition{
+		{
+			Method:       "POST",
+			Path:         "/api/v1/subscription/checkout",
+			Handler:      c.CreateCheckout,
+			RequiresAuth: true,
+			RequiresCSRF: true,
+		},
+	}
 }
