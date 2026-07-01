@@ -36,6 +36,28 @@ func (m *mockEntitlementRepo) GetLatest(ctx context.Context, userID uuid.UUID) (
 	return repository.Entitlement{}, repository.NewError(repository.ErrorKindNotFound, "not found", nil)
 }
 
+// GetLatestByStripeCustomer returns the most recent entitlement for a stripe customer.
+// Implements DESIGN-007 TrialTracker.
+func (m *mockEntitlementRepo) GetLatestByStripeCustomer(ctx context.Context, customerID string) (repository.Entitlement, error) {
+	for i := len(m.ents) - 1; i >= 0; i-- {
+		if m.ents[i].StripeCustomerID == customerID {
+			return m.ents[i], nil
+		}
+	}
+	return repository.Entitlement{}, repository.NewError(repository.ErrorKindNotFound, "not found", nil)
+}
+
+// GetLatestByStripeSubscription returns the most recent entitlement for a stripe subscription.
+// Implements DESIGN-007 TrialTracker.
+func (m *mockEntitlementRepo) GetLatestByStripeSubscription(ctx context.Context, subscriptionID string) (repository.Entitlement, error) {
+	for i := len(m.ents) - 1; i >= 0; i-- {
+		if m.ents[i].StripeSubscriptionID == subscriptionID {
+			return m.ents[i], nil
+		}
+	}
+	return repository.Entitlement{}, repository.NewError(repository.ErrorKindNotFound, "not found", nil)
+}
+
 // ListExpiredTrials returns active trials past their expiration.
 // Implements DESIGN-007 TrialTracker.
 func (m *mockEntitlementRepo) ListExpiredTrials(ctx context.Context, now time.Time) ([]repository.Entitlement, error) {

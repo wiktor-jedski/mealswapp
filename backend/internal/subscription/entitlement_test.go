@@ -34,6 +34,28 @@ func (r *fakeEntitlementRepository) GetLatest(_ context.Context, _ uuid.UUID) (r
 	return repository.Entitlement{}, errors.New("not found")
 }
 
+// Implements DESIGN-007 EntitlementManager.
+func (r *fakeEntitlementRepository) GetLatestByStripeCustomer(_ context.Context, _ string) (repository.Entitlement, error) {
+	if r.err != nil {
+		return repository.Entitlement{}, r.err
+	}
+	if r.entitlement != nil {
+		return *r.entitlement, nil
+	}
+	return repository.Entitlement{}, errors.New("not found")
+}
+
+// Implements DESIGN-007 EntitlementManager.
+func (r *fakeEntitlementRepository) GetLatestByStripeSubscription(_ context.Context, _ string) (repository.Entitlement, error) {
+	if r.err != nil {
+		return repository.Entitlement{}, r.err
+	}
+	if r.entitlement != nil {
+		return *r.entitlement, nil
+	}
+	return repository.Entitlement{}, errors.New("not found")
+}
+
 // TestCheckEntitlement verifies decision logic.
 // Implements DESIGN-007 EntitlementManager.
 func TestCheckEntitlement(t *testing.T) {
