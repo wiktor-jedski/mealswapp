@@ -7,7 +7,6 @@ import (
 	"github.com/stripe/stripe-go/v78"
 	"github.com/stripe/stripe-go/v78/checkout/session"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 )
 
 // StripeCheckoutGateway uses the official Stripe SDK to create checkout sessions.
@@ -26,7 +25,7 @@ func NewStripeCheckoutGateway(cfg config.Config) *StripeCheckoutGateway {
 
 // CreateSession creates a Stripe checkout session.
 // Implements DESIGN-007 CheckoutGateway.
-func (g *StripeCheckoutGateway) CreateSession(ctx context.Context, userID uuid.UUID, req httpapi.PaymentIntentRequest, idempotencyKey string) (string, error) {
+func (g *StripeCheckoutGateway) CreateSession(ctx context.Context, userID uuid.UUID, priceID, successURL, cancelURL, idempotencyKey string) (string, error) {
 	stripe.Key = g.secretKey
 
 	params := &stripe.CheckoutSessionParams{
@@ -34,12 +33,12 @@ func (g *StripeCheckoutGateway) CreateSession(ctx context.Context, userID uuid.U
 		Mode:              stripe.String(string(stripe.CheckoutSessionModeSubscription)),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
 			{
-				Price:    stripe.String(req.PriceID),
+				Price:    stripe.String(priceID),
 				Quantity: stripe.Int64(1),
 			},
 		},
-		SuccessURL: stripe.String(req.SuccessURL),
-		CancelURL:  stripe.String(req.CancelURL),
+		SuccessURL: stripe.String(successURL),
+		CancelURL:  stripe.String(cancelURL),
 	}
 
 	if idempotencyKey != "" {

@@ -63,6 +63,9 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
 	mealRepo := repository.NewPostgresMealRepository(pg)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
+	entRepo := repository.NewPostgresEntitlementRepository(pg)
+	entitlementManager := subscription.NewEntitlementManager(entRepo)
+	usageLimiter := subscription.NewUsageLimiter(entRepo, 3)
 	var searchResponseCache search.SearchResponseCache
 	var similarityCache search.SimilarityCalculationCache
 	var redisStore cache.RedisStore
@@ -89,7 +92,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
-		httpapi.NewSubscriptionController(cfg, subscription.NewStripeCheckoutGateway(cfg)),
+		httpapi.NewSubscriptionController(cfg, subscription.NewStripeCheckoutGateway(cfg), entitlementManager, usageLimiter),
 	}
 	routes := []httpapi.RouteDefinition{}
 	for _, controller := range controllers {

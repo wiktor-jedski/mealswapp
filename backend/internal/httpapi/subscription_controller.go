@@ -13,6 +13,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
+	"time"
 )
 
 // Implements DESIGN-007 SubscriptionController
@@ -36,7 +38,7 @@ type Plan struct {
 // CheckoutGateway creates external payment sessions.
 // Implements DESIGN-007 Stripe checkout session creation.
 type CheckoutGateway interface {
-	CreateSession(ctx context.Context, userID uuid.UUID, req PaymentIntentRequest, idempotencyKey string) (string, error)
+	CreateSession(ctx context.Context, userID uuid.UUID, priceID, successURL, cancelURL, idempotencyKey string) (string, error)
 }
 
 // IdempotencyRecord stores the result of a checkout creation for retries.
@@ -54,11 +56,13 @@ type SubscriptionController struct {
 	plans         map[string]Plan
 	gateway       CheckoutGateway
 	idemStore     sync.Map // map[string]IdempotencyRecord
+	entManager    *subscription.EntitlementManager
+	usageLimiter  *subscription.UsageLimiter
 }
 
 // NewSubscriptionController creates a controller and maps price IDs to SW-REQ-050 amounts.
 // Implements DESIGN-007 SubscriptionController initialization.
-func NewSubscriptionController(cfg config.Config, gateway CheckoutGateway) *SubscriptionController {
+func NewSubscriptionController(cfg config.Config, gateway CheckoutGateway, entManager *subscription.EntitlementManager, usageLimiter *subscription.UsageLimiter) *SubscriptionController {
 	return &SubscriptionController{
 		billingConfig: cfg.Billing,
 		frontendUrl:   cfg.FrontendOrigin,
@@ -67,6 +71,8 @@ func NewSubscriptionController(cfg config.Config, gateway CheckoutGateway) *Subs
 			cfg.Billing.AnnualPlanPriceID:  {Label: "annual", AmountUS: 2500},
 		},
 		gateway: gateway,
+		entManager: entManager,
+		usageLimiter: usageLimiter,
 	}
 }
 
@@ -107,7 +113,7 @@ func (c *SubscriptionController) CreateCheckout(ctx *fiber.Ctx) error {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	url, err := c.gateway.CreateSession(ctx.Context(), user.UserID, req, idempotencyKey)
+	url, err := c.gateway.CreateSession(ctx.Context(), user.UserID, req.PriceID, req.SuccessURL, req.CancelURL, idempotencyKey)
 	if err != nil {
 		return ctx.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "billing service unavailable"})
 	}
@@ -154,5 +160,61 @@ func (c *SubscriptionController) Routes() []RouteDefinition {
 			RequiresAuth: true,
 			RequiresCSRF: true,
 		},
+		{
+			Method:       "GET",
+			Path:         "/api/v1/entitlements",
+			Handler:      c.GetEntitlement,
+			RequiresAuth: true,
+			RequiresCSRF: false,
+		},
 	}
+}
+
+
+// GetEntitlement handles reading the user's entitlement and billing state.
+// Implements DESIGN-007 SubscriptionController GetEntitlement.
+func (c *SubscriptionController) GetEntitlement(ctx *fiber.Ctx) error {
+	user, ok := authenticatedUser(ctx)
+	if !ok {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	ent, err := c.entManager.GetEntitlementState(ctx.Context(), user.UserID)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
+	}
+
+	usageRemaining, err := c.usageLimiter.GetUsageRemaining(ctx.Context(), &ent, "catalog", time.Now())
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
+	}
+
+	allowedModes := []string{}
+	if (ent.Tier == "trial" || ent.Tier == "paid") && ent.Status == "active" {
+		allowedModes = []string{"catalog", "substitution:single", "substitution:multi", "daily_diet", "daily_diet_alternative"}
+	} else {
+		allowedModes = []string{"catalog", "substitution:single"}
+	}
+
+	var expiresAt string
+	if ent.ExpiresAt != nil {
+		expiresAt = ent.ExpiresAt.Format(time.RFC3339)
+	}
+
+	data := fiber.Map{
+		"tier":                 ent.Tier,
+		"status":               ent.Status,
+		"allowedModes":         allowedModes,
+		"searchLimitPer24h":    3, // Hardcoded for free users as per spec
+		"usageRemaining":       usageRemaining,
+		"expiresAt":            expiresAt,
+		"stripeCustomerId":     ent.StripeCustomerID,
+		"stripeSubscriptionId": ent.StripeSubscriptionID,
+	}
+
+	return ctx.JSON(fiber.Map{
+		"status":    "ok",
+		"requestId": ctx.Locals("requestId"), // fallback or omit if not present
+		"data":      data,
+	})
 }

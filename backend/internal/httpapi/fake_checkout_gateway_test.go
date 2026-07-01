@@ -15,7 +15,8 @@ type fakeCheckoutGateway struct {
 	err      error
 }
 
-func (f *fakeCheckoutGateway) CreateSession(_ context.Context, _ uuid.UUID, req PaymentIntentRequest, _ string) (string, error) {
+func (f *fakeCheckoutGateway) CreateSession(_ context.Context, _ uuid.UUID, priceID, successURL, cancelURL, idempotencyKey string) (string, error) {
+	req := PaymentIntentRequest{PriceID: priceID, SuccessURL: successURL, CancelURL: cancelURL}
 	if f.err != nil {
 		return "", f.err
 	}

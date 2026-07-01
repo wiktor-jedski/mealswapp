@@ -70,3 +70,21 @@ func (m *EntitlementManager) CheckEntitlement(ctx context.Context, userID uuid.U
 		return Decision{Allowed: false, Reason: "requires active subscription"}, nil
 	}
 }
+
+// GetEntitlementState returns the user's raw entitlement state from the repository.
+// Missing entitlements default to free active.
+// Implements DESIGN-007 EntitlementManager.
+func (m *EntitlementManager) GetEntitlementState(ctx context.Context, userID uuid.UUID) (repository.Entitlement, error) {
+	if userID == uuid.Nil {
+		return repository.Entitlement{}, errors.New("invalid user identity")
+	}
+	ent, err := m.repo.GetLatest(ctx, userID)
+	if err != nil {
+		// Missing entitlement falls back to free behavior.
+		ent = repository.Entitlement{
+			Tier:   "free",
+			Status: "active",
+		}
+	}
+	return ent, nil
+}

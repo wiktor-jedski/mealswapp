@@ -91,3 +91,27 @@ func (l *UsageLimiter) RecordUsage(ctx context.Context, ent *repository.Entitlem
 	}
 	return nil
 }
+
+// GetUsageRemaining returns the remaining searches in the current rolling 24-hour window.
+// Implements DESIGN-007 UsageLimiter.
+func (l *UsageLimiter) GetUsageRemaining(ctx context.Context, ent *repository.Entitlement, feature string, now time.Time) (int, error) {
+	if ent == nil || ((ent.Tier == "trial" || ent.Tier == "paid") && ent.Status == "active") {
+		// Unlimited. Return a high number or actual limit.
+		return 999999, nil
+	}
+	
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	windowStart := now.Add(-24 * time.Hour)
+	window, err := l.usageRepo.GetUsageSince(ctx, ent.UserID, feature, windowStart)
+	if err != nil {
+		return 0, err
+	}
+
+	remaining := l.limit - (window.SearchCount + l.inFlight[ent.UserID])
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, nil
+}

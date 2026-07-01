@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
@@ -10,6 +11,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"time"
 )
 
 // Implements DESIGN-007 SubscriptionController configuration tests.
@@ -19,7 +23,7 @@ func TestSubscriptionController_MapsPlans(t *testing.T) {
 	cfg.Billing.MonthlyPlanPriceID = "price_123"
 	cfg.Billing.AnnualPlanPriceID = "price_456"
 
-	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{})
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(&fakeEntitlementRepo{}), subscription.NewUsageLimiter(&fakeEntitlementRepo{}, 3))
 	if ctrl.plans["price_123"].AmountUS != 300 || ctrl.plans["price_123"].Label != "monthly" {
 		t.Errorf("monthly plan incorrectly mapped: %+v", ctrl.plans["price_123"])
 	}
@@ -31,7 +35,7 @@ func TestSubscriptionController_MapsPlans(t *testing.T) {
 func TestSubscriptionController_ValidateRedirectURLs(t *testing.T) {
 	cfg, _ := config.Load()
 	cfg.FrontendOrigin = "https://example.com"
-	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{})
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(&fakeEntitlementRepo{}), subscription.NewUsageLimiter(&fakeEntitlementRepo{}, 3))
 
 	validReq := PaymentIntentRequest{
 		SuccessURL: "https://example.com/success",
@@ -77,7 +81,7 @@ func TestSubscriptionController_CreateCheckout(t *testing.T) {
 	cfg.Billing.AnnualPlanPriceID = "price_annual"
 
 	gateway := &fakeCheckoutGateway{urls: []string{"https://checkout.stripe.com/123"}}
-	ctrl := NewSubscriptionController(cfg, gateway)
+	ctrl := NewSubscriptionController(cfg, gateway, subscription.NewEntitlementManager(&fakeEntitlementRepo{}), subscription.NewUsageLimiter(&fakeEntitlementRepo{}, 3))
 
 	app := fiber.New()
 	app.Post("/checkout", func(c *fiber.Ctx) error {
@@ -137,7 +141,7 @@ func TestSubscriptionController_CreateCheckout(t *testing.T) {
 
 	// Test 5: Gateway error maps to 503
 	gateway2 := &fakeCheckoutGateway{err: errors.New("stripe down")}
-	ctrl2 := NewSubscriptionController(cfg, gateway2)
+	ctrl2 := NewSubscriptionController(cfg, gateway2, subscription.NewEntitlementManager(&fakeEntitlementRepo{}), subscription.NewUsageLimiter(&fakeEntitlementRepo{}, 3))
 	app2 := fiber.New()
 	app2.Post("/checkout", func(c *fiber.Ctx) error {
 		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
@@ -151,5 +155,108 @@ func TestSubscriptionController_CreateCheckout(t *testing.T) {
 
 	if resp5.StatusCode != 503 {
 		t.Fatalf("expected 503, got %d", resp5.StatusCode)
+	}
+}
+
+
+type fakeEntitlementRepo struct {
+	ent repository.Entitlement
+	err error
+	usage repository.UsageWindow
+}
+
+func (f *fakeEntitlementRepo) AppendEntitlement(ctx context.Context, entitlement repository.Entitlement) error { return nil }
+func (f *fakeEntitlementRepo) GetLatest(ctx context.Context, userID uuid.UUID) (repository.Entitlement, error) {
+	if f.err != nil { return repository.Entitlement{}, f.err }
+	return f.ent, nil
+}
+func (f *fakeEntitlementRepo) RecordUsage(ctx context.Context, userID uuid.UUID, feature string, occurredAt time.Time) (repository.UsageWindow, error) { return repository.UsageWindow{}, nil }
+func (f *fakeEntitlementRepo) GetUsageSince(ctx context.Context, userID uuid.UUID, feature string, since time.Time) (repository.UsageWindow, error) { return f.usage, nil }
+func (f *fakeEntitlementRepo) ListExpiredTrials(ctx context.Context, now time.Time) ([]repository.Entitlement, error) { return nil, nil }
+func (f *fakeEntitlementRepo) InsertProcessedStripeEvent(ctx context.Context, event repository.ProcessedStripeEvent) (bool, error) { return false, nil }
+
+func TestGetEntitlement_SuccessFree(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{
+		ent: repository.Entitlement{
+			Tier:   "free",
+			Status: "active",
+		},
+		usage: repository.UsageWindow{SearchCount: 1},
+	}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", func(c *fiber.Ctx) error {
+		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
+		return ctrl.GetEntitlement(c)
+	})
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	data := body["data"].(map[string]interface{})
+	if data["tier"] != "free" || data["status"] != "active" {
+		t.Errorf("unexpected tier/status: %v", data)
+	}
+	if data["usageRemaining"].(float64) != 2 { // 3 - 1
+		t.Errorf("expected 2 usage remaining, got %v", data["usageRemaining"])
+	}
+	modes := data["allowedModes"].([]interface{})
+	if len(modes) != 2 {
+		t.Errorf("expected 2 allowed modes for free, got %d", len(modes))
+	}
+}
+
+func TestGetEntitlement_SuccessPaid(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{
+		ent: repository.Entitlement{
+			Tier:   "paid",
+			Status: "active",
+		},
+	}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", func(c *fiber.Ctx) error {
+		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
+		return ctrl.GetEntitlement(c)
+	})
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	data := body["data"].(map[string]interface{})
+	
+	if data["tier"] != "paid" || data["status"] != "active" {
+		t.Errorf("unexpected tier/status: %v", data)
+	}
+	if data["usageRemaining"].(float64) == 0 { 
+		t.Errorf("expected unlimited usage remaining for paid, got %v", data["usageRemaining"])
+	}
+	modes := data["allowedModes"].([]interface{})
+	if len(modes) < 4 {
+		t.Errorf("expected all allowed modes for paid, got %d", len(modes))
+	}
+}
+
+func TestGetEntitlement_Anonymous(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", ctrl.GetEntitlement)
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 401 {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
 }

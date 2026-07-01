@@ -475,6 +475,17 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  /api/v1/entitlements:
+    get:
+      operationId: getApiV1Entitlements
+      summary: Read authenticated entitlement and billing state
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Entitlement"
+        "401":
+          $ref: "#/components/responses/Error"
   /api/v1/disclaimers:
     get:
       operationId: getApiV1Disclaimers
@@ -595,6 +606,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/DisclaimerEnvelope"
+    Entitlement:
+      description: Entitlement and billing state envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EntitlementEnvelope"
   schemas:
     AppError:
       type: object
@@ -795,9 +812,46 @@ components:
               format: uuid
             displayName:
               type: string
-            unitSystem:
+unitSystem:
               type: string
               enum: [metric, imperial]
+    EntitlementData:
+      type: object
+      required: [tier, status, allowedModes, searchLimitPer24h, usageRemaining]
+      properties:
+        tier:
+          type: string
+          enum: [free, trial, paid]
+        status:
+          type: string
+          enum: [active, expired, past_due, cancelled]
+        allowedModes:
+          type: array
+          items:
+            type: string
+        searchLimitPer24h:
+          type: integer
+        usageRemaining:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time
+        stripeCustomerId:
+          type: string
+        stripeSubscriptionId:
+          type: string
+    EntitlementEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/EntitlementData"""
+
             themePreference:
               type: string
               enum: [system, light, dark]
