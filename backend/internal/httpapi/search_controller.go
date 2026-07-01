@@ -32,12 +32,35 @@ type SearchHistoryAppender interface {
 	AddHistory(ctx context.Context, userID uuid.UUID, query string, mode string, filtersHash string) (uuid.UUID, error)
 }
 
+// EntitlementDecision carries the result of an entitlement check.
+// Implements DESIGN-007 EntitlementManager.
+type EntitlementDecision struct {
+	Allowed bool
+	Code    string
+	Message string
+}
+
+// EntitlementManager defines access decisions for protected features.
+// Implements DESIGN-007 EntitlementManager.
+type EntitlementManager interface {
+	CheckEntitlement(ctx context.Context, userID uuid.UUID, feature string) (EntitlementDecision, error)
+}
+
+// UsageLimiter defines rolling usage recording for search features.
+// Implements DESIGN-007 UsageLimiter.
+type UsageLimiter interface {
+	CheckUsageLimit(ctx context.Context, userID uuid.UUID, feature string) error
+	RecordUsage(ctx context.Context, userID uuid.UUID, feature string) error
+}
+
 // SearchController owns Catalog Search endpoint handlers.
 // Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository.
 type SearchController struct {
 	service      SearchService
 	autocomplete AutocompleteService
 	history      SearchHistoryAppender
+	entitlements EntitlementManager
+	usage        UsageLimiter
 }
 
 // searchResponseDTO is the public HTTP payload for successful search responses.
@@ -160,6 +183,14 @@ func (c *SearchController) WithAutocompleteService(autocomplete AutocompleteServ
 	return c
 }
 
+// WithEntitlementGate enables subscription and usage access control.
+// Implements DESIGN-007 EntitlementManager.
+func (c *SearchController) WithEntitlementGate(entitlements EntitlementManager, usage UsageLimiter) *SearchController {
+	c.entitlements = entitlements
+	c.usage = usage
+	return c
+}
+
 // Routes returns public search routes.
 // Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository.
 func (c *SearchController) Routes() []RouteDefinition {
@@ -170,6 +201,18 @@ func (c *SearchController) Routes() []RouteDefinition {
 	return routes
 }
 
+// featureForRequest maps a search request to a protected feature name.
+// Implements DESIGN-007 EntitlementManager.
+func featureForRequest(req search.SearchRequest) string {
+	if req.Mode == search.SearchModeSubstitution {
+		if len(req.SubstitutionInputs) > 1 {
+			return "substitution_multi"
+		}
+		return "substitution_single"
+	}
+	return string(req.Mode)
+}
+
 // Search returns Catalog Search results in the shared response envelope.
 // Implements DESIGN-002 SearchController.
 func (c *SearchController) Search(ctx *fiber.Ctx) error {
@@ -177,6 +220,31 @@ func (c *SearchController) Search(ctx *fiber.Ctx) error {
 	if err != nil {
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed", Cause: err}
 	}
+	
+	feature := featureForRequest(req)
+	user, hasUser := authenticatedUser(ctx)
+	
+	if c.entitlements != nil {
+		if hasUser {
+			decision, err := c.entitlements.CheckEntitlement(ctx.UserContext(), user.UserID, feature)
+			if err != nil {
+				return AppError{HTTPStatus: fiber.StatusInternalServerError, Category: "entitlement", Code: "entitlement_error", Message: "failed to check entitlement", Cause: err}
+			}
+			if !decision.Allowed {
+				return AppError{HTTPStatus: fiber.StatusForbidden, Category: "entitlement", Code: decision.Code, Message: decision.Message}
+			}
+			if c.usage != nil {
+				if err := c.usage.CheckUsageLimit(ctx.UserContext(), user.UserID, feature); err != nil {
+					return AppError{HTTPStatus: fiber.StatusForbidden, Category: "usage", Code: "usage_limit_exceeded", Message: err.Error(), Cause: err}
+				}
+			}
+		} else {
+			if req.Mode != search.SearchModeCatalog {
+				return AppError{HTTPStatus: fiber.StatusUnauthorized, Category: "auth", Code: "unauthorized", Message: "authentication required"}
+			}
+		}
+	}
+
 	response, err := c.service.Search(ctx.UserContext(), req)
 	if err != nil {
 		if errors.Is(err, search.ErrDailyDietIDRequired) {
@@ -195,6 +263,11 @@ func (c *SearchController) Search(ctx *fiber.Ctx) error {
 	}
 	if err := c.appendAuthenticatedHistory(ctx, req); err != nil {
 		return err
+	}
+	if c.usage != nil && hasUser {
+		if err := c.usage.RecordUsage(ctx.UserContext(), user.UserID, feature); err != nil {
+			return AppError{HTTPStatus: fiber.StatusInternalServerError, Category: "usage", Code: "usage_recording_failed", Message: "failed to record usage", Cause: err}
+		}
 	}
 	data, err := envelopeData(searchResponseData(response))
 	if err != nil {

@@ -910,3 +910,188 @@ func hasMetric(metrics []observability.MetricPoint, name string, route string, s
 	}
 	return false
 }
+
+type fakeEntitlementManager struct {
+	decision EntitlementDecision
+	err      error
+	feature  string
+}
+
+func (m *fakeEntitlementManager) CheckEntitlement(ctx context.Context, userID uuid.UUID, feature string) (EntitlementDecision, error) {
+	m.feature = feature
+	return m.decision, m.err
+}
+
+type fakeUsageLimiter struct {
+	checkErr  error
+	recordErr error
+	checked   int
+	recorded  int
+}
+
+func (l *fakeUsageLimiter) CheckUsageLimit(ctx context.Context, userID uuid.UUID, feature string) error {
+	l.checked++
+	return l.checkErr
+}
+
+func (l *fakeUsageLimiter) RecordUsage(ctx context.Context, userID uuid.UUID, feature string) error {
+	l.recorded++
+	return l.recordErr
+}
+
+func TestSearchControllerAnonymousCatalogSearchWorksWithoutEntitlement(t *testing.T) {
+	// Implements DESIGN-002 SearchController phase 06 entitlement gate.
+	service := &fakeSearchService{response: search.SearchResponse{Items: []repository.FoodItemEntity{}, TotalCount: 0, Page: 1}}
+	history := &fakeSearchHistoryAppender{}
+	entitlements := &fakeEntitlementManager{decision: EntitlementDecision{Allowed: true}}
+	usage := &fakeUsageLimiter{}
+	
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).WithSearchHistoryAppender(history).WithEntitlementGate(entitlements, usage).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "catalog", "page": 1, "filters": []any{}})
+	
+	resp, err := app.Test(searchHTTPPost(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != fiber.StatusOK || service.calls != 1 || history.calls != 0 || usage.checked != 0 || usage.recorded != 0 {
+		t.Fatalf("anonymous catalog should bypass entitlement side effects: response=%d service=%d history=%d check=%d record=%d", resp.StatusCode, service.calls, history.calls, usage.checked, usage.recorded)
+	}
+}
+
+func TestSearchControllerAnonymousNonCatalogBlocked(t *testing.T) {
+	service := &fakeSearchService{}
+	entitlements := &fakeEntitlementManager{}
+	usage := &fakeUsageLimiter{}
+	
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).WithEntitlementGate(entitlements, usage).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "substitution", "page": 1, "filters": []any{}, "substitutionInputs": []any{map[string]any{"foodObjectId": "61000000-0000-4000-8000-000000000002", "quantity": 100, "unit": "g"}}})
+	
+	resp, err := app.Test(searchHTTPPost(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != fiber.StatusUnauthorized || service.calls != 0 {
+		t.Fatalf("anonymous non-catalog should block: response=%d service=%d", resp.StatusCode, service.calls)
+	}
+}
+
+func TestSearchControllerFreeSingleSubstitutionWithinUsageLimits(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	
+	service := &fakeSearchService{response: search.SearchResponse{Items: []repository.FoodItemEntity{}, TotalCount: 0, Page: 1}}
+	history := &fakeSearchHistoryAppender{}
+	entitlements := &fakeEntitlementManager{decision: EntitlementDecision{Allowed: true}}
+	usage := &fakeUsageLimiter{}
+	
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchHistoryAppender(history).WithEntitlementGate(entitlements, usage).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "substitution", "page": 1, "filters": []any{}, "substitutionInputs": []any{map[string]any{"foodObjectId": uuid.New().String(), "quantity": 100, "unit": "g"}}})
+	
+	req := searchHTTPPost(body)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != fiber.StatusOK || service.calls != 1 || history.calls != 1 || entitlements.feature != "substitution_single" || usage.checked != 1 || usage.recorded != 1 {
+		t.Fatalf("allowed single substitution failure: response=%d service=%d feature=%s check=%d record=%d", resp.StatusCode, service.calls, entitlements.feature, usage.checked, usage.recorded)
+	}
+}
+
+func TestSearchControllerFreeMultiSubstitutionReturnsStableError(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	
+	service := &fakeSearchService{}
+	history := &fakeSearchHistoryAppender{}
+	entitlements := &fakeEntitlementManager{decision: EntitlementDecision{Allowed: false, Code: "entitlement_required", Message: "upgrade required"}}
+	usage := &fakeUsageLimiter{}
+	
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchHistoryAppender(history).WithEntitlementGate(entitlements, usage).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "substitution", "page": 1, "filters": []any{}, "substitutionInputs": []any{
+		map[string]any{"foodObjectId": uuid.New().String(), "quantity": 100, "unit": "g"},
+		map[string]any{"foodObjectId": uuid.New().String(), "quantity": 50, "unit": "ml"},
+	}})
+	
+	req := searchHTTPPost(body)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	
+	envelope := decodeEnvelope(t, resp.Body)
+	
+	if resp.StatusCode != fiber.StatusForbidden || service.calls != 0 || history.calls != 0 || entitlements.feature != "substitution_multi" || usage.checked != 0 || usage.recorded != 0 {
+		t.Fatalf("blocked multi substitution failure: response=%d feature=%s", resp.StatusCode, entitlements.feature)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "entitlement_required" {
+		t.Fatalf("expected entitlement error code: %+v", envelope)
+	}
+}
+
+func TestSearchControllerDailyDietBlockedWithoutEntitlement(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	
+	service := &fakeSearchService{}
+	history := &fakeSearchHistoryAppender{}
+	entitlements := &fakeEntitlementManager{decision: EntitlementDecision{Allowed: false, Code: "entitlement_required", Message: "upgrade required"}}
+	usage := &fakeUsageLimiter{}
+	
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchHistoryAppender(history).WithEntitlementGate(entitlements, usage).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "lentil", "mode": "daily_diet_alternative", "page": 1, "filters": []any{}, "dailyDietId": uuid.New().String()})
+	
+	req := searchHTTPPost(body)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != fiber.StatusForbidden || service.calls != 0 || history.calls != 0 || usage.checked != 0 || usage.recorded != 0 {
+		t.Fatalf("blocked daily diet alternative failure: response=%d service=%d", resp.StatusCode, service.calls)
+	}
+}
+
+func TestSearchControllerUsageLimitExceeded(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	
+	service := &fakeSearchService{}
+	history := &fakeSearchHistoryAppender{}
+	entitlements := &fakeEntitlementManager{decision: EntitlementDecision{Allowed: true}}
+	usage := &fakeUsageLimiter{checkErr: errors.New("usage limit exceeded")}
+	
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchHistoryAppender(history).WithEntitlementGate(entitlements, usage).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "substitution", "page": 1, "filters": []any{}, "substitutionInputs": []any{map[string]any{"foodObjectId": uuid.New().String(), "quantity": 100, "unit": "g"}}})
+	
+	req := searchHTTPPost(body)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	
+	envelope := decodeEnvelope(t, resp.Body)
+	
+	if resp.StatusCode != fiber.StatusForbidden || service.calls != 0 || history.calls != 0 || usage.checked != 1 || usage.recorded != 0 {
+		t.Fatalf("usage limit exceeded failure: response=%d service=%d checked=%d", resp.StatusCode, service.calls, usage.checked)
+	}
+	if envelope.Error == nil || envelope.Error.Code != "usage_limit_exceeded" {
+		t.Fatalf("expected usage limit error code: %+v", envelope)
+	}
+}
