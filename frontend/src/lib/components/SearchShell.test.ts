@@ -102,6 +102,7 @@ test("does not render the previous system light dark theme dropdown in the main 
 test("animates the desktop sidebar grid column between expanded and collapsed widths", () => {
 	expect(source).toContain('import { sidebarStore } from "../stores/sidebar"');
 	expect(source).toContain("transition-[grid-template-columns]");
+	expect(source).toContain("content-start");
 	expect(source).toContain("duration-200");
 	expect(source).toContain("motion-reduce:transition-none");
 	expect(source).toContain("sm:grid-cols-[3.5rem_minmax(0,1fr)]");

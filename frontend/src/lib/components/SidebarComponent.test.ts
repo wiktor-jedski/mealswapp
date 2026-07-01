@@ -59,6 +59,7 @@ test("declares a mobile-only open toggle and a mobile-only close button bound to
 	expect(source).toContain("mobile-sidebar-toggle");
 	expect(source).toContain("data-sidebar-mobile-toggle");
 	expect(source).toContain("sm:hidden");
+	expect(source).toContain("self-center");
 	expect(source).toContain('aria-label="Open activity sidebar"');
 	expect(source).toContain('<span aria-hidden="true">☰</span>');
 	expect(source).not.toContain("☰ Activity");

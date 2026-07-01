@@ -108,8 +108,51 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
         shutil.copy(mobile_src, screenshots_dir / mobile_name)
         has_screenshots = True
 
+    scenario_titles = {
+        "catalog-autocomplete-mil": "Catalog Autocomplete: mil",
+        "catalog-cow-milk": "Catalog Search: Cow Milk",
+        "substitution-empty": "Substitution View",
+        "substitution-apple-oat-milk": "Substitution Search: Apple + Oat Milk",
+    }
+    scenario_order = {
+        "catalog-autocomplete-mil": 1,
+        "catalog-cow-milk": 2,
+        "substitution-empty": 3,
+        "substitution-apple-oat-milk": 4,
+    }
+    viewport_titles = {
+        "desktop": "Desktop (1280x900)",
+        "mobile": "Mobile (390x844)",
+    }
+    scenario_images: list[tuple[int, int, str, str, str]] = []
+    for source in sorted(tmp_screenshots_dir.glob(f"{screenshot_stem}-*.png")):
+        if source.name in {desktop_name, mobile_name}:
+            continue
+        destination = screenshots_dir / source.name
+        shutil.copy(source, destination)
+        relative_key = source.stem.removeprefix(f"{screenshot_stem}-")
+        viewport = "desktop" if relative_key.endswith("-desktop") else "mobile" if relative_key.endswith("-mobile") else ""
+        scenario_key = relative_key.removesuffix("-desktop").removesuffix("-mobile")
+        scenario_title = scenario_titles.get(scenario_key, scenario_key.replace("-", " ").title())
+        viewport_title = viewport_titles.get(viewport, viewport.title())
+        viewport_order = 1 if viewport == "desktop" else 2
+        scenario_images.append((scenario_order.get(scenario_key, 99), viewport_order, source.name, scenario_title, viewport_title))
+        has_screenshots = True
+
     screenshots_html = ""
     if has_screenshots:
+        scenario_cards = ""
+        for _, _, filename, scenario_title, viewport_title in sorted(scenario_images):
+            viewport_class = "mobile" if viewport_title.startswith("Mobile") else "desktop"
+            scenario_cards += f"""
+            <div class="screenshot-card scenario {viewport_class}">
+                <h4>{scenario_title}</h4>
+                <p class="screenshot-subtitle">{viewport_title}</p>
+                <div class="screenshot-frame">
+                    <img src="screenshots/{filename}" alt="{scenario_title} - {viewport_title}">
+                </div>
+            </div>
+            """
         screenshots_html = f"""
         <div class="section-title">Frontend Verification Screenshots</div>
         <div class="screenshots-container">
@@ -125,6 +168,9 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
                     <img src="screenshots/{mobile_name}" alt="Mobile View">
                 </div>
             </div>
+        </div>
+        <div class="screenshots-container scenario-grid">
+            {scenario_cards}
         </div>
         """
 
@@ -626,8 +672,18 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             margin-bottom: 3rem;
         }}
 
+        .screenshots-container.scenario-grid {{
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: start;
+            margin-top: -1.5rem;
+        }}
+
         @media (max-width: 768px) {{
             .screenshots-container {{
+                grid-template-columns: 1fr;
+            }}
+
+            .screenshots-container.scenario-grid {{
                 grid-template-columns: 1fr;
             }}
         }}
@@ -655,6 +711,22 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
             padding-bottom: 0.5rem;
         }}
 
+        .screenshot-card.scenario h4 {{
+            padding-bottom: 0;
+            border-bottom: 0;
+            margin-bottom: -0.75rem;
+        }}
+
+        .screenshot-subtitle {{
+            width: 100%;
+            color: var(--text-secondary);
+            font-family: var(--mono-font);
+            font-size: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }}
+
         .screenshot-frame {{
             width: 100%;
             border-radius: 8px;
@@ -676,6 +748,10 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
 
         .screenshot-card.mobile .screenshot-frame {{
             max-width: 280px;
+        }}
+
+        .screenshot-card.scenario.desktop .screenshot-frame img {{
+            max-height: 380px;
         }}
 
         .design-section {{

@@ -84,7 +84,29 @@ def chromium() -> str:
 		path = shutil.which(candidate)
 		if path:
 			return path
+	playwright_browser = playwright_chromium()
+	if playwright_browser:
+		return playwright_browser
 	raise RuntimeError("chromium, chromium-browser, or google-chrome is required for frontend verification")
+
+
+def playwright_chromium() -> str | None:
+	script = "import { chromium } from './node_modules/playwright/index.mjs'; console.log(chromium.executablePath());"
+	try:
+		result = subprocess.run(
+			["node", "--input-type=module", "-e", script],
+			cwd=FRONTEND,
+			check=True,
+			text=True,
+			capture_output=True,
+			env=frontend_env(),
+		)
+	except (OSError, subprocess.CalledProcessError):
+		return None
+	path = result.stdout.strip()
+	if path and Path(path).exists():
+		return path
+	return None
 
 
 def run_chromium(command: list[str], capture: bool = False) -> subprocess.CompletedProcess[str]:
@@ -143,6 +165,18 @@ def capture_screenshot(browser: str, url: str, artifact_dir: Path, name: str, wi
 	return output
 
 
+def capture_scenario_screenshots(url: str, artifact_dir: Path, screenshot_stem: str) -> None:
+	script = ROOT / "scripts" / "capture-frontend-scenarios.mjs"
+	print(f"+ node {script} {url} {artifact_dir} {screenshot_stem}")
+	subprocess.run(
+		["node", str(script), url, str(artifact_dir), screenshot_stem],
+		cwd=ROOT,
+		check=True,
+		text=True,
+		env=frontend_env(),
+	)
+
+
 def main() -> int:
 	parser = argparse.ArgumentParser(description="Verify the Mealswapp frontend shell and capture UAT screenshots.")
 	parser.add_argument("--artifact-dir", default=str(ARTIFACT_DIR), help="Directory for generated screenshots.")
@@ -160,6 +194,7 @@ def main() -> int:
 		assert_shell_dom(rendered_dom(browser, url))
 		desktop = capture_screenshot(browser, url, artifact_dir, f"{screenshot_stem}-desktop.png", 1280, 900)
 		mobile = capture_screenshot(browser, url, artifact_dir, f"{screenshot_stem}-mobile.png", 390, 844)
+		capture_scenario_screenshots(url, artifact_dir, screenshot_stem)
 		print(f"Frontend verification passed. Screenshots: {desktop}, {mobile}")
 		return 0
 	finally:
