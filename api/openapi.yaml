@@ -812,9 +812,14 @@ components:
               format: uuid
             displayName:
               type: string
-unitSystem:
+            unitSystem:
               type: string
               enum: [metric, imperial]
+            themePreference:
+              type: string
+              enum: [system, light, dark]
+            requiresUnitRecalculation:
+              type: boolean
     EntitlementData:
       type: object
       required: [tier, status, allowedModes, searchLimitPer24h, usageRemaining]
@@ -850,13 +855,8 @@ unitSystem:
         requestId:
           type: string
         data:
-          $ref: "#/components/schemas/EntitlementData"""
+          $ref: "#/components/schemas/EntitlementData"
 
-            themePreference:
-              type: string
-              enum: [system, light, dark]
-            requiresUnitRecalculation:
-              type: boolean
     SavedItem:
       type: object
       required: [id, itemId, kind]

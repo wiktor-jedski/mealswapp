@@ -260,3 +260,170 @@ func TestGetEntitlement_Anonymous(t *testing.T) {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
 }
+
+
+func TestGetEntitlement_Trial(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{
+		ent: repository.Entitlement{
+			Tier:   "trial",
+			Status: "active",
+		},
+	}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", func(c *fiber.Ctx) error {
+		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
+		return ctrl.GetEntitlement(c)
+	})
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	data := body["data"].(map[string]interface{})
+	if data["tier"] != "trial" || data["status"] != "active" {
+		t.Errorf("unexpected tier/status: %v", data)
+	}
+	if data["usageRemaining"].(float64) == 0 { 
+		t.Errorf("expected unlimited usage remaining for trial, got %v", data["usageRemaining"])
+	}
+}
+
+func TestGetEntitlement_PastDue(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{
+		ent: repository.Entitlement{
+			Tier:   "paid",
+			Status: "past_due",
+		},
+		usage: repository.UsageWindow{SearchCount: 1},
+	}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", func(c *fiber.Ctx) error {
+		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
+		return ctrl.GetEntitlement(c)
+	})
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	data := body["data"].(map[string]interface{})
+	if data["tier"] != "paid" || data["status"] != "past_due" {
+		t.Errorf("unexpected tier/status: %v", data)
+	}
+	// "past_due" behaves like free for usage limit
+	if data["usageRemaining"].(float64) != 2 { 
+		t.Errorf("expected 2 usage remaining for past_due, got %v", data["usageRemaining"])
+	}
+	modes := data["allowedModes"].([]interface{})
+	if len(modes) != 2 {
+		t.Errorf("expected 2 allowed modes for past_due, got %d", len(modes))
+	}
+}
+
+func TestGetEntitlement_Cancelled(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{
+		ent: repository.Entitlement{
+			Tier:   "paid",
+			Status: "cancelled",
+		},
+		usage: repository.UsageWindow{SearchCount: 1},
+	}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", func(c *fiber.Ctx) error {
+		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
+		return ctrl.GetEntitlement(c)
+	})
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	data := body["data"].(map[string]interface{})
+	if data["tier"] != "paid" || data["status"] != "cancelled" {
+		t.Errorf("unexpected tier/status: %v", data)
+	}
+	// "cancelled" behaves like free for usage limit
+	if data["usageRemaining"].(float64) != 2 { 
+		t.Errorf("expected 2 usage remaining for cancelled, got %v", data["usageRemaining"])
+	}
+	modes := data["allowedModes"].([]interface{})
+	if len(modes) != 2 {
+		t.Errorf("expected 2 allowed modes for cancelled, got %d", len(modes))
+	}
+}
+
+func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
+	cfg, _ := config.Load()
+	repo := &fakeEntitlementRepo{
+		ent: repository.Entitlement{
+			Tier:   "free",
+			Status: "active",
+			StripeCustomerID: "cus_123",
+			StripeSubscriptionID: "sub_123",
+		},
+	}
+	ctrl := NewSubscriptionController(cfg, &fakeCheckoutGateway{}, subscription.NewEntitlementManager(repo), subscription.NewUsageLimiter(repo, 3))
+	app := fiber.New()
+	app.Get("/entitlements", func(c *fiber.Ctx) error {
+		c.Locals(authenticatedUserLocal, AuthenticatedUser{UserID: uuid.New()})
+		return ctrl.GetEntitlement(c)
+	})
+
+	req := httptest.NewRequest("GET", "/entitlements", nil)
+	resp, _ := app.Test(req)
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&body)
+	
+	// Test the envelope
+	if _, ok := body["data"]; !ok {
+		t.Errorf("missing data field")
+	}
+	if _, ok := body["status"]; !ok {
+		t.Errorf("missing status field")
+	}
+	
+	for key := range body {
+		if key != "data" && key != "status" && key != "requestId" {
+			t.Errorf("unexpected envelope field: %s", key)
+		}
+	}
+
+	data := body["data"].(map[string]interface{})
+	
+	// Validate only expected data fields are present
+	expectedFields := map[string]bool{
+		"tier": true,
+		"status": true,
+		"allowedModes": true,
+		"searchLimitPer24h": true,
+		"usageRemaining": true,
+		"expiresAt": true,
+		"stripeCustomerId": true,
+		"stripeSubscriptionId": true,
+	}
+
+	for key := range data {
+		if !expectedFields[key] {
+			t.Errorf("unexpected field in data: %s - possible secret leak", key)
+		}
+	}
+}
+
