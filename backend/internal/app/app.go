@@ -15,6 +15,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/compliance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
@@ -53,6 +54,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			cfg.Account.CurrentTermsVersion,
 		),
 		Identities: identities, Sessions: sessions, Verification: verification, ResetTokens: verification,
+		OAuthTrial: entitlement.NewTrialTracker(repository.NewPostgresEntitlementRepository(pg), repository.NewPostgresEntitlementRepository(pg), time.Now),
 		Lockout: auth.NewAccountLockoutTracker(repository.NewPostgresAccountLockoutRepository(pg)),
 		Hasher:  auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
 	})
