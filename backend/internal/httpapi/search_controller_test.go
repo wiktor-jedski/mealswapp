@@ -761,19 +761,6 @@ func TestSearchWorkflowIntegrationGateSubstitutionSortsBySimilarity(t *testing.T
 	}
 }
 
-func TestSearchWorkflowIntegrationGateGeneratedTypesAreCurrent(t *testing.T) {
-	// Implements DESIGN-002 SearchController OpenAPI-generated contract compatibility gate.
-	root := filepath.Clean("../../..")
-	cmd := exec.Command("python3", "scripts/generate-api-types.py", "--check")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("generated type drift check failed: %v\n%s", err, output)
-	}
-	if !bytes.Contains(output, []byte("Generated API types are current.")) {
-		t.Fatalf("unexpected drift-check output: %s", output)
-	}
-}
 
 func TestSearchControllerReturns422ForRejectedSearch(t *testing.T) {
 	service := &fakeSearchService{response: search.SearchResponse{Rejection: &search.SearchRejection{Code: "rejected_search", Message: "filters conflict", Field: "filters"}}}

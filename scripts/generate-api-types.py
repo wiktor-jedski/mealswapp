@@ -53,6 +53,14 @@ REQUIRED_MARKERS = (
 	"/api/v1/account/export:",
 	"/api/v1/account:",
 	"/api/v1/disclaimers:",
+	"EntitlementData:",
+	"EntitlementEnvelope:",
+	"CheckoutRequest:",
+	"CheckoutSessionData:",
+	"CheckoutSessionEnvelope:",
+	"/api/v1/entitlements:",
+	"/api/v1/billing/checkout:",
+	"/api/v1/billing/webhook/stripe:",
 )
 GENERATED = """// Generated from api/openapi.yaml by scripts/generate-api-types.py.
 // Implements DESIGN-017 ErrorMessageMapper shared frontend contracts.
@@ -451,6 +459,48 @@ export interface AutocompleteResponse extends Record<string, unknown> {
 // Implements DESIGN-002 SearchController frontend autocomplete contract.
 /** Successful autocomplete response envelope. */
 export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Authenticated entitlement and billing status data. */
+export interface EntitlementData extends Record<string, unknown> {
+	tier: "free" | "trial" | "paid";
+	status: "active" | "expired" | "past_due" | "cancelled";
+	allowedModes: string[];
+	searchLimitPer24h?: number;
+	usageRemaining?: number;
+	expiresAt?: string;
+	stripeCustomerId?: string;
+	stripeSubscriptionId?: string;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Entitlement status response envelope. */
+export type EntitlementEnvelope = Envelope<EntitlementData>;
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Checkout session request payload. */
+export interface CheckoutRequest {
+	priceId: string;
+	successUrl: string;
+	cancelUrl: string;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Checkout session URL response data. */
+export interface CheckoutSessionData extends Record<string, unknown> {
+	sessionId: string;
+	checkoutUrl: string;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Checkout session response envelope. */
+export type CheckoutSessionEnvelope = Envelope<CheckoutSessionData>;
+
+// Implements DESIGN-007 SubscriptionController frontend idempotency contract.
+/** Generates an idempotency key header for safe retryable mutations. */
+export function createIdempotencyHeader(): Record<"Idempotency-Key", string> {
+	return { "Idempotency-Key": crypto.randomUUID() };
+}
 """
 
 
