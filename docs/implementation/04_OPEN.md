@@ -187,3 +187,16 @@ No unresolved Phase 03 code review findings remain at this time.
 - Resolved: handwritten frontend `.svelte` components now consistently use Svelte 5 runes for component props, mutable state, derived values, and effects. Legacy `export let` props and `$:` reactive declarations were removed, mutable component state was promoted to `$state(...)`, derived values to `$derived(...)`, side effects to `$effect(...)`, and event directives to Svelte 5 event attributes.
 - Resolved: a full headless Neovim LSP diagnostic pass was run across handwritten frontend `.svelte` files using the Mason-installed `svelte` language server. The pass initially exposed editor-only TypeScript diagnostics that `vite build` tolerated: missing Vite env typing for `App.svelte`, widened substitution-unit literals in result/source summary components, and `SearchResults.svelte` store-bridge inference issues after the runes migration. These were fixed with `frontend/src/vite-env.d.ts`, explicit unit/query option typing, and simpler `$derived(...)` store bridges. The final LSP pass attached with root `/home/wiktor/Work/mealswapp/frontend` and returned zero diagnostics.
 - Resolved: the `App.svelte` LSP type mismatch for `registerServiceWorker({ enabled: import.meta.env.PROD })` was fixed by adding `frontend/src/vite-env.d.ts` with the standard `vite/client` type reference. This gives the Svelte/TypeScript language server the Vite `ImportMetaEnv` declaration where `PROD` is boolean, without casting at the call site or changing JSON config.
+
+## Phase 06
+
+### Assumptions
+
+- Accepted for planning: Phase 06 uses Stripe-hosted Checkout/session creation for subscription signup, as named in `docs/implementation/01_PLAN.md`. This keeps raw card data outside the application server and UI. If the project owner requires embedded Stripe Elements specifically for SW-REQ-044 wording, replace the checkout UI task with an Elements-based frontend task before implementation starts.
+- Accepted for planning: Stripe monthly and annual price IDs are environment-configured sandbox values that map to SW-REQ-050's $3.00 monthly and $25.00 annual plans. The repository must not commit real Stripe keys, product IDs tied to production accounts, customer data, or webhook secrets.
+- Accepted for planning: Stripe webhook and reconciliation tests use signed sandbox fixtures, Stripe CLI forwarding, or injectable Stripe gateway fakes. Live Stripe network calls are local verification evidence, not a requirement for deterministic CI.
+- Accepted for planning: checkout/session creation is treated as a non-idempotent business action and therefore requires the cross-phase `Idempotency-Key` standard. Stripe webhooks use provider event IDs as their idempotency keys.
+
+### Actions needed
+
+- Before production billing launch, confirm whether the product requirement should say Stripe Checkout or Stripe Elements. Phase 06 planning follows the current implementation plan wording, which says Stripe checkout/webhooks.
