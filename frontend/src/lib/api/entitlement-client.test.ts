@@ -98,6 +98,27 @@ describe("entitlement-client", () => {
 				expect(clientError.appError.retryable).toBe(true);
 			}
 		});
+
+		it("maps 402 payment required to entitlement AppError", async () => {
+			globalThis.fetch = mock().mockResolvedValue({
+				ok: false,
+				status: 402,
+				json: async () => ({
+					status: "error",
+					requestId: "req-402"
+				})
+			});
+
+			try {
+				await fetchEntitlement();
+				expect.unreachable("Should have thrown");
+			} catch (error) {
+				const clientError = error as EntitlementClientError;
+				expect(clientError.status).toBe(402);
+				expect(clientError.appError.category).toBe("entitlement");
+				expect(clientError.appError.retryable).toBe(false);
+			}
+		});
 	});
 
 	describe("createCheckoutSession", () => {
