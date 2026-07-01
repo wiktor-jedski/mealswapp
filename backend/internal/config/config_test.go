@@ -31,6 +31,9 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	if cfg.HSTSMaxAge != defaultHSTSMaxAge {
 		t.Fatalf("HSTSMaxAge = %d, want %d", cfg.HSTSMaxAge, defaultHSTSMaxAge)
 	}
+	if cfg.Billing.StripeSecretKey != "sk_test_dummy" || cfg.Billing.CheckoutSuccessURL != defaultFrontendOrigin+"/billing/success" {
+		t.Fatalf("unexpected billing defaults: %+v", cfg.Billing)
+	}
 	if cfg.Account.PasswordMinLength != 12 || cfg.Account.AccessTokenTTL != 15*time.Minute || cfg.Account.RefreshTokenTTL != 7*24*time.Hour {
 		t.Fatalf("unexpected account defaults: %+v", cfg.Account)
 	}
@@ -138,6 +141,36 @@ func TestLoadRejectsDevelopmentAccountSettingsInProduction(t *testing.T) {
 	})
 }
 
+// TestLoadRejectsDevelopmentBillingSettingsInProduction verifies DESIGN-007 SubscriptionController production validation.
+func TestLoadRejectsDevelopmentBillingSettingsInProduction(t *testing.T) {
+	base := func(t *testing.T) {
+		t.Setenv("MEALSWAPP_ENV", "production")
+		t.Setenv("MEALSWAPP_DATABASE_URL", "postgres://example")
+		t.Setenv("MEALSWAPP_REDIS_URL", "redis://example:6379/0")
+		t.Setenv("MEALSWAPP_FRONTEND_ORIGIN", "https://example.test")
+		t.Setenv("MEALSWAPP_PRIVACY_POLICY_VERSION", "privacy-2026-06")
+		t.Setenv("MEALSWAPP_TERMS_VERSION", "terms-2026-06")
+		t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "sk_live_123")
+		t.Setenv("MEALSWAPP_STRIPE_WEBHOOK_SECRET", "whsec_live_123")
+		t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_live_monthly")
+		t.Setenv("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", "price_live_annual")
+	}
+	t.Run("dummy secret key", func(t *testing.T) {
+		base(t)
+		t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "sk_test_dummy")
+		if _, err := Load(); err == nil {
+			t.Fatal("Load() accepted dummy secret key in production")
+		}
+	})
+	t.Run("dummy price", func(t *testing.T) {
+		base(t)
+		t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_dummy_monthly")
+		if _, err := Load(); err == nil {
+			t.Fatal("Load() accepted dummy price in production")
+		}
+	})
+}
+
 // TestLoadAcceptsProductionDependencyURLs proves that config app will load
 // if all necessary URLs are passed.
 // TestLoadAcceptsProductionDependencyURLs verifies DESIGN-010 RequestValidator production overrides.
@@ -149,6 +182,10 @@ func TestLoadAcceptsProductionDependencyURLs(t *testing.T) {
 	t.Setenv("MEALSWAPP_FRONTEND_ORIGIN", "https://example.test")
 	t.Setenv("MEALSWAPP_PRIVACY_POLICY_VERSION", "privacy-2026-06")
 	t.Setenv("MEALSWAPP_TERMS_VERSION", "terms-2026-06")
+	t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "sk_live_123")
+	t.Setenv("MEALSWAPP_STRIPE_WEBHOOK_SECRET", "whsec_live_123")
+	t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_live_monthly")
+	t.Setenv("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", "price_live_annual")
 
 	cfg, err := Load()
 	if err != nil {

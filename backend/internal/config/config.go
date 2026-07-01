@@ -41,6 +41,18 @@ type Config struct {
 	HSTSMaxAge     int
 	TLSMinVersion  string
 	Account        AccountConfig
+	Billing        BillingConfig
+}
+
+// BillingConfig contains Stripe billing settings.
+// Implements DESIGN-007 SubscriptionController configuration.
+type BillingConfig struct {
+	StripeSecretKey     string
+	StripeWebhookSecret string
+	MonthlyPlanPriceID  string
+	AnnualPlanPriceID   string
+	CheckoutSuccessURL  string
+	CheckoutCancelURL   string
 }
 
 // AccountConfig contains authentication and account-flow settings.
@@ -94,6 +106,9 @@ func Load() (Config, error) {
 	if cfg.Account, err = loadAccountConfig(); err != nil {
 		return Config{}, err
 	}
+	if cfg.Billing, err = loadBillingConfig(cfg.FrontendOrigin); err != nil {
+		return Config{}, err
+	}
 
 	if cfg.Environment == "production" {
 		if os.Getenv("MEALSWAPP_DATABASE_URL") == "" || os.Getenv("MEALSWAPP_REDIS_URL") == "" {
@@ -104,6 +119,15 @@ func Load() (Config, error) {
 		}
 		if strings.HasPrefix(cfg.Account.AccessCookieName, "dev_") || strings.HasPrefix(cfg.Account.RefreshCookieName, "dev_") {
 			return Config{}, errors.New("production requires non-development auth cookie names")
+		}
+		if strings.HasPrefix(cfg.Billing.StripeSecretKey, "sk_test_") || cfg.Billing.StripeSecretKey == "" || cfg.Billing.StripeSecretKey == "sk_test_dummy" {
+			return Config{}, errors.New("production requires live Stripe secret key")
+		}
+		if cfg.Billing.StripeWebhookSecret == "whsec_dummy" || cfg.Billing.StripeWebhookSecret == "" {
+			return Config{}, errors.New("production requires live Stripe webhook secret")
+		}
+		if strings.Contains(cfg.Billing.MonthlyPlanPriceID, "dummy") || strings.Contains(cfg.Billing.AnnualPlanPriceID, "dummy") {
+			return Config{}, errors.New("production requires live Stripe price IDs")
 		}
 		cfg.EnforceTLS = true
 	}
@@ -168,6 +192,26 @@ func loadAccountConfig() (AccountConfig, error) {
 	}
 	if strings.TrimSpace(cfg.CurrentPrivacyPolicyVersion) == "" || strings.TrimSpace(cfg.CurrentTermsVersion) == "" || strings.TrimSpace(cfg.DisclaimerFallbackVersion) == "" {
 		return AccountConfig{}, errors.New("account legal content versions are required")
+	}
+	return cfg, nil
+}
+
+// loadBillingConfig validates Stripe sandbox and production billing settings.
+// Implements DESIGN-007 SubscriptionController configuration.
+func loadBillingConfig(frontendOrigin string) (BillingConfig, error) {
+	cfg := BillingConfig{
+		StripeSecretKey:     env("MEALSWAPP_STRIPE_SECRET_KEY", "sk_test_dummy"),
+		StripeWebhookSecret: env("MEALSWAPP_STRIPE_WEBHOOK_SECRET", "whsec_dummy"),
+		MonthlyPlanPriceID:  env("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_dummy_monthly"),
+		AnnualPlanPriceID:   env("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", "price_dummy_annual"),
+		CheckoutSuccessURL:  env("MEALSWAPP_STRIPE_SUCCESS_URL", frontendOrigin+"/billing/success"),
+		CheckoutCancelURL:   env("MEALSWAPP_STRIPE_CANCEL_URL", frontendOrigin+"/billing/cancel"),
+	}
+	if err := requireURLScheme("MEALSWAPP_STRIPE_SUCCESS_URL", cfg.CheckoutSuccessURL, "http", "https"); err != nil {
+		return BillingConfig{}, err
+	}
+	if err := requireURLScheme("MEALSWAPP_STRIPE_CANCEL_URL", cfg.CheckoutCancelURL, "http", "https"); err != nil {
+		return BillingConfig{}, err
 	}
 	return cfg, nil
 }
