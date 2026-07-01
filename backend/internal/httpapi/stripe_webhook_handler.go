@@ -63,11 +63,16 @@ func (h *StripeWebhookHandler) Handle(ctx *fiber.Ctx) error {
 		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	sanitizedPayload, _ := json.Marshal(map[string]string{
+		"event_id":   event.ID,
+		"event_type": string(event.Type),
+	})
+
 	inserted, err := h.events.InsertProcessedStripeEvent(ctx.Context(), repository.ProcessedStripeEvent{
 		EventID:     event.ID,
 		EventType:   string(event.Type),
 		Outcome:     "success",
-		Payload:     payload,
+		Payload:     sanitizedPayload,
 		ProcessedAt: time.Now(),
 	})
 	
@@ -81,11 +86,15 @@ func (h *StripeWebhookHandler) Handle(ctx *fiber.Ctx) error {
 
 	if err := h.processEvent(ctx.Context(), event); err != nil {
 		// Attempt to record failure in idempotency table if it fails processing
+		sanitizedPayload, _ := json.Marshal(map[string]string{
+			"event_id":   event.ID,
+			"event_type": string(event.Type),
+		})
 		h.events.InsertProcessedStripeEvent(ctx.Context(), repository.ProcessedStripeEvent{
 			EventID:     event.ID,
 			EventType:   string(event.Type),
 			Outcome:     "failed",
-			Payload:     payload,
+			Payload:     sanitizedPayload,
 			ProcessedAt: time.Now(),
 		})
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
