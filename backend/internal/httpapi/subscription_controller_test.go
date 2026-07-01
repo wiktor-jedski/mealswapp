@@ -416,8 +416,6 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 		"searchLimitPer24h": true,
 		"usageRemaining": true,
 		"expiresAt": true,
-		"stripeCustomerId": true,
-		"stripeSubscriptionId": true,
 	}
 
 	for key := range data {

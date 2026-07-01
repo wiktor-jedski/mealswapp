@@ -208,8 +208,6 @@ func (c *SubscriptionController) GetEntitlement(ctx *fiber.Ctx) error {
 		"searchLimitPer24h":    3, // Hardcoded for free users as per spec
 		"usageRemaining":       usageRemaining,
 		"expiresAt":            expiresAt,
-		"stripeCustomerId":     ent.StripeCustomerID,
-		"stripeSubscriptionId": ent.StripeSubscriptionID,
 	}
 
 	return ctx.JSON(fiber.Map{
