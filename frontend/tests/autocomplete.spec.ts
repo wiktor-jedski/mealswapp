@@ -111,12 +111,12 @@ test("focuses the search bar on initial load and after mode changes", async ({ p
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
 	await expect(input).toBeFocused();
-	await expect(input).toHaveAttribute("placeholder", "Search a food to add as a substitution target…");
+	await expect(input).toHaveAttribute("placeholder", "Add a substitution target…");
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find alternatives for a food using quantity and unit context.");
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
 	await expect(input).toBeFocused();
-	await expect(input).toHaveAttribute("placeholder", "Search within a saved daily diet or paste its ID…");
+	await expect(input).toHaveAttribute("placeholder", "Search a saved daily diet…");
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Search for replacements within a saved daily diet.");
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Catalog" }).click();
