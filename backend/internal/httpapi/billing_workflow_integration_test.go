@@ -1,7 +1,7 @@
 package httpapi
 
 // Implements DESIGN-007 EntitlementManager Phase 06 Billing Workflow Integration Gate.
-
+// Traceability: IT-ARCH-007-001, IT-ARCH-007-002, IT-ARCH-007-003, IT-ARCH-007-004, ARCH-007, ARCH-006, ARCH-010, ARCH-013, ARCH-002, SW-REQ-042, SW-REQ-044, SW-REQ-045, SW-REQ-046, SW-REQ-050, SW-REQ-051, SW-REQ-052, SW-REQ-053
 import (
 	"bytes"
 	"context"

@@ -1,4 +1,5 @@
 // Implements DESIGN-007 EntitlementManager.
+// Traceability: IT-ARCH-007-005, ARCH-007, SW-REQ-045, SW-REQ-052
 package subscription_test
 
 import (

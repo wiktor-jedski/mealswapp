@@ -2,7 +2,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import type { EntitlementEnvelope } from "../src/lib/api/generated";
 
 // Implements DESIGN-001 SearchView Phase 06 Search UI Entitlement Gating verification.
-
+// Traceability: IT-ARCH-007-001, IT-ARCH-007-006, ARCH-007, ARCH-001, SW-REQ-042, SW-REQ-052, SW-REQ-053
 async function mockEntitlement(page: Page, tier: "free" | "trial" | "paid", usageRemaining?: number): Promise<void> {
 	await page.route("/api/v1/entitlements", async (route: Route) => {
 		const envelope: EntitlementEnvelope = {

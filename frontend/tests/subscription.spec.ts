@@ -3,6 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 import type { CheckoutSessionEnvelope, EntitlementEnvelope, ProfileEnvelope } from "../src/lib/api/generated";
 
 // Implements DESIGN-007 SubscriptionController frontend billing controls tests.
+// Traceability: IT-ARCH-007-006, ARCH-007, ARCH-001, SW-REQ-042, SW-REQ-044, SW-REQ-050, SW-REQ-052, SW-REQ-053
 
 async function mockProfile(page: Page) {
 	await page.route("/api/v1/profile", async (route: Route) => {
