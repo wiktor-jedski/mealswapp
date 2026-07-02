@@ -49,3 +49,9 @@ test("section landmark cites the DESIGN source", () => {
 	expect(source).toContain('aria-label="Daily diet alternative controls"');
 	expect(source).toContain("<!-- Implements DESIGN-001 SearchView Daily Diet Alternative controls");
 });
+
+// Implements DESIGN-001 SearchView trial/paid unlocks verification.
+test("conditionally renders entitlement feedback for trial/paid unlocks", () => {
+	expect(source).toContain('entitlement !== undefined && !entitlement.allowedModes.includes("daily_diet_alternative")');
+	expect(source).toContain("data-entitlement-feedback");
+});

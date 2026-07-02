@@ -7,8 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"

@@ -136,3 +136,10 @@ test("quantity, unit, and remove controls render as a compact right-side column"
 	expect(source).toContain("bg-[var(--color-accent)]");
 	expect(source).not.toContain("hover:bg-[var(--color-primary)]");
 });
+
+// Implements DESIGN-001 SearchView single-input vs multi-input limit verification.
+test("conditionally renders entitlement feedback for multi-input limits", () => {
+	expect(source).toContain('entitlement !== undefined &&');
+	expect(source).toContain('!entitlement.allowedModes.includes("substitution:multi") &&');
+	expect(source).toContain("data-entitlement-feedback");
+});

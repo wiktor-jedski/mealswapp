@@ -62,3 +62,11 @@ test("the mode button template declares a visible Tailwind focus state rendered 
 	expect(source).toContain("focus:ring-2");
 	expect(source).toContain("focus:outline-none");
 });
+
+// Implements DESIGN-001 SearchView free-user usage counter display verification.
+test("conditionally renders the remaining searches counter for free users", () => {
+	expect(source).toContain('entitlement.tier === "free"');
+	expect(source).toContain('entitlement.usageRemaining !== undefined');
+	expect(source).toContain("data-entitlement-usage");
+	expect(source).toContain("Remaining searches: {entitlement.usageRemaining}/{entitlement.searchLimitPer24h}");
+});
