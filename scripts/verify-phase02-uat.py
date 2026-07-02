@@ -190,18 +190,11 @@ def main() -> int:
 	args = parser.parse_args()
 
 	stack = load_stack_module()
-	if not stack.can_use_docker_compose():
-		raise SystemExit("docker compose is required for Phase 02 UAT verification")
-
 	started_services: set[str] = set()
 	api_process = None
 	try:
-		initially_running = stack.running_compose_services()
-		started_services = set(stack.COMPOSE_SERVICES) - initially_running
-		stack.run(["docker", "compose", "up", "-d", *stack.COMPOSE_SERVICES])
-		for service in stack.COMPOSE_SERVICES:
-			stack.wait_for_compose_health(service)
-
+		# Implements DESIGN-014 MetricsCollector aggregate gate reuse of local dependencies.
+		started_services = stack.ensure_local_dependencies()
 		stack.run_migrations()
 		port = stack.free_port()
 		api_process = stack.start_api(port)

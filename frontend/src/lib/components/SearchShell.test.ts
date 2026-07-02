@@ -20,11 +20,21 @@ test("composes sidebar, mode controls, autocomplete, mode-specific controls, res
 	expect(source).toContain("<SidebarComponent />");
 	expect(source).toContain("<SearchModes />");
 	expect(source).toContain("<AutocompleteDropdown");
-	expect(source).toContain("<SubstitutionInputs />");
+	expect(source).toContain("<SubstitutionInputs");
 	expect(source).toContain("<DailyDietControls");
 	expect(source).not.toContain("<SettingsPanel");
 	expect(source).toContain("<SearchResults");
 	expect(source).toContain("<OfflineBanner />");
+});
+
+// Implements DESIGN-001 SearchView entitlement query and feedback wiring verification.
+test("starts the entitlement query and renders usage plus blocked-mode feedback", () => {
+	expect(source).toContain("buildEntitlementQueryOptions");
+	expect(source).toContain("setEntitlementStatus");
+	expect(source).toContain("setEntitlementError");
+	expect(source).toContain("resolveSearchEntitlement");
+	expect(source).toContain("data-entitlement-usage");
+	expect(source).toContain("data-entitlement-feedback");
 });
 
 // Implements DESIGN-001 SearchView documented visual order verification.
@@ -55,6 +65,7 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 	expect(source).toContain("submitSearch");
 	expect(source).toContain("onSubmit={onAutocompleteSubmit}");
 	expect(source).toContain('activeMode !== "substitution"');
+	expect(source).toContain("entitlementDecision.canExecute");
 	expect(source).not.toContain("disabled");
 });
 
@@ -79,8 +90,9 @@ test("hydrates substitution autocomplete selections with food-object detail data
 test("passes mode-specific placeholder guidance to the search input", () => {
 	expect(source).toContain("const searchPlaceholders: Record<SearchMode, string>");
 	expect(source).toContain("catalog: \"Search foods, meals, or ingredients…\"");
-	expect(source).toContain("substitution: \"Add a substitution target…\"");
-	expect(source).toContain("daily_diet_alternative: \"Search a saved daily diet…\"");
+	expect(source).toContain("substitution: \"Search a food to add as a substitution target…\"");
+	expect(source).toContain("daily_diet: \"Search saved daily diets…\"");
+	expect(source).toContain("daily_diet_alternative: \"Search within a saved daily diet or paste its ID…\"");
 	expect(source).toContain("placeholder={searchPlaceholders[activeMode]}");
 });
 
@@ -113,6 +125,8 @@ test("animates the desktop sidebar grid column between expanded and collapsed wi
 test("mode-specific controls render conditionally based on searchStore.mode", () => {
 	expect(source).toContain('activeMode === "substitution"');
 	expect(source).toContain('activeMode === "daily_diet_alternative"');
+	expect(source).toContain("executionAllowed={entitlementDecision.canExecute}");
+	expect(source).toContain("searchEnabled={entitlementDecision.canExecute}");
 });
 
 // Implements DESIGN-001 SearchView Daily Diet rejection wiring verification.

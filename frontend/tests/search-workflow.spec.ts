@@ -1,11 +1,13 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import type {
   AutocompleteEnvelope,
+  EntitlementStatusEnvelope,
   FoodObjectEnvelope,
   ProfileEnvelope,
   SavedItemsEnvelope,
   SearchHistoryEnvelope,
   SearchRequest,
+  SearchMode,
   SearchResponse,
   SearchResponseEnvelope,
   SearchRejectionEnvelope
@@ -128,6 +130,46 @@ const favoritesEnvelope: SavedItemsEnvelope = {
   data: { items: [{ id: "fav-1", itemId: "food-apple", kind: "favorite" }] }
 };
 
+/** Builds an entitlement envelope from generated billing types for search-mode fixtures. */
+function entitlementEnvelope(overrides: Partial<EntitlementStatusEnvelope["data"]> = {}): EntitlementStatusEnvelope {
+  return {
+    status: "ok",
+    requestId: "entitlement-workflow-0001",
+    data: {
+      userId: "user-entitlement",
+      tier: "paid",
+      status: "active",
+      allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"],
+      searchLimitPer24h: 25,
+      usageUsed: 0,
+      usageRemaining: null,
+      usageWindowStartedAt: "2026-07-02T00:00:00Z",
+      trialExpiresAt: null,
+      billingRecoveryState: "none",
+      ...overrides
+    }
+  };
+}
+
+async function stubEntitlement(page: Page, envelope: EntitlementStatusEnvelope): Promise<void> {
+  await page.route(/\/api\/v1\/billing\/entitlement$/, (route) => fulfillJson(route, 200, envelope));
+}
+
+async function stubAnonymousEntitlement(page: Page): Promise<void> {
+  await page.route(/\/api\/v1\/billing\/entitlement$/, (route) =>
+    fulfillJson(route, 401, {
+      status: "error",
+      requestId: "entitlement-anonymous-0001",
+      error: {
+        category: "auth",
+        code: "anonymous_session",
+        message: "Sign in to view your billing status.",
+        retryable: false
+      }
+    })
+  );
+}
+
 /** Fulfills a route with JSON. */
 async function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -135,6 +177,7 @@ async function fulfillJson(route: Route, status: number, body: unknown): Promise
 
 /** Stubs the core search + autocomplete endpoints so the shell renders without a backend. */
 async function stubCoreApi(page: Page, search: SearchResponseEnvelope = searchEnvelope(12, 1)): Promise<void> {
+  await stubEntitlement(page, entitlementEnvelope());
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
   await page.route(/\/api\/v1\/food-objects\/[^/]+$/, (route) => fulfillJson(route, 200, hydratedFoodObjectEnvelope));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, search));
@@ -263,6 +306,216 @@ test("Substitution Input search sends inputs and renders ranked results", async 
   expect(seenRequestBody!.query).toBe("");
   expect(seenRequestBody!.substitutionInputs?.[0]?.foodObjectId).toBe("food-apple");
   expect(seenRequestBody!.substitutionInputs?.[0]?.quantity).toBe(150);
+});
+
+// Implements DESIGN-001 SearchView free-user usage and single-input Substitution entitlement verification.
+test("free users see remaining usage and can run single-input Substitution until the limit", async ({ page }) => {
+  let searchRequestCount = 0;
+  await stubEntitlement(page, entitlementEnvelope({
+    tier: "free",
+    allowedModes: ["catalog", "substitution"],
+    usageUsed: 22,
+    usageRemaining: 3
+  }));
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/food-objects\/[^/]+$/, (route) => fulfillJson(route, 200, hydratedFoodObjectEnvelope));
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    searchRequestCount += 1;
+    await fulfillJson(route, 200, searchEnvelope(2, 1));
+  });
+  await page.goto("/");
+
+  await expect(page.locator("[data-entitlement-usage]")).toContainText("3 free searches remaining");
+  await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByRole("listbox", { name: "Autocomplete suggestions" }).getByRole("option", { name: "Apple", exact: true }).click();
+  await page.getByRole("button", { name: "Find substitutions" }).click();
+
+  await expect(page.locator("[data-result-card]")).toHaveCount(2);
+  expect(searchRequestCount).toBe(1);
+});
+
+// Implements DESIGN-001 SearchView free multi-input Substitution entitlement block verification.
+test("free users get entitlement feedback for multi-input Substitution without sending a blocked search", async ({ page }) => {
+  let searchRequestCount = 0;
+  await stubEntitlement(page, entitlementEnvelope({
+    tier: "free",
+    allowedModes: ["catalog", "substitution"],
+    usageUsed: 5,
+    usageRemaining: 20
+  }));
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/food-objects\/[^/]+$/, (route) => fulfillJson(route, 200, hydratedFoodObjectEnvelope));
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    searchRequestCount += 1;
+    await fulfillJson(route, 200, searchEnvelope(2, 1));
+  });
+  await page.goto("/");
+
+  await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByRole("listbox", { name: "Autocomplete suggestions" }).getByRole("option", { name: "Apple", exact: true }).click();
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByRole("listbox", { name: "Autocomplete suggestions" }).getByRole("option", { name: "Applesauce", exact: true }).click();
+
+  await expect(page.locator("[data-substitution-card]")).toHaveCount(2);
+  await expect(page.locator("[data-entitlement-feedback]")).toContainText("support one input");
+  await expect(page.getByRole("button", { name: "Find substitutions" })).toBeDisabled();
+  expect(searchRequestCount).toBe(0);
+});
+
+// Implements DESIGN-001 SearchView free Daily Diet Alternative entitlement block verification.
+test("free users get entitlement feedback for Daily Diet without sending a blocked search", async ({ page }) => {
+  let searchRequestCount = 0;
+  await stubEntitlement(page, entitlementEnvelope({
+    tier: "free",
+    allowedModes: ["catalog", "substitution", "daily_diet"],
+    usageUsed: 5,
+    usageRemaining: 20
+  }));
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    searchRequestCount += 1;
+    await fulfillJson(route, 200, searchEnvelope(2, 1));
+  });
+  await page.goto("/");
+
+  await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
+  await expect(page.locator("[data-entitlement-feedback]")).toContainText("trial and paid plans");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
+
+  await expect(page.locator("[data-results-grid]")).toHaveCount(0);
+  expect(searchRequestCount).toBe(0);
+});
+
+// Implements DESIGN-001 SearchView free Daily Diet Alternative entitlement block verification.
+test("free users get entitlement feedback for Daily Diet Alternative without sending a blocked search", async ({ page }) => {
+  let searchRequestCount = 0;
+  await stubEntitlement(page, entitlementEnvelope({
+    tier: "free",
+    allowedModes: ["catalog", "substitution", "daily_diet_alternative"],
+    usageUsed: 5,
+    usageRemaining: 20
+  }));
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    searchRequestCount += 1;
+    await fulfillJson(route, 200, searchEnvelope(2, 1));
+  });
+  await page.goto("/");
+
+  await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
+  await expect(page.locator("[data-entitlement-feedback]")).toContainText("trial and paid plans");
+  await expect(page.locator("#daily-diet-id")).toHaveAttribute("aria-disabled", "true");
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
+
+  await expect(page.locator("[data-results-grid]")).toHaveCount(0);
+  expect(searchRequestCount).toBe(0);
+});
+
+for (const tier of ["trial", "paid"] as const) {
+  // Implements DESIGN-001 SearchView trial/paid Daily Diet entitlement unlock verification.
+  test(`${tier} users can execute paid Daily Diet mode`, async ({ page }) => {
+    let seenMode: SearchMode | null = null;
+    await stubEntitlement(page, entitlementEnvelope({
+      tier,
+      allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"],
+      usageRemaining: null
+    }));
+    await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+    await page.route(/\/api\/v1\/search$/, async (route) => {
+      const body = (await route.request().postDataJSON()) as SearchRequest;
+      seenMode = body.mode;
+      await fulfillJson(route, 200, searchEnvelope(1, 1));
+    });
+    await page.goto("/");
+
+    await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
+    await expect(page.locator("[data-entitlement-feedback]")).toHaveCount(0);
+    await page.getByLabel("Food search").fill("apple");
+    await page.getByLabel("Food search").press("Enter");
+
+    await expect(page.locator("[data-result-card]")).toHaveCount(1);
+    expect(seenMode).toBe("daily_diet");
+  });
+
+  // Implements DESIGN-001 SearchView trial/paid Daily Diet Alternative entitlement unlock verification.
+  test(`${tier} users can execute paid Daily Diet Alternative mode`, async ({ page }) => {
+    let seenMode: SearchMode | null = null;
+    await stubEntitlement(page, entitlementEnvelope({
+      tier,
+      allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"],
+      usageRemaining: null
+    }));
+    await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+    await page.route(/\/api\/v1\/search$/, async (route) => {
+      const body = (await route.request().postDataJSON()) as SearchRequest;
+      seenMode = body.mode;
+      await fulfillJson(route, 200, searchEnvelope(1, 1));
+    });
+    await page.goto("/");
+
+    await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
+    await expect(page.locator("[data-entitlement-feedback]")).toHaveCount(0);
+    await page.locator("#daily-diet-id").fill("00000000-0000-0000-0000-000000000000");
+    await page.getByLabel("Food search").fill("apple");
+    await page.getByLabel("Food search").press("Enter");
+
+    await expect(page.locator("[data-result-card]")).toHaveCount(1);
+    expect(seenMode).toBe("daily_diet_alternative");
+  });
+}
+
+// Implements DESIGN-001 SearchView anonymous Catalog Search entitlement fallback verification.
+test("anonymous users can still execute Catalog Search when entitlement status returns 401", async ({ page }) => {
+  let searchRequestCount = 0;
+  await stubAnonymousEntitlement(page);
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    searchRequestCount += 1;
+    await fulfillJson(route, 200, searchEnvelope(1, 1));
+  });
+  await page.goto("/");
+
+  await page.getByLabel("Food search").fill("apple");
+  await page.getByLabel("Food search").press("Enter");
+
+  await expect(page.locator("[data-result-card]")).toHaveCount(1);
+  expect(searchRequestCount).toBe(1);
+});
+
+// Verifies IT-ARCH-007-006.
+// Verifies ARCH-007.
+// Verifies ARCH-001.
+// Traces SW-REQ-042, SW-REQ-052, and SW-REQ-053.
+// Implements DESIGN-001 SearchView and DESIGN-007 EntitlementManager Phase 06 billing workflow UI gate.
+test("billing recovery state blocks paid-mode search without network side effects", async ({ page }) => {
+  let searchRequestCount = 0;
+  await stubEntitlement(page, entitlementEnvelope({
+    tier: "paid",
+    status: "past_due",
+    allowedModes: ["catalog", "substitution"],
+    usageRemaining: null,
+    billingRecoveryState: "action_required"
+  }));
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    searchRequestCount += 1;
+    await fulfillJson(route, 200, searchEnvelope(1, 1));
+  });
+  await page.goto("/");
+
+  await expect(page.locator("[data-billing-recovery]")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Update billing" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
+  await expect(page.locator("[data-entitlement-feedback]")).toContainText("not included");
+  await page.getByLabel("Food search").fill("lentil");
+  await page.getByLabel("Food search").press("Enter");
+
+  await expect(page.locator("[data-results-grid]")).toHaveCount(0);
+  expect(searchRequestCount).toBe(0);
 });
 
 // Verifies IT-ARCH-001-003.

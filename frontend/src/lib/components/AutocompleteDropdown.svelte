@@ -156,6 +156,7 @@
         } else if (query.trim().length > 0) {
           event.preventDefault();
           dismiss();
+          suppressedSelectedQuery = query;
           controller.cancel();
           onSubmit(query);
         }

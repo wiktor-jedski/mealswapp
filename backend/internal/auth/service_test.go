@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
@@ -291,6 +292,35 @@ func (h *memoryTrialHook) ActivateFirstLoginTrial(_ context.Context, userID uuid
 	return nil
 }
 
+type authEntitlementRepository struct {
+	latest  map[uuid.UUID]repository.Entitlement
+	history map[uuid.UUID][]repository.Entitlement
+}
+
+func (r *authEntitlementRepository) AppendEntitlement(_ context.Context, entitlement repository.Entitlement) error {
+	if r.latest == nil {
+		r.latest = map[uuid.UUID]repository.Entitlement{}
+	}
+	if r.history == nil {
+		r.history = map[uuid.UUID][]repository.Entitlement{}
+	}
+	r.latest[entitlement.UserID] = entitlement
+	r.history[entitlement.UserID] = append(r.history[entitlement.UserID], entitlement)
+	return nil
+}
+
+func (r *authEntitlementRepository) GetLatest(_ context.Context, userID uuid.UUID) (repository.Entitlement, error) {
+	entitlement, ok := r.latest[userID]
+	if !ok {
+		return repository.Entitlement{}, repository.NewError(repository.ErrorKindNotFound, "missing entitlement", nil)
+	}
+	return entitlement, nil
+}
+
+func (r *authEntitlementRepository) ListExpiredTrials(context.Context, time.Time) ([]repository.Entitlement, error) {
+	return nil, nil
+}
+
 // TestCoreAuthServiceLoginRefreshAndReuse verifies DESIGN-006 AuthController service composition.
 func TestCoreAuthServiceLoginRefreshAndReuse(t *testing.T) {
 	ctx := context.Background()
@@ -397,6 +427,79 @@ func TestCoreAuthServiceLoginRefreshAndReuse(t *testing.T) {
 	}
 	if err := service.Logout(ctx, "missing"); err != nil {
 		t.Fatalf("Logout(missing) error = %v", err)
+	}
+}
+
+// TestCoreAuthServiceOAuthRealTrialTracker verifies DESIGN-007 TrialTracker auth hook wiring.
+// Verifies IT-ARCH-007-002.
+// Verifies ARCH-007.
+// Verifies ARCH-006.
+// Traces SW-REQ-046, SW-REQ-051, and SW-REQ-052.
+func TestCoreAuthServiceOAuthRealTrialTracker(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
+	keys := authKeyLoader{
+		activeEncryption: "pii-v1",
+		activeLookup:     "lookup-v1",
+		encryption:       map[string][]byte{"pii-v1": []byte("11111111111111111111111111111111")},
+		lookup:           map[string][]byte{"lookup-v1": []byte("22222222222222222222222222222222")},
+	}
+	manager := NewJWTManager(signingKeys{active: "jwt-v1", entries: map[string][]byte{"jwt-v1": []byte("33333333333333333333333333333333")}})
+	manager.now = func() time.Time { return now }
+	identityRepo := &memoryIdentityRepository{byDigest: map[repository.LookupDigest]repository.EncryptedAuthUser{}, byID: map[uuid.UUID]repository.EncryptedAuthUser{}, oauth: map[string]repository.EncryptedOAuthIdentity{}}
+	sessionRepo := &memorySessionRepository{}
+	verificationRepo := &memoryVerificationRepository{}
+	entitlementRepo := &authEntitlementRepository{latest: map[uuid.UUID]repository.Entitlement{}, history: map[uuid.UUID][]repository.Entitlement{}}
+	trialTracker := entitlement.NewTrialTracker(entitlementRepo, entitlementRepo)
+	service := NewCoreAuthService(CoreAuthDependencies{
+		Config:     CoreAuthConfig{AccessTokenTTL: 15 * time.Minute, RefreshTokenTTL: 7 * 24 * time.Hour},
+		Identities: identityRepo, Sessions: sessionRepo, Verification: verificationRepo, OAuthTrial: trialTracker,
+		Tokens: manager, Encryption: security.NewEncryptionService(keys), Digests: security.NewLookupDigestService(keys),
+	})
+	service.now = func() time.Time { return now }
+
+	trialStart := time.Now().UTC()
+	first, err := service.CompleteOAuth(ctx, "apple", OAuthProfile{Provider: "apple", ProviderUserID: "apple-user-161", Email: "trial-user@example.test", EmailVerified: true})
+	if err != nil {
+		t.Fatalf("CompleteOAuth() first social login error = %v", err)
+	}
+	trialEnd := time.Now().UTC()
+	history := entitlementRepo.history[first.Session.UserID]
+	if len(history) != 1 {
+		t.Fatalf("trial history count = %d, want exactly one trial", len(history))
+	}
+	trial := history[0]
+	if trial.Tier != "trial" || trial.Status != "active" || trial.ExpiresAt == nil {
+		t.Fatalf("trial entitlement = %#v, want active seven-day trial", trial)
+	}
+	if trial.ExpiresAt.Before(trialStart.Add(7*24*time.Hour)) || trial.ExpiresAt.After(trialEnd.Add(7*24*time.Hour)) {
+		t.Fatalf("trial expiry = %v, want within seven-day creation window", trial.ExpiresAt)
+	}
+
+	repeated, err := service.CompleteOAuth(ctx, "apple", OAuthProfile{Provider: "apple", ProviderUserID: "apple-user-161", Email: "trial-user@example.test", EmailVerified: true})
+	if err != nil {
+		t.Fatalf("CompleteOAuth() repeated social login error = %v", err)
+	}
+	if repeated.Session.UserID != first.Session.UserID || len(entitlementRepo.history[first.Session.UserID]) != 1 {
+		t.Fatalf("repeated login session=%#v history=%#v, want same user and no trial extension", repeated.Session, entitlementRepo.history[first.Session.UserID])
+	}
+
+	linkedUserID := uuid.New()
+	linkedDigest, err := service.digests.DigestForWrite(ctx, []byte("link-target@example.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkedUser := repository.EncryptedAuthUser{ID: linkedUserID, NormalizedEmailDigest: repository.LookupDigest{KeyVersion: linkedDigest.KeyVersion, Value: linkedDigest.Value}, Role: repository.UserRoleUser}
+	identityRepo.byDigest[linkedUser.NormalizedEmailDigest] = linkedUser
+	identityRepo.byID[linkedUserID] = linkedUser
+	if err := service.LinkOAuthIdentity(ctx, linkedUserID, "google", OAuthProfile{Provider: "google", ProviderUserID: "google-linked-161", Email: "link-target@example.test", EmailVerified: true}); err != nil {
+		t.Fatalf("LinkOAuthIdentity() error = %v", err)
+	}
+	if len(entitlementRepo.history[linkedUserID]) != 0 {
+		t.Fatalf("explicit link created trial history=%#v, want no trial hook", entitlementRepo.history[linkedUserID])
+	}
+	if len(entitlementRepo.history[first.Session.UserID]) != 1 || entitlementRepo.history[first.Session.UserID][0].ExpiresAt == nil || !entitlementRepo.history[first.Session.UserID][0].ExpiresAt.Equal(*trial.ExpiresAt) {
+		t.Fatalf("explicit link changed original trial history=%#v", entitlementRepo.history[first.Session.UserID])
 	}
 }
 

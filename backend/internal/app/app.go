@@ -15,12 +15,14 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/compliance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/userdata"
 )
 
@@ -41,6 +43,10 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	digests := security.NewLookupDigestService(keys)
 	tokens := auth.NewJWTManager(keys)
 	sessions := repository.NewPostgresSessionRepository(pg)
+	entitlements := repository.NewPostgresEntitlementRepository(pg)
+	entitlementManager := entitlement.NewEntitlementManager(entitlements)
+	usageLimiter := entitlement.NewUsageLimiter(entitlementManager, entitlements)
+	trials := entitlement.NewTrialTracker(entitlements, entitlements)
 	csrf := httpapi.NewCSRFManager(cfg, repository.NewPostgresSecurityAuditRepository(pg))
 	sessionManager := httpapi.NewAuthSessionManager(cfg, csrf)
 	identities := repository.NewPostgresEncryptedIdentityRepository(pg)
@@ -53,8 +59,9 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			cfg.Account.CurrentTermsVersion,
 		),
 		Identities: identities, Sessions: sessions, Verification: verification, ResetTokens: verification,
-		Lockout: auth.NewAccountLockoutTracker(repository.NewPostgresAccountLockoutRepository(pg)),
-		Hasher:  auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
+		OAuthTrial: trials,
+		Lockout:    auth.NewAccountLockoutTracker(repository.NewPostgresAccountLockoutRepository(pg)),
+		Hasher:     auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
 	})
 	savedRepo := repository.NewPostgresSavedDataRepository(pg)
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
@@ -80,12 +87,14 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			service: search.NewAutocompleteService(foodRepo, mealRepo),
 			cache:   redisStore,
 			ttl:     cache.DefaultAutocompleteTTL,
-		}).WithSearchHistoryAppender(userDataService),
+		}).WithSearchHistoryAppender(userDataService).WithSearchUsageGate(usageLimiter),
 		httpapi.NewFoodObjectController(foodRepo),
 		httpapi.NewUserDataController(userDataService),
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
+		httpapi.NewSubscriptionController(subscription.NewCheckoutService(cfg.Billing, repository.NewPostgresCheckoutIdempotencyRepository(pg), subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil)), entitlement.NewStatusService(entitlements, entitlements)),
+		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements), repository.NewPostgresSecurityAuditRepository(pg)),
 	}
 	routes := []httpapi.RouteDefinition{}
 	for _, controller := range controllers {

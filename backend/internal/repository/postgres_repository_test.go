@@ -63,6 +63,9 @@ var testUserDeleteSQL string
 //go:embed sql/testdata/entitlement_count_by_user.sql
 var testEntitlementCountByUserSQL string
 
+//go:embed sql/testdata/stripe_dead_letter_get.sql
+var testStripeDeadLetterGetSQL string
+
 //go:embed sql/testdata/food_name_fixture_create.sql
 var testFoodNameFixtureCreateSQL string
 
@@ -1769,6 +1772,20 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 	if usage.SearchCount != 2 {
 		t.Fatalf("GetUsageSince() count = %d, want 2", usage.SearchCount)
 	}
+	limited, recorded, err := repo.RecordUsageWithinLimit(ctx, userID, "search", windowStart.Add(time.Minute), windowStart.Add(-time.Hour), 3)
+	if err != nil {
+		t.Fatalf("RecordUsageWithinLimit() third error = %v", err)
+	}
+	if !recorded || limited.SearchCount != 3 {
+		t.Fatalf("RecordUsageWithinLimit() third window=%#v recorded=%v, want count 3 recorded", limited, recorded)
+	}
+	limited, recorded, err = repo.RecordUsageWithinLimit(ctx, userID, "search", windowStart.Add(2*time.Minute), windowStart.Add(-time.Hour), 3)
+	if err != nil {
+		t.Fatalf("RecordUsageWithinLimit() capped error = %v", err)
+	}
+	if recorded || limited.SearchCount != 3 {
+		t.Fatalf("RecordUsageWithinLimit() capped window=%#v recorded=%v, want count 3 not recorded", limited, recorded)
+	}
 
 	expired, err := repo.ListExpiredTrials(ctx, time.Now().UTC())
 	if err != nil {
@@ -1782,7 +1799,7 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 		Tier:              "paid",
 		Status:            "active",
 		SearchLimitPer24h: 0,
-		AllowedModes:      []string{"catalog", "substitution", "daily_diet_alternative"},
+		AllowedModes:      []string{"catalog", "substitution", "daily_diet", "daily_diet_alternative"},
 	}); err != nil {
 		t.Fatalf("AppendEntitlement() paid after trial error = %v", err)
 	}
@@ -1817,6 +1834,95 @@ func TestPostgresEntitlementRepository(t *testing.T) {
 	}
 	if inserted {
 		t.Fatalf("InsertProcessedStripeEvent() duplicate inserted=true, want false")
+	}
+
+	rawStripePayload := `{"latest_invoice":{"card":{"last4":"4242"}},"customer_email":"payer@example.test"}`
+	payloadHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if err := repo.InsertStripeDeadLetter(ctx, StripeDeadLetter{
+		EventID:              "evt_dead_letter",
+		EventType:            "invoice.payment_failed",
+		FailureCategory:      "webhook_processing_failed",
+		ErrorMessage:         "database write failed",
+		PayloadSHA256:        payloadHash,
+		StripeCustomerID:     "cus_dead_letter",
+		StripeSubscriptionID: "sub_dead_letter",
+		UserID:               &userID,
+	}); err != nil {
+		t.Fatalf("InsertStripeDeadLetter() error = %v", err)
+	}
+	var eventID, eventType, failureCategory, errorMessage, storedPayloadHash, customerID, subscriptionID string
+	var storedUserID uuid.UUID
+	if err := db.QueryRow(ctx, testStripeDeadLetterGetSQL, "evt_dead_letter").Scan(&eventID, &eventType, &failureCategory, &errorMessage, &storedPayloadHash, &customerID, &subscriptionID, &storedUserID); err != nil {
+		t.Fatalf("get stripe dead letter: %v", err)
+	}
+	if eventID != "evt_dead_letter" || eventType != "invoice.payment_failed" || failureCategory != "webhook_processing_failed" || storedPayloadHash != payloadHash {
+		t.Fatalf("dead letter metadata = %q %q %q %q", eventID, eventType, failureCategory, storedPayloadHash)
+	}
+	if customerID != "cus_dead_letter" || subscriptionID != "sub_dead_letter" || storedUserID != userID {
+		t.Fatalf("dead letter provider ids = %q %q %s", customerID, subscriptionID, storedUserID)
+	}
+	persistedDeadLetter := strings.Join([]string{eventID, eventType, failureCategory, errorMessage, storedPayloadHash, customerID, subscriptionID}, " ")
+	if strings.Contains(persistedDeadLetter, "4242") || strings.Contains(persistedDeadLetter, "payer@example.test") || strings.Contains(persistedDeadLetter, rawStripePayload) {
+		t.Fatalf("dead letter persisted raw payment data: %q", persistedDeadLetter)
+	}
+}
+
+func TestPostgresStripeWebhookDuplicateTransactionDoesNotAppend(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresEntitlementRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "stripe-duplicate@example.test")
+	firstEntitlement := Entitlement{
+		UserID:               userID,
+		Tier:                 "paid",
+		Status:               "active",
+		SearchLimitPer24h:    0,
+		AllowedModes:         []string{"catalog", "substitution", "daily_diet_alternative"},
+		StripeCustomerID:     "cus_first",
+		StripeSubscriptionID: "sub_first",
+	}
+
+	inserted, err := repo.ProcessStripeWebhookEvent(ctx, ProcessedStripeEvent{
+		EventID:   "evt_duplicate_tx",
+		EventType: "checkout.session.completed",
+		Outcome:   "success",
+		Payload:   []byte(`{"id":"evt_duplicate_tx"}`),
+	}, &firstEntitlement)
+	if err != nil || !inserted {
+		t.Fatalf("ProcessStripeWebhookEvent() first inserted=%v err=%v, want insert", inserted, err)
+	}
+	var beforeCount int
+	if err := db.QueryRow(ctx, testEntitlementCountByUserSQL, userID).Scan(&beforeCount); err != nil {
+		t.Fatalf("count entitlements before duplicate: %v", err)
+	}
+
+	duplicateEntitlement := firstEntitlement
+	duplicateEntitlement.Status = "cancelled"
+	duplicateEntitlement.StripeCustomerID = "cus_duplicate"
+	duplicateEntitlement.StripeSubscriptionID = "sub_duplicate"
+	inserted, err = repo.ProcessStripeWebhookEvent(ctx, ProcessedStripeEvent{
+		EventID:   "evt_duplicate_tx",
+		EventType: "checkout.session.completed",
+		Outcome:   "success",
+		Payload:   []byte(`{"id":"evt_duplicate_tx"}`),
+	}, &duplicateEntitlement)
+	if err != nil || inserted {
+		t.Fatalf("ProcessStripeWebhookEvent() duplicate inserted=%v err=%v, want duplicate success", inserted, err)
+	}
+
+	var afterCount int
+	if err := db.QueryRow(ctx, testEntitlementCountByUserSQL, userID).Scan(&afterCount); err != nil {
+		t.Fatalf("count entitlements after duplicate: %v", err)
+	}
+	if afterCount != beforeCount {
+		t.Fatalf("duplicate webhook entitlement count = %d, want %d", afterCount, beforeCount)
+	}
+	latest, err := repo.GetLatest(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetLatest() error = %v", err)
+	}
+	if latest.Status != "active" || latest.StripeCustomerID != "cus_first" || latest.StripeSubscriptionID != "sub_first" {
+		t.Fatalf("duplicate webhook changed latest entitlement: %#v", latest)
 	}
 }
 
@@ -1882,6 +1988,40 @@ func TestPostgresEntitlementRepositoryValidationAndErrors(t *testing.T) {
 	if window, err := repo.RecordUsage(ctx, userID, "search", now); err != nil || window.SearchCount != 1 {
 		t.Fatalf("RecordUsage() fake success window=%#v err=%v", window, err)
 	}
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, uuid.Nil, "search", now, now.Add(-time.Hour), 3); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordUsageWithinLimit() nil user error = %v, want validation", err)
+	}
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, userID, " ", now, now.Add(-time.Hour), 3); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordUsageWithinLimit() blank feature error = %v, want validation", err)
+	}
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, userID, "search", time.Time{}, now.Add(-time.Hour), 3); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordUsageWithinLimit() zero occurrence error = %v, want validation", err)
+	}
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, userID, "search", now, time.Time{}, 3); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordUsageWithinLimit() zero since error = %v, want validation", err)
+	}
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, userID, "search", now, now.Add(-time.Hour), 0); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordUsageWithinLimit() non-positive limit error = %v, want validation", err)
+	}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErr: queryErr}}})
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, userID, "search", now, now.Add(-time.Hour), 3); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("RecordUsageWithinLimit() lock error = %v, want connection", err)
+	}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}}}})
+	if _, _, err := repo.RecordUsageWithinLimit(ctx, userID, "search", now, now.Add(-time.Hour), 3); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("RecordUsageWithinLimit() current usage scan error = %v, want connection", err)
+	}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{rowList: []fakeRow{
+		{values: []any{userID, "search", now.Add(-time.Hour), 0, now, now}},
+		{values: windowValues},
+	}}}})
+	if window, recorded, err := repo.RecordUsageWithinLimit(ctx, userID, "search", now, now.Add(-time.Hour), 3); err != nil || !recorded || window.SearchCount != 1 {
+		t.Fatalf("RecordUsageWithinLimit() fake success window=%#v recorded=%v err=%v", window, recorded, err)
+	}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{userID, "search", now.Add(-time.Hour), 3, now, now}}}}})
+	if window, recorded, err := repo.RecordUsageWithinLimit(ctx, userID, "search", now, now.Add(-time.Hour), 3); err != nil || recorded || window.SearchCount != 3 {
+		t.Fatalf("RecordUsageWithinLimit() fake capped window=%#v recorded=%v err=%v", window, recorded, err)
+	}
 	if _, err := repo.GetUsageSince(ctx, uuid.Nil, "search", now); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("GetUsageSince() nil user error = %v, want validation", err)
 	}
@@ -1940,9 +2080,32 @@ func TestPostgresEntitlementRepositoryValidationAndErrors(t *testing.T) {
 	if _, err := repo.InsertProcessedStripeEvent(ctx, ProcessedStripeEvent{EventID: "evt", EventType: "checkout", Outcome: "success"}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("InsertProcessedStripeEvent() exec error = %v, want connection", err)
 	}
-	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{})
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("INSERT 1")}})
 	if inserted, err := repo.InsertProcessedStripeEvent(ctx, ProcessedStripeEvent{EventID: "evt", EventType: "checkout", Outcome: "success"}); err != nil || !inserted {
 		t.Fatalf("InsertProcessedStripeEvent() fake success inserted=%v err=%v", inserted, err)
+	}
+
+	tx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErrs: []error{nil, nil}, execTags: []pgconn.CommandTag{pgconn.NewCommandTag("INSERT 1"), pgconn.NewCommandTag("INSERT 1")}}}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: tx})
+	inserted, err := repo.ProcessStripeWebhookEvent(ctx, ProcessedStripeEvent{EventID: "evt_tx", EventType: "checkout", Outcome: "success"}, &validEntitlement)
+	if err != nil || !inserted || tx.execN != 2 {
+		t.Fatalf("ProcessStripeWebhookEvent() inserted=%v execN=%d err=%v, want event and entitlement writes", inserted, tx.execN, err)
+	}
+
+	tx = &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErrs: []error{nil}, execTags: []pgconn.CommandTag{pgconn.NewCommandTag("INSERT 0")}}}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: tx})
+	inserted, err = repo.ProcessStripeWebhookEvent(ctx, ProcessedStripeEvent{EventID: "evt_tx", EventType: "checkout", Outcome: "success"}, &validEntitlement)
+	if err != nil || inserted || tx.execN != 1 {
+		t.Fatalf("ProcessStripeWebhookEvent() duplicate inserted=%v execN=%d err=%v, want no entitlement write", inserted, tx.execN, err)
+	}
+
+	tx = &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErrs: []error{nil, queryErr}, execTags: []pgconn.CommandTag{pgconn.NewCommandTag("INSERT 1")}}}
+	repo = NewPostgresEntitlementRepository(&fakeSQLExecutor{tx: tx})
+	if _, err := repo.ProcessStripeWebhookEvent(ctx, ProcessedStripeEvent{EventID: "evt_tx", EventType: "checkout", Outcome: "success"}, &validEntitlement); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("ProcessStripeWebhookEvent() entitlement write error = %v, want connection", err)
+	}
+	if !tx.rolledBack {
+		t.Fatal("ProcessStripeWebhookEvent() write failure did not roll back transaction")
 	}
 }
 

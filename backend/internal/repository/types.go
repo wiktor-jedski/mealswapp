@@ -369,6 +369,34 @@ type ProcessedStripeEvent struct {
 	ProcessedAt time.Time
 }
 
+// StripeDeadLetter stores sanitized webhook failure metadata without raw payment payloads.
+// Implements DESIGN-007 StripeWebhookHandler dead-letter persistence.
+type StripeDeadLetter struct {
+	EventID              string
+	EventType            string
+	FailureCategory      string
+	ErrorMessage         string
+	PayloadSHA256        string
+	StripeCustomerID     string
+	StripeSubscriptionID string
+	UserID               *uuid.UUID
+	CreatedAt            time.Time
+}
+
+// CheckoutIdempotencyRecord stores one completed checkout creation response.
+// Implements DESIGN-007 SubscriptionController checkout idempotency.
+type CheckoutIdempotencyRecord struct {
+	UserID       uuid.UUID
+	Method       string
+	Route        string
+	Key          string
+	BodyHash     string
+	StatusCode   int
+	ResponseBody []byte
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 // AdminAuditEntry stores auditable administrative mutations.
 // Implements DESIGN-009 AdminController.
 type AdminAuditEntry struct {
@@ -580,6 +608,7 @@ type EntitlementRepository interface {
 // Implements DESIGN-007 UsageLimiter.
 type UsageRepository interface {
 	RecordUsage(ctx context.Context, userID uuid.UUID, feature string, occurredAt time.Time) (UsageWindow, error)
+	RecordUsageWithinLimit(ctx context.Context, userID uuid.UUID, feature string, occurredAt time.Time, since time.Time, limit int) (UsageWindow, bool, error)
 	GetUsageSince(ctx context.Context, userID uuid.UUID, feature string, since time.Time) (UsageWindow, error)
 }
 
@@ -593,6 +622,15 @@ type TrialRepository interface {
 // Implements DESIGN-007 StripeWebhookHandler.
 type StripeEventRepository interface {
 	InsertProcessedStripeEvent(ctx context.Context, event ProcessedStripeEvent) (bool, error)
+	ProcessStripeWebhookEvent(ctx context.Context, event ProcessedStripeEvent, entitlement *Entitlement) (bool, error)
+	InsertStripeDeadLetter(ctx context.Context, entry StripeDeadLetter) error
+}
+
+// CheckoutIdempotencyRepository defines checkout creation idempotency persistence.
+// Implements DESIGN-007 SubscriptionController checkout idempotency.
+type CheckoutIdempotencyRepository interface {
+	GetCheckoutIdempotency(ctx context.Context, userID uuid.UUID, method string, route string, key string) (CheckoutIdempotencyRecord, error)
+	StoreCheckoutIdempotency(ctx context.Context, record CheckoutIdempotencyRecord) error
 }
 
 // ConsentRepository defines consent persistence behavior.

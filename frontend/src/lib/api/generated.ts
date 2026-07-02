@@ -5,6 +5,7 @@ export type ErrorCategory =
 	| "validation"
 	| "auth"
 	| "entitlement"
+	| "security"
 	| "network"
 	| "timeout"
 	| "server"
@@ -231,9 +232,182 @@ export interface DisclaimerData extends Record<string, unknown> {
 /** Disclaimer response envelope. */
 export type DisclaimerEnvelope = Envelope<DisclaimerData>;
 
+// Implements DESIGN-007 SubscriptionController frontend billing endpoint contract.
+/** Entitlement status endpoint path exported for generated-type-only frontend gating. */
+export const BILLING_ENTITLEMENT_ENDPOINT = "/api/v1/billing/entitlement" as const;
+
+// Implements DESIGN-007 SubscriptionController frontend billing endpoint contract.
+/** Checkout creation endpoint path exported with its generated request helpers. */
+export const BILLING_CHECKOUT_ENDPOINT = "/api/v1/billing/checkout" as const;
+
+// Implements DESIGN-007 SubscriptionController frontend checkout idempotency contract.
+/** Stable client-generated idempotency key sent with checkout creation retries. */
+export type IdempotencyKey = string;
+
+// Implements DESIGN-017 ErrorMessageMapper frontend billing error contract.
+/** Billing statuses documented by the OpenAPI billing and entitlement contract. */
+export type BillingErrorStatus = 400 | 401 | 402 | 409 | 422 | 503;
+
+// Implements DESIGN-017 ErrorMessageMapper frontend billing error contract.
+/** User-safe billing error codes consumed by frontend billing and entitlement gates. */
+export type BillingErrorCode =
+	| "billing_payment_required"
+	| "billing_recovery_required"
+	| "checkout_idempotency_conflict"
+	| "checkout_invalid_request"
+	| "checkout_validation_failed"
+	| "stripe_unavailable"
+	| "entitlement_unavailable";
+
+// Implements DESIGN-017 ErrorMessageMapper frontend billing error contract.
+/** Classified billing error envelope returned by checkout and entitlement endpoints. */
+export interface BillingErrorEnvelope extends Envelope {
+	status: "error";
+	error: AppError & {
+		category: "auth" | "entitlement" | "validation" | "dependency";
+		code: BillingErrorCode | (string & {});
+	};
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Public checkout billing period accepted by hosted checkout creation. */
+export type CheckoutPlan = "monthly" | "annual";
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Hosted checkout creation request. Raw payment-card data is not accepted. */
+export interface CheckoutCreateRequest {
+	plan: CheckoutPlan;
+	successUrl: string;
+	cancelUrl: string;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout idempotency contract.
+/** Headers required to create or replay checkout sessions without duplicate side effects. */
+export interface CheckoutCreateHeaders {
+	Accept: "application/json";
+	"Content-Type": "application/json";
+	"Idempotency-Key": IdempotencyKey;
+	"X-CSRF-Token"?: string;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout idempotency contract.
+/** RequestInit shape for the generated checkout creation helper. */
+export interface CheckoutCreateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "POST";
+	credentials: "include";
+	headers: CheckoutCreateHeaders;
+	body: string;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout idempotency contract.
+/** Builds a checkout creation request with the required idempotency header. */
+export function buildCheckoutCreateRequestInit(
+	request: CheckoutCreateRequest,
+	idempotencyKey: IdempotencyKey,
+	options: { csrfToken?: string; signal?: AbortSignal } = {}
+): CheckoutCreateRequestInit {
+	const headers: CheckoutCreateHeaders = {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		"Idempotency-Key": idempotencyKey
+	};
+	if (options.csrfToken) {
+		headers["X-CSRF-Token"] = options.csrfToken;
+	}
+	return {
+		method: "POST",
+		credentials: "include",
+		headers,
+		body: JSON.stringify(request),
+		signal: options.signal
+	};
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Sanitized hosted checkout session response. */
+export interface CheckoutSessionData extends Record<string, unknown> {
+	checkoutSessionId: string;
+	checkoutUrl: string;
+	plan: CheckoutPlan;
+	priceId: string;
+	amountCents: number;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend checkout contract.
+/** Hosted checkout session response envelope. */
+export type CheckoutSessionEnvelope = Envelope<CheckoutSessionData>;
+
+// Implements DESIGN-007 StripeWebhookHandler frontend-visible webhook contract.
+/** Verified Stripe webhook processing result. */
+export interface StripeWebhookData extends Record<string, unknown> {
+	eventId: string;
+	eventType: string;
+	duplicate: boolean;
+}
+
+// Implements DESIGN-007 StripeWebhookHandler frontend-visible webhook contract.
+/** Stripe webhook processing response envelope. */
+export type StripeWebhookEnvelope = Envelope<StripeWebhookData>;
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Subscription tier exposed by entitlement status reads. */
+export type SubscriptionTier = "free" | "trial" | "paid";
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Persisted entitlement state exposed without provider identifiers. */
+export type EntitlementState = "active" | "expired" | "past_due" | "cancelled";
+
+// Implements DESIGN-007 SubscriptionController frontend billing-state contract.
+/** Frontend-safe billing recovery state derived from provider status. */
+export type BillingRecoveryState = "none" | "action_required" | "cancelled" | "expired";
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Sanitized entitlement and billing status payload for the current user. */
+export interface EntitlementStatusData extends Record<string, unknown> {
+	userId: string;
+	tier: SubscriptionTier;
+	status: EntitlementState;
+	allowedModes: SearchMode[];
+	searchLimitPer24h: number;
+	usageUsed: number;
+	usageRemaining: number | null;
+	usageWindowStartedAt: string | null;
+	trialExpiresAt: string | null;
+	billingRecoveryState: BillingRecoveryState;
+}
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Entitlement status response envelope. */
+export type EntitlementStatusEnvelope = Envelope<EntitlementStatusData>;
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** RequestInit shape for generated entitlement status reads. */
+export interface EntitlementStatusRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: {
+		Accept: "application/json";
+	};
+}
+
+// Implements DESIGN-007 SubscriptionController frontend entitlement contract.
+/** Builds an entitlement status request that consumes only generated entitlement types. */
+export function buildEntitlementStatusRequestInit(
+	options: { signal?: AbortSignal } = {}
+): EntitlementStatusRequestInit {
+	return {
+		method: "GET",
+		credentials: "include",
+		headers: {
+			Accept: "application/json"
+		},
+		signal: options.signal
+	};
+}
+
 // Implements DESIGN-002 SearchController frontend search-mode contract.
 /** Supported search workflows exposed by the search API. */
-export type SearchMode = "catalog" | "substitution" | "daily_diet_alternative";
+export type SearchMode = "catalog" | "substitution" | "daily_diet" | "daily_diet_alternative";
 
 // Implements DESIGN-002 SearchController frontend search-filter contract.
 /** Supported filter classes accepted by the search API. */

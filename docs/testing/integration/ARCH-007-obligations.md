@@ -68,7 +68,11 @@ Anonymous, free authenticated, trial authenticated, and paid authenticated users
 
 ### Verification Status
 
-Planned for Phase 06.
+Implemented for Phase 06 by focused HTTP and browser integration coverage:
+
+- `backend/internal/httpapi/billing_workflow_integration_test.go` verifies anonymous Catalog passthrough, authenticated free-tier limiting, paid-mode unlock after webhook entitlement update, no dispatch on denied free usage, and entitlement status collaboration.
+- `backend/internal/entitlement/usage_limiter_integration_test.go` verifies persisted free-tier usage limiting with real PostgreSQL repository collaboration and concurrent completion attempts.
+- `frontend/tests/search-workflow.spec.ts` verifies frontend search-gating collaboration and absence of paid-mode network side effects for blocked billing states.
 
 ## IT-ARCH-007-002 OAuth First-Login Trial Activation and Expiry
 
@@ -119,7 +123,10 @@ A new user completes social login, repeats social login, then trial expiry proce
 
 ### Verification Status
 
-Planned for Phase 06.
+Implemented for Phase 06 by focused auth and entitlement integration coverage:
+
+- `backend/internal/auth/service_test.go` verifies OAuth first-login collaboration with the real TrialTracker hook and confirms repeated social login does not extend or duplicate the trial.
+- `backend/internal/entitlement/trial_tracker_test.go` verifies expiry downgrade, paid-user protection, and repeated expiry idempotency.
 
 ## IT-ARCH-007-003 Checkout Creation and Idempotency Flow
 
@@ -169,7 +176,11 @@ An authenticated user requests monthly and annual checkout sessions, repeats an 
 
 ### Verification Status
 
-Planned for Phase 06.
+Implemented for Phase 06 by focused controller/service integration coverage:
+
+- `backend/internal/httpapi/billing_workflow_integration_test.go` verifies authenticated checkout creation, route-level idempotent replay, and Stripe gateway call suppression on replay.
+- `backend/internal/subscription/checkout_test.go` verifies monthly/annual price mapping, idempotency conflict handling, Stripe unavailable mapping with unchanged entitlement state, and hosted checkout gateway requests without raw card fields.
+- `backend/internal/httpapi/subscription_controller_test.go` verifies authenticated identity derivation, generated contract shape, CSRF/idempotency validation, and raw-card field rejection at the HTTP boundary.
 
 ## IT-ARCH-007-004 Stripe Webhook Idempotency, Failure, and Retry Behavior
 
@@ -222,7 +233,11 @@ Valid signed success, failure, cancellation, duplicate, invalid-signature, and p
 
 ### Verification Status
 
-Planned for Phase 06.
+Implemented for Phase 06 by focused webhook integration coverage:
+
+- `backend/internal/httpapi/billing_workflow_integration_test.go` verifies signed webhook route delivery, duplicate delivery success, and single entitlement history append before paid search unlock.
+- `backend/internal/subscription/webhook_test.go` verifies signature rejection, paid active projection, past_due/cancelled history appends, duplicate non-reapplication, store-failure retry error, and sanitized dead-letter metadata.
+- `backend/internal/httpapi/stripe_webhook_handler_test.go` verifies HTTP status mapping for accepted, duplicate, invalid-signature, and retryable failure paths.
 
 ## IT-ARCH-007-005 Reconciliation Repairs Entitlement Drift
 
@@ -269,7 +284,9 @@ The reconciliation job runs against local users whose latest entitlement differs
 
 ### Verification Status
 
-Planned for Phase 06.
+Implemented for Phase 06 by focused reconciliation coverage:
+
+- `backend/internal/subscription/reconciliation_test.go` verifies missing active entitlement repair, past_due/cancelled drift repair, idempotent repeated runs, Stripe unavailable no-op behavior, and observable warning emission.
 
 ## IT-ARCH-007-006 Frontend Billing and Search Gating Collaboration
 
@@ -324,4 +341,7 @@ Users load the SPA as anonymous, free, trial, paid, past_due, and cancelled stat
 
 ### Verification Status
 
-Planned for Phase 06.
+Implemented for Phase 06 by focused browser integration coverage:
+
+- `frontend/tests/subscription-billing.spec.ts` verifies generated entitlement and checkout contracts, free/trial/paid/past_due/cancelled billing states, checkout redirect handling, accessibility, and absence of raw PAN/CVC fields.
+- `frontend/tests/search-workflow.spec.ts` verifies anonymous Catalog fallback, free-tier paid-mode blocking, trial/paid mode unlock, and no paid-mode search network request when billing recovery blocks access.

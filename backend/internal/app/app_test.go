@@ -97,6 +97,7 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 		{fiber.MethodPost, "/api/v1/search", `{"query":"milk","mode":"catalog","page":1,"filters":[]}`},
 		{fiber.MethodGet, "/api/v1/search/autocomplete?query=milk", ""},
 		{fiber.MethodGet, "/api/v1/food-objects/71000000-0000-4000-8000-000000000001", ""},
+		{fiber.MethodPost, "/api/v1/billing/stripe/webhook", `{"bad":true}`},
 	}
 	for _, check := range checks {
 		req := httptest.NewRequest(check.method, check.path, strings.NewReader(check.body))
@@ -114,8 +115,8 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 	}
 }
 
-// TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog verifies DESIGN-002 production search composition.
-func TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog(t *testing.T) {
+// TestNewProductionSearchRouteBlocksAnonymousSubstitutionBeforeCatalog verifies DESIGN-002 and DESIGN-007 production search composition.
+func TestNewProductionSearchRouteBlocksAnonymousSubstitutionBeforeCatalog(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
@@ -147,14 +148,14 @@ func TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != fiber.StatusUnprocessableEntity {
+	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("response = %d body=%s", resp.StatusCode, responseBody)
 	}
 	if strings.Contains(string(responseBody), "search mode is not available for catalog results") || strings.Contains(string(responseBody), `"field":"mode"`) {
 		t.Fatalf("substitution request still reached catalog-only rejection: %s", responseBody)
 	}
-	if !strings.Contains(string(responseBody), `"field":"substitutionInputs"`) {
-		t.Fatalf("substitution request did not reach substitution service: %s", responseBody)
+	if !strings.Contains(string(responseBody), `"code":"entitlement_denied"`) || !strings.Contains(string(responseBody), `"feature":"single_substitution"`) {
+		t.Fatalf("substitution request did not stop at entitlement gate: %s", responseBody)
 	}
 }
 

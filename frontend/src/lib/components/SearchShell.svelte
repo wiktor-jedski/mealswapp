@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createQuery } from "@tanstack/svelte-query";
   import {
     searchStore,
     setQuery,
@@ -20,11 +21,15 @@
   import DailyDietControls from "./DailyDietControls.svelte";
   import SearchResults from "./SearchResults.svelte";
   import OfflineBanner from "./OfflineBanner.svelte";
+  import SubscriptionBilling from "./SubscriptionBilling.svelte";
+  import { buildEntitlementQueryOptions, EntitlementClientError } from "../api/entitlement-client";
   import { fetchFoodObject } from "../api/search-client";
+  import { entitlementErrorStore, entitlementStatusStore, setEntitlementError, setEntitlementStatus } from "../stores/entitlement";
   import { preferencesStore } from "../stores/preferences";
+  import { resolveSearchEntitlement } from "../search-entitlement";
   import { displayUnitForBasis } from "../units";
 
-  // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, results, and offline status.
+  // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, entitlement gate, autocomplete search bar, mode-specific controls, results, and offline status.
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
   let rejection = $state<SearchRejection | null>(null);
@@ -35,12 +40,38 @@
   /** Mode-specific input guidance for the primary SearchView combobox. */
   const searchPlaceholders: Record<SearchMode, string> = {
     catalog: "Search foods, meals, or ingredients…",
-    substitution: "Add a substitution target…",
-    daily_diet_alternative: "Search a saved daily diet…"
+    substitution: "Search a food to add as a substitution target…",
+    daily_diet: "Search saved daily diets…",
+    daily_diet_alternative: "Search within a saved daily diet or paste its ID…"
   };
 
   /** Active mode mirrored from the store for shell-level conditional rendering and focus keys. */
   let activeMode = $derived($searchStore.mode);
+
+  /** Current-user entitlement query resolved through the generated billing client. */
+  const entitlementQuery = createQuery(buildEntitlementQueryOptions);
+
+  /** Entitlement gate decision for visible feedback and request execution. */
+  let entitlementDecision = $derived(resolveSearchEntitlement({
+    status: $entitlementStatusStore,
+    error: $entitlementErrorStore,
+    mode: activeMode,
+    substitutionInputCount: $searchStore.substitutionInputs.length
+  }));
+
+  // Keeps the shared entitlement stores synchronized with TanStack Query state for all SearchView controls.
+  $effect(() => {
+    if (entitlementQuery.data) {
+      setEntitlementStatus(entitlementQuery.data);
+    }
+  });
+
+  // Anonymous entitlement failures remain recoverable so Catalog Search can continue without a session.
+  $effect(() => {
+    if (entitlementQuery.error instanceof EntitlementClientError) {
+      setEntitlementError(entitlementQuery.error.appError);
+    }
+  });
 
   /**
    * Handles autocomplete selection: in Substitution mode adds a Substitution Input from the
@@ -83,7 +114,7 @@
 
   /** Commits typed text only for result-searching modes; Substitution uses autocomplete as an item picker. */
   function onAutocompleteSubmit(query: string): void {
-    if (activeMode !== "substitution") {
+    if (activeMode !== "substitution" && entitlementDecision.canExecute) {
       submitSearch(query);
     }
   }
@@ -100,7 +131,22 @@
 
     <div class="flex w-full max-w-5xl flex-col gap-5 sm:mx-auto sm:px-6 sm:py-6">
       <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
+      <!-- Implements DESIGN-007 SubscriptionController billing controls stay outside search gating ownership. -->
+      <SubscriptionBilling />
+
       <SearchModes />
+
+      {#if entitlementDecision.usageText}
+        <p class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-data text-sm text-[var(--color-muted)]" role="status" data-entitlement-usage>
+          {entitlementDecision.usageText}
+        </p>
+      {/if}
+
+      {#if entitlementDecision.feedback}
+        <div class="rounded border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-2 text-sm" role="alert" data-entitlement-feedback>
+          {entitlementDecision.feedback}
+        </div>
+      {/if}
 
       <AutocompleteDropdown
         query={$searchStore.query}
@@ -113,12 +159,13 @@
       />
 
       {#if activeMode === "substitution"}
-        <SubstitutionInputs />
+        <SubstitutionInputs executionAllowed={entitlementDecision.canExecute} entitlementFeedback={entitlementDecision.feedback} />
       {:else if activeMode === "daily_diet_alternative"}
-        <DailyDietControls {rejection} />
+        <DailyDietControls {rejection} executionAllowed={entitlementDecision.canExecute} />
       {/if}
 
       <SearchResults
+        searchEnabled={entitlementDecision.canExecute}
         onRejection={(r) => (rejection = r)}
         onSearchInFlightChange={(searching) => (searchInFlight = searching)}
       />

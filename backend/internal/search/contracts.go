@@ -15,6 +15,7 @@ type SearchMode string
 const (
 	SearchModeCatalog              SearchMode = "catalog"
 	SearchModeSubstitution         SearchMode = "substitution"
+	SearchModeDailyDiet            SearchMode = "daily_diet"
 	SearchModeDailyDietAlternative SearchMode = "daily_diet_alternative"
 )
 
@@ -26,6 +27,7 @@ type SearchStrategy string
 const (
 	SearchStrategyCatalog              SearchStrategy = "catalog"
 	SearchStrategySubstitution         SearchStrategy = "substitution"
+	SearchStrategyDailyDiet            SearchStrategy = "daily_diet"
 	SearchStrategyDailyDietAlternative SearchStrategy = "daily_diet_alternative"
 )
 

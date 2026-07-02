@@ -35,6 +35,8 @@ test("keeps immediate search state available for visible pagination state", () =
 test("hides the ResultsGrid until the user enters a non-empty query", () => {
 	expect(source).toContain("hasStartedSearching");
 	expect(source).toContain("currentOptions.enabled === true");
+	expect(source).toContain("searchEnabled");
+	expect(source).toContain("enabled: searchEnabled && $optionsStore.enabled === true");
 	expect(source).toContain("{#if hasStartedSearching}");
 	expect(source).toContain("<ResultsGrid");
 });

@@ -2,7 +2,7 @@
   import { searchStore, setMode } from "../stores/search";
   import type { SearchMode } from "../api/generated";
 
-  // Implements DESIGN-001 SearchView mode controls (Catalog, Substitution, Daily Diet Alternative).
+  // Implements DESIGN-001 SearchView mode controls (Catalog, Substitution, Daily Diet, Daily Diet Alternative).
 
   /**
    * Mode options rendered above the search bar. Selecting one calls `setMode`, which resets
@@ -22,8 +22,14 @@
       description: "Find alternatives for a food using quantity and unit context."
     },
     {
-      value: "daily_diet_alternative",
+      value: "daily_diet",
       id: "search-mode-daily-diet",
+      label: "Daily Diet",
+      description: "Search across saved daily diets."
+    },
+    {
+      value: "daily_diet_alternative",
+      id: "search-mode-daily-diet-alternative",
       label: "Daily Diet Alternative",
       description: "Search for replacements within a saved daily diet."
     }

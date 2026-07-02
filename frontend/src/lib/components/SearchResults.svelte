@@ -23,9 +23,11 @@
    * `SearchClientError`) to the shell so `DailyDietControls` can render rejection detail.
    */
   let {
+    searchEnabled = true,
     onRejection = () => {},
     onSearchInFlightChange = () => {}
   }: {
+    searchEnabled?: boolean;
     onRejection?: (r: SearchRejection | null) => void;
     onSearchInFlightChange?: (searching: boolean) => void;
   } = $props();
@@ -43,7 +45,10 @@
   const optionsStore = createSearchQueryOptions(committedSearchStore, localCache);
 
   // Bridges the derived options store to a rune so createQuery re-evaluates on committed search changes.
-  let currentOptions: CreateQueryOptions<SearchResponse, SearchClientError, SearchResponse, SearchQueryKey> = $derived($optionsStore);
+  let currentOptions: CreateQueryOptions<SearchResponse, SearchClientError, SearchResponse, SearchQueryKey> = $derived({
+    ...$optionsStore,
+    enabled: searchEnabled && $optionsStore.enabled === true
+  });
 
   // Bridges the immediate search store to a rune for template reads (page) and cache-key derivation.
   let state = $derived($searchStore);

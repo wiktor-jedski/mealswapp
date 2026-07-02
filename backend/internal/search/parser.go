@@ -58,6 +58,8 @@ func SelectStrategy(req SearchRequest) (SearchStrategy, error) {
 		return SearchStrategyCatalog, nil
 	case SearchModeSubstitution:
 		return SearchStrategySubstitution, nil
+	case SearchModeDailyDiet:
+		return SearchStrategyDailyDiet, nil
 	case SearchModeDailyDietAlternative:
 		return SearchStrategyDailyDietAlternative, nil
 	default:

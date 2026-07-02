@@ -257,7 +257,7 @@ func normalizeSearchQuery(value string, maxRunes int) (NormalizationResult, erro
 func normalizeSearchMode(value string) (NormalizationResult, error) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	switch normalized {
-	case "catalog", "substitution", "daily_diet_alternative":
+	case "catalog", "substitution", "daily_diet", "daily_diet_alternative":
 		result := NormalizationResult{Value: normalized, Changed: normalized != value}
 		if result.Changed {
 			result.Violations = []string{"mode_normalized"}

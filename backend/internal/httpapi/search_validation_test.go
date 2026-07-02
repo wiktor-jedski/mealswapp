@@ -186,12 +186,22 @@ func TestDailyDietAlternativeSearchBoundaryReturns422WithoutSideEffects(t *testi
 	if workerSideEffects != 0 {
 		t.Fatalf("worker side effects after missing id = %d", workerSideEffects)
 	}
+
+	resp = postSearchValidation(t, app, `{"query":"lentil","mode":"daily_diet","page":1}`)
+	body = decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusBadRequest || body.Error == nil || body.Error.Code != "validation_failed" {
+		t.Fatalf("missing dailyDietId daily diet response = %d %+v", resp.StatusCode, body)
+	}
+	if workerSideEffects != 0 {
+		t.Fatalf("worker side effects after daily diet missing id = %d", workerSideEffects)
+	}
 }
 
 func TestParseValidatedSearchRequestBodyPreservesDailyDietAndFilters(t *testing.T) {
 	body := map[string]any{
 		"query":       "apple",
-		"mode":        "daily_diet_alternative",
+		"mode":        "daily_diet",
 		"page":        float64(2),
 		"dailyDietId": "61e0cae4-0f45-4854-8ac5-b228214cdd1d",
 		"filters": []any{
@@ -202,7 +212,7 @@ func TestParseValidatedSearchRequestBodyPreservesDailyDietAndFilters(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if req.Mode != search.SearchModeDailyDietAlternative || req.Page != 2 || req.DailyDietID == nil {
+	if req.Mode != search.SearchModeDailyDiet || req.Page != 2 || req.DailyDietID == nil {
 		t.Fatalf("request core fields = %+v", req)
 	}
 	if len(req.Filters) != 1 || req.Filters[0].Kind != search.SearchFilterKindPhysicalState || !req.Filters[0].Include {

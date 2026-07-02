@@ -7,6 +7,23 @@ import (
 	"time"
 )
 
+func setProductionConfig(t *testing.T) {
+	t.Helper()
+	t.Setenv("MEALSWAPP_ENV", "production")
+	t.Setenv("MEALSWAPP_DATABASE_URL", "postgres://example")
+	t.Setenv("MEALSWAPP_REDIS_URL", "redis://example:6379/0")
+	t.Setenv("MEALSWAPP_FRONTEND_ORIGIN", "https://example.test")
+	t.Setenv("MEALSWAPP_ALLOWED_ORIGINS", "https://example.test")
+	t.Setenv("MEALSWAPP_PRIVACY_POLICY_VERSION", "privacy-2026-06")
+	t.Setenv("MEALSWAPP_TERMS_VERSION", "terms-2026-06")
+	t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "sk_live_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_WEBHOOK_SECRET", "whsec_live_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_live_monthly_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", "price_live_annual_fixture")
+	t.Setenv("MEALSWAPP_CHECKOUT_SUCCESS_URL", "https://example.test/billing/success")
+	t.Setenv("MEALSWAPP_CHECKOUT_CANCEL_URL", "https://example.test/billing/cancel")
+}
+
 // TestLoadUsesDevelopmentDefaults proves that config will use default values
 // if no other values are passed.
 // TestLoadUsesDevelopmentDefaults verifies DESIGN-010 RequestValidator config defaults.
@@ -36,6 +53,9 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	}
 	if cfg.Account.AccessCookieName != "mealswapp_access" || cfg.Account.RefreshCookieName != "mealswapp_refresh" {
 		t.Fatalf("unexpected cookie names: %+v", cfg.Account)
+	}
+	if cfg.Billing.StripeSecretKey != defaultStripeSecretKey || cfg.Billing.StripeWebhookSecret != defaultStripeWebhookSecret {
+		t.Fatalf("unexpected billing defaults: %+v", cfg.Billing)
 	}
 }
 
@@ -114,23 +134,15 @@ func TestLoadRejectsMalformedRefreshTTL(t *testing.T) {
 
 // TestLoadRejectsDevelopmentAccountSettingsInProduction verifies DESIGN-006 AuthController production validation.
 func TestLoadRejectsDevelopmentAccountSettingsInProduction(t *testing.T) {
-	base := func(t *testing.T) {
-		t.Setenv("MEALSWAPP_ENV", "production")
-		t.Setenv("MEALSWAPP_DATABASE_URL", "postgres://example")
-		t.Setenv("MEALSWAPP_REDIS_URL", "redis://example:6379/0")
-		t.Setenv("MEALSWAPP_FRONTEND_ORIGIN", "https://example.test")
-		t.Setenv("MEALSWAPP_PRIVACY_POLICY_VERSION", "privacy-2026-06")
-		t.Setenv("MEALSWAPP_TERMS_VERSION", "terms-2026-06")
-	}
 	t.Run("default consent version", func(t *testing.T) {
-		base(t)
+		setProductionConfig(t)
 		t.Setenv("MEALSWAPP_PRIVACY_POLICY_VERSION", "")
 		if _, err := Load(); err == nil {
 			t.Fatal("Load() accepted development privacy version in production")
 		}
 	})
 	t.Run("development cookie name", func(t *testing.T) {
-		base(t)
+		setProductionConfig(t)
 		t.Setenv("MEALSWAPP_ACCESS_COOKIE_NAME", "dev_access")
 		if _, err := Load(); err == nil {
 			t.Fatal("Load() accepted development cookie name in production")
@@ -142,13 +154,8 @@ func TestLoadRejectsDevelopmentAccountSettingsInProduction(t *testing.T) {
 // if all necessary URLs are passed.
 // TestLoadAcceptsProductionDependencyURLs verifies DESIGN-010 RequestValidator production overrides.
 func TestLoadAcceptsProductionDependencyURLs(t *testing.T) {
-	t.Setenv("MEALSWAPP_ENV", "production")
-	t.Setenv("MEALSWAPP_DATABASE_URL", "postgres://example")
-	t.Setenv("MEALSWAPP_REDIS_URL", "redis://example:6379/0")
+	setProductionConfig(t)
 	t.Setenv("MEALSWAPP_HTTP_PORT", "9090")
-	t.Setenv("MEALSWAPP_FRONTEND_ORIGIN", "https://example.test")
-	t.Setenv("MEALSWAPP_PRIVACY_POLICY_VERSION", "privacy-2026-06")
-	t.Setenv("MEALSWAPP_TERMS_VERSION", "terms-2026-06")
 
 	cfg, err := Load()
 	if err != nil {
@@ -236,8 +243,93 @@ func TestLoadAcceptsHSTSMaxAgeOverride(t *testing.T) {
 // TestLoadAcceptsMultipleOrigins verifies DESIGN-010 CORSHandler origin-list parsing.
 func TestLoadAcceptsMultipleOrigins(t *testing.T) {
 	t.Setenv("MEALSWAPP_ALLOWED_ORIGINS", "https://one.test, https://two.test")
+	t.Setenv("MEALSWAPP_CHECKOUT_SUCCESS_URL", "https://one.test/billing/success")
+	t.Setenv("MEALSWAPP_CHECKOUT_CANCEL_URL", "https://two.test/billing/cancel")
 	cfg, err := Load()
 	if err != nil || len(cfg.AllowedOrigins) != 2 {
 		t.Fatalf("Load() = %+v, %v", cfg, err)
+	}
+}
+
+// TestLoadAcceptsStripeSandboxFixtures verifies DESIGN-007 SubscriptionController sandbox configuration loading.
+func TestLoadAcceptsStripeSandboxFixtures(t *testing.T) {
+	t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "sk_test_sandbox_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_WEBHOOK_SECRET", "whsec_sandbox_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_sandbox_monthly_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", "price_sandbox_annual_fixture")
+	t.Setenv("MEALSWAPP_CHECKOUT_SUCCESS_URL", "http://localhost:5173/checkout/success")
+	t.Setenv("MEALSWAPP_CHECKOUT_CANCEL_URL", "http://localhost:5173/checkout/cancel")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Billing.StripeSecretKey != "sk_test_sandbox_fixture" || cfg.Billing.StripeWebhookSecret != "whsec_sandbox_fixture" {
+		t.Fatalf("unexpected sandbox billing config: %+v", cfg.Billing)
+	}
+}
+
+// TestLoadMapsSubscriptionPlanPrices verifies DESIGN-007 SubscriptionController and SW-REQ-050 mapping.
+func TestLoadMapsSubscriptionPlanPrices(t *testing.T) {
+	t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", "price_monthly_fixture")
+	t.Setenv("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", "price_annual_fixture")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Billing.MonthlyPlan.Code != "monthly" || cfg.Billing.MonthlyPlan.Label != "Monthly" || cfg.Billing.MonthlyPlan.AmountCents != 300 || cfg.Billing.MonthlyPlan.PriceID != "price_monthly_fixture" {
+		t.Fatalf("monthly plan = %+v", cfg.Billing.MonthlyPlan)
+	}
+	if cfg.Billing.AnnualPlan.Code != "annual" || cfg.Billing.AnnualPlan.Label != "Annual" || cfg.Billing.AnnualPlan.AmountCents != 2500 || cfg.Billing.AnnualPlan.PriceID != "price_annual_fixture" {
+		t.Fatalf("annual plan = %+v", cfg.Billing.AnnualPlan)
+	}
+}
+
+// TestLoadRejectsInvalidBillingSettings verifies DESIGN-007 SubscriptionController fail-closed config guards.
+func TestLoadRejectsInvalidBillingSettings(t *testing.T) {
+	for key, value := range map[string]string{
+		"MEALSWAPP_STRIPE_SECRET_KEY":       "pk_test_not_secret",
+		"MEALSWAPP_STRIPE_WEBHOOK_SECRET":   "secret",
+		"MEALSWAPP_STRIPE_MONTHLY_PRICE_ID": "prod_monthly",
+		"MEALSWAPP_STRIPE_ANNUAL_PRICE_ID":  "prod_annual",
+		"MEALSWAPP_CHECKOUT_SUCCESS_URL":    "https://evil.test/success",
+		"MEALSWAPP_CHECKOUT_CANCEL_URL":     "http://localhost:5173/cancel#fragment",
+	} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv(key, value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load() accepted %s=%q", key, value)
+			}
+		})
+	}
+}
+
+// TestLoadRequiresProductionStripeValues verifies DESIGN-007 SubscriptionController production Stripe guards.
+func TestLoadRequiresProductionStripeValues(t *testing.T) {
+	for name, mutate := range map[string]func(*testing.T){
+		"missing key": func(t *testing.T) {
+			t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "")
+		},
+		"test key": func(t *testing.T) {
+			t.Setenv("MEALSWAPP_STRIPE_SECRET_KEY", "sk_test_sandbox_fixture")
+		},
+		"default webhook secret": func(t *testing.T) {
+			t.Setenv("MEALSWAPP_STRIPE_WEBHOOK_SECRET", defaultStripeWebhookSecret)
+		},
+		"default price id": func(t *testing.T) {
+			t.Setenv("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", defaultStripeMonthlyPriceID)
+		},
+		"insecure redirect": func(t *testing.T) {
+			t.Setenv("MEALSWAPP_CHECKOUT_SUCCESS_URL", "http://example.test/billing/success")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			setProductionConfig(t)
+			mutate(t)
+			if _, err := Load(); err == nil {
+				t.Fatal("Load() accepted invalid production billing config")
+			}
+		})
 	}
 }

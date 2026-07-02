@@ -182,6 +182,9 @@ type contractUsageRepository struct{}
 func (contractUsageRepository) RecordUsage(context.Context, uuid.UUID, string, time.Time) (UsageWindow, error) {
 	return UsageWindow{}, nil
 }
+func (contractUsageRepository) RecordUsageWithinLimit(context.Context, uuid.UUID, string, time.Time, time.Time, int) (UsageWindow, bool, error) {
+	return UsageWindow{}, false, nil
+}
 func (contractUsageRepository) GetUsageSince(context.Context, uuid.UUID, string, time.Time) (UsageWindow, error) {
 	return UsageWindow{}, nil
 }
@@ -196,6 +199,21 @@ type contractStripeEventRepository struct{}
 
 func (contractStripeEventRepository) InsertProcessedStripeEvent(context.Context, ProcessedStripeEvent) (bool, error) {
 	return false, nil
+}
+func (contractStripeEventRepository) ProcessStripeWebhookEvent(context.Context, ProcessedStripeEvent, *Entitlement) (bool, error) {
+	return false, nil
+}
+func (contractStripeEventRepository) InsertStripeDeadLetter(context.Context, StripeDeadLetter) error {
+	return nil
+}
+
+type contractCheckoutIdempotencyRepository struct{}
+
+func (contractCheckoutIdempotencyRepository) GetCheckoutIdempotency(context.Context, uuid.UUID, string, string, string) (CheckoutIdempotencyRecord, error) {
+	return CheckoutIdempotencyRecord{}, nil
+}
+func (contractCheckoutIdempotencyRepository) StoreCheckoutIdempotency(context.Context, CheckoutIdempotencyRecord) error {
+	return nil
 }
 
 type contractConsentRepository struct{}

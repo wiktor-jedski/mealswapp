@@ -1,4 +1,4 @@
-# Implements DESIGN-002 SearchController, DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
+# Implements DESIGN-002 SearchController, DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-007 SubscriptionController, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
 openapi: 3.1.0
 info:
   title: Mealswapp API
@@ -475,6 +475,75 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  /api/v1/billing/entitlement:
+    get:
+      operationId: getApiV1BillingEntitlement
+      summary: Read authenticated entitlement and billing recovery status
+      description: Returns frontend-safe entitlement state for the current user. Provider customer, subscription, secret, and payment-card fields are never exposed.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/EntitlementStatus"
+        "401":
+          $ref: "#/components/responses/Error"
+        "402":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/billing/checkout:
+    post:
+      operationId: postApiV1BillingCheckout
+      summary: Create or replay a Stripe-hosted subscription checkout session
+      description: Creates a provider-hosted checkout session for the authenticated user. Clients must send a stable `Idempotency-Key`; exact retries with the same normalized body return the stored checkout response, while reusing the key with a different normalized body returns 409. Raw payment-card fields such as PAN or CVC are never accepted by this API.
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutCreateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/CheckoutSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "402":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+  /api/v1/billing/stripe/webhook:
+    post:
+      operationId: postApiV1BillingStripeWebhook
+      summary: Receive Stripe subscription and payment webhooks
+      description: Accepts raw Stripe webhook payloads signed with `Stripe-Signature`. The signature is required and verified against the configured Stripe webhook secret before parsing; provider event IDs are processed idempotently so Stripe retries and duplicate deliveries do not duplicate entitlement history or usage effects.
+      parameters:
+        - $ref: "#/components/parameters/StripeSignature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StripeWebhookEvent"
+      responses:
+        "200":
+          $ref: "#/components/responses/StripeWebhook"
+        "400":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/disclaimers:
     get:
       operationId: getApiV1Disclaimers
@@ -501,6 +570,23 @@ components:
       schema:
         type: string
         enum: [google, apple]
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable client-generated key for retrying checkout creation. The key is scoped to the authenticated user, HTTP method, route, and normalized request body.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 255
+    StripeSignature:
+      name: Stripe-Signature
+      in: header
+      required: true
+      description: Stripe webhook signature header. Requests without a valid timestamped signature are rejected before any entitlement mutation.
+      schema:
+        type: string
+        minLength: 1
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -532,7 +618,7 @@ components:
           schema:
             $ref: "#/components/schemas/AuthSessionEnvelope"
     Error:
-      description: User-safe gateway error. Includes 400, 401, 403, 409, 429, 503, and 504 responses.
+      description: User-safe gateway error. Includes 400, 401, 402, 403, 409, 422, 429, 500, 503, and 504 responses.
       headers:
         Retry-After:
           schema:
@@ -595,6 +681,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/DisclaimerEnvelope"
+    EntitlementStatus:
+      description: Sanitized entitlement and billing status envelope.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EntitlementStatusEnvelope"
+    CheckoutSession:
+      description: Sanitized Stripe-hosted checkout response envelope. Contains no raw payment-card data.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CheckoutSessionEnvelope"
+    StripeWebhook:
+      description: Verified Stripe webhook processing result. Duplicate provider events return 200 with duplicate set to true.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/StripeWebhookEnvelope"
   schemas:
     AppError:
       type: object
@@ -602,7 +706,7 @@ components:
       properties:
         category:
           type: string
-          enum: [validation, auth, entitlement, network, timeout, server, dependency, unknown]
+          enum: [validation, auth, entitlement, security, network, timeout, server, dependency, unknown]
         code:
           type: string
         message:
@@ -865,7 +969,7 @@ components:
                 $ref: "#/components/schemas/SearchHistoryEntry"
     SearchMode:
       type: string
-      enum: [catalog, substitution, daily_diet_alternative]
+      enum: [catalog, substitution, daily_diet, daily_diet_alternative]
     SearchFilterKind:
       type: string
       enum: [food_category, culinary_role, physical_state, allergen, dietary_preset]
@@ -1237,3 +1341,170 @@ components:
               type: boolean
             alert:
               type: string
+    CheckoutPlan:
+      type: string
+      enum: [monthly, annual]
+    CheckoutCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [plan, successUrl, cancelUrl]
+      properties:
+        plan:
+          $ref: "#/components/schemas/CheckoutPlan"
+        successUrl:
+          type: string
+          format: uri
+          description: Absolute HTTP or HTTPS URL used by Stripe after successful checkout. URL fragments are rejected.
+        cancelUrl:
+          type: string
+          format: uri
+          description: Absolute HTTP or HTTPS URL used by Stripe when checkout is cancelled. URL fragments are rejected.
+    CheckoutSessionData:
+      type: object
+      additionalProperties: false
+      required: [checkoutSessionId, checkoutUrl, plan, priceId, amountCents]
+      properties:
+        checkoutSessionId:
+          type: string
+          minLength: 1
+        checkoutUrl:
+          type: string
+          format: uri
+        plan:
+          $ref: "#/components/schemas/CheckoutPlan"
+        priceId:
+          type: string
+          minLength: 1
+          description: Public Stripe price identifier selected by the server for the requested plan.
+        amountCents:
+          type: integer
+          minimum: 0
+    CheckoutSessionEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/CheckoutSessionData"
+    StripeWebhookEvent:
+      type: object
+      additionalProperties: true
+      required: [id, type, data]
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Stripe provider event identifier used for idempotent webhook processing.
+        type:
+          type: string
+          enum:
+            - checkout.session.completed
+            - invoice.payment_succeeded
+            - invoice.payment_failed
+            - customer.subscription.created
+            - customer.subscription.updated
+            - customer.subscription.deleted
+        data:
+          type: object
+          required: [object]
+          properties:
+            object:
+              type: object
+              additionalProperties: true
+              description: Stripe object payload. Only allow-listed user, customer, subscription, metadata, and status fields are consumed after signature verification.
+    StripeWebhookData:
+      type: object
+      additionalProperties: false
+      required: [eventId, eventType, duplicate]
+      properties:
+        eventId:
+          type: string
+        eventType:
+          type: string
+        duplicate:
+          type: boolean
+          description: True when the provider event ID was already processed and no duplicate entitlement side effects were applied.
+    StripeWebhookEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/StripeWebhookData"
+    SubscriptionTier:
+      type: string
+      enum: [free, trial, paid]
+    EntitlementState:
+      type: string
+      enum: [active, expired, past_due, cancelled]
+    BillingRecoveryState:
+      type: string
+      enum: [none, action_required, cancelled, expired]
+    EntitlementStatusData:
+      type: object
+      additionalProperties: false
+      required:
+        - userId
+        - tier
+        - status
+        - allowedModes
+        - searchLimitPer24h
+        - usageUsed
+        - usageRemaining
+        - usageWindowStartedAt
+        - trialExpiresAt
+        - billingRecoveryState
+      properties:
+        userId:
+          type: string
+          format: uuid
+        tier:
+          $ref: "#/components/schemas/SubscriptionTier"
+        status:
+          $ref: "#/components/schemas/EntitlementState"
+        allowedModes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchMode"
+        searchLimitPer24h:
+          type: integer
+          minimum: 0
+        usageUsed:
+          type: integer
+          minimum: 0
+        usageRemaining:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        usageWindowStartedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        trialExpiresAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        billingRecoveryState:
+          $ref: "#/components/schemas/BillingRecoveryState"
+    EntitlementStatusEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/EntitlementStatusData"

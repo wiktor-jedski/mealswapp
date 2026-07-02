@@ -18,10 +18,12 @@ test("imports the generated SearchRejection type without handwritten duplicates"
 // Implements DESIGN-001 SearchView Daily Diet Alternative id input verification.
 test("daily diet id input is UUID-shaped and bound to setDailyDietId", () => {
 	expect(source).toContain("setDailyDietId");
+	expect(source).toContain("executionAllowed");
 	expect(source).toContain('id="daily-diet-id"');
 	expect(source).toContain("pattern=");
 	expect(source).toContain("[0-9a-fA-F]");
 	expect(source).toContain("$searchStore.dailyDietId");
+	expect(source).toContain("aria-disabled={!executionAllowed}");
 	expect(source).toContain("oninput={onDailyDietIdInput}");
 });
 
