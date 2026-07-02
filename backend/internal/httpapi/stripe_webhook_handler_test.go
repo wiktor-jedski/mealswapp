@@ -92,7 +92,7 @@ func setupWebhookTestApp(m *mockWebhookEntitlementRepo, a *mockAuditLogger) *fib
 }
 
 func createSignedRequest(payload []byte, secret string) *http.Request {
-	req := httptest.NewRequest("POST", "/api/v1/billing/webhook", bytes.NewReader(payload))
+	req := httptest.NewRequest("POST", "/billing/webhook", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Create stripe signature
@@ -111,7 +111,7 @@ func TestWebhook_InvalidSignature(t *testing.T) {
 	audit := &mockAuditLogger{}
 	app := setupWebhookTestApp(repo, audit)
 
-	req := httptest.NewRequest("POST", "/api/v1/billing/webhook", bytes.NewReader([]byte("{}")))
+	req := httptest.NewRequest("POST", "/billing/webhook", bytes.NewReader([]byte("{}")))
 	req.Header.Set("Stripe-Signature", "t=1,v1=invalid")
 
 	resp, _ := app.Test(req)

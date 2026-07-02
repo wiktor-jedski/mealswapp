@@ -984,7 +984,7 @@ func TestSearchControllerFreeSingleSubstitutionWithinUsageLimits(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != fiber.StatusOK || service.calls != 1 || history.calls != 1 || entitlements.feature != "substitution_single" || usage.checked != 1 || usage.recorded != 1 {
+	if resp.StatusCode != fiber.StatusOK || service.calls != 1 || history.calls != 1 || entitlements.feature != "substitution:single" || usage.checked != 1 || usage.recorded != 1 {
 		t.Fatalf("allowed single substitution failure: response=%d service=%d feature=%s check=%d record=%d", resp.StatusCode, service.calls, entitlements.feature, usage.checked, usage.recorded)
 	}
 }
@@ -1015,7 +1015,7 @@ func TestSearchControllerFreeMultiSubstitutionReturnsStableError(t *testing.T) {
 
 	envelope := decodeEnvelope(t, resp.Body)
 
-	if resp.StatusCode != fiber.StatusForbidden || service.calls != 0 || history.calls != 0 || entitlements.feature != "substitution_multi" || usage.checked != 0 || usage.recorded != 0 {
+	if resp.StatusCode != fiber.StatusForbidden || service.calls != 0 || history.calls != 0 || entitlements.feature != "substitution:multi" || usage.checked != 0 || usage.recorded != 0 {
 		t.Fatalf("blocked multi substitution failure: response=%d feature=%s", resp.StatusCode, entitlements.feature)
 	}
 	if envelope.Error == nil || envelope.Error.Code != "entitlement_required" {
