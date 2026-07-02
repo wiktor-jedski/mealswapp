@@ -20,6 +20,7 @@
     SearchMode
   } from "../api/generated";
   import type { UnitSystem } from "../stores/preferences";
+  import SubscriptionController from "./SubscriptionController.svelte";
 
   // Implements DESIGN-001 SidebarComponent navigation, history, favorites, units, and responsive collapse.
 
@@ -349,6 +350,8 @@
         {#if authError}
           <p class="text-sm text-[var(--color-muted)]" data-sidebar-auth-error>{authError}</p>
         {/if}
+        
+        <SubscriptionController />
       {/if}
     {/if}
   </div>
