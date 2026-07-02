@@ -26,11 +26,22 @@ test.describe("Search UI Entitlement Gating", () => {
 		await expect(page.locator("[data-entitlement-usage]")).toContainText("Remaining searches: 8/10");
 	});
 
-	test("multi-input Substitution shows entitlement feedback without sending blocked searches", async ({ page }) => {
+		test("multi-input Substitution shows entitlement feedback without sending blocked searches", async ({ page }) => {
 		await mockEntitlement(page, "free", 8);
+		await page.route("**/api/v1/search/autocomplete*", async (route) => {
+			await route.fulfill({ status: 200, json: { status: "ok", data: { items: [{ itemId: "1", label: "Apple", score: 1 }, { itemId: "2", label: "Banana", score: 1 }] } } });
+		});
+		await page.route("**/api/v1/food-objects/*", async (route) => {
+			await route.fulfill({ status: 200, json: { status: "ok", data: { id: "1", name: "Apple", macroBasis: "100g", macros: { protein: 0, carbohydrates: 0, fat: 0 }, calories: 0, classifications: [] } } });
+		});
 		await page.goto("/");
 		
-		await page.getByRole('button', { name: 'Substitution' }).click();
+		await page.getByRole("button", { name: "Substitution" }).click();
+		await page.getByRole("combobox", { name: "Food search" }).fill("apple");
+		await page.getByRole("option", { name: "Apple" }).first().click();
+		await page.getByRole("combobox", { name: "Food search" }).fill("banana");
+		await page.getByRole("option", { name: "Banana" }).first().click();
+
 		await expect(page.locator("[data-entitlement-feedback]")).toBeVisible();
 	});
 

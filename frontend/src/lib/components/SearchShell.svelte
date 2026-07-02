@@ -27,8 +27,8 @@
   import { buildEntitlementQueryOptions } from "../api/entitlement-client";
 
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, results, and offline status.
-  const entitlementQuery = createQuery(buildEntitlementQueryOptions());
-  let entitlement = $derived($entitlementQuery.data);
+  const entitlementQuery = createQuery(() => buildEntitlementQueryOptions());
+  let entitlement = $derived(entitlementQuery.data);
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
   let rejection = $state<SearchRejection | null>(null);
