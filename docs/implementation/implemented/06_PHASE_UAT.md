@@ -1,10 +1,12 @@
 # Phase 06 UAT: Stripe Integration and Subscriptions
 
-<!-- Implements DESIGN-007 StripeWebhookHandler, SubscriptionController -->
+<!-- Implements DESIGN-007 StripeWebhookHandler, SubscriptionController, EntitlementManager, UsageLimiter -->
 
 ## Scope
 
-Phase 06 covers tasks `164`-`171`. It establishes a secure, idempotent Stripe webhook integration, including signature verification, dead-letter persistence for failures, and an hourly reconciliation job for entitlement drift. It also introduces the frontend subscription UI for monthly and annual plans, handling checkout success/cancel flows without directly capturing raw credit card data (PCI compliance). Task `171` provides the verification evidence for sandbox webhook delivery and state transitions.
+Phase 06 covers tasks `157`, `158`, `159`, `160`, `161`, `162`, `163`, `164`, `165`, `166`, `167`, `168`, `169`, `170`, `171`, `172`, `173`, `174`. It establishes a secure, idempotent Stripe webhook integration, including signature verification, dead-letter persistence for failures, and an hourly reconciliation job for entitlement drift. It also introduces the frontend subscription UI for monthly and annual plans, handling checkout success/cancel flows without directly capturing raw credit card data (PCI compliance), and enforces search gating.
+
+This phase implements requirements `SW-REQ-042`, `SW-REQ-044`, `SW-REQ-045`, `SW-REQ-050`, `SW-REQ-051`, `SW-REQ-052`, and `SW-REQ-053`.
 
 The implemented backend surface composes `StripeWebhookHandler`, persistence of idempotent provider event IDs, transactional active/past_due/cancelled entitlement updates, and dead-letter queues.
 
@@ -89,6 +91,15 @@ During local testing with `stripe listen` and the above triggers, the following 
 - **Failed events:** `invoice.payment_failed` updates the test user's status to `past_due` but retains their past records.
 - **Cancelled events:** `customer.subscription.deleted` marks the test user's status as `cancelled`.
 - **No real keys/data committed:** All configurations use `whsec_...` test secrets and sandbox fixtures. No real PAN/CVC data touches the application servers.
+
+## Free/Trial/Paid Entitlement Acceptance Tests
+
+- **Free Tier Limits**: Verify that free users are restricted to 3 searches per rolling 24-hour window for allowed search modes. Test that exceeding this limit returns an appropriate error indicating limit reached.
+- **Free Tier Search Modes**: Verify that free users can only access single-input Substitution. Verify that multi-input Substitution and Daily Diet/Alternative modes are blocked and show entitlement feedback.
+- **Trial Activation**: Verify that the first social login for a new user grants a 7-day trial. Verify that trial users can access paid search modes without search caps.
+- **Paid Entitlement**: Verify that users with an active subscription (monthly/annual) can access all paid search modes and are not subject to the 3 search limit.
+- **Anonymous Access**: Verify that anonymous users can still access the basic Catalog search without counting towards any limits.
+- **Subscription UI**: Verify that the frontend UI allows selection of monthly or annual plans, redirects to Stripe Checkout, handles success/cancel URLs, and properly reflects updated entitlement states.
 
 ## Security & Compliance
 - The UI uses Stripe Checkout redirects. The frontend application NEVER renders raw PAN/CVC input fields, satisfying PCI DSS scope reduction.
