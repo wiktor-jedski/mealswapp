@@ -54,7 +54,7 @@ func (h *StripeWebhookHandler) Routes() []RouteDefinition {
 func (h *StripeWebhookHandler) Handle(ctx *fiber.Ctx) error {
 	payload := ctx.Body()
 	sigHeader := ctx.Get("Stripe-Signature")
-	
+
 	event, err := webhook.ConstructEventWithOptions(payload, sigHeader, h.webhookSecret, webhook.ConstructEventOptions{IgnoreAPIVersionMismatch: true})
 	if err != nil {
 		security.RecordAuditBestEffort(ctx.UserContext(), h.audit, security.AuditLogEntry{
@@ -75,11 +75,11 @@ func (h *StripeWebhookHandler) Handle(ctx *fiber.Ctx) error {
 		Payload:     sanitizedPayload,
 		ProcessedAt: time.Now(),
 	})
-	
+
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal error"})
 	}
-	
+
 	if !inserted {
 		return ctx.Status(fiber.StatusOK).JSON(fiber.Map{"status": "duplicate"})
 	}
@@ -112,16 +112,16 @@ func (h *StripeWebhookHandler) processEvent(ctx context.Context, event stripe.Ev
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return err
 		}
-		
+
 		if session.ClientReferenceID == "" || session.Mode != stripe.CheckoutSessionModeSubscription {
 			return nil
 		}
-		
+
 		userID, err := uuid.Parse(session.ClientReferenceID)
 		if err != nil {
 			return err
 		}
-		
+
 		return h.appendEntitlement(ctx, userID, "paid", "active", session.Customer.ID, session.Subscription.ID)
 
 	case "invoice.payment_succeeded":
@@ -156,7 +156,7 @@ func (h *StripeWebhookHandler) appendEntitlement(ctx context.Context, userID uui
 	if tier == "free" || status != "active" {
 		allowedModes = []string{"catalog", "substitution:single"}
 	}
-	
+
 	ent := repository.Entitlement{
 		UserID:               userID,
 		Tier:                 tier,
@@ -166,7 +166,7 @@ func (h *StripeWebhookHandler) appendEntitlement(ctx context.Context, userID uui
 		StripeCustomerID:     customerID,
 		StripeSubscriptionID: subscriptionID,
 	}
-	
+
 	if tier == "free" {
 		ent.SearchLimitPer24h = 3
 	}

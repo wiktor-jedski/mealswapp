@@ -83,7 +83,7 @@ func setupWebhookTestApp(m *mockWebhookEntitlementRepo, a *mockAuditLogger) *fib
 		},
 	}
 	handler := NewStripeWebhookHandler(cfg, m, m, a)
-	
+
 	app := fiber.New()
 	for _, route := range handler.Routes() {
 		app.Add(route.Method, route.Path, route.Handler)
@@ -94,14 +94,14 @@ func setupWebhookTestApp(m *mockWebhookEntitlementRepo, a *mockAuditLogger) *fib
 func createSignedRequest(payload []byte, secret string) *http.Request {
 	req := httptest.NewRequest("POST", "/api/v1/billing/webhook", bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Create stripe signature
 	// format: t=<timestamp>,v1=<signature>
 	now := time.Now()
 	t := now.Unix()
 	mac := webhook.ComputeSignature(now, payload, secret)
 	sigHeader := fmt.Sprintf("t=%d,v1=%x", t, mac)
-	
+
 	req.Header.Set("Stripe-Signature", sigHeader)
 	return req
 }
@@ -113,13 +113,13 @@ func TestWebhook_InvalidSignature(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/billing/webhook", bytes.NewReader([]byte("{}")))
 	req.Header.Set("Stripe-Signature", "t=1,v1=invalid")
-	
+
 	resp, _ := app.Test(req)
-	
+
 	if resp.StatusCode != fiber.StatusBadRequest {
 		t.Errorf("Expected 400 for invalid signature, got %d", resp.StatusCode)
 	}
-	
+
 	if len(audit.logged) == 0 || audit.logged[0].Outcome != "failure" {
 		t.Errorf("Expected security audit event logged as failure")
 	}
@@ -137,9 +137,9 @@ func TestWebhook_DuplicateEvent(t *testing.T) {
 	}
 	payload, _ := json.Marshal(event)
 	req := createSignedRequest(payload, "whsec_test")
-	
+
 	resp, _ := app.Test(req)
-	
+
 	if true {
 	}
 	if resp.StatusCode != fiber.StatusOK {
@@ -159,35 +159,35 @@ func TestWebhook_CheckoutSessionCompleted(t *testing.T) {
 	app := setupWebhookTestApp(repo, &mockAuditLogger{})
 
 	userID := uuid.New()
-	
+
 	session := stripe.CheckoutSession{
 		ClientReferenceID: userID.String(),
 		Mode:              stripe.CheckoutSessionModeSubscription,
 		Customer:          &stripe.Customer{ID: "cus_123"},
 		Subscription:      &stripe.Subscription{ID: "sub_123"},
 	}
-	
+
 	rawSession, _ := json.Marshal(session)
 	event := stripe.Event{
 		ID:   "evt_1",
 		Type: "checkout.session.completed",
 		Data: &stripe.EventData{Raw: rawSession},
 	}
-	
+
 	payload, _ := json.Marshal(event)
 	req := createSignedRequest(payload, "whsec_test")
-	
+
 	resp, _ := app.Test(req)
 	if true {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("Expected 200, got %d", resp.StatusCode)
 	}
-	
+
 	if len(repo.appended) != 1 {
 		t.Fatalf("Expected 1 entitlement appended, got %d", len(repo.appended))
 	}
-	
+
 	ent := repo.appended[0]
 	if ent.UserID != userID || ent.Tier != "paid" || ent.Status != "active" {
 		t.Errorf("Expected paid active entitlement for user, got %s %s", ent.Tier, ent.Status)
@@ -213,27 +213,27 @@ func TestWebhook_InvoiceFailed(t *testing.T) {
 		Subscription: &stripe.Subscription{ID: "sub_456"},
 	}
 	rawInvoice, _ := json.Marshal(invoice)
-	
+
 	event := stripe.Event{
 		ID:   "evt_2",
 		Type: "invoice.payment_failed",
 		Data: &stripe.EventData{Raw: rawInvoice},
 	}
-	
+
 	payload, _ := json.Marshal(event)
 	req := createSignedRequest(payload, "whsec_test")
-	
+
 	resp, _ := app.Test(req)
 	if true {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("Expected 200, got %d", resp.StatusCode)
 	}
-	
+
 	if len(repo.appended) != 1 {
 		t.Fatalf("Expected 1 entitlement appended, got %d", len(repo.appended))
 	}
-	
+
 	ent := repo.appended[0]
 	if ent.Tier != "paid" || ent.Status != "past_due" {
 		t.Errorf("Expected paid past_due entitlement, got %s %s", ent.Tier, ent.Status)
@@ -256,27 +256,27 @@ func TestWebhook_SubscriptionCancelled(t *testing.T) {
 		Customer: &stripe.Customer{ID: "cus_789"},
 	}
 	rawSub, _ := json.Marshal(sub)
-	
+
 	event := stripe.Event{
 		ID:   "evt_3",
 		Type: "customer.subscription.canceled",
 		Data: &stripe.EventData{Raw: rawSub},
 	}
-	
+
 	payload, _ := json.Marshal(event)
 	req := createSignedRequest(payload, "whsec_test")
-	
+
 	resp, _ := app.Test(req)
 	if true {
 	}
 	if resp.StatusCode != fiber.StatusOK {
 		t.Errorf("Expected 200, got %d", resp.StatusCode)
 	}
-	
+
 	if len(repo.appended) != 1 {
 		t.Fatalf("Expected 1 entitlement appended, got %d", len(repo.appended))
 	}
-	
+
 	ent := repo.appended[0]
 	if ent.Tier != "paid" || ent.Status != "cancelled" {
 		t.Errorf("Expected paid cancelled entitlement, got %s %s", ent.Tier, ent.Status)
@@ -296,9 +296,9 @@ func TestWebhook_DatabaseFailureReturns500(t *testing.T) {
 	}
 	payload, _ := json.Marshal(event)
 	req := createSignedRequest(payload, "whsec_test")
-	
+
 	resp, _ := app.Test(req)
-	
+
 	if resp.StatusCode != fiber.StatusInternalServerError {
 		t.Errorf("Expected 500 for database write failure, got %d", resp.StatusCode)
 	}

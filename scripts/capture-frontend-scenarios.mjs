@@ -138,6 +138,16 @@ async function installRoutes(page) {
     requestId: "favorites-screenshot-0001",
     data: { items: [] }
   }));
+  await page.route(/\/api\/v1\/entitlements$/, (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "entitlements-screenshot-0001",
+    data: {
+      tier: "paid",
+      allowedModes: ["catalog", "substitution", "substitution:multi", "daily_diet_alternative"],
+      searchLimitPer24h: 100,
+      usageRemaining: 100
+    }
+  }));
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => {
     const url = new URL(route.request().url());
     const query = url.searchParams.get("query")?.toLowerCase() ?? "";

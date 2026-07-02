@@ -8,7 +8,7 @@
    * Mode options rendered above the search bar. Selecting one calls `setMode`, which resets
    * incompatible state and pagination through the search store.
    */
-  let { entitlement = undefined }: { entitlement?: EntitlementData } = $props();
+  let { entitlement = undefined, isError = false }: { entitlement?: EntitlementData, isError?: boolean } = $props();
 
   const modeOptions: { value: SearchMode; id: string; label: string; description: string }[] = [
     {

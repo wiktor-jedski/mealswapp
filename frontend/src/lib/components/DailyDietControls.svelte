@@ -9,9 +9,10 @@
    * 422 response; until then the component reads `searchStore.error` as the rejection message so the UI
    * shape is in place without creating Phase 07 job or worker behavior.
    */
-  let { rejection = null, entitlement = undefined }: { rejection?: SearchRejection | null, entitlement?: EntitlementData } = $props();
+  let { rejection = null, entitlement = undefined, isError = false }: { rejection?: SearchRejection | null, entitlement?: EntitlementData, isError?: boolean } = $props();
 
-  let isBlocked = $derived(entitlement !== undefined && !entitlement.allowedModes.includes("daily_diet_alternative"));
+  let isBlocked = $derived(isError || (entitlement !== undefined && !entitlement.allowedModes.includes("daily_diet_alternative")));
+  let isLoading = $derived(entitlement === undefined && !isError);
 
   /** UUID-shaped validation pattern for the daily diet id input. */
   const dailyDietIdPattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
@@ -33,7 +34,7 @@
     placeholder="00000000-0000-0000-0000-000000000000"
     pattern={dailyDietIdPattern}
     value={$searchStore.dailyDietId ?? ""}
-    disabled={isBlocked}
+    disabled={isBlocked || isLoading}
     oninput={onDailyDietIdInput}
   />
 

@@ -203,5 +203,93 @@ describe("entitlement-client", () => {
 			expect(retryFn(1, dependencyError)).toBe(true);
 			expect(retryFn(3, dependencyError)).toBe(false);
 		});
+
+		describe("queryFn behavior", () => {
+			let originalSetTimeout: typeof globalThis.setTimeout;
+			let originalClearTimeout: typeof globalThis.clearTimeout;
+
+			beforeEach(() => {
+				originalSetTimeout = globalThis.setTimeout;
+				originalClearTimeout = globalThis.clearTimeout;
+			});
+
+			afterEach(() => {
+				globalThis.setTimeout = originalSetTimeout;
+				globalThis.clearTimeout = originalClearTimeout;
+			});
+
+			it("aborts when the parent signal aborts", async () => {
+				const options = buildEntitlementQueryOptions();
+				const controller = new AbortController();
+				
+				globalThis.fetch = mock().mockImplementation((url: string, init?: RequestInit) => {
+					return new Promise((resolve, reject) => {
+						if (init?.signal?.aborted) return reject(init.signal.reason);
+						init?.signal?.addEventListener("abort", () => reject(init.signal.reason));
+					});
+				});
+				
+				const promise = (options.queryFn as any)({ signal: controller.signal });
+				controller.abort(new DOMException("User aborted", "AbortError"));
+				
+				try {
+					await promise;
+					expect.unreachable("Should have thrown");
+				} catch (error) {
+					expect(error).toBeInstanceOf(DOMException);
+					expect((error as DOMException).name).toBe("AbortError");
+				}
+			});
+
+			it("handles an already aborted signal", async () => {
+				const options = buildEntitlementQueryOptions();
+				const signal = AbortSignal.abort(new DOMException("Already aborted", "AbortError"));
+				
+				globalThis.fetch = mock().mockImplementation((url: string, init?: RequestInit) => {
+					return new Promise((resolve, reject) => {
+						if (init?.signal?.aborted) return reject(init.signal.reason);
+						init?.signal?.addEventListener("abort", () => reject(init.signal.reason));
+					});
+				});
+
+				try {
+					await (options.queryFn as any)({ signal });
+					expect.unreachable("Should have thrown");
+				} catch (error) {
+					expect(error).toBeInstanceOf(DOMException);
+					expect((error as DOMException).name).toBe("AbortError");
+				}
+			});
+
+			it("maps TimeoutError to a retryable EntitlementClientError", async () => {
+				const options = buildEntitlementQueryOptions();
+				const controller = new AbortController();
+				
+				// Mock setTimeout to immediately execute the callback
+				globalThis.setTimeout = ((fn: any) => {
+					fn();
+					return 123;
+				}) as any;
+				
+				globalThis.clearTimeout = mock();
+				globalThis.fetch = mock().mockImplementation((url: string, init?: RequestInit) => {
+					return new Promise((resolve, reject) => {
+						if (init?.signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
+						init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+					});
+				});
+
+				try {
+					await (options.queryFn as any)({ signal: controller.signal });
+					expect.unreachable("Should have thrown");
+				} catch (error) {
+					expect(error).toBeInstanceOf(EntitlementClientError);
+					const clientError = error as EntitlementClientError;
+					expect(clientError.status).toBe(408);
+					expect(clientError.appError.code).toBe("entitlement_timeout");
+					expect(clientError.appError.retryable).toBe(true);
+				}
+			});
+		});
 	});
 });

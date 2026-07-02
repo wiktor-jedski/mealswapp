@@ -99,7 +99,7 @@ func (l *UsageLimiter) GetUsageRemaining(ctx context.Context, ent *repository.En
 		// Unlimited. Return a high number or actual limit.
 		return 999999, nil
 	}
-	
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

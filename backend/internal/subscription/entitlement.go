@@ -98,7 +98,7 @@ func (m *EntitlementManager) ReconcileStripeEntitlements(ctx context.Context, ga
 		slog.ErrorContext(ctx, "failed to list subscriptions from stripe during reconciliation", "error", err)
 		return err
 	}
-	
+
 	for _, s := range subs {
 		ent, err := m.repo.GetLatestByStripeSubscription(ctx, s.SubscriptionID)
 		if err != nil {
@@ -108,7 +108,7 @@ func (m *EntitlementManager) ReconcileStripeEntitlements(ctx context.Context, ga
 			slog.ErrorContext(ctx, "failed to get latest entitlement by subscription during reconciliation", "subscription_id", s.SubscriptionID, "error", err)
 			return err
 		}
-		
+
 		var newStatus string
 		switch s.Status {
 		case "active", "trialing":
@@ -120,7 +120,7 @@ func (m *EntitlementManager) ReconcileStripeEntitlements(ctx context.Context, ga
 		default:
 			continue
 		}
-		
+
 		if ent.Status != newStatus || ent.Tier != "paid" {
 			slog.InfoContext(ctx, "repairing entitlement drift", "user_id", ent.UserID, "old_status", ent.Status, "new_status", newStatus)
 			newEnt := repository.Entitlement{
@@ -130,13 +130,13 @@ func (m *EntitlementManager) ReconcileStripeEntitlements(ctx context.Context, ga
 				StripeCustomerID:     ent.StripeCustomerID,
 				StripeSubscriptionID: ent.StripeSubscriptionID,
 			}
-			
+
 			allowedModes := []string{"catalog", "substitution:single", "substitution:multi", "daily_diet", "daily_diet_alternative"}
 			if newStatus != "active" {
 				allowedModes = []string{"catalog", "substitution:single"}
 			}
 			newEnt.AllowedModes = allowedModes
-			
+
 			if err := m.repo.AppendEntitlement(ctx, newEnt); err != nil {
 				slog.ErrorContext(ctx, "failed to append repaired entitlement", "user_id", ent.UserID, "error", err)
 				return err

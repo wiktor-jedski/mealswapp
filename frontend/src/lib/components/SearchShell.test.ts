@@ -18,10 +18,10 @@ function indexOf(fragment: string): number {
 // Implements DESIGN-001 SearchView composed component presence verification.
 test("composes sidebar, mode controls, autocomplete, mode-specific controls, results, and offline banner", () => {
 	expect(source).toContain("<SidebarComponent />");
-	expect(source).toContain("<SearchModes {entitlement} />");
+	expect(source).toContain("<SearchModes entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />");
 	expect(source).toContain("<AutocompleteDropdown");
-	expect(source).toContain("<SubstitutionInputs {entitlement} />");
-	expect(source).toContain("<DailyDietControls");
+	expect(source).toContain("<SubstitutionInputs entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />");
+	expect(source).toContain("<DailyDietControls {rejection} entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />");
 	expect(source).not.toContain("<SettingsPanel");
 	expect(source).toContain("<SearchResults");
 	expect(source).toContain("<OfflineBanner />");
@@ -29,7 +29,7 @@ test("composes sidebar, mode controls, autocomplete, mode-specific controls, res
 
 // Implements DESIGN-001 SearchView documented visual order verification.
 test("visual order: modes → autocomplete → mode controls → results → offline banner", () => {
-	const modesPos = indexOf("<SearchModes {entitlement} />");
+	const modesPos = indexOf("<SearchModes entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />");
 	const searchPos = indexOf("<AutocompleteDropdown");
 	const resultsPos = indexOf("<SearchResults");
 	const offlinePos = indexOf("<OfflineBanner />");

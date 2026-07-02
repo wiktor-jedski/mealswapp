@@ -759,7 +759,6 @@ func TestSearchWorkflowIntegrationGateSubstitutionSortsBySimilarity(t *testing.T
 	}
 }
 
-
 func TestSearchControllerReturns422ForRejectedSearch(t *testing.T) {
 	service := &fakeSearchService{response: search.SearchResponse{Rejection: &search.SearchRejection{Code: "rejected_search", Message: "filters conflict", Field: "filters"}}}
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).Routes()})

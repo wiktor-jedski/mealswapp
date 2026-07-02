@@ -30,7 +30,7 @@ test("declares explicit Find substitutions action without a raw food object id i
 	expect(source).toContain("requestSubstitutionSearch");
 	expect(source).toContain("data-substitution-search");
 	expect(source).toContain("Find substitutions");
-	expect(source).toContain("disabled={$searchStore.substitutionInputs.length === 0 || isBlocked}");
+	expect(source).toContain("disabled={$searchStore.substitutionInputs.length === 0 || isBlocked || isLoading}");
 	expect(source).not.toContain('id="substitution-food-object-id"');
 	expect(source).not.toContain("Food object id");
 	expect(source).not.toContain("addInput");
@@ -139,7 +139,6 @@ test("quantity, unit, and remove controls render as a compact right-side column"
 
 // Implements DESIGN-001 SearchView single-input vs multi-input limit verification.
 test("conditionally renders entitlement feedback for multi-input limits", () => {
-	expect(source).toContain('entitlement !== undefined &&');
-	expect(source).toContain('!entitlement.allowedModes.includes("substitution:multi") &&');
+	expect(source).toContain('entitlement !== undefined && !entitlement.allowedModes.includes("substitution:multi")');
 	expect(source).toContain("data-entitlement-feedback");
 });

@@ -70,8 +70,8 @@ func NewSubscriptionController(cfg config.Config, gateway CheckoutGateway, entMa
 			cfg.Billing.MonthlyPlanPriceID: {Label: "monthly", AmountUS: 300},
 			cfg.Billing.AnnualPlanPriceID:  {Label: "annual", AmountUS: 2500},
 		},
-		gateway: gateway,
-		entManager: entManager,
+		gateway:      gateway,
+		entManager:   entManager,
 		usageLimiter: usageLimiter,
 	}
 }
@@ -170,7 +170,6 @@ func (c *SubscriptionController) Routes() []RouteDefinition {
 	}
 }
 
-
 // GetEntitlement handles reading the user's entitlement and billing state.
 // Implements DESIGN-007 SubscriptionController GetEntitlement.
 func (c *SubscriptionController) GetEntitlement(ctx *fiber.Ctx) error {
@@ -202,12 +201,12 @@ func (c *SubscriptionController) GetEntitlement(ctx *fiber.Ctx) error {
 	}
 
 	data := fiber.Map{
-		"tier":                 ent.Tier,
-		"status":               ent.Status,
-		"allowedModes":         allowedModes,
-		"searchLimitPer24h":    3, // Hardcoded for free users as per spec
-		"usageRemaining":       usageRemaining,
-		"expiresAt":            expiresAt,
+		"tier":              ent.Tier,
+		"status":            ent.Status,
+		"allowedModes":      allowedModes,
+		"searchLimitPer24h": 3, // Hardcoded for free users as per spec
+		"usageRemaining":    usageRemaining,
+		"expiresAt":         expiresAt,
 	}
 
 	return ctx.JSON(fiber.Map{

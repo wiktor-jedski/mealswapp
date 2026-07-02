@@ -104,7 +104,7 @@
 
     <div class="flex w-full max-w-5xl flex-col gap-5 sm:mx-auto sm:px-6 sm:py-6">
       <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
-      <SearchModes {entitlement} />
+      <SearchModes entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />
 
       <AutocompleteDropdown
         query={$searchStore.query}
@@ -117,9 +117,9 @@
       />
 
       {#if activeMode === "substitution"}
-        <SubstitutionInputs {entitlement} />
+        <SubstitutionInputs entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />
       {:else if activeMode === "daily_diet_alternative"}
-        <DailyDietControls {rejection} {entitlement} />
+        <DailyDietControls {rejection} entitlement={entitlementQuery.data} isError={entitlementQuery.isError} />
       {/if}
 
       <SearchResults

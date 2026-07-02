@@ -19,13 +19,11 @@
     searchText: string;
   };
 
-  let { entitlement = undefined }: { entitlement?: EntitlementData } = $props();
+  let { entitlement = undefined, isError = false }: { entitlement?: EntitlementData, isError?: boolean } = $props();
 
-  let isBlocked = $derived(
-    entitlement !== undefined &&
-    !entitlement.allowedModes.includes("substitution:multi") &&
-    $searchStore.substitutionInputs.length > 1
-  );
+  let isPremiumBlocked = $derived(isError || (entitlement !== undefined && !entitlement.allowedModes.includes("substitution:multi")));
+  let isBlocked = $derived(isPremiumBlocked && $searchStore.substitutionInputs.length > 1);
+  let isLoading = $derived(entitlement === undefined && !isError);
 
   let includeFilterQuery = $state("");
   let excludeFilterQuery = $state("");
@@ -582,7 +580,7 @@
   <button
     type="button"
     class="justify-self-start rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-    disabled={$searchStore.substitutionInputs.length === 0 || isBlocked}
+    disabled={$searchStore.substitutionInputs.length === 0 || isBlocked || isLoading}
     onclick={requestSubstitutionSearch}
     data-substitution-search
   >

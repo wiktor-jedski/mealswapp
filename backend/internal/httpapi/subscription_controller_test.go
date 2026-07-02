@@ -11,8 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
 	"time"
 )
 
@@ -158,22 +158,33 @@ func TestSubscriptionController_CreateCheckout(t *testing.T) {
 	}
 }
 
-
 type fakeEntitlementRepo struct {
-	ent repository.Entitlement
-	err error
+	ent   repository.Entitlement
+	err   error
 	usage repository.UsageWindow
 }
 
-func (f *fakeEntitlementRepo) AppendEntitlement(ctx context.Context, entitlement repository.Entitlement) error { return nil }
+func (f *fakeEntitlementRepo) AppendEntitlement(ctx context.Context, entitlement repository.Entitlement) error {
+	return nil
+}
 func (f *fakeEntitlementRepo) GetLatest(ctx context.Context, userID uuid.UUID) (repository.Entitlement, error) {
-	if f.err != nil { return repository.Entitlement{}, f.err }
+	if f.err != nil {
+		return repository.Entitlement{}, f.err
+	}
 	return f.ent, nil
 }
-func (f *fakeEntitlementRepo) RecordUsage(ctx context.Context, userID uuid.UUID, feature string, occurredAt time.Time) (repository.UsageWindow, error) { return repository.UsageWindow{}, nil }
-func (f *fakeEntitlementRepo) GetUsageSince(ctx context.Context, userID uuid.UUID, feature string, since time.Time) (repository.UsageWindow, error) { return f.usage, nil }
-func (f *fakeEntitlementRepo) ListExpiredTrials(ctx context.Context, now time.Time) ([]repository.Entitlement, error) { return nil, nil }
-func (f *fakeEntitlementRepo) InsertProcessedStripeEvent(ctx context.Context, event repository.ProcessedStripeEvent) (bool, error) { return false, nil }
+func (f *fakeEntitlementRepo) RecordUsage(ctx context.Context, userID uuid.UUID, feature string, occurredAt time.Time) (repository.UsageWindow, error) {
+	return repository.UsageWindow{}, nil
+}
+func (f *fakeEntitlementRepo) GetUsageSince(ctx context.Context, userID uuid.UUID, feature string, since time.Time) (repository.UsageWindow, error) {
+	return f.usage, nil
+}
+func (f *fakeEntitlementRepo) ListExpiredTrials(ctx context.Context, now time.Time) ([]repository.Entitlement, error) {
+	return nil, nil
+}
+func (f *fakeEntitlementRepo) InsertProcessedStripeEvent(ctx context.Context, event repository.ProcessedStripeEvent) (bool, error) {
+	return false, nil
+}
 
 func TestGetEntitlement_SuccessFree(t *testing.T) {
 	cfg, _ := config.Load()
@@ -234,11 +245,11 @@ func TestGetEntitlement_SuccessPaid(t *testing.T) {
 	var body map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&body)
 	data := body["data"].(map[string]interface{})
-	
+
 	if data["tier"] != "paid" || data["status"] != "active" {
 		t.Errorf("unexpected tier/status: %v", data)
 	}
-	if data["usageRemaining"].(float64) == 0 { 
+	if data["usageRemaining"].(float64) == 0 {
 		t.Errorf("expected unlimited usage remaining for paid, got %v", data["usageRemaining"])
 	}
 	modes := data["allowedModes"].([]interface{})
@@ -260,7 +271,6 @@ func TestGetEntitlement_Anonymous(t *testing.T) {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
 	}
 }
-
 
 func TestGetEntitlement_Trial(t *testing.T) {
 	cfg, _ := config.Load()
@@ -288,7 +298,7 @@ func TestGetEntitlement_Trial(t *testing.T) {
 	if data["tier"] != "trial" || data["status"] != "active" {
 		t.Errorf("unexpected tier/status: %v", data)
 	}
-	if data["usageRemaining"].(float64) == 0 { 
+	if data["usageRemaining"].(float64) == 0 {
 		t.Errorf("expected unlimited usage remaining for trial, got %v", data["usageRemaining"])
 	}
 }
@@ -321,7 +331,7 @@ func TestGetEntitlement_PastDue(t *testing.T) {
 		t.Errorf("unexpected tier/status: %v", data)
 	}
 	// "past_due" behaves like free for usage limit
-	if data["usageRemaining"].(float64) != 2 { 
+	if data["usageRemaining"].(float64) != 2 {
 		t.Errorf("expected 2 usage remaining for past_due, got %v", data["usageRemaining"])
 	}
 	modes := data["allowedModes"].([]interface{})
@@ -358,7 +368,7 @@ func TestGetEntitlement_Cancelled(t *testing.T) {
 		t.Errorf("unexpected tier/status: %v", data)
 	}
 	// "cancelled" behaves like free for usage limit
-	if data["usageRemaining"].(float64) != 2 { 
+	if data["usageRemaining"].(float64) != 2 {
 		t.Errorf("expected 2 usage remaining for cancelled, got %v", data["usageRemaining"])
 	}
 	modes := data["allowedModes"].([]interface{})
@@ -371,9 +381,9 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 	cfg, _ := config.Load()
 	repo := &fakeEntitlementRepo{
 		ent: repository.Entitlement{
-			Tier:   "free",
-			Status: "active",
-			StripeCustomerID: "cus_123",
+			Tier:                 "free",
+			Status:               "active",
+			StripeCustomerID:     "cus_123",
 			StripeSubscriptionID: "sub_123",
 		},
 	}
@@ -391,7 +401,7 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 	}
 	var body map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&body)
-	
+
 	// Test the envelope
 	if _, ok := body["data"]; !ok {
 		t.Errorf("missing data field")
@@ -399,7 +409,7 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 	if _, ok := body["status"]; !ok {
 		t.Errorf("missing status field")
 	}
-	
+
 	for key := range body {
 		if key != "data" && key != "status" && key != "requestId" {
 			t.Errorf("unexpected envelope field: %s", key)
@@ -407,15 +417,15 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 	}
 
 	data := body["data"].(map[string]interface{})
-	
+
 	// Validate only expected data fields are present
 	expectedFields := map[string]bool{
-		"tier": true,
-		"status": true,
-		"allowedModes": true,
+		"tier":              true,
+		"status":            true,
+		"allowedModes":      true,
 		"searchLimitPer24h": true,
-		"usageRemaining": true,
-		"expiresAt": true,
+		"usageRemaining":    true,
+		"expiresAt":         true,
 	}
 
 	for key := range data {
@@ -424,7 +434,6 @@ func TestGetEntitlement_NoStripeSecrets(t *testing.T) {
 		}
 	}
 }
-
 
 func (f *fakeEntitlementRepo) GetLatestByStripeCustomer(ctx context.Context, customerID string) (repository.Entitlement, error) {
 	return repository.Entitlement{}, nil
