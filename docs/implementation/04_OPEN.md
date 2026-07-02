@@ -148,7 +148,7 @@ No unresolved Phase 03 code review findings remain at this time.
 
 - Accepted:  Phase 05 uses TanStack Query for server state and localStorage for the SW-REQ-003 cache of the 20 most recent unique normalized request/result pairs. Cache recency is updated on reads and writes; malformed or schema-version-mismatched entries are discarded. Phase 09 remains responsible for service-worker API/image interception and broader offline hardening.
 - Accepted: Phase 05 renders authenticated history and favorites in the Activity Sidebar from the existing Phase 03 generated contracts. Anonymous users receive empty/sign-in guidance, and activity API failure does not block public Catalog Search.
-- Accepted: Task 139 implementation added pinned `@tanstack/svelte-query@6.1.34`, `@playwright/test@1.61.0`, and `@axe-core/playwright@4.11.3` to `frontend/package.json` with `preview` and `test:e2e` scripts. `bunfig.toml` scopes `bun test` to `src/` to keep Playwright specs under `tests/` out of the unit test runner. The `check` script intentionally excludes `test:e2e` to keep the unit/build/drift gate deterministic and not dependent on browser binaries.
+- Accepted: Task 139 implementation added pinned `@tanstack/svelte-query@6.1.34`, `@playwright/test@1.61.0`, and `@axe-core/playwright@4.11.3` to `frontend/package.json` with `preview` and `test:e2e` scripts. `bunfig.toml` scopes `bun test` to `src/` to keep Playwright specs under `tests/` out of the unit test runner. The `check` script excluded `test:e2e` in Phase 05 to keep the unit/build/drift gate deterministic, but it has been added back in Phase 06 to satisfy accessibility gate requirements.
 - Accepted Project-owner decision: Phase 05 does not implement macro visibility toggles. Result cards always show the required protein, carbohydrate, and fat values from the generated search contract; SettingsPanel scope is limited to unit and theme preferences.
 - Accepted Project-owner decision: Phase 05 keeps the Daily Diet Alternative UI as a scaffold only. Full Daily Diet Alternative execution, field-level rejection UX, saved-diet data, and optimization job behavior move to Phase 07.
 - Accepted Project-owner decision: the sidebar theme control intentionally exposes only explicit light/dark switching. The underlying ThemeProvider still supports `system` for defaults, invalid-value fallback, and live system-theme resolution, but a visible `system` sidebar option is out of scope.
@@ -196,6 +196,11 @@ No unresolved Phase 03 code review findings remain at this time.
 - Accepted for planning: Stripe monthly and annual price IDs are environment-configured sandbox values that map to SW-REQ-050's $3.00 monthly and $25.00 annual plans. The repository must not commit real Stripe keys, product IDs tied to production accounts, customer data, or webhook secrets.
 - Accepted for planning: Stripe webhook and reconciliation tests use signed sandbox fixtures, Stripe CLI forwarding, or injectable Stripe gateway fakes. Live Stripe network calls are local verification evidence, not a requirement for deterministic CI.
 - Accepted for planning: checkout/session creation is treated as a non-idempotent business action and therefore requires the cross-phase `Idempotency-Key` standard. Stripe webhooks use provider event IDs as their idempotency keys.
+
+### Testing coverage deviations
+
+- Accepted: `GetEntitlementState` and `GetUsageRemaining` in `internal/subscription` lack direct test coverage because they are read-only helper functions verified by the broader integration tests.
+- Accepted: `internal/subscription/stripe.go` (`NewStripeCheckoutGateway`, `CreateSession`, `ListSubscriptions`) lacks coverage because it contains live Stripe API network boundaries. Mocking the Stripe SDK internals directly provides little value over the existing fake gateway used in tests. Live integration is tested manually via Stripe CLI.
 
 ### Actions needed
 

@@ -288,6 +288,7 @@ def main() -> int:
 	run(["bun", "run", "build"], FRONTEND)
 	run(["bun", "run", "check:api-types"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
+	run(["bun", "run", "test:e2e"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
 
 	design_implemented, design_missing, design_checked, design_total = validate_design_coverage()
