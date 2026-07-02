@@ -279,8 +279,8 @@ def main() -> int:
 	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
 	run(["go", "fmt", "./..."], BACKEND)
 	try:
-		run(["go", "test", "./...", "-count=1"], BACKEND)
-		run(["go", "test", "-race", "./...", "-count=1"], BACKEND)
+		run(["go", "test", "-p", "1", "./...", "-count=1"], BACKEND)
+		run(["go", "test", "-p", "1", "-race", "./...", "-count=1"], BACKEND)
 		go_coverage_stdout = validate_go_coverage()
 	finally:
 		started_services = {"postgres", "redis"} - initially_running_services
