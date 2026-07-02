@@ -118,6 +118,7 @@ def run_env(command: list[str], cwd: Path = ROOT, capture: bool = False) -> subp
 		"GOMODCACHE": str(BACKEND / ".go-mod-cache"),
 		"BUN_TMPDIR": str(FRONTEND / ".bun-tmp"),
 		"BUN_INSTALL": str(FRONTEND / ".bun-install"),
+		"CI": "1",
 	}
 	return subprocess.run(command, cwd=cwd, check=True, env=env, text=True, capture_output=capture)
 
