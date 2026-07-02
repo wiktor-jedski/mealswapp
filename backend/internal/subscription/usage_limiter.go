@@ -34,7 +34,7 @@ func NewUsageLimiter(usageRepo repository.UsageRepository, limit int) *UsageLimi
 func (l *UsageLimiter) CheckAccess(ctx context.Context, ent *repository.Entitlement, feature string, now time.Time) error {
 	// Anonymous user
 	if ent == nil {
-		if feature == "catalog" {
+		if feature == FeatureCatalog {
 			return nil
 		}
 		return ErrFeatureNotAllowed
@@ -46,7 +46,7 @@ func (l *UsageLimiter) CheckAccess(ctx context.Context, ent *repository.Entitlem
 	}
 
 	// Free or inactive users
-	if feature != "catalog" && feature != "single" {
+	if feature != FeatureCatalog && feature != FeatureSubstitutionSingle {
 		return ErrFeatureNotAllowed
 	}
 

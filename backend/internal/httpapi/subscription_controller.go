@@ -155,14 +155,14 @@ func (c *SubscriptionController) Routes() []RouteDefinition {
 	return []RouteDefinition{
 		{
 			Method:       "POST",
-			Path:         "/api/v1/subscription/checkout",
+			Path:         "/subscription/checkout",
 			Handler:      c.CreateCheckout,
 			RequiresAuth: true,
 			RequiresCSRF: true,
 		},
 		{
 			Method:       "GET",
-			Path:         "/api/v1/entitlements",
+			Path:         "/entitlements",
 			Handler:      c.GetEntitlement,
 			RequiresAuth: true,
 			RequiresCSRF: false,

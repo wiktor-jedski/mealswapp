@@ -194,7 +194,7 @@ func (c *SearchController) WithEntitlementGate(entitlements EntitlementManager, 
 // Routes returns public search routes.
 // Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository.
 func (c *SearchController) Routes() []RouteDefinition {
-	routes := []RouteDefinition{{Method: fiber.MethodPost, Path: "/search", OptionalAuth: c.history != nil, ExemptCSRF: true, Validate: ValidateJSON(ValidateSearchRequestBody), RateLimit: &RateLimitRule{Scope: "endpoint", MaxRequests: 120, WindowSeconds: 60}, Handler: c.Search}}
+	routes := []RouteDefinition{{Method: fiber.MethodPost, Path: "/search", OptionalAuth: c.history != nil || c.entitlements != nil, ExemptCSRF: true, Validate: ValidateJSON(ValidateSearchRequestBody), RateLimit: &RateLimitRule{Scope: "endpoint", MaxRequests: 120, WindowSeconds: 60}, Handler: c.Search}}
 	if c.autocomplete != nil {
 		routes = append(routes, RouteDefinition{Method: fiber.MethodGet, Path: "/search/autocomplete", OptionalAuth: true, Validate: ValidateQuery(ValidateAutocompleteQueryParams), RateLimit: &RateLimitRule{Scope: "endpoint", MaxRequests: 240, WindowSeconds: 60}, Handler: c.Autocomplete})
 	}
@@ -206,9 +206,9 @@ func (c *SearchController) Routes() []RouteDefinition {
 func featureForRequest(req search.SearchRequest) string {
 	if req.Mode == search.SearchModeSubstitution {
 		if len(req.SubstitutionInputs) > 1 {
-			return "substitution_multi"
+			return "substitution:multi"
 		}
-		return "substitution_single"
+		return "substitution:single"
 	}
 	return string(req.Mode)
 }

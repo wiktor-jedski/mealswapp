@@ -40,7 +40,7 @@ func (h *StripeWebhookHandler) Routes() []RouteDefinition {
 	return []RouteDefinition{
 		{
 			Method:       "POST",
-			Path:         "/api/v1/billing/webhook",
+			Path:         "/billing/webhook",
 			Handler:      h.Handle,
 			RequiresAuth: false,
 			RequiresCSRF: false,

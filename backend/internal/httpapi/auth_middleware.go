@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -78,6 +79,7 @@ func requireAuth(authenticator *JWTAuthenticator) fiber.Handler {
 		}
 		user, err := authenticator.Authenticate(ctx.UserContext(), ctx.Cookies(authenticator.cfg.Account.AccessCookieName), ctx.Cookies(authenticator.cfg.Account.RefreshCookieName))
 		if err != nil {
+			fmt.Printf("auth failed: %v (access: %q, refresh: %q)\n", err, ctx.Cookies(authenticator.cfg.Account.AccessCookieName), ctx.Cookies(authenticator.cfg.Account.RefreshCookieName))
 			return AppError{HTTPStatus: fiber.StatusUnauthorized, Category: "auth", Code: "unauthorized", Message: "authentication required", Cause: err}
 		}
 		ctx.Locals(authenticatedUserLocal, user)
@@ -100,6 +102,8 @@ func optionalAuth(authenticator *JWTAuthenticator) fiber.Handler {
 		user, err := authenticator.Authenticate(ctx.UserContext(), accessToken, refreshToken)
 		if err == nil {
 			ctx.Locals(authenticatedUserLocal, user)
+		} else {
+			fmt.Printf("optionalAuth failed: %v (access: %q, refresh: %q)\n", err, accessToken, refreshToken)
 		}
 		return ctx.Next()
 	}
