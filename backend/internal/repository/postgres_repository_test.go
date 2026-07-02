@@ -111,9 +111,9 @@ func openRepositoryTestDB(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 		t.Fatalf("resolve migration dir: %v", err)
 	}
-	if err := migrations.Run(ctx, pool, "down", migrationDir); err != nil {
+	if _, err := pool.Exec(ctx, "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"); err != nil {
 		pool.Close()
-		t.Fatalf("reset migrations down: %v", err)
+		t.Fatalf("reset database schema: %v", err)
 	}
 	if err := migrations.Run(ctx, pool, "up", migrationDir); err != nil {
 		pool.Close()

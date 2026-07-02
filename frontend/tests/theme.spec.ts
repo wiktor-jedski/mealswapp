@@ -61,10 +61,21 @@ test("explicit dark theme selection persists across a reload", async ({ page }) 
 // Implements DESIGN-016 ThemeProvider explicit light override ignores system changes verification.
 test("explicit light override ignores a live switch to system dark", async ({ page }) => {
   await stubApi(page);
-  await page.emulateMedia({ colorScheme: "dark" });
+  await page.emulateMedia({ colorScheme: "light" });
   await page.goto("/");
 
-  await setResolvedTheme(page, "light");
+  const toggle = page.getByLabel("Theme preference");
+  const openedSidebar = !(await toggle.isVisible());
+  if (openedSidebar) {
+    await page.getByLabel("Open activity sidebar").click();
+  }
+  // Toggle twice: light (system) -> dark -> light (explicit)
+  await toggle.click();
+  await toggle.click();
+  if (openedSidebar) {
+    await page.getByLabel("Close activity sidebar").click();
+  }
+
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
   // System flips to dark while the user explicitly chose light; the resolved theme stays light.

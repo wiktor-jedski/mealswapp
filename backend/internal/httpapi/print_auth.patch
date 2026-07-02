@@ -1,0 +1,11 @@
+--- auth_middleware.go
++++ auth_middleware.go
+@@ -81,6 +81,8 @@
+ 		user, err := authenticator.Authenticate(ctx.UserContext(), accessToken, refreshToken)
+ 		if err == nil {
+ 			ctx.Locals(authenticatedUserLocal, user)
++		} else {
++			fmt.Printf("optionalAuth Auth error: %v\n", err)
+ 		}
+ 		return ctx.Next()
+ 	}
