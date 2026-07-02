@@ -1,6 +1,6 @@
 <script lang="ts">
   import { searchStore, setMode } from "../stores/search";
-  import type { SearchMode } from "../api/generated";
+  import type { SearchMode, EntitlementData } from "../api/generated";
 
   // Implements DESIGN-001 SearchView mode controls (Catalog, Substitution, Daily Diet Alternative).
 
@@ -8,6 +8,8 @@
    * Mode options rendered above the search bar. Selecting one calls `setMode`, which resets
    * incompatible state and pagination through the search store.
    */
+  let { entitlement = undefined }: { entitlement?: EntitlementData } = $props();
+
   const modeOptions: { value: SearchMode; id: string; label: string; description: string }[] = [
     {
       value: "catalog",
@@ -55,4 +57,10 @@
   <p class="max-w-xl text-sm text-[var(--color-muted)]" data-search-mode-description>
     {activeDescription}
   </p>
+
+  {#if entitlement && entitlement.tier === "free" && entitlement.usageRemaining !== undefined}
+    <p class="max-w-xl text-sm font-medium text-[var(--color-primary)] mt-1" data-entitlement-usage>
+      Remaining searches: {entitlement.usageRemaining}/{entitlement.searchLimitPer24h}
+    </p>
+  {/if}
 </nav>

@@ -18,9 +18,9 @@ function indexOf(fragment: string): number {
 // Implements DESIGN-001 SearchView composed component presence verification.
 test("composes sidebar, mode controls, autocomplete, mode-specific controls, results, and offline banner", () => {
 	expect(source).toContain("<SidebarComponent />");
-	expect(source).toContain("<SearchModes />");
+	expect(source).toContain("<SearchModes {entitlement} />");
 	expect(source).toContain("<AutocompleteDropdown");
-	expect(source).toContain("<SubstitutionInputs />");
+	expect(source).toContain("<SubstitutionInputs {entitlement} />");
 	expect(source).toContain("<DailyDietControls");
 	expect(source).not.toContain("<SettingsPanel");
 	expect(source).toContain("<SearchResults");
@@ -29,7 +29,7 @@ test("composes sidebar, mode controls, autocomplete, mode-specific controls, res
 
 // Implements DESIGN-001 SearchView documented visual order verification.
 test("visual order: modes → autocomplete → mode controls → results → offline banner", () => {
-	const modesPos = indexOf("<SearchModes />");
+	const modesPos = indexOf("<SearchModes {entitlement} />");
 	const searchPos = indexOf("<AutocompleteDropdown");
 	const resultsPos = indexOf("<SearchResults");
 	const offlinePos = indexOf("<OfflineBanner />");

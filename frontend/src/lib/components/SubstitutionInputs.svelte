@@ -1,6 +1,6 @@
 <script lang="ts">
   import { searchStore, removeSubstitutionInput, requestSubstitutionSearch, setFilters, updateSubstitutionInput } from "../stores/search";
-  import type { ClassificationSummary, FoodObject, SearchFilter, SearchFilterKind, SubstitutionUnit } from "../api/generated";
+  import type { ClassificationSummary, FoodObject, SearchFilter, SearchFilterKind, SubstitutionUnit, EntitlementData } from "../api/generated";
   import { preferencesStore } from "../stores/preferences";
   import type { UnitSystem } from "../stores/preferences";
   import {
@@ -18,6 +18,14 @@
     description: string;
     searchText: string;
   };
+
+  let { entitlement = undefined }: { entitlement?: EntitlementData } = $props();
+
+  let isBlocked = $derived(
+    entitlement !== undefined &&
+    !entitlement.allowedModes.includes("substitution:multi") &&
+    $searchStore.substitutionInputs.length > 1
+  );
 
   let includeFilterQuery = $state("");
   let excludeFilterQuery = $state("");
@@ -564,10 +572,17 @@
   </div>
   {/if}
 
+
+  {#if isBlocked}
+    <div class="rounded border border-[var(--color-accent)] bg-[var(--color-accent)] bg-opacity-10 p-3" role="alert" aria-label="Entitlement feedback" data-entitlement-feedback>
+      <p class="text-sm text-[var(--color-on-surface)]">Multi-input substitution is a premium feature. Please remove items or upgrade your plan.</p>
+    </div>
+  {/if}
+
   <button
     type="button"
     class="justify-self-start rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-    disabled={$searchStore.substitutionInputs.length === 0}
+    disabled={$searchStore.substitutionInputs.length === 0 || isBlocked}
     onclick={requestSubstitutionSearch}
     data-substitution-search
   >

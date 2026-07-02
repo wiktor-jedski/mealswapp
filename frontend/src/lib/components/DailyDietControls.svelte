@@ -1,6 +1,6 @@
 <script lang="ts">
   import { searchStore, setDailyDietId } from "../stores/search";
-  import type { SearchRejection } from "../api/generated";
+  import type { SearchRejection, EntitlementData } from "../api/generated";
 
   // Implements DESIGN-001 SearchView Daily Diet Alternative controls and Phase 04 structured rejection display.
 
@@ -9,7 +9,9 @@
    * 422 response; until then the component reads `searchStore.error` as the rejection message so the UI
    * shape is in place without creating Phase 07 job or worker behavior.
    */
-  let { rejection = null }: { rejection?: SearchRejection | null } = $props();
+  let { rejection = null, entitlement = undefined }: { rejection?: SearchRejection | null, entitlement?: EntitlementData } = $props();
+
+  let isBlocked = $derived(entitlement !== undefined && !entitlement.allowedModes.includes("daily_diet_alternative"));
 
   /** UUID-shaped validation pattern for the daily diet id input. */
   const dailyDietIdPattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
@@ -31,9 +33,16 @@
     placeholder="00000000-0000-0000-0000-000000000000"
     pattern={dailyDietIdPattern}
     value={$searchStore.dailyDietId ?? ""}
+    disabled={isBlocked}
     oninput={onDailyDietIdInput}
   />
 
+
+  {#if isBlocked}
+    <div class="rounded border border-[var(--color-accent)] bg-[var(--color-accent)] bg-opacity-10 p-3" role="alert" aria-label="Entitlement feedback" data-entitlement-feedback>
+      <p class="text-sm text-[var(--color-on-surface)]">Daily Diet Alternative is a premium feature. Please upgrade your plan.</p>
+    </div>
+  {/if}
   {#if rejection || $searchStore.error}
     <div class="rounded border border-[var(--color-border)] p-3" role="alert" aria-label="Search rejection">
       {#if rejection}

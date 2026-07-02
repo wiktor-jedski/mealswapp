@@ -12,7 +12,7 @@ const source = readFileSync(join(import.meta.dir, "DailyDietControls.svelte"), "
 
 // Implements DESIGN-001 SearchView generated rejection type reuse verification.
 test("imports the generated SearchRejection type without handwritten duplicates", () => {
-	expect(source).toContain('import type { SearchRejection } from "../api/generated"');
+	expect(source).toContain('import type { SearchRejection, EntitlementData } from "../api/generated"');
 });
 
 // Implements DESIGN-001 SearchView Daily Diet Alternative id input verification.

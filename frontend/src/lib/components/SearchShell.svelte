@@ -23,8 +23,12 @@
   import { fetchFoodObject } from "../api/search-client";
   import { preferencesStore } from "../stores/preferences";
   import { displayUnitForBasis } from "../units";
+  import { createQuery } from "@tanstack/svelte-query";
+  import { buildEntitlementQueryOptions } from "../api/entitlement-client";
 
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, autocomplete search bar, mode-specific controls, results, and offline status.
+  const entitlementQuery = createQuery(buildEntitlementQueryOptions());
+  let entitlement = $derived($entitlementQuery.data);
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
   let rejection = $state<SearchRejection | null>(null);
@@ -100,7 +104,7 @@
 
     <div class="flex w-full max-w-5xl flex-col gap-5 sm:mx-auto sm:px-6 sm:py-6">
       <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
-      <SearchModes />
+      <SearchModes {entitlement} />
 
       <AutocompleteDropdown
         query={$searchStore.query}
@@ -113,9 +117,9 @@
       />
 
       {#if activeMode === "substitution"}
-        <SubstitutionInputs />
+        <SubstitutionInputs {entitlement} />
       {:else if activeMode === "daily_diet_alternative"}
-        <DailyDietControls {rejection} />
+        <DailyDietControls {rejection} {entitlement} />
       {/if}
 
       <SearchResults
