@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import type { CheckoutSessionEnvelope, EntitlementEnvelope, ProfileEnvelope } from "../src/lib/api/generated";
 
 // Implements DESIGN-007 SubscriptionController frontend billing controls tests.
@@ -145,5 +146,18 @@ test.describe("Subscription UI and Checkout Flow", () => {
 		// Verify there are no inputs resembling credit card fields
 		const inputs = await page.locator('input[name*="card"], input[name*="cvc"], input[name*="pan"]').count();
 		expect(inputs).toBe(0);
+	});
+
+	test("axe checks report no serious or critical violations", async ({ page, isMobile }) => {
+		await mockProfile(page);
+		await mockEntitlement(page, "free");
+		
+		await navigateAndOpenSidebar(page, isMobile);
+		
+		const results = await new AxeBuilder({ page }).analyze();
+		const violations = results.violations.filter(
+			(v) => v.impact === "serious" || v.impact === "critical"
+		);
+		expect(violations).toEqual([]);
 	});
 });
