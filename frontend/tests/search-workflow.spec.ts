@@ -128,10 +128,25 @@ const favoritesEnvelope: SavedItemsEnvelope = {
   data: { items: [{ id: "fav-1", itemId: "food-apple", kind: "favorite" }] }
 };
 
+const entitlementEnvelope = {
+  status: "ok",
+  requestId: "entitlements-workflow-0001",
+  data: {
+    tier: "paid",
+    allowedModes: ["catalog", "substitution", "substitution:multi", "daily_diet_alternative"],
+    searchLimitPer24h: 100,
+    usageRemaining: 100
+  }
+};
+
 /** Fulfills a route with JSON. */
 async function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
+
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/v1\/entitlements$/, (route) => fulfillJson(route, 200, entitlementEnvelope));
+});
 
 /** Stubs the core search + autocomplete endpoints so the shell renders without a backend. */
 async function stubCoreApi(page: Page, search: SearchResponseEnvelope = searchEnvelope(12, 1)): Promise<void> {
