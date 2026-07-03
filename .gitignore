@@ -38,6 +38,11 @@ playwright-report/
 ### Agents ###
 auth.json
 .antigravitycli/
+.agents/
+.claude/
+.hermes/
+.pi/
+skills-lock.json
 
 ### Python ###
 __pycache__/

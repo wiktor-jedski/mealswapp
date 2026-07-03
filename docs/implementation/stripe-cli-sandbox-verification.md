@@ -108,7 +108,7 @@ Those tests cover valid signature acceptance, invalid signature rejection, dupli
 
 ## Recorded Backend Verification Evidence
 
-The Stripe CLI was not installed on the verification host on 2026-07-02, so `stripe listen` could not be executed directly. The deterministic verifier was run against a clean migrated local backend/database instead.
+The first pass on 2026-07-02 used deterministic signed fixtures against a clean migrated local backend/database. The Stripe CLI was installed and rechecked on 2026-07-03.
 
 Setup run on 2026-07-02:
 
@@ -151,3 +151,71 @@ PASS forced entitlement write failure returned 500 for Stripe retry
 PASS sanitized dead-letter metadata persisted for retry-producing failure
 Stripe sandbox webhook verification passed.
 ```
+
+## Recorded Stripe CLI Forwarding Evidence
+
+Live Stripe CLI forwarding was verified on 2026-07-03 with `stripe version 1.43.6`.
+
+Setup run on 2026-07-03:
+
+```bash
+docker compose up -d --force-recreate postgres redis
+psql 'postgres://mealswapp:mealswapp@127.0.0.1:5432/postgres?sslmode=disable' -c 'DROP DATABASE IF EXISTS mealswapp_task171'
+psql 'postgres://mealswapp:mealswapp@127.0.0.1:5432/postgres?sslmode=disable' -c 'CREATE DATABASE mealswapp_task171'
+cd backend
+MEALSWAPP_DATABASE_URL='postgres://mealswapp:mealswapp@127.0.0.1:5432/mealswapp_task171?sslmode=disable' \
+GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/migrate up
+```
+
+Deterministic signed verifier run on 2026-07-03:
+
+```bash
+MEALSWAPP_HTTP_PORT=18082 \
+MEALSWAPP_DATABASE_URL='postgres://mealswapp:mealswapp@127.0.0.1:5432/mealswapp_task171?sslmode=disable' \
+MEALSWAPP_REDIS_URL='redis://127.0.0.1:6379/0' \
+MEALSWAPP_STRIPE_WEBHOOK_SECRET=whsec_local_fixture \
+GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/api
+
+MEALSWAPP_DATABASE_URL='postgres://mealswapp:mealswapp@127.0.0.1:5432/mealswapp_task171?sslmode=disable' \
+python3 scripts/verify-stripe-cli-sandbox.py \
+  --webhook-url http://127.0.0.1:18082/api/v1/billing/stripe/webhook \
+  --webhook-secret whsec_local_fixture
+```
+
+The deterministic verifier passed all checks listed above.
+
+Live Stripe CLI forwarding run on 2026-07-03:
+
+```bash
+stripe listen --forward-to http://127.0.0.1:18082/api/v1/billing/stripe/webhook
+MEALSWAPP_STRIPE_WEBHOOK_SECRET='<runtime whsec printed by stripe listen>' \
+MEALSWAPP_HTTP_PORT=18082 \
+MEALSWAPP_DATABASE_URL='postgres://mealswapp:mealswapp@127.0.0.1:5432/mealswapp_task171?sslmode=disable' \
+MEALSWAPP_REDIS_URL='redis://127.0.0.1:6379/0' \
+GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/api
+psql 'postgres://mealswapp:mealswapp@127.0.0.1:5432/mealswapp_task171?sslmode=disable' \
+  -c "INSERT INTO users (id) VALUES ('11111111-1111-4111-8111-111111111171') ON CONFLICT (id) DO NOTHING;"
+stripe trigger checkout.session.completed \
+  --override checkout_session:client_reference_id=11111111-1111-4111-8111-111111111171 \
+  --override 'checkout_session:metadata[user_id]=11111111-1111-4111-8111-111111111171'
+```
+
+Sanitized live Stripe CLI output:
+
+```text
+Ready! You are using Stripe API Version [2026-06-24.dahlia].
+Trigger succeeded! Check dashboard for event details.
+checkout.session.completed forwarded to POST /api/v1/billing/stripe/webhook with HTTP 200.
+```
+
+Database confirmation after the live forwarded trigger:
+
+```text
+paid:active::
+```
+
+The empty customer/subscription suffix reflects the default Stripe CLI
+`checkout.session.completed` fixture shape. The deterministic fixture verifier
+above covers customer and subscription ID projection, duplicate idempotency,
+failed-payment `past_due`, cancelled subscription, retry `500`, and sanitized
+dead-letter behavior.
