@@ -14,6 +14,7 @@ import (
 const (
 	// Implements DESIGN-007 UsageLimiter rolling 24-hour free-tier window.
 	freeUsageWindowDuration = 24 * time.Hour
+	// UsageFeatureSearch identifies counted search usage in usage-window persistence.
 	// Implements DESIGN-007 UsageLimiter repository-backed counted search feature.
 	UsageFeatureSearch = "search"
 )
@@ -24,8 +25,11 @@ type UsageDenyReason string
 
 // Implements DESIGN-007 UsageLimiter decision states.
 const (
-	UsageDenyReasonNone             UsageDenyReason = ""
-	UsageDenyReasonEntitlement      UsageDenyReason = "entitlement_denied"
+	// UsageDenyReasonNone means usage limiting did not block the request.
+	UsageDenyReasonNone UsageDenyReason = ""
+	// UsageDenyReasonEntitlement means entitlement policy blocked the request.
+	UsageDenyReasonEntitlement UsageDenyReason = "entitlement_denied"
+	// UsageDenyReasonFreeLimitReached means the free-tier rolling limit is exhausted.
 	UsageDenyReasonFreeLimitReached UsageDenyReason = "free_limit_reached"
 )
 

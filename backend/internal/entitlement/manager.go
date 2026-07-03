@@ -15,10 +15,15 @@ type Feature string
 
 // Implements DESIGN-007 EntitlementManager feature decisions.
 const (
-	FeatureCatalog              Feature = "catalog"
-	FeatureSingleSubstitution   Feature = "single_substitution"
-	FeatureMultiSubstitution    Feature = "multi_substitution"
-	FeatureDailyDiet            Feature = "daily_diet"
+	// FeatureCatalog identifies anonymous and authenticated catalog search access.
+	FeatureCatalog Feature = "catalog"
+	// FeatureSingleSubstitution identifies free-tier single-input substitution access.
+	FeatureSingleSubstitution Feature = "single_substitution"
+	// FeatureMultiSubstitution identifies paid multi-input substitution access.
+	FeatureMultiSubstitution Feature = "multi_substitution"
+	// FeatureDailyDiet identifies paid daily diet search access.
+	FeatureDailyDiet Feature = "daily_diet"
+	// FeatureDailyDietAlternative identifies paid daily diet alternative generation access.
 	FeatureDailyDietAlternative Feature = "daily_diet_alternative"
 )
 
@@ -31,9 +36,13 @@ type DenyReason string
 
 // Implements DESIGN-007 EntitlementManager decision states.
 const (
-	DenyReasonNone              DenyReason = ""
-	DenyReasonInvalidFeature    DenyReason = "invalid_feature"
-	DenyReasonFreeTierScope     DenyReason = "free_tier_scope"
+	// DenyReasonNone means the entitlement decision was not blocked.
+	DenyReasonNone DenyReason = ""
+	// DenyReasonInvalidFeature means the requested feature is unknown.
+	DenyReasonInvalidFeature DenyReason = "invalid_feature"
+	// DenyReasonFreeTierScope means the free tier does not include the requested feature.
+	DenyReasonFreeTierScope DenyReason = "free_tier_scope"
+	// DenyReasonInactivePaidState means paid access is blocked by subscription state.
 	DenyReasonInactivePaidState DenyReason = "inactive_paid_state"
 )
 

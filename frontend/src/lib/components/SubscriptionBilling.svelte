@@ -22,12 +22,12 @@
   const priceLabels: Record<CheckoutPlan, { title: string; cadence: string; description: string }> = {
     monthly: {
       title: "Monthly",
-      cadence: "$9 / month",
+      cadence: "$3 / month",
       description: "Flexible access with monthly billing."
     },
     annual: {
       title: "Annual",
-      cadence: "$90 / year",
+      cadence: "$25 / year",
       description: "Twelve months of paid access with annual billing."
     }
   };

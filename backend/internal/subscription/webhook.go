@@ -21,9 +21,12 @@ const stripeSignatureTolerance = 5 * time.Minute
 
 // Implements DESIGN-007 StripeWebhookHandler webhook processing errors.
 var (
+	// ErrWebhookInvalidSignature means the Stripe-Signature header failed verification.
 	ErrWebhookInvalidSignature = errors.New("stripe webhook signature is invalid")
-	ErrWebhookInvalidPayload   = errors.New("stripe webhook payload is invalid")
-	ErrWebhookStoreFailed      = errors.New("stripe webhook persistence failed")
+	// ErrWebhookInvalidPayload means the verified Stripe event payload cannot be applied.
+	ErrWebhookInvalidPayload = errors.New("stripe webhook payload is invalid")
+	// ErrWebhookStoreFailed means webhook idempotency or entitlement persistence failed.
+	ErrWebhookStoreFailed = errors.New("stripe webhook persistence failed")
 )
 
 // StripeWebhookStore persists provider event idempotency and entitlement changes transactionally.

@@ -192,14 +192,14 @@ No unresolved Phase 03 code review findings remain at this time.
 
 ### Assumptions
 
-- Accepted for planning: Phase 06 uses Stripe-hosted Checkout/session creation for subscription signup, as named in `docs/implementation/01_PLAN.md`. This keeps raw card data outside the application server and UI. If the project owner requires embedded Stripe Elements specifically for SW-REQ-044 wording, replace the checkout UI task with an Elements-based frontend task before implementation starts.
+- Accepted for planning: Phase 06 uses Stripe-hosted Checkout/session creation for subscription signup, as named in `docs/implementation/01_PLAN.md` and `SW-REQ-044`. This keeps raw card data outside the application server and UI.
 - Accepted for planning: Stripe monthly and annual price IDs are environment-configured sandbox values that map to SW-REQ-050's $3.00 monthly and $25.00 annual plans. The repository must not commit real Stripe keys, product IDs tied to production accounts, customer data, or webhook secrets.
 - Accepted for planning: Stripe webhook and reconciliation tests use signed sandbox fixtures, Stripe CLI forwarding, or injectable Stripe gateway fakes. Live Stripe network calls are local verification evidence, not a requirement for deterministic CI.
 - Accepted for planning: checkout/session creation is treated as a non-idempotent business action and therefore requires the cross-phase `Idempotency-Key` standard. Stripe webhooks use provider event IDs as their idempotency keys.
 
 ### Actions needed
 
-- Before production billing launch, confirm whether the product requirement should say Stripe Checkout or Stripe Elements. Phase 06 planning follows the current implementation plan wording, which says Stripe checkout/webhooks.
+- Resolved on 2026-07-03: the product requirement now says Stripe-hosted Checkout rather than embedded Stripe Elements. Phase 06 billing remains aligned with the implementation plan's checkout/webhooks wording.
 - Resolved for Task 173 repair on 2026-07-02: aggregate verification previously hit local Docker bind failures on PostgreSQL `5432` and Redis `6379` when those ports were already occupied by usable host services. `scripts/verify-local-stack.py`, `scripts/verify-phase02-uat.py`, and `scripts/verify-phase03-uat.py` now reuse existing local PostgreSQL and Redis listeners on those ports before attempting Docker Compose startup; `python3 scripts/check.py` completed successfully with that repaired path.
 
 ### Testing coverage deviations

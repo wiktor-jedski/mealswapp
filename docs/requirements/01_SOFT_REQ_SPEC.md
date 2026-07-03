@@ -595,20 +595,20 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-044] Secure Credential Tokenization
-**Statement:** The software shall use Stripe Elements for the capture of payment data to ensure that raw credit card information is tokenized at the client-side and never processed or stored by the application server.
+**Statement:** The software shall use Stripe-hosted Checkout for subscription payment collection to ensure that raw credit card information is captured by Stripe and never processed or stored by the application frontend or backend.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Security / Compliance (PCI-DSS) |
 | **Priority** | High |
 | **Feasibility** | Feasible |
-| **Verification** | Security Audit (Network trace to ensure no PAN data reaches application backend) |
+| **Verification** | Security Audit (Network trace to ensure no PAN data reaches application frontend or backend) |
 
-**Notes:** Mandatory for PCI-DSS Scope reduction.
+**Notes:** Stripe-hosted Checkout is the preferred subscription flow for implementation simplicity and PCI-DSS scope reduction.
 ---
 
 ## [SW-REQ-045] Payment Status Synchronization
-**Statement:** WHEN a subscription transaction is initiated, the software shall synchronize the user's entitlement status (Free vs Paid) by processing asynchronous 'Payment Intent' success or failure events via Stripe webhooks.
+**Statement:** WHEN a subscription transaction is initiated through Stripe Checkout, the software shall synchronize the user's entitlement status (Free vs Paid) by processing asynchronous Checkout Session, invoice payment, and subscription lifecycle events via Stripe webhooks.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -617,7 +617,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | Integration Test (Webhook simulation and database state check) |
 
-**Notes:** Ensures reliable subscription status even if the user closes the browser during processing.
+**Notes:** Ensures reliable subscription status even if the user closes the browser during hosted checkout processing.
 ---
 
 ## [SW-REQ-046] Social Authentication

@@ -20,10 +20,14 @@ import (
 
 // Implements DESIGN-007 SubscriptionController checkout creation errors.
 var (
+	// ErrMissingIdempotencyKey means checkout creation was attempted without an Idempotency-Key.
 	ErrMissingIdempotencyKey = errors.New("idempotency key is required")
-	ErrIdempotencyConflict   = errors.New("idempotency key reused with different body")
-	ErrInvalidPlan           = errors.New("checkout plan is invalid")
-	ErrStripeUnavailable     = errors.New("stripe is unavailable")
+	// ErrIdempotencyConflict means an Idempotency-Key was reused for a different checkout body.
+	ErrIdempotencyConflict = errors.New("idempotency key reused with different body")
+	// ErrInvalidPlan means the requested checkout plan is not configured.
+	ErrInvalidPlan = errors.New("checkout plan is invalid")
+	// ErrStripeUnavailable means checkout creation could not reach or use Stripe.
+	ErrStripeUnavailable = errors.New("stripe is unavailable")
 )
 
 // CheckoutGateway creates provider-hosted checkout sessions without receiving raw card data.

@@ -34,9 +34,8 @@ The implemented Phase 06 surface follows `docs/design/DESIGN-007.md`:
 Phase 06 uses Stripe-hosted Checkout as recorded in
 `docs/implementation/04_OPEN.md`. Raw card data is not accepted by backend
 checkout DTOs and no PAN/CVC fields are rendered by the application billing UI.
-Before production billing launch, the project owner must confirm whether
-`SW-REQ-044` should continue to allow Stripe Checkout or be rewritten to require
-embedded Stripe Elements specifically.
+`SW-REQ-044` now explicitly requires Stripe-hosted Checkout rather than embedded
+Stripe Elements.
 
 ## Automated Evidence
 
@@ -210,9 +209,8 @@ Phase 06 is ready for project-owner acceptance when:
   `python3 scripts/validate-traceability.py` pass on the final worktree;
 - the project owner accepts the documented coverage deviations in
   `docs/implementation/04_OPEN.md`;
-- the project owner accepts the Stripe Checkout interpretation for
-  `SW-REQ-044`, or updates the requirement/task plan before production billing
-  launch;
+- `SW-REQ-044` remains aligned with the implemented Stripe Checkout billing
+  flow;
 - Stripe sandbox forwarding is performed with a locally installed Stripe CLI
   before production credentials are introduced.
 
@@ -250,8 +248,7 @@ Requirement coverage:
 - `SW-REQ-042` Free Tier Search Limitation: tasks `159`, `160`, `169`, `172`.
 - `SW-REQ-044` Secure Credential Tokenization: tasks `157`, `162`, `170`,
   `171`; implemented through Stripe-hosted Checkout with no raw payment fields
-  in the application server or UI. Product wording still needs owner
-  confirmation before production billing launch.
+  in the application server or UI.
 - `SW-REQ-045` Payment Status Synchronization: tasks `164`, `165`, `171`,
   `172`.
 - `SW-REQ-050` Subscription Pricing Tiers: tasks `157`, `162`, `166`, `170`.
@@ -268,8 +265,8 @@ Requirement coverage:
   `backend/internal/entitlement` and `backend/internal/subscription`; frontend
   coverage is `All files | 98.85 | 96.76`, with remaining gaps in
   `entitlement-client.ts` and `search-entitlement.ts`.
-- `docs/implementation/04_OPEN.md` records the production-launch action to
-  confirm Stripe Checkout vs Stripe Elements wording for `SW-REQ-044`.
+- `docs/implementation/04_OPEN.md` records that Stripe Checkout is now the
+  accepted wording for `SW-REQ-044`.
 - `docs/implementation/stripe-cli-sandbox-verification.md` records that the
   Stripe CLI was not installed on the 2026-07-02 verification host. Deterministic
   signed webhook verification passed locally; live `stripe listen` should still
