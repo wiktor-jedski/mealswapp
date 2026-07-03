@@ -105,6 +105,24 @@ func TestReconcileStripeEntitlementsIsIdempotentAcrossDuplicateRuns(t *testing.T
 	}
 }
 
+func TestReconcileStripeEntitlementsSkipsSubscriptionsWithoutLocalUserIdentity(t *testing.T) {
+	// Verifies IT-ARCH-007-005.
+	// Verifies ARCH-007.
+	// Traces SW-REQ-045 and SW-REQ-052.
+	store := &memoryEntitlementStore{}
+	service := NewReconciliationService(memoryReconciliationGateway{subscriptions: []StripeSubscription{
+		{CustomerID: "cus_missing_user", SubscriptionID: "sub_missing_user", Status: "active"},
+	}}, store, nil)
+
+	result, err := service.ReconcileStripeEntitlements(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileStripeEntitlements() error = %v", err)
+	}
+	if result.Checked != 1 || result.Appended != 0 || result.Skipped != 1 || len(store.appends) != 0 {
+		t.Fatalf("result = %+v appends=%d, want defensive skip", result, len(store.appends))
+	}
+}
+
 func TestReconcileStripeEntitlementsFailureLeavesLocalStateAndWarns(t *testing.T) {
 	// Verifies IT-ARCH-007-005.
 	// Verifies ARCH-007.

@@ -55,8 +55,7 @@ func TestTrialTrackerStartTrialCreatesOneSevenDayTrial(t *testing.T) {
 	now := time.Date(2026, 7, 1, 8, 30, 0, 0, time.UTC)
 	userID := uuid.New()
 	repo := &trialRepositoryStub{entitlements: map[uuid.UUID]repository.Entitlement{}}
-	tracker := NewTrialTracker(repo, repo)
-	tracker.now = func() time.Time { return now }
+	tracker := NewTrialTrackerWithClock(repo, repo, func() time.Time { return now })
 
 	trial, err := tracker.StartTrial(ctx, userID)
 	if err != nil {
@@ -78,6 +77,14 @@ func TestTrialTrackerStartTrialCreatesOneSevenDayTrial(t *testing.T) {
 	}
 	if second.ExpiresAt == nil || !second.ExpiresAt.Equal(*trial.ExpiresAt) || len(repo.appended) != 1 {
 		t.Fatalf("second trial = %#v appended=%d, want existing trial without extension", second, len(repo.appended))
+	}
+}
+
+func TestTrialTrackerConstructorDefaultsNilClockToNow(t *testing.T) {
+	repo := &trialRepositoryStub{entitlements: map[uuid.UUID]repository.Entitlement{}}
+	tracker := NewTrialTrackerWithClock(repo, repo, nil)
+	if tracker.now == nil {
+		t.Fatal("NewTrialTrackerWithClock(nil clock) left now unset")
 	}
 }
 

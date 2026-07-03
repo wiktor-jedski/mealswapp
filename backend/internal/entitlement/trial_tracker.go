@@ -19,7 +19,16 @@ type TrialTracker struct {
 // NewTrialTracker creates the Phase 06 trial activation and expiry service.
 // Implements DESIGN-007 TrialTracker.
 func NewTrialTracker(entitlements repository.EntitlementRepository, trials repository.TrialRepository) *TrialTracker {
-	return &TrialTracker{entitlements: entitlements, trials: trials, now: time.Now}
+	return NewTrialTrackerWithClock(entitlements, trials, time.Now)
+}
+
+// NewTrialTrackerWithClock creates the Phase 06 trial service with an injectable clock.
+// Implements DESIGN-007 TrialTracker.
+func NewTrialTrackerWithClock(entitlements repository.EntitlementRepository, trials repository.TrialRepository, now func() time.Time) *TrialTracker {
+	if now == nil {
+		now = time.Now
+	}
+	return &TrialTracker{entitlements: entitlements, trials: trials, now: now}
 }
 
 // ActivateFirstLoginTrial creates one seven-day trial when no entitlement history exists.

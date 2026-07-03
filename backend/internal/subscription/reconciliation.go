@@ -127,6 +127,7 @@ func (s *ReconciliationService) warn(ctx context.Context, message string, fields
 func entitlementFromStripeSubscription(sub StripeSubscription) (repository.Entitlement, bool) {
 	status, ok := entitlementStatusForStripeSubscription(sub.Status)
 	if !ok || sub.UserID == uuid.Nil || strings.TrimSpace(sub.SubscriptionID) == "" {
+		// Cannot repair missing entitlement without knowing UserID; rely on checkout session persistence.
 		return repository.Entitlement{}, false
 	}
 	return repository.Entitlement{
