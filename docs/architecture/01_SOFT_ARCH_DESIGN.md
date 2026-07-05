@@ -1,7 +1,7 @@
 # Software Architecture Design (SAD)
 **Project:** Mealswapp
 **Process:** SWE.2 Software Architectural Design
-**Version:** 1.1 (ASPICE 4.0 Compliant)
+**Version:** 1.2 (ASPICE 4.0 Compliant)
 
 ## 1. Introduction
 
@@ -18,6 +18,10 @@ The Mealswapp application follows a **three-tier architecture** with a responsiv
 │  │              ARCH-001: Web Application                   │    │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐   │    │
 │  │  │Search UI│ │Sidebar  │ │Results  │ │Offline Cache│   │    │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────────┘   │    │
+│  │              ARCH-018: Frontend Auth Session             │    │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────┐   │    │
+│  │  │ Login   │ │Register │ │Consent  │ │Auth Guard   │   │    │
 │  │  └─────────┘ └─────────┘ └─────────┘ └─────────────┘   │    │
 │  └─────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
@@ -93,7 +97,7 @@ Container orchestration is not required as managed services handle scaling and a
 | :--- | :--- |
 | **Type** | Module |
 | **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager, ServiceWorker |
-| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer), TanStack Query |
+| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer), ARCH-018 (Frontend Authentication Session), TanStack Query |
 | **Traceability** | SW-REQ-001, SW-REQ-002, SW-REQ-003, SW-REQ-005, SW-REQ-007, SW-REQ-008, SW-REQ-009, SW-REQ-011, SW-REQ-012, SW-REQ-013, SW-REQ-014, SW-REQ-015, SW-REQ-018, SW-REQ-025, SW-REQ-048, SW-REQ-077, SW-REQ-085, SW-REQ-086, SW-REQ-087, SW-REQ-088, SW-REQ-089 |
 
 **Dynamic Behavior:**
@@ -102,6 +106,7 @@ Container orchestration is not required as managed services handle scaling and a
 - **Search Input:** Debounces user input by 150ms before triggering API calls. Manages focus states for keyboard navigation (Tab/Shift+Tab).
 - **Offline Detection:** Monitors browser online/offline events. Switches to cached data display and shows offline indicator when disconnected.
 - **Theme Switching:** Real-time CSS variable updates when user toggles light/dark mode. Persists selection to localStorage.
+- **Authenticated UI Coordination:** Consumes ARCH-018 frontend-safe session state so anonymous Catalog Search remains usable while authenticated-only sidebar, saved-data, entitlement, and checkout actions can request sign-in before protected API calls.
 
 **Interface Definition:**
 
@@ -358,8 +363,8 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 **Dynamic Behavior:**
 
 - **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, Catalog Search and single-input Substitution Search only. Paid/Trial: unlimited, all features.
-- **Payment Flow:** Client uses Stripe Elements (PCI-DSS compliant tokenization). Server creates Payment Intents, never handles raw card data.
-- **Webhook Processing:** Asynchronously processes payment_intent.succeeded/failed events to update entitlement status reliably.
+- **Payment Flow:** Authenticated client requests a Stripe-hosted Checkout Session from the server, then follows the server-provided redirect URL. Stripe captures raw card data; the application frontend and backend never collect PAN, CVC, expiry, or card-number fields.
+- **Webhook Processing:** Asynchronously processes Checkout Session, invoice payment, and subscription lifecycle events to update entitlement status reliably.
 - **Trial Management:** Activates 7-day trial on first social login. Tracks expiration timestamp. Auto-downgrades to Free tier on expiry.
 
 **Interface Definition:**
@@ -369,9 +374,9 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Stripe with server-side webhook processing for entitlement sync
+- *Chosen Approach:* Stripe-hosted Checkout with server-side webhook processing for entitlement sync
 - *Alternative Considered:* Client-side payment confirmation with polling
-- *Trade-off:* Webhook-based sync (SW-REQ-045) ensures reliable entitlement updates even if user closes browser during payment. Polling would miss events and create inconsistent states. Stripe Elements ensure PCI-DSS scope reduction (SW-REQ-044) by tokenizing at client.
+- *Trade-off:* Webhook-based sync (SW-REQ-045) ensures reliable entitlement updates even if user closes browser during payment. Polling would miss events and create inconsistent states. Stripe-hosted Checkout reduces PCI-DSS scope (SW-REQ-044) because raw payment-card fields are captured only by Stripe.
 
 ### Webhook Handling
 
@@ -392,7 +397,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 ### Partial Failure Recovery
 
-**Scenario:** Payment succeeds at Stripe, but local entitlement database write fails.
+**Scenario:** Checkout or subscription payment succeeds at Stripe, but local entitlement database write fails.
 
 **Solution:**
 1. Webhook handler wraps entitlement update in database transaction
@@ -418,8 +423,10 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
      │                  │                   │                   │
      │  2. User pays    │                   │                   │
      │                  │                   │                   │
-     │                  │ 3. payment_intent │                   │
-     │                  │    .succeeded     │                   │
+     │                  │ 3. checkout,      │                   │
+     │                  │    invoice, or    │                   │
+     │                  │    subscription   │                   │
+     │                  │    event          │                   │
      │                  │──────────────────>│                   │
      │                  │                   │                   │
      │                  │                   │ 4. Verify         │
@@ -834,6 +841,46 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 ---
 
+## [ARCH-018] - Frontend Authentication Session Module
+
+**Description:** Client-side authentication surface for the Svelte SPA. It presents sign-in, registration, consent, disclaimer, OAuth entry, logout, and authenticated-action gating while relying on ARCH-006 and ARCH-010 for all credential validation, token issuance, CSRF validation, and HttpOnly cookie session management.
+
+| Attribute | Value |
+| :--- | :--- |
+| **Type** | Module |
+| **Static Aspects** | AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, DisclaimerPanel, OAuthEntryPoint, AuthenticatedActionGuard |
+| **Dependencies** | ARCH-001 (Web Application), ARCH-006 (Authentication), ARCH-007 (Subscription), ARCH-010 (API Gateway), ARCH-015 (Compliance), ARCH-017 (Error Handling), TanStack Query |
+| **Traceability** | SW-REQ-044, SW-REQ-046, SW-REQ-058, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-070, SW-REQ-071, SW-REQ-074 |
+
+**Dynamic Behavior:**
+
+- **Session bootstrap:** On SPA startup and after auth mutations, probes authenticated state through generated API contracts and stores only frontend-safe session projection data. Access and refresh tokens remain unavailable to JavaScript because ARCH-006 stores them in HttpOnly cookies.
+- **Registration:** Collects email, password, current Privacy Policy and ToS consent, retrieves CSRF state from ARCH-010, submits registration to ARCH-006, and displays verified-login restrictions from the backend session/profile projection.
+- **Login:** Collects email and password, retrieves CSRF state, submits login to ARCH-006, handles generic invalid-credential, lockout, and rate-limit errors without revealing whether an email exists, then refreshes entitlement and user-facing session state.
+- **Social login:** Presents Google and Apple OAuth entry actions that navigate to ARCH-006 provider start endpoints. Callback completion is handled through the backend session cookie result and a subsequent session/entitlement refresh.
+- **Compliance display:** Loads login-screen disclaimer content from ARCH-015 and blocks registration completion until explicit consent versions are selected.
+- **Authenticated action gating:** When anonymous users attempt authenticated-only actions such as Stripe-hosted Checkout, renders sign-in/register guidance instead of calling protected subscription endpoints. After authentication succeeds, refreshes entitlement state and allows the user to retry the action.
+- **Logout and expiry:** Calls ARCH-006 logout, clears frontend-safe session state, preserves anonymous Catalog Search behavior, and maps expired sessions to sign-in guidance through ARCH-017.
+
+**Interface Definition:**
+
+- `Input`: User credentials, consent selections, OAuth provider selection, CSRF token responses, auth/profile/disclaimer/entitlement API responses, browser redirects, session-cookie presence inferred by server responses
+- `Output`: Credentialed HTTPS requests with `credentials: include`, OAuth redirects, frontend-safe authenticated/anonymous session state, sign-in/register UI states, authenticated-action gating decisions
+
+**Alternative Analysis (BP6):**
+
+- *Chosen Approach:* First-party SPA authentication surface backed by HttpOnly cookie sessions and generated API clients
+- *Alternative Considered:* Local development auth shortcut or manual cookie setup for subscription UAT
+- *Trade-off:* A real frontend auth surface satisfies SW-REQ-058, SW-REQ-061, SW-REQ-071, and SW-REQ-074 while allowing Phase 06 checkout UAT to start from the webapp. Manual cookies or local shortcuts would unblock isolated developer testing but would not verify the user-facing account flow, consent capture, disclaimer display, CSRF behavior, or authenticated checkout precondition.
+
+**Resource Goals (optional):**
+
+- *CPU:* Auth UI state updates must not block search input responsiveness.
+- *Memory:* Frontend session state stores only user-safe projection data and no token strings.
+- *Network:* Session probes and entitlement refreshes should be deduplicated through TanStack Query cache keys to avoid repeated protected-route calls during startup and checkout retry flows.
+
+---
+
 ## 3. Interface Definitions
 
 ### 3.1 External Interfaces
@@ -841,6 +888,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | Interface | Protocol | Description | Security |
 | :--- | :--- | :--- | :--- |
 | **Client <-> API** | HTTPS (TLS 1.3) | RESTful API endpoints via Fiber | JWT in HttpOnly cookies, Fiber CSRF middleware |
+| **Frontend Auth <-> API Gateway** | HTTPS (TLS 1.3) | CSRF retrieval, registration, login, logout, session recovery, disclaimer retrieval, entitlement refresh, and authenticated checkout start | Credentials sent only over TLS, JWT/refresh tokens remain in HttpOnly cookies, CSRF required for state-changing auth calls |
 | **API <-> Stripe** | HTTPS | Payment processing | Webhook signatures |
 | **API <-> OAuth** | OAuth 2.0 | Google/Apple login via github.com/markbates/goth | PKCE flow |
 | **API <-> USDA** | HTTPS | Food data retrieval | API key |
@@ -855,6 +903,8 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | **Optimizer -> Similarity** | Function call | ItemPairs -> Scores |
 | **Auth -> Repository** | Query interface | Credentials -> Users |
 | **Subscription -> Auth** | Event | EntitlementUpdates |
+| **Web Application -> Frontend Auth Session** | Store/API client boundary | Authenticated/anonymous session projection -> UI gating and protected-action retry |
+| **Frontend Auth Session -> Compliance** | REST via API Gateway | Disclaimer and consent version data -> login/register surface |
 
 ---
 
@@ -905,9 +955,9 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | SW-REQ-041 | ARCH-005, ARCH-008 |
 | SW-REQ-042 | ARCH-007 |
 | SW-REQ-043 | ARCH-008 |
-| SW-REQ-044 | ARCH-007 |
+| SW-REQ-044 | ARCH-007, ARCH-018 |
 | SW-REQ-045 | ARCH-007 |
-| SW-REQ-046 | ARCH-006 |
+| SW-REQ-046 | ARCH-006, ARCH-018 |
 | SW-REQ-047 | ARCH-008 |
 | SW-REQ-048 | ARCH-001, ARCH-011 |
 | SW-REQ-049 | ARCH-008 |
@@ -919,23 +969,23 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | SW-REQ-055 | ARCH-009, ARCH-012 |
 | SW-REQ-056 | ARCH-009 |
 | SW-REQ-057 | ARCH-009 |
-| SW-REQ-058 | ARCH-006 |
+| SW-REQ-058 | ARCH-006, ARCH-018 |
 | SW-REQ-059 | ARCH-006, ARCH-013 |
-| SW-REQ-060 | ARCH-006 |
-| SW-REQ-061 | ARCH-006 |
-| SW-REQ-062 | ARCH-006 |
-| SW-REQ-063 | ARCH-006 |
-| SW-REQ-064 | ARCH-006, ARCH-010 |
-| SW-REQ-065 | ARCH-006 |
-| SW-REQ-066 | ARCH-006 |
+| SW-REQ-060 | ARCH-006, ARCH-018 |
+| SW-REQ-061 | ARCH-006, ARCH-018 |
+| SW-REQ-062 | ARCH-006, ARCH-018 |
+| SW-REQ-063 | ARCH-006, ARCH-018 |
+| SW-REQ-064 | ARCH-006, ARCH-010, ARCH-018 |
+| SW-REQ-065 | ARCH-006, ARCH-018 |
+| SW-REQ-066 | ARCH-006, ARCH-018 |
 | SW-REQ-067 | ARCH-010 |
 | SW-REQ-068 | ARCH-010, ARCH-013 |
 | SW-REQ-069 | ARCH-006 |
-| SW-REQ-070 | ARCH-006 |
-| SW-REQ-071 | ARCH-015 |
+| SW-REQ-070 | ARCH-006, ARCH-018 |
+| SW-REQ-071 | ARCH-015, ARCH-018 |
 | SW-REQ-072 | ARCH-008, ARCH-015 |
 | SW-REQ-073 | ARCH-008, ARCH-011, ARCH-015 |
-| SW-REQ-074 | ARCH-015 |
+| SW-REQ-074 | ARCH-015, ARCH-018 |
 | SW-REQ-075 | ARCH-013 |
 | SW-REQ-076 | ARCH-010 |
 | SW-REQ-077 | ARCH-001, ARCH-017 |
@@ -957,6 +1007,13 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 ---
 
 ## 5. Changelog
+
+### 2026-07-05 (Rev 1.2)
+
+**Changed (Phase 06.01 Planning Repair):**
+- **ARCH-018:** Added Frontend Authentication Session Module to cover sign-in, registration, consent, disclaimer, OAuth entry, logout, session projection, and authenticated-action gating needed before Phase 06 checkout UAT can start from the webapp.
+- **ARCH-001:** Added dependency on ARCH-018 for frontend-safe authenticated/anonymous session coordination.
+- **ARCH-007:** Reconciled the aggregate SAD with Stripe-hosted Checkout and Checkout/invoice/subscription webhook language.
 
 ### 2026-01-21 (Rev 1.1)
 
