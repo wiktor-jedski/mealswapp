@@ -151,7 +151,7 @@ func TestOAuthControllerFailures(t *testing.T) {
 		t.Fatalf("provider error response = %d", resp.StatusCode)
 	}
 
-	gateway.callbackErr = errors.New("OAuth provider gateway is not configured")
+	gateway.callbackErr = ErrOAuthProviderUnavailable
 	resp, err = app.Test(validOAuthCallbackRequest(t, "google", "state-unavailable"))
 	if err != nil {
 		t.Fatal(err)

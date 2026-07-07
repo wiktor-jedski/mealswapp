@@ -57,6 +57,7 @@
       errorMessage = safeFeedback.message;
       retryAfterSeconds = safeFeedback.retryAfterSeconds;
     } finally {
+      request.password = "";
       submitting = false;
     }
   }

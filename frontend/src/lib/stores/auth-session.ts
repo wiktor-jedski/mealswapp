@@ -284,22 +284,6 @@ function sanitizeProjection(session: AuthSessionProjection): AuthSessionProjecti
 	return projection;
 }
 
-function readStoredProjection(): AuthSessionProjection | null {
-	if (typeof window === "undefined") {
-		return null;
-	}
-	try {
-		const raw = window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY);
-		if (raw === null) {
-			return null;
-		}
-		const parsed = JSON.parse(raw) as unknown;
-		return isStoredProjection(parsed) ? parsed : null;
-	} catch {
-		return null;
-	}
-}
-
 function writeStoredProjection(session: AuthSessionProjection): void {
 	if (typeof window === "undefined") {
 		return;
@@ -314,18 +298,4 @@ function writeStoredProjection(session: AuthSessionProjection): void {
 		// Storage is optional; HttpOnly-cookie auth remains usable with the in-memory store.
 		return;
 	}
-}
-
-function isStoredProjection(value: unknown): value is AuthSessionProjection {
-	if (typeof value !== "object" || value === null) {
-		return false;
-	}
-	const candidate = value as AuthSessionProjection;
-	return (
-		candidate.status === "authenticated" &&
-		typeof candidate.userId === "string" &&
-		(candidate.displayName === undefined || typeof candidate.displayName === "string") &&
-		(candidate.hasVerifiedLoginMethod === undefined || typeof candidate.hasVerifiedLoginMethod === "boolean") &&
-		(candidate.role === undefined || candidate.role === "user" || candidate.role === "admin")
-	);
 }

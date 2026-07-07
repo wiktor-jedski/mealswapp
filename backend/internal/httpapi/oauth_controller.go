@@ -15,6 +15,10 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
+// ErrOAuthProviderUnavailable means no configured provider gateway can serve the request.
+// Implements DESIGN-006 OAuthHandler and DESIGN-017 ErrorMessageMapper.
+var ErrOAuthProviderUnavailable = errors.New("OAuth provider gateway is not configured")
+
 // OAuthService defines provider login behavior for HTTP handlers.
 // Implements DESIGN-006 OAuthHandler.
 type OAuthService interface {
@@ -211,7 +215,7 @@ func mapOAuthError(err error) error {
 // mapOAuthGatewayError maps provider setup/exchange failures to safe responses.
 // Implements DESIGN-006 OAuthHandler and DESIGN-017 ErrorMessageMapper.
 func mapOAuthGatewayError(err error) error {
-	if strings.Contains(err.Error(), "OAuth provider gateway is not configured") {
+	if errors.Is(err, ErrOAuthProviderUnavailable) {
 		return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "oauth_provider_unavailable", Message: "sign-in provider is temporarily unavailable", Retryable: true}
 	}
 	return err

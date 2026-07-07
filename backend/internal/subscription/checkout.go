@@ -18,6 +18,9 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
+// Implements DESIGN-007 SubscriptionController Stripe gateway response safety.
+const maxStripeResponseBytes = 1 << 20
+
 // Implements DESIGN-007 SubscriptionController checkout creation errors.
 var (
 	// ErrMissingIdempotencyKey means checkout creation was attempted without an Idempotency-Key.
@@ -137,7 +140,7 @@ func (g *StripeCheckoutGateway) CreateCheckoutSession(ctx context.Context, req C
 		ID  string `json:"id"`
 		URL string `json:"url"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxStripeResponseBytes)).Decode(&payload); err != nil {
 		return CheckoutSession{}, err
 	}
 	if strings.TrimSpace(payload.ID) == "" || strings.TrimSpace(payload.URL) == "" {
@@ -175,7 +178,7 @@ func (g *StripeCheckoutGateway) CreatePortalSession(ctx context.Context, req Por
 	var payload struct {
 		URL string `json:"url"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxStripeResponseBytes)).Decode(&payload); err != nil {
 		return PortalSession{}, err
 	}
 	if strings.TrimSpace(payload.URL) == "" {
@@ -272,7 +275,7 @@ func (s *PortalService) CreateBillingPortal(ctx context.Context, req PortalReque
 	}
 	session, err := s.gateway.CreatePortalSession(ctx, PortalSessionRequest{CustomerID: entitlement.StripeCustomerID, ReturnURL: req.ReturnURL})
 	if err != nil {
-		return PortalResponse{}, ErrStripeUnavailable
+		return PortalResponse{}, fmt.Errorf("%w: %w", ErrStripeUnavailable, err)
 	}
 	return PortalResponse{PortalURL: session.URL}, nil
 }
@@ -311,7 +314,7 @@ func (s *CheckoutService) CreateCheckout(ctx context.Context, req CheckoutReques
 
 	session, err := s.gateway.CreateCheckoutSession(ctx, CheckoutSessionRequest{UserID: req.UserID, Plan: plan.Code, PriceID: plan.PriceID, SuccessURL: req.SuccessURL, CancelURL: req.CancelURL, ProviderIdempotencyKey: stripeCheckoutIdempotencyKey(req)})
 	if err != nil {
-		return CheckoutResult{}, ErrStripeUnavailable
+		return CheckoutResult{}, fmt.Errorf("%w: %w", ErrStripeUnavailable, err)
 	}
 	response := CheckoutResponse{CheckoutSessionID: session.ID, CheckoutURL: session.URL, Plan: plan.Code, PriceID: plan.PriceID, AmountCents: plan.AmountCents}
 	payload, err := json.Marshal(response)

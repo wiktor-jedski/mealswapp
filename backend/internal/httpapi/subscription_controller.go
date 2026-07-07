@@ -32,9 +32,10 @@ type EntitlementStatusReader interface {
 // SubscriptionController owns authenticated subscription and entitlement routes.
 // Implements DESIGN-007 SubscriptionController.
 type SubscriptionController struct {
-	service CheckoutCreator
-	status  EntitlementStatusReader
-	portal  BillingPortalCreator
+	service               CheckoutCreator
+	status                EntitlementStatusReader
+	portal                BillingPortalCreator
+	billingRedirectOrigin string
 }
 
 // Implements DESIGN-007 SubscriptionController compile-time route controller contract.
@@ -57,12 +58,23 @@ func (c *SubscriptionController) WithBillingPortal(portal BillingPortalCreator) 
 	return c
 }
 
+// WithBillingRedirectOrigin restricts Stripe return URLs to the configured frontend origin.
+// Implements DESIGN-007 SubscriptionController checkout redirect validation.
+func (c *SubscriptionController) WithBillingRedirectOrigin(origin string) *SubscriptionController {
+	c.billingRedirectOrigin = origin
+	return c
+}
+
 // Routes returns authenticated subscription checkout routes.
 // Implements DESIGN-007 SubscriptionController.
 func (c *SubscriptionController) Routes() []RouteDefinition {
 	return []RouteDefinition{
-		{Method: fiber.MethodPost, Path: "/billing/checkout", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(ValidateCheckoutCreateRequestBody), Handler: c.CreateCheckout},
-		{Method: fiber.MethodPost, Path: "/billing/portal", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(ValidateBillingPortalRequestBody), Handler: c.CreateBillingPortal},
+		{Method: fiber.MethodPost, Path: "/billing/checkout", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(func(body map[string]any) error {
+			return ValidateCheckoutCreateRequestBodyForOrigin(body, c.billingRedirectOrigin)
+		}), Handler: c.CreateCheckout},
+		{Method: fiber.MethodPost, Path: "/billing/portal", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(func(body map[string]any) error {
+			return ValidateBillingPortalRequestBodyForOrigin(body, c.billingRedirectOrigin)
+		}), Handler: c.CreateBillingPortal},
 		{Method: fiber.MethodGet, Path: "/billing/entitlement", RequiresAuth: true, Handler: c.GetEntitlement},
 	}
 }

@@ -385,6 +385,23 @@ func TestPortalServiceCreatesHostedPortalOnlyForActivePaidEntitlement(t *testing
 	}
 }
 
+func TestPortalServiceWrapsStripeGatewayFailure(t *testing.T) {
+	userID := uuid.New()
+	cause := errors.New("stripe auth failed")
+	service := NewPortalService(&trackingEntitlementRepository{latest: repository.Entitlement{
+		UserID:               userID,
+		Tier:                 "paid",
+		Status:               "active",
+		StripeCustomerID:     "cus_test_123",
+		StripeSubscriptionID: "sub_test_123",
+	}}, &fakePortalGateway{err: cause})
+
+	_, err := service.CreateBillingPortal(context.Background(), PortalRequest{UserID: userID, ReturnURL: "http://localhost:5173/subscription"})
+	if !errors.Is(err, ErrStripeUnavailable) || !errors.Is(err, cause) {
+		t.Fatalf("CreateBillingPortal() error = %v, want ErrStripeUnavailable wrapping cause", err)
+	}
+}
+
 func TestPortalServiceRejectsMissingActivePaidEntitlement(t *testing.T) {
 	for _, entitlement := range []repository.Entitlement{
 		{UserID: uuid.New(), Tier: "trial", Status: "active"},

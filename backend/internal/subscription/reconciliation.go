@@ -45,12 +45,13 @@ type ReconciliationService struct {
 	gateway StripeSubscriptionGateway
 	store   repository.EntitlementRepository
 	logs    observability.LogSink
+	now     func() time.Time
 }
 
 // NewReconciliationService creates Stripe entitlement reconciliation.
 // Implements DESIGN-007 StripeWebhookHandler hourly reconciliation.
 func NewReconciliationService(gateway StripeSubscriptionGateway, store repository.EntitlementRepository, logs observability.LogSink) *ReconciliationService {
-	return &ReconciliationService{gateway: gateway, store: store, logs: logs}
+	return &ReconciliationService{gateway: gateway, store: store, logs: logs, now: time.Now}
 }
 
 // ReconcileStripeEntitlements appends missing entitlement states and skips exact matches.
@@ -125,7 +126,7 @@ func (s *ReconciliationService) warn(ctx context.Context, message string, fields
 		Level:     "warning",
 		Message:   message,
 		Fields:    fields,
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: s.now().UTC(),
 	})
 }
 

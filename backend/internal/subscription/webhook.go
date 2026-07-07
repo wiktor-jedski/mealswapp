@@ -154,7 +154,7 @@ func (s *StripeWebhookService) logNoop(ctx context.Context, event stripeEvent) {
 			"stripe_subscription_id": stripeSubscriptionID(event.Object),
 			"stripe_customer_id":     strings.TrimSpace(event.Object.Customer),
 		},
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: s.now().UTC(),
 	})
 }
 

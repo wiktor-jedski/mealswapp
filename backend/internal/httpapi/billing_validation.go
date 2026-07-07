@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
 	"net/url"
 	"slices"
@@ -34,6 +33,12 @@ type billingPortalRequestDTO struct {
 // ValidateCheckoutCreateRequestBody rejects malformed checkout requests and raw card fields.
 // Implements DESIGN-007 SubscriptionController.
 func ValidateCheckoutCreateRequestBody(body map[string]any) error {
+	return ValidateCheckoutCreateRequestBodyForOrigin(body, "")
+}
+
+// ValidateCheckoutCreateRequestBodyForOrigin rejects malformed checkout requests and cross-origin redirects.
+// Implements DESIGN-007 SubscriptionController checkout redirect validation.
+func ValidateCheckoutCreateRequestBodyForOrigin(body map[string]any, allowedOrigin string) error {
 	for key := range body {
 		normalized := strings.ToLower(strings.TrimSpace(key))
 		for _, rejected := range rejectedCheckoutRequestFields {
@@ -52,10 +57,10 @@ func ValidateCheckoutCreateRequestBody(body map[string]any) error {
 	if dto.Plan != "monthly" && dto.Plan != "annual" {
 		return errors.New("plan is invalid")
 	}
-	if err := validateCheckoutRequestRedirectURL(dto.SuccessURL); err != nil {
+	if err := validateCheckoutRequestRedirectURL(dto.SuccessURL, allowedOrigin); err != nil {
 		return err
 	}
-	if err := validateCheckoutRequestRedirectURL(dto.CancelURL); err != nil {
+	if err := validateCheckoutRequestRedirectURL(dto.CancelURL, allowedOrigin); err != nil {
 		return err
 	}
 	return nil
@@ -64,6 +69,12 @@ func ValidateCheckoutCreateRequestBody(body map[string]any) error {
 // ValidateBillingPortalRequestBody rejects malformed billing portal requests.
 // Implements DESIGN-007 SubscriptionController.
 func ValidateBillingPortalRequestBody(body map[string]any) error {
+	return ValidateBillingPortalRequestBodyForOrigin(body, "")
+}
+
+// ValidateBillingPortalRequestBodyForOrigin rejects malformed billing portal requests and cross-origin return URLs.
+// Implements DESIGN-007 SubscriptionController billing portal request validation.
+func ValidateBillingPortalRequestBodyForOrigin(body map[string]any, allowedOrigin string) error {
 	for key := range body {
 		if !slices.Contains(allowedBillingPortalRequestFields, key) {
 			return errors.New("billing portal request contains an unsupported field")
@@ -73,12 +84,12 @@ func ValidateBillingPortalRequestBody(body map[string]any) error {
 	if err != nil {
 		return err
 	}
-	return validateCheckoutRequestRedirectURL(dto.ReturnURL)
+	return validateCheckoutRequestRedirectURL(dto.ReturnURL, allowedOrigin)
 }
 
-// validateCheckoutRequestRedirectURL rejects relative or fragment-bearing checkout redirects.
+// validateCheckoutRequestRedirectURL rejects relative, fragment-bearing, or cross-origin billing redirects.
 // Implements DESIGN-007 SubscriptionController checkout redirect validation.
-func validateCheckoutRequestRedirectURL(value string) error {
+func validateCheckoutRequestRedirectURL(value string, allowedOrigin string) error {
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Fragment != "" {
 		return errors.New("checkout redirect URL is invalid")
@@ -86,33 +97,60 @@ func validateCheckoutRequestRedirectURL(value string) error {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return errors.New("checkout redirect URL is invalid")
 	}
+	if strings.TrimSpace(allowedOrigin) != "" && !sameOrigin(parsed, allowedOrigin) {
+		return errors.New("checkout redirect URL origin is not allowed")
+	}
 	return nil
 }
 
 // decodeCheckoutCreateRequestBody converts a validated generic checkout body into the typed DTO.
 // Implements DESIGN-007 SubscriptionController.
 func decodeCheckoutCreateRequestBody(body map[string]any) (checkoutCreateRequestDTO, error) {
-	payload, err := json.Marshal(body)
+	plan, err := requiredStringField(body, "plan")
 	if err != nil {
 		return checkoutCreateRequestDTO{}, err
 	}
-	var dto checkoutCreateRequestDTO
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	successURL, err := requiredStringField(body, "successUrl")
+	if err != nil {
 		return checkoutCreateRequestDTO{}, err
 	}
-	return dto, nil
+	cancelURL, err := requiredStringField(body, "cancelUrl")
+	if err != nil {
+		return checkoutCreateRequestDTO{}, err
+	}
+	return checkoutCreateRequestDTO{Plan: plan, SuccessURL: successURL, CancelURL: cancelURL}, nil
 }
 
 // decodeBillingPortalRequestBody converts a validated generic portal body into the typed DTO.
 // Implements DESIGN-007 SubscriptionController.
 func decodeBillingPortalRequestBody(body map[string]any) (billingPortalRequestDTO, error) {
-	payload, err := json.Marshal(body)
+	returnURL, err := requiredStringField(body, "returnUrl")
 	if err != nil {
 		return billingPortalRequestDTO{}, err
 	}
-	var dto billingPortalRequestDTO
-	if err := json.Unmarshal(payload, &dto); err != nil {
-		return billingPortalRequestDTO{}, err
+	return billingPortalRequestDTO{ReturnURL: returnURL}, nil
+}
+
+// requiredStringField extracts required JSON string fields without re-marshaling the body.
+// Implements DESIGN-007 SubscriptionController billing request validation.
+func requiredStringField(body map[string]any, field string) (string, error) {
+	value, ok := body[field]
+	if !ok {
+		return "", errors.New("billing request is missing a required field")
 	}
-	return dto, nil
+	text, ok := value.(string)
+	if !ok || strings.TrimSpace(text) == "" {
+		return "", errors.New("billing request field is invalid")
+	}
+	return text, nil
+}
+
+// sameOrigin checks redirect targets against the configured frontend origin.
+// Implements DESIGN-007 SubscriptionController checkout redirect validation.
+func sameOrigin(candidate *url.URL, allowedOrigin string) bool {
+	allowed, err := url.Parse(allowedOrigin)
+	if err != nil || allowed.Scheme == "" || allowed.Host == "" {
+		return false
+	}
+	return strings.EqualFold(candidate.Scheme, allowed.Scheme) && strings.EqualFold(candidate.Host, allowed.Host)
 }

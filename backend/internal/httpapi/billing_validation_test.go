@@ -36,6 +36,18 @@ func TestValidateCheckoutCreateRequestBodyAcceptsAnnualPlan(t *testing.T) {
 	}
 }
 
+func TestValidateCheckoutCreateRequestBodyForOriginRejectsCrossOriginRedirects(t *testing.T) {
+	body := map[string]any{
+		"plan":       "monthly",
+		"successUrl": "https://evil.example/billing/success",
+		"cancelUrl":  "http://localhost:5173/billing/cancel",
+	}
+
+	if err := ValidateCheckoutCreateRequestBodyForOrigin(body, "http://localhost:5173"); err == nil {
+		t.Fatal("ValidateCheckoutCreateRequestBodyForOrigin() accepted a cross-origin success URL")
+	}
+}
+
 func TestValidateCheckoutCreateRequestBodyRejectsRawCardFields(t *testing.T) {
 	for _, field := range []string{"card", "cardNumber", "number", "cvc", "cvv", "expiry", "expMonth", "expYear", "paymentMethodData"} {
 		t.Run(field, func(t *testing.T) {
@@ -82,6 +94,14 @@ func TestValidateBillingPortalRequestBodyAcceptsReturnURL(t *testing.T) {
 	}
 	if dto.ReturnURL != "http://localhost:5173/subscription" {
 		t.Fatalf("portal dto = %+v", dto)
+	}
+}
+
+func TestValidateBillingPortalRequestBodyForOriginRejectsCrossOriginReturnURL(t *testing.T) {
+	body := map[string]any{"returnUrl": "https://evil.example/subscription"}
+
+	if err := ValidateBillingPortalRequestBodyForOrigin(body, "http://localhost:5173"); err == nil {
+		t.Fatal("ValidateBillingPortalRequestBodyForOrigin() accepted a cross-origin return URL")
 	}
 }
 

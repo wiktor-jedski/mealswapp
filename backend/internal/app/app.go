@@ -97,7 +97,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewSubscriptionController(
 			subscription.NewCheckoutService(cfg.Billing, repository.NewPostgresCheckoutIdempotencyRepository(pg), subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil)),
 			entitlement.NewStatusService(entitlements, entitlements),
-		).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
+		).WithBillingRedirectOrigin(cfg.FrontendOrigin).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
 		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
 	}
 	routes := []httpapi.RouteDefinition{}
@@ -156,13 +156,13 @@ var _ httpapi.OAuthProviderGateway = unavailableOAuthGateway{}
 // StartOAuth fails closed until Google or Apple provider credentials are configured.
 // Implements DESIGN-006 OAuthHandler.
 func (unavailableOAuthGateway) StartOAuth(context.Context, string, string) (string, error) {
-	return "", errors.New("OAuth provider gateway is not configured")
+	return "", httpapi.ErrOAuthProviderUnavailable
 }
 
 // CompleteOAuth fails closed until Google or Apple provider credentials are configured.
 // Implements DESIGN-006 OAuthHandler.
 func (unavailableOAuthGateway) CompleteOAuth(context.Context, string, map[string]string) (auth.OAuthProfile, error) {
-	return auth.OAuthProfile{}, errors.New("OAuth provider gateway is not configured")
+	return auth.OAuthProfile{}, httpapi.ErrOAuthProviderUnavailable
 }
 
 // postgresStore is the shared PostgreSQL repository/readiness boundary.

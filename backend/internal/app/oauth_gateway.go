@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"net/url"
 	"strings"
 
@@ -35,7 +34,7 @@ func NewGoogleOAuthGateway(cfg config.OAuthConfig) httpapi.OAuthProviderGateway 
 // Implements DESIGN-006 OAuthHandler.
 func (g GoogleOAuthGateway) StartOAuth(_ context.Context, provider string, state string) (string, error) {
 	if provider != "google" || g.provider == nil {
-		return "", errors.New("OAuth provider gateway is not configured")
+		return "", httpapi.ErrOAuthProviderUnavailable
 	}
 	session, err := g.provider.BeginAuth(state)
 	if err != nil {
@@ -48,9 +47,9 @@ func (g GoogleOAuthGateway) StartOAuth(_ context.Context, provider string, state
 // Implements DESIGN-006 OAuthHandler.
 func (g GoogleOAuthGateway) CompleteOAuth(_ context.Context, provider string, query map[string]string) (auth.OAuthProfile, error) {
 	if provider != "google" || g.provider == nil {
-		return auth.OAuthProfile{}, errors.New("OAuth provider gateway is not configured")
+		return auth.OAuthProfile{}, httpapi.ErrOAuthProviderUnavailable
 	}
-	session, err := g.provider.BeginAuth("")
+	session, err := g.provider.BeginAuth(query["state"])
 	if err != nil {
 		return auth.OAuthProfile{}, err
 	}

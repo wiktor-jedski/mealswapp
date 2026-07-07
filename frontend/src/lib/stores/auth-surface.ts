@@ -60,9 +60,7 @@ export function buildAuthGuardDecision(
 	if (session.status === "locked") {
 		return { allowed: false, reason: "locked", signInAction: action };
 	}
-	if (session.status === "anonymous") {
-		return { allowed: false, reason: "anonymous", signInAction: action };
-	}
+	// Anonymous and unresolved states use the same sign-in guard behavior.
 	return { allowed: false, reason: "anonymous", signInAction: action };
 }
 
