@@ -104,6 +104,9 @@
   /** True only for explicit submitted result-search requests, not autocomplete suggestions. */
   let searchInFlight = $derived(hasStartedSearching && query.isFetching === true);
 
+  /** True only when the active submitted search can render final results or a final error. */
+  let shouldRenderResults = $derived(hasStartedSearching && !searchInFlight && (query.data !== undefined || errorMessage !== null));
+
   // Lifts submitted-search loading state so the shell can render the spinner inside the search input.
   $effect(() => {
     onSearchInFlightChange(searchInFlight);
@@ -124,7 +127,7 @@
 </script>
 
 <!-- Implements DESIGN-001 SearchView ResultsGrid wiring from TanStack Query result. -->
-{#if hasStartedSearching}
+{#if shouldRenderResults}
   <ResultsGrid
     results={query.data?.items ?? []}
     similarityMetadata={query.data?.similarityMetadata ?? []}

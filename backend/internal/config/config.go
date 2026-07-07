@@ -46,6 +46,7 @@ type Config struct {
 	TLSMinVersion  string
 	Account        AccountConfig
 	Billing        BillingConfig
+	OAuth          OAuthConfig
 }
 
 // AccountConfig contains authentication and account-flow settings.
@@ -61,6 +62,14 @@ type AccountConfig struct {
 	DisclaimerFallbackVersion   string
 	EmailVerificationTTL        time.Duration
 	PasswordResetTTL            time.Duration
+}
+
+// OAuthConfig contains external identity provider credentials.
+// Implements DESIGN-006 OAuthHandler provider configuration.
+type OAuthConfig struct {
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleCallbackURL  string
 }
 
 // BillingConfig contains Stripe checkout and webhook settings.
@@ -122,6 +131,9 @@ func Load() (Config, error) {
 	if cfg.Billing, err = loadBillingConfig(cfg.Environment, cfg.FrontendOrigin, cfg.AllowedOrigins); err != nil {
 		return Config{}, err
 	}
+	if cfg.OAuth, err = loadOAuthConfig(cfg.Environment); err != nil {
+		return Config{}, err
+	}
 
 	if cfg.Environment == "production" {
 		if os.Getenv("MEALSWAPP_DATABASE_URL") == "" || os.Getenv("MEALSWAPP_REDIS_URL") == "" {
@@ -153,6 +165,29 @@ func Load() (Config, error) {
 		}
 	}
 
+	return cfg, nil
+}
+
+// loadOAuthConfig loads optional Google OAuth settings without exposing secrets.
+// Implements DESIGN-006 OAuthHandler provider configuration.
+func loadOAuthConfig(environment string) (OAuthConfig, error) {
+	cfg := OAuthConfig{
+		GoogleClientID:     strings.TrimSpace(os.Getenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_ID")),
+		GoogleClientSecret: strings.TrimSpace(os.Getenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_SECRET")),
+		GoogleCallbackURL:  strings.TrimSpace(os.Getenv("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL")),
+	}
+	if cfg.GoogleCallbackURL == "" {
+		return cfg, nil
+	}
+	if err := requireURLScheme("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL", cfg.GoogleCallbackURL, "http", "https"); err != nil {
+		return OAuthConfig{}, err
+	}
+	if environment == "production" {
+		parsed, _ := url.Parse(cfg.GoogleCallbackURL)
+		if parsed.Scheme != "https" {
+			return OAuthConfig{}, errors.New("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL must use https in production")
+		}
+	}
 	return cfg, nil
 }
 

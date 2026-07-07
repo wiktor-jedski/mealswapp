@@ -216,6 +216,29 @@ func TestUnavailableOAuthGatewayAndRedisPurgerFailClosed(t *testing.T) {
 	}
 }
 
+func TestGoogleOAuthGatewayConfiguration(t *testing.T) {
+	missing := NewGoogleOAuthGateway(config.OAuthConfig{})
+	if _, err := missing.StartOAuth(context.Background(), "google", "state"); err == nil {
+		t.Fatal("missing Google config did not fail closed")
+	}
+
+	gateway := NewGoogleOAuthGateway(config.OAuthConfig{
+		GoogleClientID:     "google-client-id",
+		GoogleClientSecret: "google-client-secret",
+		GoogleCallbackURL:  "http://localhost:8080/api/v1/auth/oauth/google/callback",
+	})
+	if _, err := gateway.StartOAuth(context.Background(), "apple", "state"); err == nil {
+		t.Fatal("Apple OAuth unexpectedly enabled")
+	}
+	location, err := gateway.StartOAuth(context.Background(), "google", "state-191")
+	if err != nil {
+		t.Fatalf("StartOAuth() error = %v", err)
+	}
+	if !strings.Contains(location, "accounts.google.com") || !strings.Contains(location, "state=state-191") || strings.Contains(location, "google-client-secret") {
+		t.Fatalf("unexpected Google auth URL: %s", location)
+	}
+}
+
 func TestNewProductionRejectsMissingProductionSecret(t *testing.T) {
 	t.Setenv("MEALSWAPP_LOCAL_SECRET_KEY", "")
 	if _, err := NewProduction(config.Config{Environment: "production"}, fakeProductionPostgres{}, nil, observability.JSONSink{Writer: io.Discard}); err == nil {

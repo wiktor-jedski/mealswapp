@@ -28,6 +28,22 @@ type fakeCheckoutCreator struct {
 	errors  []error
 }
 
+type fakeBillingPortalCreator struct {
+	result subscription.PortalResponse
+	err    error
+	gotReq subscription.PortalRequest
+	calls  int
+}
+
+func (s *fakeBillingPortalCreator) CreateBillingPortal(_ context.Context, req subscription.PortalRequest) (subscription.PortalResponse, error) {
+	s.calls++
+	s.gotReq = req
+	if s.err != nil {
+		return subscription.PortalResponse{}, s.err
+	}
+	return s.result, nil
+}
+
 func (s *fakeCheckoutCreator) CreateCheckout(_ context.Context, req subscription.CheckoutRequest) (subscription.CheckoutResult, error) {
 	s.calls++
 	s.gotReq = req
@@ -136,6 +152,56 @@ func TestSubscriptionControllerCreatesCheckoutFromAuthenticatedCookies(t *testin
 	}
 	if _, ok := body.Data["cardNumber"]; ok {
 		t.Fatalf("checkout response leaked card field: %+v", body.Data)
+	}
+}
+
+func TestSubscriptionControllerCreatesBillingPortalFromAuthenticatedCookies(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	portal := &fakeBillingPortalCreator{result: subscription.PortalResponse{PortalURL: "https://billing.stripe.test/session"}}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(nil).WithBillingPortal(portal).Routes()})
+	token, csrfCookies := fetchCSRFToken(t, app)
+
+	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/portal", strings.NewReader(`{"returnUrl":"http://localhost:5173/subscription"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", token)
+	addCookies(req, csrfCookies)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || body.Data["portalUrl"] != "https://billing.stripe.test/session" {
+		t.Fatalf("portal response = %d body=%+v", resp.StatusCode, body)
+	}
+	if portal.gotReq.UserID != userID || portal.gotReq.ReturnURL != "http://localhost:5173/subscription" {
+		t.Fatalf("portal request = %+v", portal.gotReq)
+	}
+}
+
+func TestSubscriptionControllerRejectsBillingPortalWithoutActiveSubscription(t *testing.T) {
+	cfg := testConfig()
+	authenticator, authCookies := testJWTAuth(t, cfg, uuid.New(), nil)
+	portal := &fakeBillingPortalCreator{err: subscription.ErrNoActiveSubscription}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(nil).WithBillingPortal(portal).Routes()})
+	token, csrfCookies := fetchCSRFToken(t, app)
+
+	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/portal", strings.NewReader(`{"returnUrl":"http://localhost:5173/subscription"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", token)
+	addCookies(req, csrfCookies)
+	addCookies(req, authCookies)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusConflict || body.Error == nil || body.Error.Code != "billing_portal_unavailable" {
+		t.Fatalf("portal conflict response = %d body=%+v", resp.StatusCode, body)
 	}
 }
 

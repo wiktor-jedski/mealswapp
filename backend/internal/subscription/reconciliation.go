@@ -68,6 +68,13 @@ func (s *ReconciliationService) ReconcileStripeEntitlements(ctx context.Context)
 	for _, sub := range subscriptions {
 		entitlement, ok := entitlementFromStripeSubscription(sub)
 		if !ok {
+			if _, known := entitlementStatusForStripeSubscription(sub.Status); !known {
+				s.warn(ctx, "stripe reconciliation skipped unknown subscription status", map[string]any{
+					"stripe_subscription_id": strings.TrimSpace(sub.SubscriptionID),
+					"stripe_customer_id":     strings.TrimSpace(sub.CustomerID),
+					"stripe_status":          strings.TrimSpace(sub.Status),
+				})
+			}
 			result.Skipped++
 			continue
 		}
@@ -147,9 +154,9 @@ func entitlementStatusForStripeSubscription(status string) (string, bool) {
 	switch strings.TrimSpace(status) {
 	case "active", "trialing":
 		return "active", true
-	case "past_due", "unpaid", "incomplete_expired":
+	case "past_due", "unpaid", "incomplete", "paused":
 		return "past_due", true
-	case "canceled", "cancelled":
+	case "incomplete_expired", "canceled", "cancelled":
 		return "cancelled", true
 	default:
 		return "", false

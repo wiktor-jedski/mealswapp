@@ -76,9 +76,10 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		similarityCache = cache.SearchResponseStore{Store: redisStore}
 	}
 	userDataService := userdata.NewService(savedRepo, identities, savedRepo, encryption)
+	oauthGateway := NewGoogleOAuthGateway(cfg.OAuth)
 	controllers := []httpapi.Controller{
 		httpapi.NewAuthController(authService, sessionManager).WithLogSink(telemetry),
-		httpapi.NewOAuthController(authService, unavailableOAuthGateway{}, sessionManager),
+		httpapi.NewOAuthController(authService, oauthGateway, sessionManager),
 		httpapi.NewProfileController(profile.NewService(identities, encryption)),
 		httpapi.NewSearchController(search.NewSearchDispatcher(
 			search.NewCatalogService(foodRepo, searchResponseCache),
@@ -93,8 +94,11 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
-		httpapi.NewSubscriptionController(subscription.NewCheckoutService(cfg.Billing, repository.NewPostgresCheckoutIdempotencyRepository(pg), subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil)), entitlement.NewStatusService(entitlements, entitlements)),
-		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements), repository.NewPostgresSecurityAuditRepository(pg)),
+		httpapi.NewSubscriptionController(
+			subscription.NewCheckoutService(cfg.Billing, repository.NewPostgresCheckoutIdempotencyRepository(pg), subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil)),
+			entitlement.NewStatusService(entitlements, entitlements),
+		).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
+		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
 	}
 	routes := []httpapi.RouteDefinition{}
 	for _, controller := range controllers {

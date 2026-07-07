@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -359,6 +360,9 @@ func (c *SearchController) appendAuthenticatedHistory(ctx *fiber.Ctx, req search
 	}
 	user, ok := authenticatedUser(ctx)
 	if !ok {
+		return nil
+	}
+	if strings.TrimSpace(req.Query) == "" {
 		return nil
 	}
 	_, err := c.history.AddHistory(ctx.UserContext(), user.UserID, req.Query, string(req.Mode), searchFiltersHash(req.Filters))

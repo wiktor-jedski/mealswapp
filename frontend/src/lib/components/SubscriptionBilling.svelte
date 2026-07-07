@@ -1,23 +1,29 @@
 <script lang="ts">
-  import { createMutation, createQuery } from "@tanstack/svelte-query";
+  import { createMutation } from "@tanstack/svelte-query";
   import {
     buildCheckoutMutationOptions,
-    buildEntitlementQueryOptions,
+    createBillingPortalSession,
+    fetchEntitlementStatus,
     EntitlementClientError,
-    type CheckoutMutationVariables,
-    type EntitlementQueryKey
+    type CheckoutMutationVariables
   } from "../api/entitlement-client";
   import type {
     CheckoutPlan,
-    EntitlementStatusData,
-    CheckoutSessionData
+    CheckoutSessionData,
+    BillingPortalSessionData,
+    EntitlementStatusData
   } from "../api/generated";
   import {
+    entitlementErrorStore,
+    entitlementStatusStore,
     setEntitlementError,
     setEntitlementStatus
   } from "../stores/entitlement";
+  import { authSessionStore, clearAuthSession } from "../stores/auth-session";
+  import { buildAuthGuardDecision, requestProtectedAction } from "../stores/auth-surface";
 
   // Implements DESIGN-007 SubscriptionController hosted checkout controls and billing recovery UI.
+  // Implements DESIGN-018 AuthenticatedActionGuard checkout handoff to login.
 
   const priceLabels: Record<CheckoutPlan, { title: string; cadence: string; description: string }> = {
     monthly: {
@@ -34,6 +40,8 @@
 
   /** Generated checkout plans rendered as distinct hosted-checkout choices. */
   const checkoutPlans: CheckoutPlan[] = ["monthly", "annual"];
+  const checkoutConfirmationPollIntervalMs = 2_000;
+  const checkoutConfirmationPollAttempts = 15;
 
   /** Current browser return route used after hosted checkout redirects back into the SPA. */
   let returnState = $state<"success" | "cancel" | null>(null);
@@ -44,13 +52,17 @@
   /** Whether checkout is being created from a billing recovery CTA instead of the plan cards. */
   let recoveryCheckout = $state(false);
 
-  /** Entitlement status query drives billing state and refreshes return routes. */
-  const entitlementQuery = createQuery<
-    EntitlementStatusData,
-    EntitlementClientError,
-    EntitlementStatusData,
-    EntitlementQueryKey
-  >(() => buildEntitlementQueryOptions());
+  /** Guards hosted-checkout return routes so they refresh entitlement once after mount. */
+  let handledReturnRefresh = $state(false);
+
+  /** Manual entitlement refresh state for billing-return and retry controls. */
+  let refreshingEntitlement = $state(false);
+
+  /** True while the success return route is waiting for Stripe webhook-confirmed entitlement. */
+  let confirmingCheckout = $state(false);
+
+  /** True after the success return route could not observe paid entitlement within the bounded wait. */
+  let checkoutConfirmationPending = $state(false);
 
   /** Hosted-checkout mutation uses generated billing contracts and idempotency behavior. */
   const checkoutMutation = createMutation<CheckoutSessionData, EntitlementClientError, CheckoutMutationVariables>(
@@ -62,38 +74,44 @@
     })
   );
 
+  /** Hosted billing portal mutation sends users to Stripe for cancellation and payment management. */
+  const portalMutation = createMutation<BillingPortalSessionData, EntitlementClientError, void>(
+    () => ({
+      mutationFn: () => createBillingPortalSession({ returnUrl: buildSubscriptionReturnUrl() }),
+      onSuccess: (portal) => {
+        window.location.assign(portal.portalUrl);
+      }
+    })
+  );
+
   $effect(() => {
     const path = window.location.pathname;
     if (path === "/billing/success") {
       returnState = "success";
-      void entitlementQuery.refetch();
     } else if (path === "/billing/cancel") {
       returnState = "cancel";
-      void entitlementQuery.refetch();
+    }
+    if (returnState === "success" && !handledReturnRefresh) {
+      handledReturnRefresh = true;
+      void confirmCheckoutEntitlement();
+    } else if (returnState === "cancel" && !handledReturnRefresh) {
+      handledReturnRefresh = true;
+      void refreshEntitlementWhenAllowed();
     }
   });
 
-  $effect(() => {
-    if (entitlementQuery.data) {
-      setEntitlementStatus(entitlementQuery.data);
-    }
-  });
-
-  $effect(() => {
-    const error = entitlementQuery.error ?? checkoutMutation.error;
-    if (error instanceof EntitlementClientError) {
-      setEntitlementError(error.appError);
-    }
-  });
-
-  let status = $derived(entitlementQuery.data ?? null);
+  let status = $derived($entitlementStatusStore);
   let loadingPlan = $derived(checkoutMutation.isPending ? selectedPlan : null);
   let checkoutError = $derived(
     checkoutMutation.error instanceof EntitlementClientError ? checkoutMutation.error.appError.message : null
   );
-  let entitlementError = $derived(
-    entitlementQuery.error instanceof EntitlementClientError ? entitlementQuery.error.appError.message : null
+  let portalError = $derived(
+    portalMutation.error instanceof EntitlementClientError ? portalMutation.error.appError.message : null
   );
+  let checkoutErrorId = "checkout-error";
+  let portalErrorId = "billing-portal-error";
+  let entitlementError = $derived($entitlementErrorStore?.message ?? null);
+  let paidActive = $derived(status?.tier === "paid" && status.status === "active");
   let recoveryRequired = $derived(
     status?.billingRecoveryState === "action_required" ||
       status?.billingRecoveryState === "cancelled" ||
@@ -104,6 +122,18 @@
 
   /** Starts server-side checkout creation; raw card details are collected only by the hosted provider. */
   function startCheckout(plan: CheckoutPlan, recovery = false): void {
+    const decision = requestProtectedAction($authSessionStore, {
+      kind: "checkout",
+      label: `Continue ${priceLabels[plan].title} checkout`,
+      continueAfterAuth: async () => startCheckout(plan, recovery)
+    });
+    if (!decision.allowed) {
+      if (decision.reason === "expired") {
+        clearAuthSession("expired");
+      }
+      return;
+    }
+
     selectedPlan = plan;
     recoveryCheckout = recovery;
     checkoutMutation.mutate({
@@ -122,39 +152,129 @@
     return url.toString();
   }
 
+  /** Builds the hosted billing portal return URL for this SPA view. */
+  function buildSubscriptionReturnUrl(): string {
+    return new URL("/subscription", window.location.origin).toString();
+  }
+
+  /** Opens Stripe-hosted subscription management for cancellation and payment changes. */
+  function openBillingPortal(): void {
+    const decision = requestProtectedAction($authSessionStore, {
+      kind: "checkout",
+      label: "Manage subscription",
+      continueAfterAuth: async () => openBillingPortal()
+    });
+    if (!decision.allowed) {
+      if (decision.reason === "expired") {
+        clearAuthSession("expired");
+      }
+      return;
+    }
+    portalMutation.mutate();
+  }
+
   /** Refetches entitlement status after a recoverable billing or return-route failure. */
   function retryEntitlement(): void {
-    void entitlementQuery.refetch();
+    const decision = requestProtectedAction($authSessionStore, {
+      kind: "entitlement_refresh",
+      label: "Refresh billing status",
+      continueAfterAuth: async () => {
+        await refreshEntitlement();
+      }
+    });
+    if (decision.reason === "expired") {
+      clearAuthSession("expired");
+    }
+    if (decision.allowed) {
+      void refreshEntitlement();
+    }
   }
+
+  /** Checks whether automatic billing entitlement refresh may call protected APIs. */
+  function entitlementRefreshAllowed(): boolean {
+    return buildAuthGuardDecision($authSessionStore, {
+      kind: "entitlement_refresh",
+      label: "Refresh billing status",
+      continueAfterAuth: async () => undefined
+    }).allowed;
+  }
+
+  /** Runs one entitlement refresh for explicit billing recovery paths without creating another live query. */
+  async function refreshEntitlementWhenAllowed(): Promise<void> {
+    if (!entitlementRefreshAllowed()) {
+      return;
+    }
+    await refreshEntitlement();
+  }
+
+  /** Refreshes shared entitlement state through the generated billing client. */
+  async function refreshEntitlement(): Promise<EntitlementStatusData | null> {
+    refreshingEntitlement = true;
+    try {
+      const status = await fetchEntitlementStatus();
+      setEntitlementStatus(status);
+      return status;
+    } catch (error) {
+      if (error instanceof EntitlementClientError) {
+        setEntitlementError(error.appError);
+      }
+      return null;
+    } finally {
+      refreshingEntitlement = false;
+    }
+  }
+
+  /** Polls briefly after hosted Checkout returns because Stripe webhook delivery is asynchronous. */
+  async function confirmCheckoutEntitlement(): Promise<void> {
+    if (!entitlementRefreshAllowed()) {
+      return;
+    }
+    confirmingCheckout = true;
+    checkoutConfirmationPending = false;
+    for (let attempt = 0; attempt < checkoutConfirmationPollAttempts; attempt += 1) {
+      const status = await refreshEntitlement();
+      if (status?.tier === "paid" && status.status === "active") {
+        confirmingCheckout = false;
+        return;
+      }
+      if (attempt < checkoutConfirmationPollAttempts - 1) {
+        await delay(checkoutConfirmationPollIntervalMs);
+      }
+    }
+    confirmingCheckout = false;
+    checkoutConfirmationPending = true;
+  }
+
+  function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
 </script>
 
 <!-- Implements DESIGN-007 SubscriptionController billing-state, checkout, cancellation return, and success return UI. -->
 <section
   class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-  aria-labelledby="subscription-billing-title"
+  aria-label="Subscription billing"
   data-subscription-billing
 >
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-    <div>
-      <h2 id="subscription-billing-title" class="text-lg font-bold text-[var(--color-text)]">
-        Subscription
-      </h2>
-      <p class="text-sm text-[var(--color-muted)]">
-        Manage paid search access through hosted checkout.
-      </p>
+  {#if status}
+    <div class="w-fit rounded border border-[var(--color-border)] px-3 py-2 text-sm">
+      <span class="font-[var(--font-data)] uppercase tracking-normal text-[var(--color-muted)]">Plan</span>
+      <span class="ml-2 font-semibold capitalize">{status.tier} · {status.status}</span>
     </div>
-
-    {#if status}
-      <div class="rounded border border-[var(--color-border)] px-3 py-2 text-sm">
-        <span class="font-[var(--font-data)] uppercase tracking-normal text-[var(--color-muted)]">Plan</span>
-        <span class="ml-2 font-semibold capitalize">{status.tier} · {status.status}</span>
-      </div>
-    {/if}
-  </div>
+  {/if}
 
   {#if returnState === "success"}
     <p class="rounded border border-[var(--color-primary)] bg-[var(--color-secondary)] px-3 py-2 text-sm text-[var(--color-text)]" role="status">
-      Checkout completed. Billing access is refreshing.
+      {#if status?.tier === "paid" && status.status === "active"}
+        Checkout completed. Billing access is active.
+      {:else if checkoutConfirmationPending}
+        Checkout completed. Waiting for Stripe confirmation.
+      {:else if confirmingCheckout || refreshingEntitlement}
+        Checkout completed. Confirming billing access.
+      {:else}
+        Checkout completed. Billing access will update after Stripe confirmation.
+      {/if}
     </p>
   {:else if returnState === "cancel"}
     <p class="rounded border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)]" role="status">
@@ -162,7 +282,7 @@
     </p>
   {/if}
 
-  {#if entitlementQuery.isFetching && !status}
+  {#if refreshingEntitlement && !status}
     <div class="grid gap-2" aria-label="Loading billing status">
       <div class="h-5 w-40 rounded bg-[var(--color-secondary)]"></div>
       <div class="h-16 rounded bg-[var(--color-secondary)]"></div>
@@ -199,36 +319,54 @@
     </div>
   {/if}
 
-  <div class="grid gap-3 sm:grid-cols-2">
-    {#each checkoutPlans as plan}
-      <article class="grid gap-3 rounded border border-[var(--color-border)] p-3">
-        <div>
-          <h3 class="text-base font-semibold text-[var(--color-text)]">{priceLabels[plan].title}</h3>
-          <p class="font-[var(--font-data)] text-sm text-[var(--color-muted)]">{priceLabels[plan].cadence}</p>
-          <p class="mt-1 text-sm text-[var(--color-muted)]">{priceLabels[plan].description}</p>
-        </div>
-        <button
-          type="button"
-          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-wait disabled:opacity-70"
-          disabled={checkoutMutation.isPending}
-          aria-describedby={checkoutError && selectedPlan === plan ? `checkout-error-${plan}` : undefined}
-          onclick={() => startCheckout(plan)}
-        >
-          {loadingPlan === plan && !recoveryCheckout ? "Creating checkout..." : `Choose ${priceLabels[plan].title}`}
-        </button>
-        {#if checkoutError && selectedPlan === plan && !checkoutMutation.isPending}
-          <p id={`checkout-error-${plan}`} class="text-sm text-[var(--color-error)]" role="alert">
-            {checkoutError}
-          </p>
+  {#if paidActive}
+    <div class="grid gap-3 rounded border border-[var(--color-border)] p-3">
+      <div>
+        <h3 class="text-base font-semibold text-[var(--color-text)]">Active paid subscription</h3>
+        <p class="text-sm text-[var(--color-muted)]">
+          Billing interval details are managed by Stripe.
+        </p>
+      </div>
+      <button
+        type="button"
+        class="w-fit rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-wait disabled:opacity-70"
+        disabled={portalMutation.isPending}
+        aria-describedby={portalError ? portalErrorId : undefined}
+        onclick={openBillingPortal}
+      >
+        {portalMutation.isPending ? "Opening billing portal..." : "Manage or cancel subscription"}
+      </button>
+    </div>
+  {:else}
+    <div class="grid gap-3 sm:grid-cols-2">
+      {#each checkoutPlans as plan}
+        <article class="flex h-full flex-col gap-3 rounded border border-[var(--color-border)] p-3">
+          <div>
+            <h3 class="text-base font-semibold text-[var(--color-text)]">{priceLabels[plan].title}</h3>
+            <p class="font-[var(--font-data)] text-sm text-[var(--color-muted)]">{priceLabels[plan].cadence}</p>
+            <p class="mt-1 text-sm text-[var(--color-muted)]">{priceLabels[plan].description}</p>
+          </div>
           <button
             type="button"
-            class="w-fit rounded border border-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            onclick={() => startCheckout(plan, recoveryCheckout)}
+            class="mt-auto rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-wait disabled:opacity-70"
+            disabled={checkoutMutation.isPending}
+            aria-describedby={checkoutError ? checkoutErrorId : undefined}
+            onclick={() => startCheckout(plan)}
           >
-            Retry checkout
+            {loadingPlan === plan && !recoveryCheckout ? "Creating checkout..." : `Choose ${priceLabels[plan].title}`}
           </button>
-        {/if}
-      </article>
-    {/each}
-  </div>
+        </article>
+      {/each}
+    </div>
+  {/if}
+  {#if portalError && !portalMutation.isPending}
+    <p id={portalErrorId} class="text-sm text-[var(--color-error)]" role="alert">
+      {portalError}
+    </p>
+  {/if}
+  {#if checkoutError && !checkoutMutation.isPending}
+    <p id={checkoutErrorId} class="text-sm text-[var(--color-error)]" role="alert">
+      {checkoutError}
+    </p>
+  {/if}
 </section>

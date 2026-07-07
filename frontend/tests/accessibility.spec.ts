@@ -256,7 +256,6 @@ test("keyboard-only Substitution workflow switches mode, adds an input, and sear
   // Pick the source item from the auto-focused search bar.
   await page.keyboard.type("apple");
   await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeVisible();
-  await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page.locator("[data-food-object-id='food-apple']")).toHaveText("Apple");
   await expect(page.locator("[data-result-card]")).toHaveCount(0);

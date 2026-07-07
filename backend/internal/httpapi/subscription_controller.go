@@ -17,6 +17,12 @@ type CheckoutCreator interface {
 	CreateCheckout(context.Context, subscription.CheckoutRequest) (subscription.CheckoutResult, error)
 }
 
+// BillingPortalCreator defines billing portal creation behavior for HTTP handlers.
+// Implements DESIGN-007 SubscriptionController.
+type BillingPortalCreator interface {
+	CreateBillingPortal(context.Context, subscription.PortalRequest) (subscription.PortalResponse, error)
+}
+
 // EntitlementStatusReader defines frontend-safe entitlement status reads.
 // Implements DESIGN-007 SubscriptionController.
 type EntitlementStatusReader interface {
@@ -28,6 +34,7 @@ type EntitlementStatusReader interface {
 type SubscriptionController struct {
 	service CheckoutCreator
 	status  EntitlementStatusReader
+	portal  BillingPortalCreator
 }
 
 // Implements DESIGN-007 SubscriptionController compile-time route controller contract.
@@ -43,11 +50,19 @@ func NewSubscriptionController(service CheckoutCreator, status ...EntitlementSta
 	return controller
 }
 
+// WithBillingPortal attaches hosted billing portal creation to the controller.
+// Implements DESIGN-007 SubscriptionController billing portal handoff.
+func (c *SubscriptionController) WithBillingPortal(portal BillingPortalCreator) *SubscriptionController {
+	c.portal = portal
+	return c
+}
+
 // Routes returns authenticated subscription checkout routes.
 // Implements DESIGN-007 SubscriptionController.
 func (c *SubscriptionController) Routes() []RouteDefinition {
 	return []RouteDefinition{
 		{Method: fiber.MethodPost, Path: "/billing/checkout", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(ValidateCheckoutCreateRequestBody), Handler: c.CreateCheckout},
+		{Method: fiber.MethodPost, Path: "/billing/portal", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(ValidateBillingPortalRequestBody), Handler: c.CreateBillingPortal},
 		{Method: fiber.MethodGet, Path: "/billing/entitlement", RequiresAuth: true, Handler: c.GetEntitlement},
 	}
 }
@@ -81,6 +96,30 @@ func (c *SubscriptionController) CreateCheckout(ctx *fiber.Ctx) error {
 	return ctx.Status(result.StatusCode).JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: checkoutResponseData(result.Response)})
 }
 
+// CreateBillingPortal starts a provider-hosted billing management session.
+// Implements DESIGN-007 SubscriptionController.
+func (c *SubscriptionController) CreateBillingPortal(ctx *fiber.Ctx) error {
+	user, ok := authenticatedUser(ctx)
+	if !ok {
+		return AppError{HTTPStatus: fiber.StatusUnauthorized, Category: "auth", Code: "unauthorized", Message: "authentication required"}
+	}
+	var req billingPortalRequestDTO
+	if err := ctx.BodyParser(&req); err != nil {
+		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "invalid_json", Message: "invalid request body"}
+	}
+	if c.portal == nil {
+		return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "stripe_unavailable", Message: "billing provider is unavailable", Retryable: true}
+	}
+	result, err := c.portal.CreateBillingPortal(ctx.UserContext(), subscription.PortalRequest{
+		UserID:    user.UserID,
+		ReturnURL: req.ReturnURL,
+	})
+	if err != nil {
+		return portalError(err)
+	}
+	return ctx.Status(fiber.StatusOK).JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: map[string]any{"portalUrl": result.PortalURL}})
+}
+
 // GetEntitlement returns frontend-safe entitlement and billing state.
 // Implements DESIGN-007 SubscriptionController.
 func (c *SubscriptionController) GetEntitlement(ctx *fiber.Ctx) error {
@@ -96,6 +135,19 @@ func (c *SubscriptionController) GetEntitlement(ctx *fiber.Ctx) error {
 		return err
 	}
 	return ctx.Status(fiber.StatusOK).JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: entitlementStatusResponseData(status)})
+}
+
+// portalError maps billing portal service errors to user-safe API errors.
+// Implements DESIGN-007 SubscriptionController and DESIGN-017 GlobalExceptionHandler.
+func portalError(err error) error {
+	switch {
+	case errors.Is(err, subscription.ErrNoActiveSubscription):
+		return AppError{HTTPStatus: fiber.StatusConflict, Category: "entitlement", Code: "billing_portal_unavailable", Message: "An active paid subscription is required to manage billing"}
+	case errors.Is(err, subscription.ErrStripeUnavailable):
+		return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "stripe_unavailable", Message: "billing provider is unavailable", Retryable: true}
+	default:
+		return err
+	}
 }
 
 // checkoutError maps checkout service errors to user-safe API errors.

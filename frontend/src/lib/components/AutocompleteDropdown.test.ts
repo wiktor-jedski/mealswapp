@@ -422,6 +422,13 @@ test("declares typed-query submission without requiring an active suggestion", (
 	expect(source).toContain("activeIndex = -1");
 });
 
+// Implements DESIGN-001 AutocompleteDropdown mode-scoped default option verification.
+test("declares optional first-suggestion default selection for picker-style modes", () => {
+	expect(source).toContain("selectFirstOnEnter = false");
+	expect(source).toContain("selectFirstOnEnter?: boolean");
+	expect(source).toContain("activeIndex = selectFirstOnEnter && next.length > 0 ? 0 : -1");
+});
+
 // Implements DESIGN-001 SearchView mode-specific search guidance verification.
 test("declares a placeholder prop for mode-specific search guidance", () => {
 	expect(source).toContain('placeholder = "Search foods, meals, or ingredients…"');

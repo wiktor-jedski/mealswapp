@@ -5,13 +5,16 @@ import { get } from "svelte/store";
 import type {
 	AppError,
 	CheckoutCreateRequest,
+	BillingPortalSessionEnvelope,
 	CheckoutSessionEnvelope,
+	CSRFTokenEnvelope,
 	EntitlementStatusEnvelope
 } from "./generated";
 import {
 	EntitlementClientError,
 	buildCheckoutMutationOptions,
 	buildEntitlementQueryOptions,
+	createBillingPortalSession,
 	createCheckoutSession,
 	fetchEntitlementStatus,
 	generateCheckoutIdempotencyKey
@@ -121,6 +124,24 @@ function checkoutEnvelope(): CheckoutSessionEnvelope {
 			priceId: "price_monthly",
 			amountCents: 1200
 		}
+	};
+}
+
+function portalEnvelope(): BillingPortalSessionEnvelope {
+	return {
+		status: "ok",
+		requestId: "req-portal",
+		data: {
+			portalUrl: "https://billing.stripe.com/p/session"
+		}
+	};
+}
+
+function csrfEnvelope(token = "csrf-checkout"): CSRFTokenEnvelope {
+	return {
+		status: "ok",
+		requestId: "req-csrf-checkout",
+		data: { csrfToken: token }
 	};
 }
 
@@ -273,6 +294,24 @@ test("createCheckoutSession sends generated checkout request with idempotency ke
 	expect((call.init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-token");
 });
 
+// Implements DESIGN-007 SubscriptionController hosted billing portal client verification.
+test("createBillingPortalSession fetches CSRF and sends generated portal request", async () => {
+	globalThis.fetch = fetchMock.fetch as typeof fetch;
+	fetchMock.enqueueResponse(jsonResponse(200, csrfEnvelope("csrf-portal")));
+	fetchMock.enqueueResponse(jsonResponse(200, portalEnvelope()));
+
+	const portal = await createBillingPortalSession({ returnUrl: "https://app.example/subscription" });
+
+	expect(portal.portalUrl).toBe("https://billing.stripe.com/p/session");
+	expect(fetchMock.calls).toHaveLength(2);
+	expect(fetchMock.calls[0]?.url).toBe("/api/v1/auth/csrf-token");
+	expect(fetchMock.calls[1]?.url).toBe("/api/v1/billing/portal");
+	expect(fetchMock.calls[1]?.init.method).toBe("POST");
+	expect(fetchMock.calls[1]?.init.credentials).toBe("include");
+	expect((fetchMock.calls[1]?.init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-portal");
+	expect(JSON.parse(fetchMock.calls[1]?.init.body as string)).toEqual({ returnUrl: "https://app.example/subscription" });
+});
+
 // Implements DESIGN-001 SearchView checkout retry behavior verification.
 test("checkout mutation retries exactly one recoverable 503 and never retries 409 conflicts", () => {
 	const options = buildCheckoutMutationOptions();
@@ -297,6 +336,7 @@ test("checkout mutation retries exactly one recoverable 503 and never retries 40
 test("checkout mutation pins one generated idempotency key across retry invocations", async () => {
 	globalThis.fetch = fetchMock.fetch as typeof fetch;
 	setCryptoUuid("00000000-0000-4000-8000-000000000002");
+	fetchMock.enqueueResponse(jsonResponse(200, csrfEnvelope("csrf-checkout-1")));
 	fetchMock.enqueueResponse(jsonResponse(503, billingError(503, "stripe_unavailable", "dependency", true)));
 	fetchMock.enqueueResponse(jsonResponse(200, checkoutEnvelope()));
 	const options = buildCheckoutMutationOptions();
@@ -306,11 +346,16 @@ test("checkout mutation pins one generated idempotency key across retry invocati
 	await expect(mutationFn(variables)).rejects.toBeInstanceOf(EntitlementClientError);
 	await mutationFn(variables);
 
-	expect(fetchMock.calls).toHaveLength(2);
-	expect((fetchMock.calls[0]?.init.headers as Record<string, string>)["Idempotency-Key"]).toBe(
+	expect(fetchMock.calls).toHaveLength(3);
+	expect(fetchMock.calls[0]?.url).toBe("/api/v1/auth/csrf-token");
+	expect(fetchMock.calls[1]?.url).toBe("/api/v1/billing/checkout");
+	expect(fetchMock.calls[2]?.url).toBe("/api/v1/billing/checkout");
+	expect((fetchMock.calls[1]?.init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-checkout-1");
+	expect((fetchMock.calls[2]?.init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-checkout-1");
+	expect((fetchMock.calls[1]?.init.headers as Record<string, string>)["Idempotency-Key"]).toBe(
 		"checkout-00000000-0000-4000-8000-000000000002"
 	);
-	expect((fetchMock.calls[1]?.init.headers as Record<string, string>)["Idempotency-Key"]).toBe(
+	expect((fetchMock.calls[2]?.init.headers as Record<string, string>)["Idempotency-Key"]).toBe(
 		"checkout-00000000-0000-4000-8000-000000000002"
 	);
 });

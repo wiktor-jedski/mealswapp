@@ -32,6 +32,7 @@ test("declares explicit Find substitutions action without a raw food object id i
 	expect(source).toContain("onSubstitutionSearch");
 	expect(source).toContain("data-substitution-search");
 	expect(source).toContain("Find substitutions");
+	expect(source).toContain("w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)]");
 	expect(source).toContain("disabled={$searchStore.substitutionInputs.length === 0 || !executionAllowed}");
 	expect(source).toContain("data-substitution-entitlement-feedback");
 	expect(source).not.toContain('id="substitution-food-object-id"');

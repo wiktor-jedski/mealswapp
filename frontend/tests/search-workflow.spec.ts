@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import type {
+  AuthSessionEnvelope,
   AutocompleteEnvelope,
   EntitlementStatusEnvelope,
   FoodObjectEnvelope,
@@ -14,6 +15,8 @@ import type {
 } from "../src/lib/api/generated";
 
 // Implements DESIGN-001 SearchView Phase 05 integration coverage with controlled API responses.
+// Implements DESIGN-018 anonymous/authenticated auth-state composition across DESIGN-001 SearchView workflows.
+// Verifies ARCH-018 and ARCH-001 browser workflow integration for task 185.
 //
 // Task 151 composes the production search shell: sidebar, mode controls, autocomplete search
 // bar, mode-specific controls, filters, settings, results (TanStack Query over generated
@@ -130,6 +133,18 @@ const favoritesEnvelope: SavedItemsEnvelope = {
   data: { items: [{ id: "fav-1", itemId: "food-apple", kind: "favorite" }] }
 };
 
+const authSessionEnvelope: AuthSessionEnvelope = {
+  status: "ok",
+  requestId: "auth-session-workflow-0001",
+  data: {
+    userId: "user-1",
+    role: "user",
+    hasVerifiedLoginMethod: true,
+    accessExpiresAt: "2026-07-05T13:00:00Z",
+    refreshExpiresAt: "2026-07-12T13:00:00Z"
+  }
+};
+
 /** Builds an entitlement envelope from generated billing types for search-mode fixtures. */
 function entitlementEnvelope(overrides: Partial<EntitlementStatusEnvelope["data"]> = {}): EntitlementStatusEnvelope {
   return {
@@ -152,6 +167,14 @@ function entitlementEnvelope(overrides: Partial<EntitlementStatusEnvelope["data"
 }
 
 async function stubEntitlement(page: Page, envelope: EntitlementStatusEnvelope): Promise<void> {
+  await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 200, profileEnvelope));
+  await page.route(/\/api\/v1\/auth\/refresh$/, (route) => fulfillJson(route, 200, authSessionEnvelope));
+  await page.route(/\/api\/v1\/search-history$/, (route) =>
+    fulfillJson(route, 200, { status: "ok", requestId: "history-empty-workflow-0001", data: { history: [] } })
+  );
+  await page.route(/\/api\/v1\/saved-items\?kind=favorite$/, (route) =>
+    fulfillJson(route, 200, { status: "ok", requestId: "favorites-empty-workflow-0001", data: { items: [] } })
+  );
   await page.route(/\/api\/v1\/billing\/entitlement$/, (route) => fulfillJson(route, 200, envelope));
 }
 
@@ -490,7 +513,7 @@ test("anonymous users can still execute Catalog Search when entitlement status r
 // Verifies ARCH-007.
 // Verifies ARCH-001.
 // Traces SW-REQ-042, SW-REQ-052, and SW-REQ-053.
-// Implements DESIGN-001 SearchView and DESIGN-007 EntitlementManager Phase 06 billing workflow UI gate.
+// Implements DESIGN-001 SearchView, DESIGN-018 authenticated navigation, and DESIGN-007 EntitlementManager Phase 06 billing workflow UI gate.
 test("billing recovery state blocks paid-mode search without network side effects", async ({ page }) => {
   let searchRequestCount = 0;
   await stubEntitlement(page, entitlementEnvelope({
@@ -507,8 +530,6 @@ test("billing recovery state blocks paid-mode search without network side effect
   });
   await page.goto("/");
 
-  await expect(page.locator("[data-billing-recovery]")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Update billing" })).toBeVisible();
   await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
   await expect(page.locator("[data-entitlement-feedback]")).toContainText("not included");
   await page.getByLabel("Food search").fill("lentil");
@@ -516,6 +537,15 @@ test("billing recovery state blocks paid-mode search without network side effect
 
   await expect(page.locator("[data-results-grid]")).toHaveCount(0);
   expect(searchRequestCount).toBe(0);
+
+  const mobileToggle = page.getByLabel("Open activity sidebar");
+  if (await mobileToggle.isVisible()) {
+    await mobileToggle.click();
+  }
+  await page.getByRole("navigation", { name: "Account navigation" }).getByRole("button", { name: "Subscription" }).click();
+  await expect(page.locator("[data-subscription-view]")).toBeVisible();
+  await expect(page.locator("[data-billing-recovery]")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Update billing" })).toBeVisible();
 });
 
 // Verifies IT-ARCH-001-003.
@@ -631,10 +661,10 @@ test("repeating the same search reuses the cache without a second network call",
 // Traces SW-REQ-013, SW-REQ-048.
 // Implements DESIGN-001 SidebarComponent authenticated history and favorites verification.
 test("authenticated sidebar loads search history and favorites", async ({ page }) => {
+  await stubCoreApi(page);
   await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 200, profileEnvelope));
   await page.route(/\/api\/v1\/search-history$/, (route) => fulfillJson(route, 200, historyEnvelope));
   await page.route(/\/api\/v1\/saved-items\?kind=favorite$/, (route) => fulfillJson(route, 200, favoritesEnvelope));
-  await stubCoreApi(page);
   await page.goto("/");
 
   // On mobile the sidebar starts collapsed; open it via the activity toggle when present.

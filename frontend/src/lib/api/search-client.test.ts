@@ -491,10 +491,10 @@ test("buildSearchQueryOptions produces identical query keys for equivalent searc
 	expect(optionsA.queryKey).toEqual(optionsB.queryKey);
 });
 
-// Implements DESIGN-001 SearchView previous-page retention configuration verification.
-test("buildSearchQueryOptions enables keepPreviousData placeholderData for page retention", () => {
+// Implements DESIGN-001 SearchView submitted-search loading isolation verification.
+test("buildSearchQueryOptions does not keep previous result pages as placeholder data", () => {
 	const options = buildSearchQueryOptions(catalogState("apple", 1), new LocalQueryCache({ storage: null }));
-	expect(options.placeholderData).toBe(keepPreviousData);
+	expect(options.placeholderData).toBeUndefined();
 });
 
 // Implements DESIGN-001 SearchView local-cache hit bypasses fetch verification.
@@ -667,8 +667,8 @@ test("QueryClient fetchQuery bypasses network when local cache holds a fresh ent
 	expect(fetchMock.calls.length).toBe(0);
 });
 
-// Implements DESIGN-001 SearchView previous-page retention via keepPreviousData verification.
-test("QueryObserver keeps previous page as placeholderData while next page loads", async () => {
+// Implements DESIGN-001 SearchView submitted-search loading isolation verification.
+test("QueryObserver clears previous page data while next page loads", async () => {
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
 	const localCache = new LocalQueryCache({ storage: null });
 
@@ -692,8 +692,8 @@ test("QueryObserver keeps previous page as placeholderData while next page loads
 
 	const during = observer.getCurrentResult();
 	expect(during.isFetching).toBe(true);
-	expect(during.isPlaceholderData).toBe(true);
-	expect(during.data).toEqual(makeSearchResponse(1, 1));
+	expect(during.isPlaceholderData).toBe(false);
+	expect(during.data).toBeUndefined();
 
 	resolvePage2(jsonResponse(200, makeSearchEnvelope(2, 2, "req-page-2")));
 	await waitForResult(observer, (r) => r.data?.page === 2 && !r.isPlaceholderData);

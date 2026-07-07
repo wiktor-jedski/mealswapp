@@ -68,3 +68,34 @@ func TestValidateCheckoutCreateRequestBodyRejectsMalformedShape(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateBillingPortalRequestBodyAcceptsReturnURL(t *testing.T) {
+	body := map[string]any{"returnUrl": "http://localhost:5173/subscription"}
+
+	if err := ValidateBillingPortalRequestBody(body); err != nil {
+		t.Fatalf("ValidateBillingPortalRequestBody() error = %v", err)
+	}
+
+	dto, err := decodeBillingPortalRequestBody(body)
+	if err != nil {
+		t.Fatalf("decodeBillingPortalRequestBody() error = %v", err)
+	}
+	if dto.ReturnURL != "http://localhost:5173/subscription" {
+		t.Fatalf("portal dto = %+v", dto)
+	}
+}
+
+func TestValidateBillingPortalRequestBodyRejectsMalformedShape(t *testing.T) {
+	for name, body := range map[string]map[string]any{
+		"unknown field": {"returnUrl": "http://localhost:5173/subscription", "customer": "cus_secret"},
+		"missing url":   {},
+		"relative url":  {"returnUrl": "/subscription"},
+		"fragment url":  {"returnUrl": "http://localhost:5173/subscription#token"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateBillingPortalRequestBody(body); err == nil {
+				t.Fatal("ValidateBillingPortalRequestBody() accepted malformed portal request")
+			}
+		})
+	}
+}

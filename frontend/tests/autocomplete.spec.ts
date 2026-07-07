@@ -219,6 +219,24 @@ test("Enter submits the typed query without selecting the top suggestion", async
 	await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
 });
 
+// Implements DESIGN-001 SearchView Substitution first autocomplete suggestion default verification.
+test("Enter adds the first suggestion in Substitution mode without pressing ArrowDown", async ({ page }) => {
+	await stubApiWithResults(page);
+	await page.goto("/");
+	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
+	await searchCombobox(page).fill("app");
+
+	const listbox = page.getByRole("listbox", { name: "Autocomplete suggestions" });
+	await expect(listbox).toBeVisible();
+	await expect(autocompleteOptions(page).first()).toHaveAttribute("aria-selected", "true");
+
+	await searchCombobox(page).press("Enter");
+
+	await expect(page.locator('section[aria-label="Substitution inputs"]')).toContainText("Apple");
+	await expect(searchCombobox(page)).toHaveValue("");
+	await expect(listbox).toBeHidden();
+});
+
 // Verifies IT-ARCH-001-002.
 // Verifies ARCH-001.
 // Traces SW-REQ-009, SW-REQ-086.

@@ -199,6 +199,13 @@ paths:
       summary: Start Google or Apple OAuth login
       parameters:
         - $ref: "#/components/parameters/OAuthProvider"
+        - name: return_to
+          in: query
+          required: false
+          description: Safe relative frontend path to return to after provider callback. Absolute URLs are ignored by the server.
+          schema:
+            type: string
+            example: /subscription
       responses:
         "302":
           description: Redirect to provider authorization URL.
@@ -226,8 +233,13 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          $ref: "#/components/responses/AuthSession"
+        "302":
+          description: Redirect back to the configured frontend origin after authenticated cookies are set.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
         "400":
           $ref: "#/components/responses/Error"
         "401":
@@ -522,6 +534,33 @@ paths:
           $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
+  /api/v1/billing/portal:
+    post:
+      operationId: postApiV1BillingPortal
+      summary: Create a Stripe-hosted billing portal session
+      description: Creates a provider-hosted customer portal session for the authenticated user's active paid subscription. Provider customer and subscription IDs remain server-side.
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BillingPortalCreateRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/BillingPortalSession"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "422":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
   /api/v1/billing/stripe/webhook:
     post:
       operationId: postApiV1BillingStripeWebhook
@@ -693,6 +732,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/CheckoutSessionEnvelope"
+    BillingPortalSession:
+      description: Sanitized Stripe-hosted billing portal response envelope. Contains no provider customer or subscription identifiers.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/BillingPortalSessionEnvelope"
     StripeWebhook:
       description: Verified Stripe webhook processing result. Duplicate provider events return 200 with duplicate set to true.
       content:
@@ -1390,6 +1435,34 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/CheckoutSessionData"
+    BillingPortalCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [returnUrl]
+      properties:
+        returnUrl:
+          type: string
+          format: uri
+          description: Absolute HTTP or HTTPS URL used by Stripe Billing Portal to return to the application. URL fragments are rejected.
+    BillingPortalSessionData:
+      type: object
+      additionalProperties: false
+      required: [portalUrl]
+      properties:
+        portalUrl:
+          type: string
+          format: uri
+    BillingPortalSessionEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/BillingPortalSessionData"
     StripeWebhookEvent:
       type: object
       additionalProperties: true

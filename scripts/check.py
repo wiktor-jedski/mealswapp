@@ -187,6 +187,28 @@ def validate_stripe_webhook_tests() -> None:
 	], BACKEND)
 
 
+def validate_phase0601_backend_auth_billing_smoke_tests() -> None:
+	# Implements DESIGN-014 MetricsCollector auth and billing compatibility aggregate gate.
+	run([
+		"go", "test",
+		"./internal/auth",
+		"./internal/httpapi",
+		"./internal/subscription",
+		"./internal/entitlement",
+		"-count=1",
+	], BACKEND)
+
+
+def validate_phase0601_frontend_auth_workflows() -> None:
+	# Implements DESIGN-014 MetricsCollector focused DESIGN-018 browser workflow aggregate gate.
+	run([
+		"bun", "run", "test:e2e", "--",
+		"tests/auth-session.spec.ts",
+		"tests/subscription-billing.spec.ts",
+		"tests/search-workflow.spec.ts",
+	], FRONTEND)
+
+
 def validate_frontend_e2e() -> None:
 	# Implements DESIGN-014 MetricsCollector Playwright and accessibility aggregate gate.
 	run(["bun", "run", "test:e2e"], FRONTEND)
@@ -316,6 +338,7 @@ def main() -> int:
 	run(["go", "vet", "./..."], BACKEND)
 	run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)
 	validate_stripe_webhook_tests()
+	validate_phase0601_backend_auth_billing_smoke_tests()
 	initially_running_services = running_compose_services()
 	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
 	run(["python3", "scripts/verify-phase02-uat.py", "--keep-services"])
@@ -334,6 +357,7 @@ def main() -> int:
 	run(["bun", "run", "check:api-types"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
+	validate_phase0601_frontend_auth_workflows()
 	validate_frontend_e2e()
 
 	design_implemented, design_missing, design_checked, design_total = validate_design_coverage()

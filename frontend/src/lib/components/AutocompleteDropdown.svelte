@@ -12,7 +12,8 @@
     onQueryInput = () => {},
     placeholder = "Search foods, meals, or ingredients…",
     focusKey = 0,
-    searching = false
+    searching = false,
+    selectFirstOnEnter = false
   }: {
     /**
      * Current query text. The parent owns typing and feeds debounced updates through this prop;
@@ -34,6 +35,8 @@
     focusKey?: string | number;
     /** True while an explicit submitted search request is fetching results. */
     searching?: boolean;
+    /** When true, fresh suggestions make the first option the default Enter selection. */
+    selectFirstOnEnter?: boolean;
   } = $props();
 
   /** Stable id linking the combobox input to its listbox via `aria-controls`. */
@@ -52,7 +55,7 @@
     onResults: (next) => {
       items = next;
       isOpen = next.length > 0;
-      activeIndex = -1;
+      activeIndex = selectFirstOnEnter && next.length > 0 ? 0 : -1;
     },
     onError: () => {
       items = [];

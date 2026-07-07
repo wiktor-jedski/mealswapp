@@ -10,9 +10,9 @@
   } from "../stores/sidebar";
   import { resolvedTheme, setThemePreference } from "../stores/theme";
   import { preferencesStore, setUnitSystem } from "../stores/preferences";
+  import { authSessionStore, clearAuthSession } from "../stores/auth-session";
+  import { buildAuthGuardDecision } from "../stores/auth-surface";
   import type {
-    ProfileData,
-    ProfileEnvelope,
     SavedItem,
     SavedItemsEnvelope,
     SearchHistoryEntry,
@@ -22,9 +22,27 @@
   import type { UnitSystem } from "../stores/preferences";
 
   // Implements DESIGN-001 SidebarComponent navigation, history, favorites, units, and responsive collapse.
+  // Implements DESIGN-018 AuthenticatedActionGuard sidebar protected actions through AuthSessionStore.
 
-  /** Authenticated profile endpoint used to detect signed-in state without exposing tokens. */
-  const PROFILE_ENDPOINT = "/api/v1/profile";
+  interface Props {
+    activeView?: "search" | "subscription" | "privacy" | "terms";
+    onNavigateSearch?: () => void;
+    onNavigateSubscription?: () => void;
+    onNavigatePrivacy?: () => void;
+    onNavigateTerms?: () => void;
+    onSignIn?: () => void;
+    onSignOut?: () => void;
+  }
+
+  let {
+    activeView = "search",
+    onNavigateSearch = () => undefined,
+    onNavigateSubscription = () => undefined,
+    onNavigatePrivacy = () => undefined,
+    onNavigateTerms = () => undefined,
+    onSignIn = () => undefined,
+    onSignOut = () => undefined
+  }: Props = $props();
 
   /** Authenticated search-history list endpoint served by ARCH-008 SearchHistoryRepository. */
   const SEARCH_HISTORY_ENDPOINT = "/api/v1/search-history";
@@ -38,15 +56,6 @@
     { value: "imperial", label: "Imperial" }
   ];
 
-  /** Authenticated profile loaded from `/api/v1/profile`; `null` while loading or anonymous. */
-  let profile = $state<ProfileData | null>(null);
-  /** True while the profile probe is in flight; gates the anonymous guidance block. */
-  let authenticating = $state(true);
-  /** True when the profile probe returned a valid profile envelope. */
-  let authenticated = $state(false);
-  /** Inline auth-probe error message; never propagated to the parent so core search stays usable. */
-  let authError = $state<string | null>(null);
-
   /** Authenticated search-history entries loaded from `/api/v1/search-history`. */
   let history = $state<SearchHistoryEntry[]>([]);
   let historyLoading = $state(false);
@@ -58,10 +67,25 @@
   let favoritesLoading = $state(false);
   /** Inline favorites error message; never propagated to the parent so core search stays usable. */
   let favoritesError = $state<string | null>(null);
+  /** User id whose protected sidebar data has already been requested for this browser session. */
+  let loadedForUserId = $state<string | null>(null);
+  let authenticating = $derived($authSessionStore.status === "unknown" || $authSessionStore.status === "authenticating");
+  let authenticated = $derived(sidebarProtectedActionsAllowed());
 
   onMount(() => {
     initSidebar();
-    void loadSidebar();
+  });
+
+  $effect(() => {
+    if (sidebarProtectedActionsAllowed() && $authSessionStore.userId !== loadedForUserId) {
+      loadedForUserId = $authSessionStore.userId ?? null;
+      void loadHistory();
+      void loadFavorites();
+    } else if (!sidebarProtectedActionsAllowed()) {
+      loadedForUserId = null;
+      history = [];
+      favorites = [];
+    }
   });
 
   /** Type guard ensuring a stored history `mode` is one of the supported SearchMode values before calling setMode. */
@@ -69,48 +93,13 @@
     return value === "catalog" || value === "substitution" || value === "daily_diet_alternative";
   }
 
-  /**
-   * Probes `/api/v1/profile` to detect the signed-in state. A 401 means anonymous (no error);
-   * any other failure sets {@link authError} and treats the user as anonymous so public
-   * Catalog Search stays usable. When authenticated, kicks off history and favorites loads.
-   */
-  async function loadSidebar(): Promise<void> {
-    authenticating = true;
-    authError = null;
-    try {
-      const response = await fetch(PROFILE_ENDPOINT, {
-        method: "GET",
-        credentials: "include",
-        headers: { Accept: "application/json" }
-      });
-      if (response.status === 401) {
-        authenticated = false;
-        profile = null;
-        authenticating = false;
-        return;
-      }
-      if (!response.ok) {
-        authenticated = false;
-        profile = null;
-        authError = "Couldn't load your activity right now.";
-        authenticating = false;
-        return;
-      }
-      const envelope = (await response.json()) as ProfileEnvelope;
-      profile = envelope.data ?? null;
-      authenticated = profile !== null;
-      authenticating = false;
-    } catch {
-      authenticated = false;
-      profile = null;
-      authError = "Couldn't load your activity right now.";
-      authenticating = false;
-      return;
-    }
-    if (authenticated) {
-      void loadHistory();
-      void loadFavorites();
-    }
+  /** Checks whether protected sidebar data may be loaded from authenticated APIs. */
+  function sidebarProtectedActionsAllowed(): boolean {
+    return buildAuthGuardDecision($authSessionStore, {
+      kind: "saved_data",
+      label: "Load sidebar activity",
+      continueAfterAuth: async () => undefined
+    }).allowed;
   }
 
   /**
@@ -127,6 +116,12 @@
         credentials: "include",
         headers: { Accept: "application/json" }
       });
+      if (response.status === 401) {
+        clearAuthSession("expired");
+        history = [];
+        historyLoading = false;
+        return;
+      }
       if (!response.ok) {
         historyError = "Couldn't load history.";
         historyLoading = false;
@@ -154,6 +149,12 @@
         credentials: "include",
         headers: { Accept: "application/json" }
       });
+      if (response.status === 401) {
+        clearAuthSession("expired");
+        favorites = [];
+        favoritesLoading = false;
+        return;
+      }
       if (!response.ok) {
         favoritesError = "Couldn't load favorites.";
         favoritesLoading = false;
@@ -179,6 +180,27 @@
     if (isSearchMode(entry.mode)) {
       setMode(entry.mode);
     }
+    onNavigateSearch();
+    setMobileOpen(false);
+  }
+
+  /** Navigates between authenticated top-level Search and Subscription views while closing the mobile drawer. */
+  function onSidebarNavigationSelect(view: "search" | "subscription"): void {
+    if (view === "search") {
+      onNavigateSearch();
+    } else {
+      onNavigateSubscription();
+    }
+    setMobileOpen(false);
+  }
+
+  /** Opens static legal views from the sidebar footer and closes the mobile drawer. */
+  function onLegalNavigationSelect(view: "privacy" | "terms"): void {
+    if (view === "privacy") {
+      onNavigatePrivacy();
+    } else {
+      onNavigateTerms();
+    }
     setMobileOpen(false);
   }
 
@@ -192,8 +214,12 @@
     setThemePreference($resolvedTheme === "dark" ? "light" : "dark");
   }
 
-  /** Branding shown in the sidebar header; falls back to the product name when the profile has no display name. */
-  let branding = $derived(profile?.displayName && profile.displayName.length > 0 ? profile.displayName : "Mealswapp");
+  /** Branding shown in the sidebar header; falls back to the product name when the session has no display name. */
+  let branding = $derived(
+    $authSessionStore.displayName && $authSessionStore.displayName.length > 0
+      ? $authSessionStore.displayName
+      : "Mealswapp"
+  );
 </script>
 
 <!-- Implements DESIGN-001 SidebarComponent -->
@@ -234,7 +260,7 @@
   <!-- Implements DESIGN-001 SidebarComponent content: visible on mobile only when mobileOpen, on desktop only when not collapsed. -->
   <div
     id="activity-sidebar-content"
-    class="sidebar-animated-content grid gap-4 {$sidebarStore.mobileOpen ? 'block' : 'hidden'} sm:grid"
+    class="sidebar-animated-content min-h-0 flex-1 flex-col gap-4 {$sidebarStore.mobileOpen ? 'flex' : 'hidden'} sm:flex"
     data-sidebar-content
   >
     <!-- Implements DESIGN-001 SidebarComponent mobile close button: visible only on small screens when the sidebar is open. -->
@@ -298,11 +324,49 @@
 
     {#if !authenticating}
       {#if !authenticated}
-        <!-- Implements DESIGN-001 SidebarComponent anonymous empty/sign-in guidance. -->
-        <p class="text-sm" data-sidebar-anonymous>
-          Sign in to see your history and favorites.
-        </p>
+        <!-- Implements DESIGN-018 AuthenticatedActionGuard sign-in entry point from the sidebar. -->
+        <button
+          type="button"
+          class="w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          onclick={onSignIn}
+          data-sidebar-sign-in
+        >
+          Sign in
+        </button>
       {:else}
+        <!-- Implements DESIGN-018 AuthSessionStore logout action from authenticated browser workflows. -->
+        <button
+          type="button"
+          class="w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          onclick={onSignOut}
+          data-sidebar-sign-out
+        >
+          Sign out
+        </button>
+
+        <!-- Implements DESIGN-016 ComponentStyles handheld focus order for account navigation after sign-out. -->
+        <!-- Implements DESIGN-001 SidebarComponent authenticated navigation between SearchView and Subscription view. -->
+        <nav class="grid gap-1" aria-label="Account navigation" data-sidebar-navigation>
+          <button
+            type="button"
+            class="w-full rounded border px-3 py-2 text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {activeView === 'search' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-muted)]'}"
+            aria-current={activeView === "search" ? "page" : undefined}
+            onclick={() => onSidebarNavigationSelect("search")}
+            data-sidebar-nav-search
+          >
+            Search
+          </button>
+          <button
+            type="button"
+            class="w-full rounded border px-3 py-2 text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {activeView === 'subscription' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-muted)]'}"
+            aria-current={activeView === "subscription" ? "page" : undefined}
+            onclick={() => onSidebarNavigationSelect("subscription")}
+            data-sidebar-nav-subscription
+          >
+            Subscription
+          </button>
+        </nav>
+
         <!-- Implements DESIGN-001 SidebarComponent authenticated search history list loaded from generated Phase 03 contracts. -->
         <section class="grid gap-2" aria-label="Search history" data-sidebar-history>
           <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">History</h2>
@@ -316,7 +380,7 @@
                 <li>
                   <button
                     type="button"
-                    class="w-full truncate rounded px-2 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                    class="w-full truncate rounded border border-transparent px-3 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                     data-sidebar-history-entry={entry.id}
                     onclick={() => onHistoryEntrySelect(entry)}
                   >
@@ -338,18 +402,36 @@
           {:else if !favoritesLoading}
             <ul class="grid gap-1">
               {#each favorites as favorite}
-                <li class="truncate px-2 py-1 text-sm" data-sidebar-favorite={favorite.itemId}>
+                <li class="truncate border border-transparent px-3 py-1 text-sm" data-sidebar-favorite={favorite.itemId}>
                   {favorite.itemId}
                 </li>
               {/each}
             </ul>
           {/if}
         </section>
-
-        {#if authError}
-          <p class="text-sm text-[var(--color-muted)]" data-sidebar-auth-error>{authError}</p>
-        {/if}
       {/if}
     {/if}
+
+    <!-- Implements DESIGN-016 ComponentStyles sidebar footer legal navigation for handheld and desktop layouts. -->
+    <nav class="mt-auto grid gap-1 pt-3" aria-label="Legal" data-sidebar-legal>
+      <button
+        type="button"
+        class="w-full rounded border px-3 py-2 text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {activeView === 'privacy' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-muted)]'}"
+        aria-current={activeView === "privacy" ? "page" : undefined}
+        onclick={() => onLegalNavigationSelect("privacy")}
+        data-sidebar-nav-privacy
+      >
+        Privacy Policy
+      </button>
+      <button
+        type="button"
+        class="w-full rounded border px-3 py-2 text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {activeView === 'terms' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-muted)]'}"
+        aria-current={activeView === "terms" ? "page" : undefined}
+        onclick={() => onLegalNavigationSelect("terms")}
+        data-sidebar-nav-terms
+      >
+        Terms of Service
+      </button>
+    </nav>
   </div>
 </aside>

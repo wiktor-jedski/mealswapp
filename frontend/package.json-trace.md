@@ -8,15 +8,18 @@
 - `docs/design/DESIGN-001.md`: SearchView SPA shell dependency on Svelte and TanStack Query server-state orchestration for catalog/substitution/daily-diet search.
 - `docs/design/DESIGN-016.md`: ComponentStyles dependency on Tailwind and frontend build validation.
 - `docs/design/DESIGN-017.md`: ErrorMessageMapper shared API error contracts generated from OpenAPI.
+- `docs/design/DESIGN-018.md`: AuthApiClient generated-contract dependency for auth, session recovery, disclaimer, entitlement refresh, and checkout start flows.
 
 ## Implemented Surface
 
-- Defines Bun scripts for development, build, preview, test, end-to-end browser tests, frontend checks, and OpenAPI contract generation or drift detection.
+- Defines Bun scripts for development, build, preview, test, mocked end-to-end browser tests, opt-in real-stack browser UAT, frontend checks, and OpenAPI contract generation or drift detection.
 - Declares Svelte, Vite, TanStack Svelte Query, Tailwind, TypeScript, Bun test types, Svelte testing, Playwright, and axe-core Playwright dependencies.
 - `dev` and `preview` serve the SPA for local development and Playwright browser tests respectively; `preview` pins port 4173 with `--strictPort` so the Playwright `webServer` polls a deterministic URL.
 - `test` runs deterministic Bun unit/component tests scoped to `src/` via `frontend/bunfig.toml` (`[test] root = "src"`), keeping Playwright specs under `frontend/tests/` out of the Bun runner.
 - `test:e2e` runs `playwright test`, executing Chromium desktop and mobile projects defined in `frontend/playwright.config.ts` against the built app served by `bun run build && bun run preview`.
+- `test:e2e:real-stack` runs the opt-in `frontend/playwright.real-stack.config.ts` scenario against the Vite dev proxy and a separately running local backend stack, proving real auth cookies and checkout handoff without mocked API routes.
 - `check` continues to run the unit/build/drift gates (`check:api-types`, `build`, `bun test`) without requiring Playwright browser binaries.
+- `generate:api-types` and `check:api-types` cover the DESIGN-018 auth/disclaimer/session contract helpers consumed by future auth UI code.
 
 ## Phase 05 Frontend Search Tooling (Task 139)
 

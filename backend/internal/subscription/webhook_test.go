@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
@@ -130,6 +131,13 @@ func TestStripeWebhookServiceMapsFailedAndCancelledEventsWithoutDeletingHistory(
 		{id: "evt_failed", event: "invoice.payment_failed", want: "past_due", subField: "sub_123"},
 		{id: "evt_cancelled", event: "customer.subscription.deleted", want: "cancelled", subField: "sub_123"},
 		{id: "evt_subscription_past_due", event: "customer.subscription.updated", status: "past_due", want: "past_due", subField: ""},
+		{id: "evt_subscription_incomplete", event: "customer.subscription.updated", status: "incomplete", want: "past_due", subField: ""},
+		{id: "evt_subscription_paused", event: "customer.subscription.updated", status: "paused", want: "past_due", subField: ""},
+		{id: "evt_subscription_incomplete_expired", event: "customer.subscription.updated", status: "incomplete_expired", want: "cancelled", subField: ""},
+		{id: "evt_subscription_paused_event", event: "customer.subscription.paused", status: "active", want: "past_due", subField: ""},
+		{id: "evt_subscription_resumed_active", event: "customer.subscription.resumed", status: "active", want: "active", subField: ""},
+		{id: "evt_subscription_resumed_incomplete", event: "customer.subscription.resumed", status: "incomplete", want: "past_due", subField: ""},
+		{id: "evt_payment_action_required", event: "invoice.payment_action_required", want: "past_due", subField: "sub_123"},
 	}
 
 	for _, tt := range events {
@@ -147,12 +155,62 @@ func TestStripeWebhookServiceMapsFailedAndCancelledEventsWithoutDeletingHistory(
 	}
 }
 
+func TestStripeWebhookServiceLogsRecognizedNoopBillingEvents(t *testing.T) {
+	// Verifies IT-ARCH-007-004.
+	// Verifies ARCH-007.
+	// Verifies ARCH-013.
+	// Traces SW-REQ-045 and SW-REQ-052.
+	userID := uuid.New()
+	store := &memoryStripeWebhookStore{}
+	logs := &observability.MemorySink{}
+	service := NewStripeWebhookService("whsec_test_secret", store).WithLogSink(logs)
+	payload := []byte(webhookPayload("evt_trial_will_end", "customer.subscription.trial_will_end", userID, "cus_123", "", "trialing"))
+
+	result, err := service.HandleWebhook(context.Background(), WebhookRequest{Payload: payload, Signature: signWebhookPayload(payload, "whsec_test_secret")})
+	if err != nil {
+		t.Fatalf("HandleWebhook() error = %v", err)
+	}
+	if result.Duplicate || len(store.entitlements) != 0 || len(store.events) != 1 {
+		t.Fatalf("result=%+v entitlements=%#v events=%#v, want persisted no-op without entitlement", result, store.entitlements, store.events)
+	}
+	if len(logs.Logs) != 1 {
+		t.Fatalf("logs = %#v, want one no-op log", logs.Logs)
+	}
+	log := logs.Logs[0]
+	if log.Service != "subscription.webhook" || log.Level != "info" || log.Message != "stripe webhook recognized no-op" {
+		t.Fatalf("log = %#v, want sanitized no-op event", log)
+	}
+	if log.Fields["stripe_event_id"] != "evt_trial_will_end" || log.Fields["stripe_event_type"] != "customer.subscription.trial_will_end" || log.Fields["stripe_subscription_id"] != "sub_object_123" || log.Fields["stripe_customer_id"] != "cus_123" {
+		t.Fatalf("log fields = %#v, want sanitized Stripe identifiers", log.Fields)
+	}
+	for _, value := range log.Fields {
+		text, _ := value.(string)
+		if strings.Contains(text, userID.String()) || strings.Contains(text, "payer@example.test") || strings.Contains(text, "4242") {
+			t.Fatalf("log fields = %#v, leaked non-allow-listed data", log.Fields)
+		}
+	}
+}
+
+func TestStripeWebhookServiceDoesNotLogUnknownBillingEvents(t *testing.T) {
+	store := &memoryStripeWebhookStore{}
+	logs := &observability.MemorySink{}
+	service := NewStripeWebhookService("whsec_test_secret", store).WithLogSink(logs)
+	payload := []byte(webhookPayload("evt_unknown_billing", "customer.subscription.future_event", uuid.New(), "cus_123", "", "active"))
+
+	if _, err := service.HandleWebhook(context.Background(), WebhookRequest{Payload: payload, Signature: signWebhookPayload(payload, "whsec_test_secret")}); err != nil {
+		t.Fatalf("HandleWebhook() error = %v", err)
+	}
+	if len(store.entitlements) != 0 || len(store.events) != 1 || len(logs.Logs) != 0 {
+		t.Fatalf("entitlements=%#v events=%#v logs=%#v, want silent persisted unknown no-op", store.entitlements, store.events, logs.Logs)
+	}
+}
+
 func TestStripeWebhookServiceReturnsStoreFailureForStripeRetry(t *testing.T) {
 	// Verifies IT-ARCH-007-004.
 	// Verifies ARCH-007.
 	// Verifies ARCH-013.
 	// Traces SW-REQ-045 and SW-REQ-052.
-	expected := errors.New("database write failed for card 4242 and payer@example.test")
+	expected := repository.NewError(repository.ErrorKindConnection, "database write failed for card 4242 and payer@example.test", errors.New("SQL insert failed for sk_test_secret"))
 	store := &memoryStripeWebhookStore{err: expected}
 	service := NewStripeWebhookService("whsec_test_secret", store)
 	payload := []byte(webhookPayload("evt_store_failure", "checkout.session.completed", uuid.New(), "cus_123", "sub_123", ""))
@@ -171,8 +229,73 @@ func TestStripeWebhookServiceReturnsStoreFailureForStripeRetry(t *testing.T) {
 	if deadLetter.PayloadSHA256 == "" || deadLetter.StripeCustomerID != "cus_123" || deadLetter.StripeSubscriptionID != "sub_123" || deadLetter.UserID == nil {
 		t.Fatalf("dead letter = %#v, want sanitized provider metadata and payload hash", deadLetter)
 	}
-	if strings.Contains(deadLetter.ErrorMessage, "4242") || strings.Contains(deadLetter.ErrorMessage, "payer@example.test") {
-		t.Fatalf("dead letter error message = %q, want sanitized message", deadLetter.ErrorMessage)
+	if deadLetter.ErrorMessage != "repository_connection" {
+		t.Fatalf("dead letter error message = %q, want repository_connection diagnostic", deadLetter.ErrorMessage)
+	}
+	for _, forbidden := range []string{"4242", "payer@example.test", "SQL insert", "sk_test_secret"} {
+		if strings.Contains(deadLetter.ErrorMessage, forbidden) {
+			t.Fatalf("dead letter error message = %q, leaked %q", deadLetter.ErrorMessage, forbidden)
+		}
+	}
+}
+
+func TestSanitizedErrorMessageUsesBoundedDiagnosticCodes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "nil", err: nil, want: ""},
+		{name: "context cancelled", err: context.Canceled, want: "context_cancelled"},
+		{name: "context deadline", err: context.DeadlineExceeded, want: "context_deadline_exceeded"},
+		{name: "not found", err: repository.NewError(repository.ErrorKindNotFound, "missing card 4242", nil), want: "repository_not_found"},
+		{name: "validation", err: repository.NewError(repository.ErrorKindValidation, "bad payer@example.test", nil), want: "repository_validation"},
+		{name: "conflict", err: repository.NewError(repository.ErrorKindConflict, "duplicate", nil), want: "repository_conflict"},
+		{name: "connection", err: repository.NewError(repository.ErrorKindConnection, "down", nil), want: "repository_connection"},
+		{name: "retryable", err: repository.NewError(repository.ErrorKindRetryable, "deadlock", nil), want: "repository_retryable"},
+		{name: "canceled", err: repository.NewError(repository.ErrorKindCanceled, "query canceled", nil), want: "repository_canceled"},
+		{name: "internal", err: repository.NewError(repository.ErrorKindInternal, "schema missing", nil), want: "repository_internal"},
+		{name: "unknown repository kind", err: repository.NewError(repository.ErrorKind("future_kind"), "future", nil), want: "repository_unknown"},
+		{name: "fallback", err: errors.New("raw database failure with 4242 and payer@example.test"), want: "stripe webhook processing failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizedErrorMessage(tc.err)
+			if got != tc.want {
+				t.Fatalf("sanitizedErrorMessage() = %q, want %q", got, tc.want)
+			}
+			if strings.Contains(got, "4242") || strings.Contains(got, "payer@example.test") {
+				t.Fatalf("sanitizedErrorMessage() = %q, leaked raw error text", got)
+			}
+		})
+	}
+}
+
+func TestStripeWebhookServiceStoresFallbackDiagnosticWithoutRawErrorText(t *testing.T) {
+	expected := errors.New("database write failed for card 4242 and payer@example.test using SQL INSERT")
+	store := &memoryStripeWebhookStore{err: expected}
+	service := NewStripeWebhookService("whsec_test_secret", store)
+	payload := []byte(webhookPayload("evt_store_failure_fallback", "checkout.session.completed", uuid.New(), "cus_123", "sub_123", ""))
+
+	_, err := service.HandleWebhook(context.Background(), WebhookRequest{Payload: payload, Signature: signWebhookPayload(payload, "whsec_test_secret")})
+	if !errors.Is(err, ErrWebhookStoreFailed) || !errors.Is(err, expected) {
+		t.Fatalf("HandleWebhook() error = %v, want wrapped store failure", err)
+	}
+	if len(store.deadLetters) != 1 {
+		t.Fatalf("dead letters = %#v, want one sanitized entry", store.deadLetters)
+	}
+	if got := store.deadLetters[0].ErrorMessage; got != "stripe webhook processing failed" {
+		t.Fatalf("dead letter error message = %q, want fallback diagnostic", got)
+	}
+	for _, forbidden := range []string{"4242", "payer@example.test", "SQL INSERT"} {
+		if strings.Contains(store.deadLetters[0].ErrorMessage, forbidden) {
+			t.Fatalf("dead letter error message = %q, leaked %q", store.deadLetters[0].ErrorMessage, forbidden)
+		}
+	}
+}
+
+func TestStripeWebhookServiceStoresEmptyDiagnosticForNilCause(t *testing.T) {
+	if got := sanitizedErrorMessage(nil); got != "" {
+		t.Fatalf("sanitizedErrorMessage(nil) = %q, want empty diagnostic", got)
 	}
 }
 
@@ -186,7 +309,7 @@ func signWebhookPayload(payload []byte, secret string) string {
 
 func webhookPayload(eventID string, eventType string, userID uuid.UUID, customerID string, subscriptionID string, status string) string {
 	objectID := "cs_test_123"
-	if eventType == "customer.subscription.deleted" || eventType == "customer.subscription.updated" {
+	if strings.HasPrefix(eventType, "customer.subscription.") {
 		objectID = "sub_object_123"
 	}
 	return fmt.Sprintf(`{"id":%q,"type":%q,"data":{"object":{"id":%q,"client_reference_id":%q,"customer":%q,"subscription":%q,"status":%q,"metadata":{"user_id":%q}}}}`,

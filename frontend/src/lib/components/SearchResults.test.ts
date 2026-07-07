@@ -37,7 +37,7 @@ test("hides the ResultsGrid until the user enters a non-empty query", () => {
 	expect(source).toContain("currentOptions.enabled === true");
 	expect(source).toContain("searchEnabled");
 	expect(source).toContain("enabled: searchEnabled && $optionsStore.enabled === true");
-	expect(source).toContain("{#if hasStartedSearching}");
+	expect(source).toContain("{#if shouldRenderResults}");
 	expect(source).toContain("<ResultsGrid");
 });
 
@@ -45,6 +45,7 @@ test("hides the ResultsGrid until the user enters a non-empty query", () => {
 test("lifts submitted search loading state and suppresses empty result flicker while fetching", () => {
 	expect(source).toContain("onSearchInFlightChange");
 	expect(source).toContain("hasStartedSearching && query.isFetching === true");
+	expect(source).toContain("hasStartedSearching && !searchInFlight && (query.data !== undefined || errorMessage !== null)");
 	expect(source).toContain("onSearchInFlightChange(searchInFlight)");
 	expect(source).toContain("loading={searchInFlight}");
 });

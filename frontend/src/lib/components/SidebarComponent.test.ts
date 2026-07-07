@@ -10,8 +10,8 @@ import { join } from "node:path";
 // these tests assert the Svelte source declares the documented sidebar
 // behaviors: desktop-left placement, collapse/expand toggle, mobile toggle,
 // authenticated history and favorites loaded through generated Phase 03
-// contracts, unit preference control, anonymous sign-in guidance, history-entry selection restoring
-// search state, and API failures that never block core search. Sidebar search-mode buttons
+// contracts, unit preference control, anonymous sign-in guidance, authenticated Search/Subscription
+// navigation, history-entry selection restoring search state, and API failures that never block core search. Sidebar search-mode buttons
 // are intentionally omitted because mode switching lives in the main view. `vite build`
 // compiles the component, validating the Svelte source at build time.
 
@@ -69,35 +69,98 @@ test("declares a mobile-only open toggle and a mobile-only close button bound to
 	expect(source).toContain("setMobileOpen(false)");
 	expect(source).toContain("$sidebarStore.mobileOpen");
 	// Mobile open/closed gates content visibility on small screens.
-	expect(source).toContain("$sidebarStore.mobileOpen ? 'block' : 'hidden'");
+	expect(source).toContain("$sidebarStore.mobileOpen ? 'flex' : 'hidden'");
+	expect(source).toContain("flex-1 flex-col");
 });
 
 // Implements DESIGN-001 SidebarComponent authenticated contract loading verification.
-test("imports generated Phase 03 contract types and fetches profile, history, and favorites with credentials", () => {
+test("imports generated Phase 03 contract types and fetches history and favorites with credentials after session auth", () => {
 	expect(source).toContain('import type {');
-	expect(source).toContain("ProfileEnvelope");
 	expect(source).toContain("SearchHistoryEnvelope");
 	expect(source).toContain("SavedItemsEnvelope");
 	expect(source).toContain("SearchHistoryEntry");
 	expect(source).toContain("SavedItem");
-	expect(source).toContain("ProfileData");
 	expect(source).toContain('from "../api/generated"');
-	expect(source).toContain('"/api/v1/profile"');
+	expect(source).toContain('import { authSessionStore, clearAuthSession } from "../stores/auth-session"');
+	expect(source).toContain('import { buildAuthGuardDecision } from "../stores/auth-surface"');
+	expect(source).toContain("sidebarProtectedActionsAllowed()");
+	expect(source).toContain("buildAuthGuardDecision($authSessionStore");
+	expect(source).toContain('kind: "saved_data"');
+	expect(source).not.toContain('"/api/v1/profile"');
 	expect(source).toContain('"/api/v1/search-history"');
 	expect(source).toContain('"/api/v1/saved-items?kind=favorite"');
 	expect(source).toContain("credentials: \"include\"");
-	// Three credentialed GETs: profile probe, history, and favorites.
-	expect(countOccurrences(source, "credentials: \"include\"")).toBe(3);
+	// Two credentialed GETs: history and favorites only after the authenticated-action guard allows sidebar data.
+	expect(countOccurrences(source, "credentials: \"include\"")).toBe(2);
 });
 
-// Implements DESIGN-001 SidebarComponent anonymous empty/sign-in guidance verification.
-test("renders sign-in guidance when the profile probe returns anonymous", () => {
-	expect(source).toContain("data-sidebar-anonymous");
-	expect(source).toContain("Sign in to see your history and favorites.");
-	// Authenticated state is gated by a profile-probe flag so anonymous users see guidance, not errors.
+// Implements DESIGN-018 AuthenticatedActionGuard sidebar sign-in entry verification.
+test("renders a sidebar sign-in action when the session store reports anonymous", () => {
+	expect(source).toContain("data-sidebar-sign-in");
+	expect(source).toContain("onSignIn");
+	expect(source).toContain("w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)]");
+	expect(source).not.toContain("Sign in to see your history and favorites.");
+	// Authenticated state is gated by AuthSessionStore so anonymous users see guidance, not protected calls.
 	expect(source).toContain("authenticating");
 	expect(source).toContain("authenticated");
+	expect(source).toContain('$authSessionStore.status === "unknown"');
 	expect(source).toContain("response.status === 401");
+	expect(source).toContain('clearAuthSession("expired")');
+});
+
+// Implements DESIGN-001 SidebarComponent authenticated Search and Subscription navigation verification.
+test("declares authenticated Search and Subscription sidebar links only in the authenticated branch", () => {
+	const navPos = source.indexOf("data-sidebar-navigation");
+	const authenticatedBranchPos = source.indexOf("{:else}");
+		const signOutPos = source.indexOf("data-sidebar-sign-out");
+		const historyPos = source.indexOf("data-sidebar-history");
+		const unitsPos = source.indexOf("data-sidebar-units");
+		expect(signOutPos).toBeGreaterThan(unitsPos);
+		expect(navPos).toBeGreaterThan(signOutPos);
+		expect(navPos).toBeGreaterThan(authenticatedBranchPos);
+		expect(navPos).toBeLessThan(historyPos);
+		expect(source).toContain("Implements DESIGN-016 ComponentStyles handheld focus order for account navigation after sign-out");
+	expect(source).toContain('aria-label="Account navigation"');
+	expect(source).toContain("data-sidebar-nav-search");
+	expect(source).toContain("data-sidebar-nav-subscription");
+	expect(source).toContain("data-sidebar-sign-out");
+	expect(source).toContain("Search");
+	expect(source).toContain("Subscription");
+	expect(source).toContain("Sign out");
+	expect(source).toContain("onNavigateSearch");
+	expect(source).toContain("onNavigateSubscription");
+	expect(source).toContain("onSignOut");
+	expect(source).toContain("activeView === 'search'");
+	expect(source).toContain("activeView === 'subscription'");
+	expect(source).toContain("border-[var(--color-primary)] text-[var(--color-text)]");
+	expect(source).toContain("border-transparent text-[var(--color-muted)]");
+	expect(source).not.toContain("activeView === 'subscription' ? 'bg-[var(--color-secondary)]");
+	expect(source).toContain('aria-current={activeView === "search" ? "page" : undefined}');
+	expect(source).toContain('aria-current={activeView === "subscription" ? "page" : undefined}');
+});
+
+// Implements DESIGN-016 ComponentStyles legal sidebar footer navigation verification.
+test("declares sidebar footer links for Privacy Policy and Terms of Service", () => {
+	expect(source).toContain("data-sidebar-legal");
+	expect(source).toContain("data-sidebar-nav-privacy");
+	expect(source).toContain("data-sidebar-nav-terms");
+	expect(source).toContain("Privacy Policy");
+	expect(source).toContain("Terms of Service");
+	expect(source).toContain("onNavigatePrivacy");
+	expect(source).toContain("onNavigateTerms");
+	expect(source).toContain("onLegalNavigationSelect");
+	expect(source).toContain('aria-current={activeView === "privacy" ? "page" : undefined}');
+	expect(source).toContain('aria-current={activeView === "terms" ? "page" : undefined}');
+});
+
+// Implements DESIGN-001 SidebarComponent mobile navigation usability verification.
+test("sidebar navigation closes the mobile drawer after account navigation", () => {
+	expect(source).toContain("onSidebarNavigationSelect");
+	expect(source).toContain("setMobileOpen(false)");
+	expect(source).toContain('onclick={() => onSidebarNavigationSelect("search")}');
+	expect(source).toContain('onclick={() => onSidebarNavigationSelect("subscription")}');
+	expect(source).toContain('onclick={() => onLegalNavigationSelect("privacy")}');
+	expect(source).toContain('onclick={() => onLegalNavigationSelect("terms")}');
 });
 
 // Implements DESIGN-001 SidebarComponent history entry selection restoring search state verification.
@@ -106,20 +169,20 @@ test("selecting a history entry calls setQuery with the query and setMode with t
 	expect(source).toContain("setQuery(entry.query)");
 	expect(source).toContain("setMode(entry.mode)");
 	expect(source).toContain("isSearchMode(entry.mode)");
+	expect(source).toContain("onNavigateSearch()");
 	expect(source).toContain("onclick={() => onHistoryEntrySelect(entry)}");
 	expect(source).toContain("data-sidebar-history-entry={entry.id}");
+	expect(source).toContain("w-full truncate rounded border border-transparent px-3 py-1 text-left text-sm");
 });
 
 // Implements DESIGN-001 SidebarComponent API failures never block core search verification.
-test("wraps profile, history, and favorites fetches in try/catch that sets inline error state instead of throwing", () => {
-	// Each of the three async loaders has a try block and a catch that assigns a local error string.
-	expect(countOccurrences(source, "} catch {")).toBeGreaterThanOrEqual(3);
-	expect(source).toContain("authError =");
+test("wraps history and favorites fetches in try/catch that sets inline error state instead of throwing", () => {
+	// Each protected sidebar loader has a try block and a catch that assigns a local error string.
+	expect(countOccurrences(source, "} catch {")).toBeGreaterThanOrEqual(2);
 	expect(source).toContain("historyError =");
 	expect(source).toContain("favoritesError =");
 	expect(source).toContain("data-sidebar-history-error");
 	expect(source).toContain("data-sidebar-favorites-error");
-	expect(source).toContain("data-sidebar-auth-error");
 	// The component must not rethrow or expose a throw that propagates to the parent.
 	expect(source).not.toContain("throw new Error");
 	expect(source).not.toContain("throw new SearchClientError");

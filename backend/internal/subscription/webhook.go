@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
@@ -57,6 +58,7 @@ type WebhookResult struct {
 type StripeWebhookService struct {
 	signingSecret string
 	store         StripeWebhookStore
+	logs          observability.LogSink
 	now           func() time.Time
 }
 
@@ -64,6 +66,16 @@ type StripeWebhookService struct {
 // Implements DESIGN-007 StripeWebhookHandler.
 func NewStripeWebhookService(signingSecret string, store StripeWebhookStore) *StripeWebhookService {
 	return &StripeWebhookService{signingSecret: strings.TrimSpace(signingSecret), store: store, now: time.Now}
+}
+
+// WithLogSink attaches best-effort structured logs for recognized no-op billing events.
+// Implements DESIGN-007 StripeWebhookHandler.
+func (s *StripeWebhookService) WithLogSink(logs observability.LogSink) *StripeWebhookService {
+	if s == nil {
+		return s
+	}
+	s.logs = logs
+	return s
 }
 
 // HandleWebhook verifies, deduplicates, and applies subscription entitlement state.
@@ -97,6 +109,9 @@ func (s *StripeWebhookService) HandleWebhook(ctx context.Context, req WebhookReq
 		s.recordDeadLetter(ctx, event, req.Payload, entitlement, err)
 		return WebhookResult{}, fmt.Errorf("%w: %w", ErrWebhookStoreFailed, err)
 	}
+	if inserted && entitlement == nil && isRecognizedNoopStripeBillingEvent(event) {
+		s.logNoop(ctx, event)
+	}
 	return WebhookResult{EventID: event.ID, EventType: event.Type, Duplicate: !inserted}, nil
 }
 
@@ -123,11 +138,55 @@ func (s *StripeWebhookService) recordDeadLetter(ctx context.Context, event strip
 	_ = s.store.InsertStripeDeadLetter(ctx, entry)
 }
 
+// logNoop records sanitized operator context for recognized billing events with no local side effect.
+// Implements DESIGN-007 StripeWebhookHandler.
+func (s *StripeWebhookService) logNoop(ctx context.Context, event stripeEvent) {
+	if s == nil || s.logs == nil {
+		return
+	}
+	_ = s.logs.Log(ctx, observability.LogEvent{
+		Service: "subscription.webhook",
+		Level:   "info",
+		Message: "stripe webhook recognized no-op",
+		Fields: map[string]any{
+			"stripe_event_id":        strings.TrimSpace(event.ID),
+			"stripe_event_type":      strings.TrimSpace(event.Type),
+			"stripe_subscription_id": stripeSubscriptionID(event.Object),
+			"stripe_customer_id":     strings.TrimSpace(event.Object.Customer),
+		},
+		CreatedAt: time.Now().UTC(),
+	})
+}
+
 // sanitizedErrorMessage keeps dead-letter diagnostics bounded and payload-free.
 // Implements DESIGN-007 StripeWebhookHandler dead-letter persistence.
 func sanitizedErrorMessage(err error) string {
 	if err == nil {
 		return ""
+	}
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "context_cancelled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "context_deadline_exceeded"
+	case repository.IsKind(err, repository.ErrorKindNotFound):
+		return "repository_not_found"
+	case repository.IsKind(err, repository.ErrorKindValidation):
+		return "repository_validation"
+	case repository.IsKind(err, repository.ErrorKindConflict):
+		return "repository_conflict"
+	case repository.IsKind(err, repository.ErrorKindConnection):
+		return "repository_connection"
+	case repository.IsKind(err, repository.ErrorKindRetryable):
+		return "repository_retryable"
+	case repository.IsKind(err, repository.ErrorKindCanceled):
+		return "repository_canceled"
+	case repository.IsKind(err, repository.ErrorKindInternal):
+		return "repository_internal"
+	}
+	var repoErr *repository.Error
+	if errors.As(err, &repoErr) {
+		return "repository_unknown"
 	}
 	return "stripe webhook processing failed"
 }
@@ -195,23 +254,27 @@ func entitlementStatusForStripeEvent(event stripeEvent) (string, bool) {
 	switch event.Type {
 	case "checkout.session.completed", "invoice.payment_succeeded":
 		return "active", true
-	case "invoice.payment_failed":
+	case "invoice.payment_failed", "invoice.payment_action_required":
 		return "past_due", true
 	case "customer.subscription.deleted":
 		return "cancelled", true
-	case "customer.subscription.created", "customer.subscription.updated":
-		switch event.Object.Status {
-		case "active", "trialing":
-			return "active", true
-		case "past_due", "unpaid", "incomplete_expired":
-			return "past_due", true
-		case "canceled":
-			return "cancelled", true
-		default:
-			return "", false
-		}
+	case "customer.subscription.paused":
+		return "past_due", true
+	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.resumed":
+		return entitlementStatusForStripeSubscription(event.Object.Status)
 	default:
 		return "", false
+	}
+}
+
+// isRecognizedNoopStripeBillingEvent identifies Stripe billing events that are intentionally observed only.
+// Implements DESIGN-007 StripeWebhookHandler.
+func isRecognizedNoopStripeBillingEvent(event stripeEvent) bool {
+	switch event.Type {
+	case "customer.subscription.trial_will_end":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -234,10 +297,6 @@ func userIDFromStripeObject(object stripeObject) (uuid.UUID, error) {
 // paidEntitlementForWebhook builds the append-only paid entitlement projection.
 // Implements DESIGN-007 StripeWebhookHandler.
 func paidEntitlementForWebhook(userID uuid.UUID, status string, object stripeObject) repository.Entitlement {
-	subscriptionID := strings.TrimSpace(object.Subscription)
-	if subscriptionID == "" && strings.HasPrefix(object.ID, "sub_") {
-		subscriptionID = object.ID
-	}
 	return repository.Entitlement{
 		UserID:               userID,
 		Tier:                 "paid",
@@ -245,8 +304,18 @@ func paidEntitlementForWebhook(userID uuid.UUID, status string, object stripeObj
 		SearchLimitPer24h:    0,
 		AllowedModes:         []string{"catalog", "substitution", "daily_diet_alternative"},
 		StripeCustomerID:     strings.TrimSpace(object.Customer),
-		StripeSubscriptionID: subscriptionID,
+		StripeSubscriptionID: stripeSubscriptionID(object),
 	}
+}
+
+// stripeSubscriptionID returns the allow-listed subscription identifier from Stripe object shapes.
+// Implements DESIGN-007 StripeWebhookHandler.
+func stripeSubscriptionID(object stripeObject) string {
+	subscriptionID := strings.TrimSpace(object.Subscription)
+	if subscriptionID == "" && strings.HasPrefix(object.ID, "sub_") {
+		subscriptionID = strings.TrimSpace(object.ID)
+	}
+	return subscriptionID
 }
 
 // verifyStripeSignature validates Stripe's timestamped v1 HMAC signature.

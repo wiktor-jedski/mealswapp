@@ -11,6 +11,9 @@ import (
 // Implements DESIGN-007 SubscriptionController checkout request validation.
 var allowedCheckoutRequestFields = []string{"plan", "successUrl", "cancelUrl"}
 
+// Implements DESIGN-007 SubscriptionController billing portal request validation.
+var allowedBillingPortalRequestFields = []string{"returnUrl"}
+
 // Implements DESIGN-007 SubscriptionController raw-card-data rejection.
 var rejectedCheckoutRequestFields = []string{"card", "cardNumber", "card[number]", "number", "cvc", "cvv", "expiry", "expMonth", "expYear", "paymentMethodData"}
 
@@ -20,6 +23,12 @@ type checkoutCreateRequestDTO struct {
 	Plan       string `json:"plan"`
 	SuccessURL string `json:"successUrl"`
 	CancelURL  string `json:"cancelUrl"`
+}
+
+// billingPortalRequestDTO is the server-owned billing portal request shape.
+// Implements DESIGN-007 SubscriptionController.
+type billingPortalRequestDTO struct {
+	ReturnURL string `json:"returnUrl"`
 }
 
 // ValidateCheckoutCreateRequestBody rejects malformed checkout requests and raw card fields.
@@ -52,6 +61,21 @@ func ValidateCheckoutCreateRequestBody(body map[string]any) error {
 	return nil
 }
 
+// ValidateBillingPortalRequestBody rejects malformed billing portal requests.
+// Implements DESIGN-007 SubscriptionController.
+func ValidateBillingPortalRequestBody(body map[string]any) error {
+	for key := range body {
+		if !slices.Contains(allowedBillingPortalRequestFields, key) {
+			return errors.New("billing portal request contains an unsupported field")
+		}
+	}
+	dto, err := decodeBillingPortalRequestBody(body)
+	if err != nil {
+		return err
+	}
+	return validateCheckoutRequestRedirectURL(dto.ReturnURL)
+}
+
 // validateCheckoutRequestRedirectURL rejects relative or fragment-bearing checkout redirects.
 // Implements DESIGN-007 SubscriptionController checkout redirect validation.
 func validateCheckoutRequestRedirectURL(value string) error {
@@ -75,6 +99,20 @@ func decodeCheckoutCreateRequestBody(body map[string]any) (checkoutCreateRequest
 	var dto checkoutCreateRequestDTO
 	if err := json.Unmarshal(payload, &dto); err != nil {
 		return checkoutCreateRequestDTO{}, err
+	}
+	return dto, nil
+}
+
+// decodeBillingPortalRequestBody converts a validated generic portal body into the typed DTO.
+// Implements DESIGN-007 SubscriptionController.
+func decodeBillingPortalRequestBody(body map[string]any) (billingPortalRequestDTO, error) {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return billingPortalRequestDTO{}, err
+	}
+	var dto billingPortalRequestDTO
+	if err := json.Unmarshal(payload, &dto); err != nil {
+		return billingPortalRequestDTO{}, err
 	}
 	return dto, nil
 }

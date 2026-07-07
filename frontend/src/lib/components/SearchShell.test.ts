@@ -17,7 +17,7 @@ function indexOf(fragment: string): number {
 
 // Implements DESIGN-001 SearchView composed component presence verification.
 test("composes sidebar, mode controls, autocomplete, mode-specific controls, results, and offline banner", () => {
-	expect(source).toContain("<SidebarComponent />");
+	expect(source).toContain("<SidebarComponent");
 	expect(source).toContain("<SearchModes />");
 	expect(source).toContain("<AutocompleteDropdown");
 	expect(source).toContain("<SubstitutionInputs");
@@ -25,6 +25,53 @@ test("composes sidebar, mode controls, autocomplete, mode-specific controls, res
 	expect(source).not.toContain("<SettingsPanel");
 	expect(source).toContain("<SearchResults");
 	expect(source).toContain("<OfflineBanner />");
+});
+
+// Implements DESIGN-001 SearchView and SidebarComponent subscription view separation verification.
+test("renders billing controls only in the authenticated Subscription view branch", () => {
+	expect(source).toContain("type ShellView = \"search\" | \"subscription\" | \"privacy\" | \"terms\"");
+	expect(source).toContain("data-subscription-view");
+	expect(source).toContain("activeView === \"subscription\"");
+	expect(source).toContain("<SubscriptionBilling />");
+	expect(source).not.toContain("subscription-view-title");
+	expect(source).toContain("{:else}");
+	expect(source.indexOf("<SubscriptionBilling />")).toBeLessThan(source.indexOf("<SearchModes />"));
+	expect(source).toContain("openSubscriptionView");
+	expect(source).toContain("requestProtectedAction($authSessionStore");
+	expect(source).toContain('kind: "account"');
+});
+
+// Implements DESIGN-018 OAuthEntryPoint auth-modal composition verification.
+test("renders Google OAuth entry inside the protected-action auth modal", () => {
+	expect(source).toContain('import OAuthEntryPoint from "./OAuthEntryPoint.svelte"');
+	expect(source).toContain("<OAuthEntryPoint mode={authSurfaceMode} />");
+	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode} />")).toBeLessThan(source.indexOf("<LoginView />"));
+	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode} />")).toBeLessThan(source.indexOf("<RegisterView"));
+});
+
+// Implements DESIGN-001 SearchView state preservation when returning from Subscription view.
+test("passes sidebar navigation callbacks that return to search without resetting search state", () => {
+	expect(source).toContain("onNavigateSearch={openSearchView}");
+	expect(source).toContain("onNavigateSubscription={openSubscriptionView}");
+	expect(source).toContain("onNavigatePrivacy={openPrivacyView}");
+	expect(source).toContain("onNavigateTerms={openTermsView}");
+	expect(source).toContain("onSignIn={() =>");
+	expect(source).toContain("onSignOut={() => void signOut()}");
+	expect(source).toContain("function openSearchView(): void");
+	expect(source).toContain("function openPrivacyView(): void");
+	expect(source).toContain("function openTermsView(): void");
+	expect(source).toContain('activeView = "search"');
+	expect(source).not.toContain("resetSearch");
+});
+
+// Implements DESIGN-016 ComponentStyles placeholder legal content views verification.
+test("renders placeholder Privacy Policy and Terms of Service views", () => {
+	expect(source).toContain('path === "/privacy"');
+	expect(source).toContain('path === "/terms"');
+	expect(source).toContain("data-privacy-view");
+	expect(source).toContain("data-terms-view");
+	expect(source).toContain("Privacy Policy placeholder text.");
+	expect(source).toContain("Terms of Service placeholder text.");
 });
 
 // Implements DESIGN-001 SearchView entitlement query and feedback wiring verification.
@@ -73,6 +120,7 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 test("passes submitted search loading state into the autocomplete search bar", () => {
 	expect(source).toContain("let searchInFlight = $state(false)");
 	expect(source).toContain("searching={searchInFlight}");
+	expect(source).toContain('selectFirstOnEnter={activeMode === "substitution"}');
 	expect(source).toContain("onSearchInFlightChange");
 	expect(source).toContain("searchInFlight = searching");
 });

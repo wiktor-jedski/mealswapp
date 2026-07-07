@@ -816,6 +816,44 @@ func TestSearchWorkflowIntegrationGateSubstitutionSortsBySimilarity(t *testing.T
 	}
 }
 
+func TestSearchControllerSkipsHistoryForEmptySubstitutionQuery(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository query-less Substitution Search.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	history := &fakeSearchHistoryAppender{err: errors.New("history query is required")}
+	service := &fakeSearchService{response: search.SearchResponse{
+		Items:            []repository.FoodItemEntity{{ID: uuid.New(), Name: "Oat Milk", PhysicalState: repository.PhysicalStateLiquid}},
+		TotalCount:       1,
+		Page:             1,
+		SimilarityScores: []float64{0.95},
+		Warnings:         []string{},
+	}}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchHistoryAppender(history).Routes()})
+	body := searchRequestBody(t, map[string]any{
+		"query":   "",
+		"mode":    "substitution",
+		"page":    1,
+		"filters": []any{},
+		"substitutionInputs": []any{
+			map[string]any{"foodObjectId": "21000000-0000-0000-0000-000000000001", "quantity": 100, "unit": "g"},
+			map[string]any{"foodObjectId": "21000000-0000-0000-0000-000000000004", "quantity": 100, "unit": "ml"},
+		},
+	})
+	req := searchHTTPPost(body)
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+	if resp.StatusCode != fiber.StatusOK || envelope.Status != "ok" || history.calls != 0 {
+		t.Fatalf("empty substitution query response=%d envelope=%+v history=%d", resp.StatusCode, envelope, history.calls)
+	}
+}
+
 func TestSearchControllerEntitlementGateAllowsAnonymousCatalogWithoutUsageWrites(t *testing.T) {
 	// Implements DESIGN-002 SearchController and DESIGN-007 EntitlementManager anonymous Catalog Search gate.
 	usageRepo := &searchEntitlementUsageRepository{}

@@ -83,6 +83,40 @@ func TestReconcileStripeEntitlementsAppendsMissingPaidCancelledAndPastDueState(t
 	}
 }
 
+func TestReconcileStripeEntitlementsMapsRecoverableAndTerminalStripeStatuses(t *testing.T) {
+	// Verifies IT-ARCH-007-005.
+	// Verifies ARCH-007.
+	// Traces SW-REQ-045 and SW-REQ-052.
+	incompleteUser := uuid.New()
+	pausedUser := uuid.New()
+	expiredUser := uuid.New()
+	store := &memoryEntitlementStore{latest: map[uuid.UUID]repository.Entitlement{
+		incompleteUser: {UserID: incompleteUser, Tier: "paid", Status: "active", StripeCustomerID: "cus_incomplete", StripeSubscriptionID: "sub_incomplete"},
+		pausedUser:     {UserID: pausedUser, Tier: "paid", Status: "active", StripeCustomerID: "cus_paused", StripeSubscriptionID: "sub_paused"},
+		expiredUser:    {UserID: expiredUser, Tier: "paid", Status: "active", StripeCustomerID: "cus_expired", StripeSubscriptionID: "sub_expired"},
+	}}
+	service := NewReconciliationService(memoryReconciliationGateway{subscriptions: []StripeSubscription{
+		{UserID: incompleteUser, CustomerID: "cus_incomplete", SubscriptionID: "sub_incomplete", Status: "incomplete"},
+		{UserID: pausedUser, CustomerID: "cus_paused", SubscriptionID: "sub_paused", Status: "paused"},
+		{UserID: expiredUser, CustomerID: "cus_expired", SubscriptionID: "sub_expired", Status: "incomplete_expired"},
+	}}, store, nil)
+
+	result, err := service.ReconcileStripeEntitlements(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileStripeEntitlements() error = %v", err)
+	}
+	if result.Appended != 3 || result.Skipped != 0 {
+		t.Fatalf("result = %+v, want three repaired entitlement appends", result)
+	}
+	got := map[uuid.UUID]string{}
+	for _, entitlement := range store.appends {
+		got[entitlement.UserID] = entitlement.Status
+	}
+	if got[incompleteUser] != "past_due" || got[pausedUser] != "past_due" || got[expiredUser] != "cancelled" {
+		t.Fatalf("statuses = %#v, want recoverable past_due and terminal cancelled", got)
+	}
+}
+
 func TestReconcileStripeEntitlementsIsIdempotentAcrossDuplicateRuns(t *testing.T) {
 	// Verifies IT-ARCH-007-005.
 	// Verifies ARCH-007.
@@ -120,6 +154,35 @@ func TestReconcileStripeEntitlementsSkipsSubscriptionsWithoutLocalUserIdentity(t
 	}
 	if result.Checked != 1 || result.Appended != 0 || result.Skipped != 1 || len(store.appends) != 0 {
 		t.Fatalf("result = %+v appends=%d, want defensive skip", result, len(store.appends))
+	}
+}
+
+func TestReconcileStripeEntitlementsWarnsForUnknownStripeStatus(t *testing.T) {
+	// Verifies IT-ARCH-007-005.
+	// Verifies ARCH-007.
+	// Traces SW-REQ-045 and SW-REQ-052.
+	userID := uuid.New()
+	store := &memoryEntitlementStore{latest: map[uuid.UUID]repository.Entitlement{
+		userID: {UserID: userID, Tier: "paid", Status: "active", StripeCustomerID: "cus_unknown", StripeSubscriptionID: "sub_unknown"},
+	}}
+	logs := &observability.MemorySink{}
+	service := NewReconciliationService(memoryReconciliationGateway{subscriptions: []StripeSubscription{
+		{UserID: userID, CustomerID: "cus_unknown", SubscriptionID: "sub_unknown", Status: "provider_new_state"},
+	}}, store, logs)
+
+	result, err := service.ReconcileStripeEntitlements(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileStripeEntitlements() error = %v", err)
+	}
+	if result.Appended != 0 || result.Skipped != 1 || len(store.appends) != 0 || store.latest[userID].Status != "active" {
+		t.Fatalf("result=%+v appends=%#v latest=%#v, want skipped without mutation", result, store.appends, store.latest[userID])
+	}
+	if len(logs.Logs) != 1 || logs.Logs[0].Message != "stripe reconciliation skipped unknown subscription status" {
+		t.Fatalf("logs = %#v, want unknown-status warning", logs.Logs)
+	}
+	fields := logs.Logs[0].Fields
+	if fields["stripe_subscription_id"] != "sub_unknown" || fields["stripe_customer_id"] != "cus_unknown" || fields["stripe_status"] != "provider_new_state" {
+		t.Fatalf("log fields = %#v, want sanitized Stripe status metadata", fields)
 	}
 }
 

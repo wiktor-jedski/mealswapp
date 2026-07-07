@@ -4,9 +4,14 @@ import type { CreateMutationOptions, CreateQueryOptions } from "@tanstack/svelte
 import {
 	BILLING_CHECKOUT_ENDPOINT,
 	BILLING_ENTITLEMENT_ENDPOINT,
+	BILLING_PORTAL_ENDPOINT,
+	buildBillingPortalCreateRequestInit,
 	buildCheckoutCreateRequestInit,
 	buildEntitlementStatusRequestInit,
 	type AppError,
+	type BillingPortalCreateRequest,
+	type BillingPortalSessionData,
+	type BillingPortalSessionEnvelope,
 	type CheckoutCreateRequest,
 	type CheckoutSessionData,
 	type CheckoutSessionEnvelope,
@@ -15,6 +20,7 @@ import {
 	type Envelope,
 	type IdempotencyKey
 } from "./generated";
+import { fetchCsrfToken } from "./auth-client";
 
 // Implements DESIGN-001 SearchView current user entitlement state over generated billing contracts.
 // Implements DESIGN-017 ErrorMessageMapper recoverable billing and entitlement error mapping.
@@ -96,6 +102,23 @@ export async function createCheckoutSession(
 }
 
 /**
+ * POSTs billing portal creation with CSRF protection and decodes the generated portal envelope.
+ *
+ * @remarks Implements DESIGN-007 SubscriptionController hosted billing portal client.
+ */
+export async function createBillingPortalSession(
+	request: BillingPortalCreateRequest,
+	options: { csrfToken?: string; signal?: AbortSignal } = {}
+): Promise<BillingPortalSessionData> {
+	const csrfToken = options.csrfToken ?? (await fetchCsrfToken(options.signal)).csrfToken;
+	const response = await fetch(
+		BILLING_PORTAL_ENDPOINT,
+		buildBillingPortalCreateRequestInit(request, { csrfToken, signal: options.signal })
+	);
+	return decodeBillingPortalSessionResponse(response);
+}
+
+/**
  * Builds the current-user entitlement TanStack Query options with a stable key and no anonymous
  * retry loop; 401 is surfaced immediately so anonymous users can continue without churn.
  *
@@ -130,8 +153,9 @@ export function buildCheckoutMutationOptions(): CreateMutationOptions<
 	return {
 		mutationKey: [CHECKOUT_MUTATION_NAMESPACE],
 		retry: (failureCount, error) => error.status === 503 && error.recoverable && failureCount < 1,
-		mutationFn: (variables) => {
+		mutationFn: async (variables) => {
 			variables.idempotencyKey = variables.idempotencyKey ?? generateCheckoutIdempotencyKey();
+			variables.csrfToken = variables.csrfToken ?? (await fetchCsrfToken(variables.signal)).csrfToken;
 			return createCheckoutSession(variables.request, {
 				csrfToken: variables.csrfToken,
 				idempotencyKey: variables.idempotencyKey,
@@ -182,6 +206,17 @@ async function decodeCheckoutSessionResponse(response: Response): Promise<Checko
 	return envelope.data as CheckoutSessionData;
 }
 
+async function decodeBillingPortalSessionResponse(response: Response): Promise<BillingPortalSessionData> {
+	const envelope = await readJsonEnvelope(response);
+	if (!response.ok) {
+		throw mapBillingError(envelope, response.status);
+	}
+	if (!hasData(envelope)) {
+		throw malformedEnvelopeError(response.status, envelope?.requestId);
+	}
+	return envelope.data as BillingPortalSessionData;
+}
+
 async function readJsonEnvelope(response: Response): Promise<Envelope | null> {
 	try {
 		const body = (await response.json()) as unknown;
@@ -198,7 +233,7 @@ function readEnvelope(body: unknown): Envelope | null {
 	return body as Envelope;
 }
 
-function hasData(envelope: Envelope | null): envelope is EntitlementStatusEnvelope | CheckoutSessionEnvelope {
+function hasData(envelope: Envelope | null): envelope is EntitlementStatusEnvelope | CheckoutSessionEnvelope | BillingPortalSessionEnvelope {
 	return Boolean(envelope && typeof envelope === "object" && envelope.data);
 }
 

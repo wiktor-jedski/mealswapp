@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TASK_LIST = ROOT / "docs" / "implementation" / "02_TASK_LIST.md"
 VALID_STATUSES = {"OPEN", "PREPARED", "REJECTED", "PASSED"}
 STATIC_ASPECT_RE = re.compile(r"^(?:DESIGN|ARCH)-\d{3}: [A-Za-z][A-Za-z0-9]*$")
-TASK_ROW_RE = re.compile(r"^\| \d+ \|")
+TASK_ROW_RE = re.compile(r"^\|\s+\d+\s+\|")
 
 
 def parse_task_rows() -> list[list[str]]:

@@ -111,7 +111,7 @@ func (l *UsageLimiter) CheckSearchAllowed(ctx context.Context, req UsageRequest)
 	if !entitlementDecision.Allowed {
 		return decision, nil
 	}
-	if entitlementDecision.Tier != "free" || entitlementDecision.Status != "active" {
+	if !effectiveFreeUsageScope(entitlementDecision) {
 		decision.Allowed = true
 		return decision, nil
 	}
@@ -215,6 +215,18 @@ func usageDecisionFromEntitlement(decision Decision) UsageDecision {
 	return result
 }
 
+// effectiveFreeUsageScope reports whether allowed free-scope searches use the free usage cap.
+// Implements DESIGN-007 UsageLimiter.
+func effectiveFreeUsageScope(decision Decision) bool {
+	if !decision.Allowed || !freeFeature(decision.Feature) {
+		return false
+	}
+	if decision.Tier == "free" {
+		return decision.Status == "active"
+	}
+	return decision.Status != "active"
+}
+
 // IsUsageLimitError reports deterministic free-tier limit denials.
 // Implements DESIGN-007 UsageLimiter.
 func IsUsageLimitError(decision UsageDecision) bool {
@@ -247,15 +259,6 @@ func (l *keyedLocks) lock(userID uuid.UUID, feature string) func() {
 	return func() {
 		lock.Unlock()
 	}
-}
-
-// max returns the larger integer for remaining-count calculations.
-// Implements DESIGN-007 UsageLimiter.
-func max(a int, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // IsUsageValidationError reports validation failures from this service boundary.

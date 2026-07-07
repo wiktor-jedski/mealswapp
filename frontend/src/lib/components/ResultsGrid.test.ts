@@ -96,12 +96,10 @@ test("renders an error state from the error prop with an alert role", () => {
 	expect(source).toContain('role="alert"');
 });
 
-// Implements DESIGN-001 ResultsGrid previous-page retention verification.
-test("retains previous results while loading without rendering flickering loading text", () => {
+// Implements DESIGN-001 ResultsGrid artifact-free loading verification.
+test("does not render a loading overlay or loading text inside the grid", () => {
 	expect(source).not.toContain("data-results-loading-overlay");
 	expect(source).not.toContain("Loading…");
-	expect(source).toContain("{:else}");
-	expect(source).toContain("data-results-list");
 });
 
 // Implements DESIGN-001 ResultsGrid pagination page-request wiring verification.

@@ -97,6 +97,40 @@ func TestLoadAcceptsAccountOverrides(t *testing.T) {
 	}
 }
 
+// TestLoadAcceptsGoogleOAuthConfig verifies DESIGN-006 OAuthHandler provider configuration.
+func TestLoadAcceptsGoogleOAuthConfig(t *testing.T) {
+	t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_ID", "google-client-id")
+	t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_SECRET", "google-client-secret")
+	t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL", "http://localhost:8080/api/v1/auth/oauth/google/callback")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.OAuth.GoogleClientID != "google-client-id" || cfg.OAuth.GoogleClientSecret != "google-client-secret" || cfg.OAuth.GoogleCallbackURL == "" {
+		t.Fatalf("unexpected OAuth config: %+v", cfg.OAuth)
+	}
+}
+
+// TestLoadRejectsInvalidGoogleOAuthConfig verifies DESIGN-006 OAuthHandler provider configuration guards.
+func TestLoadRejectsInvalidGoogleOAuthConfig(t *testing.T) {
+	t.Run("malformed callback", func(t *testing.T) {
+		t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL", "not a url")
+		if _, err := Load(); err == nil {
+			t.Fatal("Load() accepted malformed Google callback URL")
+		}
+	})
+	t.Run("production http callback", func(t *testing.T) {
+		setProductionConfig(t)
+		t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_ID", "google-client-id")
+		t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_SECRET", "google-client-secret")
+		t.Setenv("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL", "http://example.test/api/v1/auth/oauth/google/callback")
+		if _, err := Load(); err == nil {
+			t.Fatal("Load() accepted production Google callback over HTTP")
+		}
+	})
+}
+
 // TestLoadRejectsInvalidAccountSettings verifies DESIGN-006 AuthController account-flow guards.
 func TestLoadRejectsInvalidAccountSettings(t *testing.T) {
 	for key, value := range map[string]string{

@@ -587,7 +587,7 @@
 
   <button
     type="button"
-    class="justify-self-start rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+    class="w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
     disabled={$searchStore.substitutionInputs.length === 0 || !executionAllowed}
     aria-describedby={entitlementFeedback ? "substitution-entitlement-feedback" : undefined}
     onclick={onSubstitutionSearch}

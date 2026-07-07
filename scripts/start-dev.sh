@@ -36,7 +36,7 @@ Options:
 
 Environment:
   MEALSWAPP_START_STRIPE_CLI=true   Equivalent to --stripe.
-  MEALSWAPP_ENV_FILE=path           Env file loaded when --stripe is used. Defaults to $ROOT_DIR/.env.
+  MEALSWAPP_ENV_FILE=path           Env file loaded for local dev. Defaults to $ROOT_DIR/.env.
   MEALSWAPP_STRIPE_WEBHOOK_URL=url  Forwarding target. Defaults to backend /api/v1/billing/stripe/webhook.
 EOF
 }
@@ -59,8 +59,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ "$START_STRIPE_CLI" == "true" && -f "$ENV_FILE" ]]; then
-    echo "Loading local Stripe/dev environment from ${ENV_FILE}..."
+if [[ -f "$ENV_FILE" ]]; then
+    echo "Loading local development environment from ${ENV_FILE}..."
     set -a
     # shellcheck disable=SC1090
     source "$ENV_FILE"
@@ -98,9 +98,13 @@ echo "Seeding development data..."
 )
 
 if [[ "$START_STRIPE_CLI" == "true" ]]; then
+    if [[ -z "${MEALSWAPP_STRIPE_SECRET_KEY:-}" ]]; then
+        echo "MEALSWAPP_STRIPE_SECRET_KEY is required when starting Stripe CLI forwarding." >&2
+        exit 1
+    fi
     STRIPE_LOG="$(mktemp)"
     echo "Starting Stripe CLI forwarding to ${STRIPE_WEBHOOK_URL}..."
-    stripe listen --forward-to "$STRIPE_WEBHOOK_URL" >"$STRIPE_LOG" 2>&1 &
+    stripe listen --api-key "$MEALSWAPP_STRIPE_SECRET_KEY" --forward-to "$STRIPE_WEBHOOK_URL" >"$STRIPE_LOG" 2>&1 &
     STRIPE_PID=$!
 
     for _ in {1..60}; do

@@ -163,8 +163,7 @@ export async function fetchFoodObject(id: string, signal: AbortSignal): Promise<
 
 /**
  * Builds TanStack Query options for the search query backed by {@link searchRequestKey} as the
- * stable query key, the local query cache for hit/miss behavior, a 10-second timeout, and
- * `placeholderData: keepPreviousData` so previous-page results remain visible during page loads.
+ * stable query key, the local query cache for hit/miss behavior, and a 10-second timeout.
  *
  * @remarks Implements DESIGN-001 SearchView TanStack Query search query options (step 6).
  */
@@ -185,8 +184,6 @@ export function buildSearchQueryOptions(
 		queryKey,
 		// Implements DESIGN-001 SearchView execution guard: Catalog/Daily require submitted text; Substitution requires the explicit two-step search action with at least one input.
 		enabled,
-		// Implements DESIGN-001 SearchView previous-page retention via TanStack keepPreviousData.
-		placeholderData: keepPreviousData,
 		staleTime: LOCAL_CACHE_STALE_MS,
 		gcTime: LOCAL_CACHE_STALE_MS * 2,
 		queryFn: (context) => runSearchQueryFn(request, requestKey, localCache, context, timeoutMs)

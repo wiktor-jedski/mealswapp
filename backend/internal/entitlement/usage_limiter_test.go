@@ -198,6 +198,54 @@ func TestUsageLimiterDoesNotCapTrialOrPaidActiveUsers(t *testing.T) {
 	}
 }
 
+func TestUsageLimiterCapsInactivePaidUsersForFreeScopeSearches(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	for _, status := range []string{"past_due", "cancelled"} {
+		t.Run(status, func(t *testing.T) {
+			userID := uuid.New()
+			usage := &usageRepositoryStub{records: map[uuid.UUID][]time.Time{
+				userID: {now.Add(-2 * time.Hour), now.Add(-time.Hour), now.Add(-30 * time.Minute)},
+			}}
+			limiter := newUsageLimiterFixture(userID, paidEntitlement(userID, "paid", status), usage, now)
+
+			decision, err := limiter.CheckSearchAllowed(context.Background(), UsageRequest{UserID: &userID, Feature: FeatureCatalog})
+			if err != nil {
+				t.Fatalf("CheckSearchAllowed() error = %v", err)
+			}
+			if decision.Allowed || decision.CountUsageOnFinish || decision.DenyReason != UsageDenyReasonFreeLimitReached || decision.Tier != "paid" || decision.Status != status {
+				t.Fatalf("catalog decision = %+v, want inactive paid free-limit denial", decision)
+			}
+			if decision.Used != freeSearchLimitPer24h || decision.Remaining != 0 || usage.getCalls != 1 || usage.recordCalls != 0 {
+				t.Fatalf("usage decision=%+v getCalls=%d recordCalls=%d, want capped inactive paid accounting", decision, usage.getCalls, usage.recordCalls)
+			}
+		})
+	}
+}
+
+func TestUsageLimiterRecordsInactivePaidFreeScopeSearchesWithinLimit(t *testing.T) {
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	userID := uuid.New()
+	usage := &usageRepositoryStub{records: map[uuid.UUID][]time.Time{
+		userID: {now.Add(-2 * time.Hour), now.Add(-time.Hour)},
+	}}
+	limiter := newUsageLimiterFixture(userID, paidEntitlement(userID, "paid", "past_due"), usage, now)
+
+	decision, err := limiter.CheckSearchAllowed(context.Background(), UsageRequest{UserID: &userID, Feature: FeatureSingleSubstitution})
+	if err != nil {
+		t.Fatalf("CheckSearchAllowed() error = %v", err)
+	}
+	if !decision.Allowed || !decision.CountUsageOnFinish || decision.Used != 2 || decision.Remaining != 1 || decision.Tier != "paid" || decision.Status != "past_due" {
+		t.Fatalf("substitution decision = %+v, want counted inactive paid allow", decision)
+	}
+	decision, _, err = limiter.RecordCompletedSearch(context.Background(), decision)
+	if err != nil {
+		t.Fatalf("RecordCompletedSearch() error = %v", err)
+	}
+	if !decision.Allowed || decision.Used != 3 || decision.Remaining != 0 || decision.CountUsageOnFinish {
+		t.Fatalf("recorded decision = %+v, want exhausted counted inactive paid allow", decision)
+	}
+}
+
 func TestUsageLimiterAllowsAnonymousCatalogWithoutUsageWrites(t *testing.T) {
 	usage := &usageRepositoryStub{}
 	limiter := newUsageLimiterFixture(uuid.New(), freeEntitlement(uuid.New()), usage, time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC))
