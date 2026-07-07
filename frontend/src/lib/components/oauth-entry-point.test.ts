@@ -109,8 +109,11 @@ test("component declares Google-only action plus callback refresh feedback", () 
 	expect(source).toContain("<!-- Implements DESIGN-018 OAuthEntryPoint");
 	expect(source).toContain('mode?: "login" | "register"');
 	expect(source).toContain('mode === "register" ? "Register with a provider" : "Sign in with a provider"');
-	expect(source).toContain('data-oauth-provider={provider.id}');
-	expect(source).toContain('label: "Google"');
+	expect(source).toContain("VITE_MEALSWAPP_OAUTH_PROVIDERS");
+	expect(source).toContain('provider === "google"');
+	expect(source).toContain("providerLabels[provider]");
+	expect(source).toContain("providers.length > 0 || callbackReturn");
+	expect(source).toContain("data-oauth-provider={provider}");
 	expect(source).not.toContain("Continue with Apple");
 	expect(source).toContain("refreshOAuthCallbackSession(window.location.href");
 	expect(source).toContain("We could not finish sign-in. Please try again.");

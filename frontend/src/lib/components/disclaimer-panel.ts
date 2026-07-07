@@ -11,10 +11,12 @@ export interface DisclaimerViewModel {
 	unavailable: boolean;
 }
 
+/** Side-effect boundary used to load disclaimer content. */
 export interface DisclaimerPanelDependencies {
 	loadDisclaimer: typeof loadDisclaimer;
 }
 
+/** Bundled medical disclaimer shown when the generated disclaimer endpoint is unavailable. */
 export const BUNDLED_LOGIN_DISCLAIMER: DisclaimerViewModel = {
 	version: "bundled-2026-07",
 	effectiveAt: "2026-07-05T00:00:00.000Z",

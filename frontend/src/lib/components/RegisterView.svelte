@@ -99,6 +99,14 @@
 			alertMessage = result.error?.message ?? "Registration is temporarily unavailable. Please try again.";
 			return;
 		}
+		if (result.status === "locked") {
+			alertMessage = "This account is locked by an administrative or compliance hold. Contact support to restore access.";
+			return;
+		}
+		if (result.status === "unverified" && !result.session) {
+			unverifiedLoginMethod = true;
+			return;
+		}
 		if (result.session) {
 			unverifiedLoginMethod = result.status === "unverified";
 			statusMessage = "Registration complete. Your browser session is authenticated.";

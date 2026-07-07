@@ -7,6 +7,7 @@ import {
 
 // Implements DESIGN-018 OAuthEntryPoint generated-provider routing and callback refresh orchestration.
 
+/** Side-effect boundaries used to start OAuth or refresh the callback session. */
 export interface OAuthEntryDependencies {
 	getOAuthStartUrl: (provider: OAuthProvider, returnTo?: string) => string;
 	navigate: (url: string) => void;
@@ -14,6 +15,7 @@ export interface OAuthEntryDependencies {
 	currentReturnPath: () => string;
 }
 
+/** User-safe result returned after attempting to start provider OAuth. */
 export interface OAuthEntryResult {
 	ok: boolean;
 	url?: string;

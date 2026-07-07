@@ -35,6 +35,8 @@ test("maps invalid credentials generically and renders safe retry timing for loc
 	expect(source).toContain('"Email or password is incorrect."');
 	expect(source).not.toContain("No account");
 	expect(source).not.toContain("email exists");
+	expect(source).toContain("administrative or compliance hold");
+	expect(source).toContain("error.status === 423");
 	expect(source).toContain("normalizeRetryAfterSeconds(error.retryAfterSeconds)");
 	expect(source).toContain("const maxLoginRetryAfterSeconds = 60 * 60");
 	expect(source).toContain("Try again in {retryAfterSeconds} seconds.");

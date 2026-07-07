@@ -64,6 +64,9 @@
 
   function mapLoginFeedback(error: unknown): { message: string; retryAfterSeconds?: number } {
     if (error instanceof AuthClientError) {
+      if (isAccountHold(error)) {
+        return { message: "This account is locked by an administrative or compliance hold. Contact support to restore access." };
+      }
       if (error.status === 401 || error.appError.code === "invalid_credentials") {
         return { message: genericInvalidCredentialMessage };
       }
@@ -76,6 +79,13 @@
       return { message: error.appError.message };
     }
     return { message: "Login is temporarily unavailable. Please try again." };
+  }
+
+  function isAccountHold(error: AuthClientError): boolean {
+    return (
+      error.status === 423 ||
+      ["account_hold", "admin_hold", "compliance_hold", "account_disabled"].includes(error.appError.code)
+    );
   }
 
   function normalizeRetryAfterSeconds(seconds: number | undefined): number | undefined {

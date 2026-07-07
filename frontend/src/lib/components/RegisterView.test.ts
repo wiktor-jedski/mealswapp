@@ -34,6 +34,7 @@ test("registration uses the auth session store and clears duplicate-email users 
 test("stale consent and unverified login method feedback are present", () => {
 	expect(source).toContain("Privacy Policy or Terms changed.");
 	expect(source).toContain("Verify your email before using features that require a verified login method.");
+	expect(source).toContain("administrative or compliance hold");
 	expect(source).toContain("setCombinedConsent");
 });
 

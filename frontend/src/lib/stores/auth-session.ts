@@ -85,13 +85,14 @@ export function initAuthSessionStore(): void {
  * @remarks Implements DESIGN-018 AuthSessionStore startup session probing.
  */
 export async function probeAuthSession(signal?: AbortSignal): Promise<AuthSessionProjection> {
+	const previous = get(authSessionStore);
 	authSessionStore.set({ status: "unknown", lastCheckedAt: dependencies.now() });
 	try {
 		const profile = await dependencies.probeProfileSession(signal);
 		const session = await dependencies.refreshAuthSession(signal);
 		return setAuthSession(sessionToProjection(session, profile.displayName));
 	} catch (error) {
-		return setAuthSession(errorToProjection(error));
+		return setAuthSession(probeFailureProjection(previous, errorToProjection(error)));
 	}
 }
 
@@ -238,6 +239,20 @@ function errorToProjection(error: unknown): AuthSessionProjection {
 	const appError = extractAppError(error);
 	const status = mapAuthErrorToStatus(error, appError);
 	return sanitizeProjection({ status, error: appError, lastCheckedAt: dependencies.now() });
+}
+
+function probeFailureProjection(
+	previous: AuthSessionProjection,
+	failure: AuthSessionProjection
+): AuthSessionProjection {
+	if (failure.status === "error" && previous.status === "authenticated") {
+		return sanitizeProjection({
+			...previous,
+			lastCheckedAt: failure.lastCheckedAt,
+			error: failure.error
+		});
+	}
+	return failure;
 }
 
 function mapAuthErrorToStatus(error: unknown, appError: AppError | undefined): AuthStatus {

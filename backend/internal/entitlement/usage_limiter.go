@@ -84,7 +84,7 @@ func NewUsageLimiterWithClock(entitlements *EntitlementManager, usage repository
 }
 
 // CheckSearchAllowed decides whether the search may dispatch.
-// Implements DESIGN-007 UsageLimiter.
+// Implements DESIGN-007 UsageLimiter and DESIGN-018 AuthenticatedActionGuard.
 func (l *UsageLimiter) CheckSearchAllowed(ctx context.Context, req UsageRequest) (UsageDecision, error) {
 	if err := l.validate(); err != nil {
 		return UsageDecision{}, err
@@ -186,7 +186,7 @@ func (l *UsageLimiter) validate() error {
 }
 
 // anonymousDecision resolves unauthenticated access without usage persistence.
-// Implements DESIGN-007 UsageLimiter.
+// Implements DESIGN-007 UsageLimiter and DESIGN-018 AuthenticatedActionGuard.
 func anonymousDecision(feature Feature) UsageDecision {
 	decision := UsageDecision{Feature: feature}
 	if feature == FeatureCatalog {

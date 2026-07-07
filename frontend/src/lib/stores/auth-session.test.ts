@@ -131,6 +131,44 @@ test("probeAuthSession maps lockout and unexpected failures to locked and error 
 	await expect(probeAuthSession()).resolves.toMatchObject({ status: "error" });
 });
 
+test("probeAuthSession preserves an authenticated projection on transient probe failures", async () => {
+	setAuthSession({
+		status: "authenticated",
+		userId: "user-1",
+		role: "user",
+		hasVerifiedLoginMethod: true,
+		lastCheckedAt: "2026-07-05T11:00:00.000Z"
+	});
+	setAuthSessionDependencies({
+		now: () => fixedNow,
+		probeProfileSession: async () => {
+			throw new Error("network down");
+		}
+	});
+
+	await expect(probeAuthSession()).resolves.toEqual({
+		status: "authenticated",
+		userId: "user-1",
+		role: "user",
+		hasVerifiedLoginMethod: true,
+		lastCheckedAt: fixedNow
+	});
+	expect(get(authSessionStore).status).toBe("authenticated");
+});
+
+test("probeAuthSession still clears authenticated projection on server auth failures", async () => {
+	setAuthSession({ status: "authenticated", userId: "user-1", role: "user", hasVerifiedLoginMethod: true });
+	setAuthSessionDependencies({
+		now: () => fixedNow,
+		probeProfileSession: async () => {
+			throw clientError(401, "session_expired");
+		}
+	});
+
+	await expect(probeAuthSession()).resolves.toMatchObject({ status: "expired" });
+	expect(get(authSessionStore).status).toBe("expired");
+});
+
 test("loginWithEmail and registerWithEmail use CSRF, store authenticated state, and refresh entitlements", async () => {
 	const csrfTokens: string[] = [];
 	const entitlement = entitlementData();

@@ -145,3 +145,29 @@ test("unverified login method restrictions are surfaced from server state", asyn
 	expect(result.status).toBe("unverified");
 	expect(result.session?.hasVerifiedLoginMethod).toBe(false);
 });
+
+test("unverified login method errors are surfaced from server state", async () => {
+	const form = validForm();
+	const result = await submitRegistration(form, consent, {
+		registerWithEmail: () => {
+			throw authError(appError("unverified_login_method", "Verify your email."));
+		},
+		loadConsentVersions: async () => consent
+	});
+
+	expect(result.status).toBe("unverified");
+	expect(result.error?.code).toBe("unverified_login_method");
+});
+
+test("account hold errors return locked registration status", async () => {
+	const form = validForm();
+	const result = await submitRegistration(form, consent, {
+		registerWithEmail: () => {
+			throw authError(appError("compliance_hold", "Account locked."));
+		},
+		loadConsentVersions: async () => consent
+	});
+
+	expect(result.status).toBe("locked");
+	expect(result.error?.code).toBe("compliance_hold");
+});

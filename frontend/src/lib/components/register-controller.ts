@@ -37,8 +37,9 @@ export interface RegisterControllerDependencies {
 	loadConsentVersions: (signal?: AbortSignal) => Promise<ConsentVersions>;
 }
 
+/** Result of one registration submission attempt after client and server validation. */
 export interface RegisterSubmitResult {
-	status: "registered" | "invalid" | "duplicate_email" | "consent_stale" | "unverified" | "error";
+	status: "registered" | "invalid" | "duplicate_email" | "consent_stale" | "unverified" | "locked" | "error";
 	session?: AuthSessionProjection;
 	error?: AppError;
 	consentVersions?: ConsentVersions;
@@ -143,6 +144,12 @@ export async function submitRegistration(
 				validation: { consent: "Legal terms changed. Review and accept the current versions." }
 			};
 		}
+		if (isUnverifiedLoginMethod(appError)) {
+			return { status: "unverified", error: appError, validation: {} };
+		}
+		if (isAccountHold(appError)) {
+			return { status: "locked", error: appError, validation: {} };
+		}
 		return { status: "error", error: appError ?? fallbackError(), validation: {} };
 	} finally {
 		state.password = "";
@@ -171,6 +178,24 @@ function isStaleConsent(error: AppError | undefined): boolean {
 		error?.code === "consent_stale" ||
 			error?.code === "consent_version_stale" ||
 			error?.code === "stale_consent_versions"
+	);
+}
+
+function isUnverifiedLoginMethod(error: AppError | undefined): boolean {
+	return Boolean(
+		error?.code === "unverified_login_method" ||
+			error?.code === "login_method_unverified" ||
+			error?.code === "email_unverified"
+	);
+}
+
+function isAccountHold(error: AppError | undefined): boolean {
+	return Boolean(
+		error?.code === "account_locked" ||
+			error?.code === "account_hold" ||
+			error?.code === "admin_hold" ||
+			error?.code === "compliance_hold" ||
+			error?.code === "account_disabled"
 	);
 }
 
