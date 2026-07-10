@@ -24,6 +24,10 @@ const (
 	defaultRefreshTokenTTL      = 7 * 24 * time.Hour
 	defaultEmailVerificationTTL = 24 * time.Hour
 	defaultPasswordResetTTL     = time.Hour
+	defaultStripeSecretKey      = "sk_test_local_fixture"
+	defaultStripeWebhookSecret  = "whsec_local_fixture"
+	defaultStripeMonthlyPriceID = "price_local_monthly_fixture"
+	defaultStripeAnnualPriceID  = "price_local_annual_fixture"
 )
 
 // Config contains the environment-backed settings for the API and worker.
@@ -41,6 +45,8 @@ type Config struct {
 	HSTSMaxAge     int
 	TLSMinVersion  string
 	Account        AccountConfig
+	Billing        BillingConfig
+	OAuth          OAuthConfig
 }
 
 // AccountConfig contains authentication and account-flow settings.
@@ -56,6 +62,34 @@ type AccountConfig struct {
 	DisclaimerFallbackVersion   string
 	EmailVerificationTTL        time.Duration
 	PasswordResetTTL            time.Duration
+}
+
+// OAuthConfig contains external identity provider credentials.
+// Implements DESIGN-006 OAuthHandler provider configuration.
+type OAuthConfig struct {
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleCallbackURL  string
+}
+
+// BillingConfig contains Stripe checkout and webhook settings.
+// Implements DESIGN-007 SubscriptionController and StripeWebhookHandler.
+type BillingConfig struct {
+	StripeSecretKey     string
+	StripeWebhookSecret string
+	MonthlyPlan         BillingPlan
+	AnnualPlan          BillingPlan
+	CheckoutSuccessURL  string
+	CheckoutCancelURL   string
+}
+
+// BillingPlan maps one public paid plan to its Stripe price.
+// Implements DESIGN-007 SubscriptionController and SW-REQ-050 pricing tiers.
+type BillingPlan struct {
+	Code        string
+	Label       string
+	AmountCents int
+	PriceID     string
 }
 
 // Load reads Mealswapp configuration from the environment and applies local defaults.
@@ -94,6 +128,12 @@ func Load() (Config, error) {
 	if cfg.Account, err = loadAccountConfig(); err != nil {
 		return Config{}, err
 	}
+	if cfg.Billing, err = loadBillingConfig(cfg.Environment, cfg.FrontendOrigin, cfg.AllowedOrigins); err != nil {
+		return Config{}, err
+	}
+	if cfg.OAuth, err = loadOAuthConfig(cfg.Environment); err != nil {
+		return Config{}, err
+	}
 
 	if cfg.Environment == "production" {
 		if os.Getenv("MEALSWAPP_DATABASE_URL") == "" || os.Getenv("MEALSWAPP_REDIS_URL") == "" {
@@ -104,6 +144,9 @@ func Load() (Config, error) {
 		}
 		if strings.HasPrefix(cfg.Account.AccessCookieName, "dev_") || strings.HasPrefix(cfg.Account.RefreshCookieName, "dev_") {
 			return Config{}, errors.New("production requires non-development auth cookie names")
+		}
+		if err := requireProductionBillingConfig(cfg.Billing); err != nil {
+			return Config{}, err
 		}
 		cfg.EnforceTLS = true
 	}
@@ -123,6 +166,89 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// loadOAuthConfig loads optional Google OAuth settings without exposing secrets.
+// Implements DESIGN-006 OAuthHandler provider configuration.
+func loadOAuthConfig(environment string) (OAuthConfig, error) {
+	cfg := OAuthConfig{
+		GoogleClientID:     strings.TrimSpace(os.Getenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_ID")),
+		GoogleClientSecret: strings.TrimSpace(os.Getenv("MEALSWAPP_GOOGLE_OAUTH_CLIENT_SECRET")),
+		GoogleCallbackURL:  strings.TrimSpace(os.Getenv("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL")),
+	}
+	if cfg.GoogleCallbackURL == "" {
+		return cfg, nil
+	}
+	if err := requireURLScheme("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL", cfg.GoogleCallbackURL, "http", "https"); err != nil {
+		return OAuthConfig{}, err
+	}
+	if environment == "production" {
+		parsed, _ := url.Parse(cfg.GoogleCallbackURL)
+		if parsed.Scheme != "https" {
+			return OAuthConfig{}, errors.New("MEALSWAPP_GOOGLE_OAUTH_CALLBACK_URL must use https in production")
+		}
+	}
+	return cfg, nil
+}
+
+// loadBillingConfig validates Stripe settings used by checkout and webhooks.
+// Implements DESIGN-007 SubscriptionController and StripeWebhookHandler.
+func loadBillingConfig(environment string, frontendOrigin string, allowedOrigins []string) (BillingConfig, error) {
+	cfg := BillingConfig{
+		StripeSecretKey:     env("MEALSWAPP_STRIPE_SECRET_KEY", defaultStripeSecretKey),
+		StripeWebhookSecret: env("MEALSWAPP_STRIPE_WEBHOOK_SECRET", defaultStripeWebhookSecret),
+		MonthlyPlan: BillingPlan{
+			Code:        "monthly",
+			Label:       "Monthly",
+			AmountCents: 300,
+			PriceID:     env("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", defaultStripeMonthlyPriceID),
+		},
+		AnnualPlan: BillingPlan{
+			Code:        "annual",
+			Label:       "Annual",
+			AmountCents: 2500,
+			PriceID:     env("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", defaultStripeAnnualPriceID),
+		},
+		CheckoutSuccessURL: env("MEALSWAPP_CHECKOUT_SUCCESS_URL", strings.TrimRight(frontendOrigin, "/")+"/billing/success"),
+		CheckoutCancelURL:  env("MEALSWAPP_CHECKOUT_CANCEL_URL", strings.TrimRight(frontendOrigin, "/")+"/billing/cancel"),
+	}
+	if err := validateStripeSecretKey(cfg.StripeSecretKey); err != nil {
+		return BillingConfig{}, err
+	}
+	if err := validateStripeWebhookSecret(cfg.StripeWebhookSecret); err != nil {
+		return BillingConfig{}, err
+	}
+	if err := validateStripePriceID("MEALSWAPP_STRIPE_MONTHLY_PRICE_ID", cfg.MonthlyPlan.PriceID); err != nil {
+		return BillingConfig{}, err
+	}
+	if err := validateStripePriceID("MEALSWAPP_STRIPE_ANNUAL_PRICE_ID", cfg.AnnualPlan.PriceID); err != nil {
+		return BillingConfig{}, err
+	}
+	if cfg.MonthlyPlan.AmountCents != 300 || cfg.AnnualPlan.AmountCents != 2500 {
+		return BillingConfig{}, errors.New("billing plan amounts must match SW-REQ-050")
+	}
+	if err := validateCheckoutRedirectURL("MEALSWAPP_CHECKOUT_SUCCESS_URL", cfg.CheckoutSuccessURL, allowedOrigins, environment); err != nil {
+		return BillingConfig{}, err
+	}
+	if err := validateCheckoutRedirectURL("MEALSWAPP_CHECKOUT_CANCEL_URL", cfg.CheckoutCancelURL, allowedOrigins, environment); err != nil {
+		return BillingConfig{}, err
+	}
+	return cfg, nil
+}
+
+// requireProductionBillingConfig fails closed when production Stripe values are missing or sandbox-only.
+// Implements DESIGN-007 SubscriptionController and StripeWebhookHandler.
+func requireProductionBillingConfig(cfg BillingConfig) error {
+	if cfg.StripeSecretKey == defaultStripeSecretKey || strings.HasPrefix(cfg.StripeSecretKey, "sk_test_") {
+		return errors.New("production requires a live MEALSWAPP_STRIPE_SECRET_KEY")
+	}
+	if cfg.StripeWebhookSecret == defaultStripeWebhookSecret {
+		return errors.New("production requires MEALSWAPP_STRIPE_WEBHOOK_SECRET")
+	}
+	if cfg.MonthlyPlan.PriceID == defaultStripeMonthlyPriceID || cfg.AnnualPlan.PriceID == defaultStripeAnnualPriceID {
+		return errors.New("production requires Stripe price IDs")
+	}
+	return nil
 }
 
 // loadAccountConfig validates authentication and account-flow settings.
@@ -215,4 +341,51 @@ func requireURLScheme(key string, value string, schemes ...string) error {
 		return nil
 	}
 	return fmt.Errorf("%s must use one of these schemes: %v", key, schemes)
+}
+
+// validateStripeSecretKey accepts Stripe secret-key shaped values without embedding real secrets.
+// Implements DESIGN-007 SubscriptionController Stripe configuration loading.
+func validateStripeSecretKey(value string) error {
+	if !strings.HasPrefix(strings.TrimSpace(value), "sk_") {
+		return errors.New("MEALSWAPP_STRIPE_SECRET_KEY must be a Stripe secret key")
+	}
+	return nil
+}
+
+// validateStripeWebhookSecret accepts Stripe webhook signing-secret shaped values.
+// Implements DESIGN-007 StripeWebhookHandler signing-secret loading.
+func validateStripeWebhookSecret(value string) error {
+	if !strings.HasPrefix(strings.TrimSpace(value), "whsec_") {
+		return errors.New("MEALSWAPP_STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret")
+	}
+	return nil
+}
+
+// validateStripePriceID accepts Stripe price-id shaped values for configured paid plans.
+// Implements DESIGN-007 SubscriptionController and SW-REQ-050 price mapping.
+func validateStripePriceID(key string, value string) error {
+	if !strings.HasPrefix(strings.TrimSpace(value), "price_") {
+		return fmt.Errorf("%s must be a Stripe price ID", key)
+	}
+	return nil
+}
+
+// validateCheckoutRedirectURL restricts checkout returns to configured browser origins.
+// Implements DESIGN-007 SubscriptionController checkout redirect validation.
+func validateCheckoutRedirectURL(key string, value string, allowedOrigins []string, environment string) error {
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Fragment != "" {
+		return fmt.Errorf("%s must be an absolute URL without a fragment", key)
+	}
+	if !slices.Contains([]string{"http", "https"}, parsed.Scheme) {
+		return fmt.Errorf("%s must use http or https", key)
+	}
+	if environment == "production" && parsed.Scheme != "https" {
+		return fmt.Errorf("%s must use https in production", key)
+	}
+	origin := parsed.Scheme + "://" + parsed.Host
+	if !slices.Contains(allowedOrigins, origin) {
+		return fmt.Errorf("%s must use an allowed frontend origin", key)
+	}
+	return nil
 }

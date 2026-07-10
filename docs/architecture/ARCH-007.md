@@ -12,8 +12,8 @@
 **Dynamic Behavior:**
 
 - **Tier Enforcement:** Checks user entitlement on each request. Free tier: 3 searches/24h, Catalog Search and single-input Substitution Search only. Paid/Trial: unlimited, all features.
-- **Payment Flow:** Client uses Stripe Elements (PCI-DSS compliant tokenization). Server creates Payment Intents, never handles raw card data.
-- **Webhook Processing:** Asynchronously processes payment_intent.succeeded/failed events to update entitlement status reliably.
+- **Payment Flow:** Authenticated client requests a Stripe-hosted Checkout Session from the server, then follows the server-provided redirect URL. Stripe captures raw card data; the application frontend and backend never collect PAN, CVC, expiry, or card-number fields.
+- **Webhook Processing:** Asynchronously processes Checkout Session, invoice payment, and subscription lifecycle events to update entitlement status reliably.
 - **Trial Management:** Activates 7-day trial on first social login. Tracks expiration timestamp. Auto-downgrades to Free tier on expiry.
 
 **Interface Definition:**
@@ -23,9 +23,9 @@
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Stripe with server-side webhook processing for entitlement sync
+- *Chosen Approach:* Stripe-hosted Checkout with server-side webhook processing for entitlement sync
 - *Alternative Considered:* Client-side payment confirmation with polling
-- *Trade-off:* Webhook-based sync (SW-REQ-045) ensures reliable entitlement updates even if user closes browser during payment. Polling would miss events and create inconsistent states. Stripe Elements ensure PCI-DSS scope reduction (SW-REQ-044) by tokenizing at client.
+- *Trade-off:* Webhook-based sync (SW-REQ-045) ensures reliable entitlement updates even if user closes browser during payment. Polling would miss events and create inconsistent states. Stripe-hosted Checkout reduces PCI-DSS scope (SW-REQ-044) because raw payment-card fields are captured only by Stripe.
 
 ### Webhook Handling
 
@@ -46,7 +46,7 @@
 
 ### Partial Failure Recovery
 
-**Scenario:** Payment succeeds at Stripe, but local entitlement database write fails.
+**Scenario:** Checkout or subscription payment succeeds at Stripe, but local entitlement database write fails.
 
 **Solution:**
 1. Webhook handler wraps entitlement update in database transaction
@@ -72,8 +72,10 @@
      │                  │                   │                   │
      │  2. User pays    │                   │                   │
      │                  │                   │                   │
-     │                  │ 3. payment_intent │                   │
-     │                  │    .succeeded     │                   │
+     │                  │ 3. checkout,      │                   │
+     │                  │    invoice, or    │                   │
+     │                  │    subscription   │                   │
+     │                  │    event          │                   │
      │                  │──────────────────>│                   │
      │                  │                   │                   │
      │                  │                   │ 4. Verify         │

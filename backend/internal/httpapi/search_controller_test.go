@@ -10,9 +10,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
@@ -163,6 +165,59 @@ func (c *composedSearchGateCache) SearchResponseCacheMetadata(search.SearchReque
 
 func composedSearchGateCacheKey(req search.SearchRequest) string {
 	return string(req.Mode) + "|" + req.Query + "|" + string(rune(req.Page))
+}
+
+type searchEntitlementUsageRepository struct {
+	entitlements       map[uuid.UUID]repository.Entitlement
+	usageCount         int
+	getLatestCalls     int
+	getUsageSinceCalls int
+	recordCalls        int
+}
+
+func (r *searchEntitlementUsageRepository) AppendEntitlement(_ context.Context, entitlement repository.Entitlement) error {
+	if r.entitlements == nil {
+		r.entitlements = map[uuid.UUID]repository.Entitlement{}
+	}
+	r.entitlements[entitlement.UserID] = entitlement
+	return nil
+}
+
+func (r *searchEntitlementUsageRepository) GetLatest(_ context.Context, userID uuid.UUID) (repository.Entitlement, error) {
+	r.getLatestCalls++
+	entitlement, ok := r.entitlements[userID]
+	if !ok {
+		return repository.Entitlement{}, repository.NewError(repository.ErrorKindNotFound, "entitlement not found", nil)
+	}
+	return entitlement, nil
+}
+
+func (r *searchEntitlementUsageRepository) RecordUsage(_ context.Context, userID uuid.UUID, feature string, occurredAt time.Time) (repository.UsageWindow, error) {
+	r.recordCalls++
+	r.usageCount++
+	return r.usageWindow(userID, feature, occurredAt), nil
+}
+
+func (r *searchEntitlementUsageRepository) RecordUsageWithinLimit(_ context.Context, userID uuid.UUID, feature string, occurredAt time.Time, since time.Time, limit int) (repository.UsageWindow, bool, error) {
+	r.recordCalls++
+	if r.usageCount >= limit {
+		return r.usageWindow(userID, feature, since), false, nil
+	}
+	r.usageCount++
+	return r.usageWindow(userID, feature, occurredAt), true, nil
+}
+
+func (r *searchEntitlementUsageRepository) GetUsageSince(_ context.Context, userID uuid.UUID, feature string, since time.Time) (repository.UsageWindow, error) {
+	r.getUsageSinceCalls++
+	return r.usageWindow(userID, feature, since), nil
+}
+
+func (r *searchEntitlementUsageRepository) usageWindow(userID uuid.UUID, feature string, startedAt time.Time) repository.UsageWindow {
+	return repository.UsageWindow{UserID: userID, Feature: feature, StartedAt: startedAt, SearchCount: r.usageCount, CreatedAt: startedAt, UpdatedAt: startedAt}
+}
+
+func newSearchUsageGate(repo *searchEntitlementUsageRepository) *entitlement.UsageLimiter {
+	return entitlement.NewUsageLimiter(entitlement.NewEntitlementManager(repo), repo)
 }
 
 func TestSearchControllerRemainingFailurePaths(t *testing.T) {
@@ -761,6 +816,239 @@ func TestSearchWorkflowIntegrationGateSubstitutionSortsBySimilarity(t *testing.T
 	}
 }
 
+func TestSearchControllerSkipsHistoryForEmptySubstitutionQuery(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository query-less Substitution Search.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	history := &fakeSearchHistoryAppender{err: errors.New("history query is required")}
+	service := &fakeSearchService{response: search.SearchResponse{
+		Items:            []repository.FoodItemEntity{{ID: uuid.New(), Name: "Oat Milk", PhysicalState: repository.PhysicalStateLiquid}},
+		TotalCount:       1,
+		Page:             1,
+		SimilarityScores: []float64{0.95},
+		Warnings:         []string{},
+	}}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchHistoryAppender(history).Routes()})
+	body := searchRequestBody(t, map[string]any{
+		"query":   "",
+		"mode":    "substitution",
+		"page":    1,
+		"filters": []any{},
+		"substitutionInputs": []any{
+			map[string]any{"foodObjectId": "21000000-0000-0000-0000-000000000001", "quantity": 100, "unit": "g"},
+			map[string]any{"foodObjectId": "21000000-0000-0000-0000-000000000004", "quantity": 100, "unit": "ml"},
+		},
+	})
+	req := searchHTTPPost(body)
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+	if resp.StatusCode != fiber.StatusOK || envelope.Status != "ok" || history.calls != 0 {
+		t.Fatalf("empty substitution query response=%d envelope=%+v history=%d", resp.StatusCode, envelope, history.calls)
+	}
+}
+
+func TestSearchControllerEntitlementGateAllowsAnonymousCatalogWithoutUsageWrites(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-007 EntitlementManager anonymous Catalog Search gate.
+	usageRepo := &searchEntitlementUsageRepository{}
+	service := &fakeSearchService{response: search.SearchResponse{
+		Items:            []repository.FoodItemEntity{{ID: uuid.New(), Name: "Apple", PhysicalState: repository.PhysicalStateSolid}},
+		TotalCount:       1,
+		Page:             1,
+		SimilarityScores: []float64{0},
+		Warnings:         []string{},
+	}}
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSearchController(service).WithSearchUsageGate(newSearchUsageGate(usageRepo)).Routes()})
+	body := searchRequestBody(t, map[string]any{"query": "apple", "mode": "catalog", "page": 1, "filters": []any{}})
+
+	resp, err := app.Test(searchHTTPPost(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+
+	if resp.StatusCode != fiber.StatusOK || envelope.Status != "ok" || service.calls != 1 {
+		t.Fatalf("response=%d envelope=%+v service calls=%d", resp.StatusCode, envelope, service.calls)
+	}
+	if usageRepo.getLatestCalls != 0 || usageRepo.getUsageSinceCalls != 0 || usageRepo.recordCalls != 0 {
+		t.Fatalf("anonymous catalog wrote usage or loaded entitlement: %+v", usageRepo)
+	}
+}
+
+func TestSearchControllerEntitlementGateAllowsFreeSingleSubstitutionWithinUsageLimit(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-007 UsageLimiter counted free Substitution Search.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	usageRepo := &searchEntitlementUsageRepository{usageCount: 2}
+	history := &fakeSearchHistoryAppender{}
+	service := &fakeSearchService{response: search.SearchResponse{
+		Items:            []repository.FoodItemEntity{{ID: uuid.New(), Name: "Soy Milk", PhysicalState: repository.PhysicalStateLiquid}},
+		TotalCount:       1,
+		Page:             1,
+		SimilarityScores: []float64{1},
+		Warnings:         []string{},
+	}}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchUsageGate(newSearchUsageGate(usageRepo)).WithSearchHistoryAppender(history).Routes()})
+	req := searchHTTPPost(singleSubstitutionBody(t))
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK || service.calls != 1 || history.calls != 1 {
+		t.Fatalf("response=%d service=%d history=%+v", resp.StatusCode, service.calls, history)
+	}
+	if usageRepo.getLatestCalls != 1 || usageRepo.getUsageSinceCalls != 1 || usageRepo.recordCalls != 1 || usageRepo.usageCount != 3 {
+		t.Fatalf("usage gate calls/count = %+v", usageRepo)
+	}
+}
+
+func TestSearchControllerEntitlementGateBlocksFreeMultiSubstitutionBeforeSideEffects(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-007 EntitlementManager multi-input Substitution gate.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	usageRepo := &searchEntitlementUsageRepository{}
+	searchRepo := &composedSearchGateRepository{}
+	cache := &composedSearchGateCache{}
+	history := &fakeSearchHistoryAppender{}
+	service := search.NewSearchDispatcher(search.NewCatalogService(searchRepo, cache), search.NewSubstitutionService(searchRepo, cache))
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchUsageGate(newSearchUsageGate(usageRepo)).WithSearchHistoryAppender(history).Routes()})
+	req := searchHTTPPost(searchRequestBody(t, map[string]any{
+		"query":   "milk",
+		"mode":    "substitution",
+		"page":    1,
+		"filters": []any{},
+		"substitutionInputs": []any{
+			map[string]any{"foodObjectId": "62000000-0000-4000-8000-000000000001", "quantity": 100, "unit": "ml"},
+			map[string]any{"foodObjectId": "62000000-0000-4000-8000-000000000002", "quantity": 50, "unit": "ml"},
+		},
+	}))
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+
+	assertSearchEntitlementDenied(t, resp.StatusCode, envelope, entitlement.FeatureMultiSubstitution, entitlement.UsageDenyReasonEntitlement, entitlement.DenyReasonFreeTierScope)
+	if searchRepo.searches != 0 || cache.gets != 0 || cache.sets != 0 || history.calls != 0 || usageRepo.recordCalls != 0 || usageRepo.getUsageSinceCalls != 0 {
+		t.Fatalf("denied multi substitution side effects repo=%d cache=%+v history=%d usage=%+v", searchRepo.searches, cache, history.calls, usageRepo)
+	}
+}
+
+func TestSearchControllerEntitlementGateBlocksDailyDietWithoutPaidEntitlementBeforeSideEffects(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-007 EntitlementManager Daily Diet gate.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	usageRepo := &searchEntitlementUsageRepository{}
+	searchRepo := &composedSearchGateRepository{}
+	cache := &composedSearchGateCache{}
+	history := &fakeSearchHistoryAppender{}
+	service := search.NewSearchDispatcher(search.NewCatalogService(searchRepo, cache), search.NewSubstitutionService(searchRepo, cache))
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchUsageGate(newSearchUsageGate(usageRepo)).WithSearchHistoryAppender(history).Routes()})
+	req := searchHTTPPost(searchRequestBody(t, map[string]any{
+		"query":       "lentil",
+		"mode":        "daily_diet",
+		"page":        1,
+		"filters":     []any{},
+		"dailyDietId": "61e0cae4-0f45-4854-8ac5-b228214cdd1d",
+	}))
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+
+	assertSearchEntitlementDenied(t, resp.StatusCode, envelope, entitlement.FeatureDailyDiet, entitlement.UsageDenyReasonEntitlement, entitlement.DenyReasonFreeTierScope)
+	if searchRepo.searches != 0 || cache.gets != 0 || cache.sets != 0 || history.calls != 0 || usageRepo.recordCalls != 0 || usageRepo.getUsageSinceCalls != 0 {
+		t.Fatalf("denied daily diet side effects repo=%d cache=%+v history=%d usage=%+v", searchRepo.searches, cache, history.calls, usageRepo)
+	}
+}
+
+func TestSearchControllerEntitlementGateBlocksDailyDietAlternativeWithoutPaidEntitlementBeforeSideEffects(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-007 EntitlementManager Daily Diet Alternative gate.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	usageRepo := &searchEntitlementUsageRepository{}
+	searchRepo := &composedSearchGateRepository{}
+	cache := &composedSearchGateCache{}
+	history := &fakeSearchHistoryAppender{}
+	service := search.NewSearchDispatcher(search.NewCatalogService(searchRepo, cache), search.NewSubstitutionService(searchRepo, cache))
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchUsageGate(newSearchUsageGate(usageRepo)).WithSearchHistoryAppender(history).Routes()})
+	req := searchHTTPPost(searchRequestBody(t, map[string]any{
+		"query":       "lentil",
+		"mode":        "daily_diet_alternative",
+		"page":        1,
+		"filters":     []any{},
+		"dailyDietId": "61e0cae4-0f45-4854-8ac5-b228214cdd1d",
+	}))
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+
+	assertSearchEntitlementDenied(t, resp.StatusCode, envelope, entitlement.FeatureDailyDietAlternative, entitlement.UsageDenyReasonEntitlement, entitlement.DenyReasonFreeTierScope)
+	if searchRepo.searches != 0 || cache.gets != 0 || cache.sets != 0 || history.calls != 0 || usageRepo.recordCalls != 0 || usageRepo.getUsageSinceCalls != 0 {
+		t.Fatalf("denied daily diet alternative side effects repo=%d cache=%+v history=%d usage=%+v", searchRepo.searches, cache, history.calls, usageRepo)
+	}
+}
+
+func TestSearchControllerEntitlementGateBlocksFreeUsageLimitBeforeSideEffects(t *testing.T) {
+	// Implements DESIGN-002 SearchController and DESIGN-007 UsageLimiter free-tier limit gate.
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	usageRepo := &searchEntitlementUsageRepository{usageCount: 3}
+	searchRepo := &composedSearchGateRepository{}
+	cache := &composedSearchGateCache{}
+	history := &fakeSearchHistoryAppender{}
+	service := search.NewSearchDispatcher(search.NewCatalogService(searchRepo, cache), search.NewSubstitutionService(searchRepo, cache))
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSearchController(service).WithSearchUsageGate(newSearchUsageGate(usageRepo)).WithSearchHistoryAppender(history).Routes()})
+	req := searchHTTPPost(singleSubstitutionBody(t))
+	addCookies(req, authCookies)
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	envelope := decodeEnvelope(t, resp.Body)
+
+	if resp.StatusCode != fiber.StatusTooManyRequests || envelope.Error == nil || envelope.Error.Code != "free_usage_limit_reached" {
+		t.Fatalf("limit response=%d envelope=%+v", resp.StatusCode, envelope)
+	}
+	dataFeature := envelope.Data["feature"]
+	if dataFeature != string(entitlement.FeatureSingleSubstitution) || envelope.Data["denyReason"] != string(entitlement.UsageDenyReasonFreeLimitReached) {
+		t.Fatalf("limit data = %+v", envelope.Data)
+	}
+	if searchRepo.searches != 0 || cache.gets != 0 || cache.sets != 0 || history.calls != 0 || usageRepo.recordCalls != 0 {
+		t.Fatalf("denied limit side effects repo=%d cache=%+v history=%d usage=%+v", searchRepo.searches, cache, history.calls, usageRepo)
+	}
+}
+
 func TestSearchWorkflowIntegrationGateGeneratedTypesAreCurrent(t *testing.T) {
 	// Implements DESIGN-002 SearchController OpenAPI-generated contract compatibility gate.
 	root := filepath.Clean("../../..")
@@ -900,6 +1188,31 @@ func searchHTTPPost(body []byte) *http.Request {
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/search", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
+}
+
+func singleSubstitutionBody(t *testing.T) []byte {
+	t.Helper()
+	return searchRequestBody(t, map[string]any{
+		"query":   "milk",
+		"mode":    "substitution",
+		"page":    1,
+		"filters": []any{},
+		"substitutionInputs": []any{map[string]any{
+			"foodObjectId": "62000000-0000-4000-8000-000000000001",
+			"quantity":     100,
+			"unit":         "ml",
+		}},
+	})
+}
+
+func assertSearchEntitlementDenied(t *testing.T, status int, envelope Envelope, feature entitlement.Feature, usageReason entitlement.UsageDenyReason, entitlementReason entitlement.DenyReason) {
+	t.Helper()
+	if status != fiber.StatusForbidden || envelope.Status != "error" || envelope.Error == nil || envelope.Error.Code != "entitlement_denied" {
+		t.Fatalf("entitlement response=%d envelope=%+v", status, envelope)
+	}
+	if envelope.Data["feature"] != string(feature) || envelope.Data["denyReason"] != string(usageReason) || envelope.Data["entitlementReason"] != string(entitlementReason) {
+		t.Fatalf("entitlement data = %+v", envelope.Data)
+	}
 }
 
 func hasMetric(metrics []observability.MetricPoint, name string, route string, status string) bool {

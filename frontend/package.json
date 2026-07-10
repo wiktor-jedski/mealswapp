@@ -9,9 +9,11 @@
     "preview": "vite preview --port 4173 --strictPort",
     "generate:api-types": "python3 ../scripts/generate-api-types.py",
     "check:api-types": "python3 ../scripts/generate-api-types.py --check",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "test": "bun test",
     "test:e2e": "playwright test",
-    "check": "bun run check:api-types && bun run build && bun test"
+    "test:e2e:real-stack": "MEALSWAPP_REAL_STACK_E2E=1 playwright test -c playwright.real-stack.config.ts tests/real-stack-auth-checkout.spec.ts",
+    "check": "bun run check:api-types && bun run typecheck && bun run build && bun test"
   },
   "dependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.1",

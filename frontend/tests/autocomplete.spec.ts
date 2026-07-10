@@ -114,6 +114,11 @@ test("focuses the search bar on initial load and after mode changes", async ({ p
 	await expect(input).toHaveAttribute("placeholder", "Search a food to add as a substitution target…");
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find alternatives for a food using quantity and unit context.");
 
+	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
+	await expect(input).toBeFocused();
+	await expect(input).toHaveAttribute("placeholder", "Search saved daily diets…");
+	await expect(page.locator("[data-search-mode-description]")).toHaveText("Search across saved daily diets.");
+
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
 	await expect(input).toBeFocused();
 	await expect(input).toHaveAttribute("placeholder", "Search within a saved daily diet or paste its ID…");
@@ -212,6 +217,24 @@ test("Enter submits the typed query without selecting the top suggestion", async
 
 	await expect(input).toHaveValue("app");
 	await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeHidden();
+});
+
+// Implements DESIGN-001 SearchView Substitution first autocomplete suggestion default verification.
+test("Enter adds the first suggestion in Substitution mode without pressing ArrowDown", async ({ page }) => {
+	await stubApiWithResults(page);
+	await page.goto("/");
+	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
+	await searchCombobox(page).fill("app");
+
+	const listbox = page.getByRole("listbox", { name: "Autocomplete suggestions" });
+	await expect(listbox).toBeVisible();
+	await expect(autocompleteOptions(page).first()).toHaveAttribute("aria-selected", "true");
+
+	await searchCombobox(page).press("Enter");
+
+	await expect(page.locator('section[aria-label="Substitution inputs"]')).toContainText("Apple");
+	await expect(searchCombobox(page)).toHaveValue("");
+	await expect(listbox).toBeHidden();
 });
 
 // Verifies IT-ARCH-001-002.

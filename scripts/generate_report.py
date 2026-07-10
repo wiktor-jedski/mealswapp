@@ -87,7 +87,8 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Copy screenshots from /tmp/mealswapp-frontend-verifier to output_dir/screenshots/
+    # Copy screenshots from /tmp/mealswapp-frontend-verifier to output_dir/screenshots/.
+    # Implements DESIGN-018 AuthView report evidence for auth and authenticated Subscription views.
     html_path = Path(output_path)
     html_dir = html_path.parent
     screenshot_stem = screenshot_stem or html_path.stem
@@ -113,12 +114,18 @@ def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: 
         "catalog-cow-milk": "Catalog Search: Cow Milk",
         "substitution-empty": "Substitution View",
         "substitution-apple-oat-milk": "Substitution Search: Apple + Oat Milk",
+        "auth-login": "Auth Login View",
+        "auth-register": "Auth Registration View",
+        "authenticated-subscription": "Authenticated Subscription View",
     }
     scenario_order = {
         "catalog-autocomplete-mil": 1,
         "catalog-cow-milk": 2,
         "substitution-empty": 3,
         "substitution-apple-oat-milk": 4,
+        "auth-login": 5,
+        "auth-register": 6,
+        "authenticated-subscription": 7,
     }
     viewport_titles = {
         "desktop": "Desktop (1280x900)",

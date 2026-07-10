@@ -43,6 +43,18 @@ def can_use_docker_compose() -> bool:
 	return True
 
 
+def port_accepts_connection(host: str, port: int) -> bool:
+	try:
+		with socket.create_connection((host, port), timeout=1):
+			return True
+	except OSError:
+		return False
+
+
+def local_dependency_ports_accept_connections() -> bool:
+	return port_accepts_connection("127.0.0.1", 5432) and port_accepts_connection("127.0.0.1", 6379)
+
+
 def running_compose_services() -> set[str]:
 	result = run(["docker", "compose", "ps", "--status", "running", "--services"], capture=True)
 	return {line.strip() for line in result.stdout.splitlines() if line.strip()}
@@ -91,6 +103,22 @@ def run_migrations() -> None:
 	run(["go", "run", "./cmd/migrate", "up"], BACKEND, backend_env())
 	run(["go", "run", "./cmd/migrate", "down"], BACKEND, backend_env())
 	run(["go", "run", "./cmd/migrate", "up"], BACKEND, backend_env())
+
+
+def ensure_local_dependencies() -> set[str]:
+	# Implements DESIGN-014 MetricsCollector aggregate gate reuse of local dependencies.
+	if local_dependency_ports_accept_connections():
+		print("Using existing local PostgreSQL and Redis services on ports 5432 and 6379.")
+		return set()
+	if not can_use_docker_compose():
+		raise SystemExit("docker compose or existing local PostgreSQL/Redis services are required for local stack verification")
+
+	initially_running = running_compose_services()
+	started_services = set(COMPOSE_SERVICES) - initially_running
+	run(["docker", "compose", "up", "-d", *COMPOSE_SERVICES])
+	for service in COMPOSE_SERVICES:
+		wait_for_compose_health(service)
+	return started_services
 
 
 def start_api(port: int) -> subprocess.Popen[str]:
@@ -161,12 +189,7 @@ def main() -> int:
 	started_services: set[str] = set()
 	api_process: subprocess.Popen[str] | None = None
 	try:
-		initially_running = running_compose_services()
-		started_services = set(COMPOSE_SERVICES) - initially_running
-		run(["docker", "compose", "up", "-d", *COMPOSE_SERVICES])
-		for service in COMPOSE_SERVICES:
-			wait_for_compose_health(service)
-
+		started_services = ensure_local_dependencies()
 		run_migrations()
 
 		port = free_port()

@@ -28,6 +28,16 @@ var entitlementGetLatestSQL string
 //go:embed sql/usage_window_record.sql
 var usageWindowRecordSQL string
 
+// Implements DESIGN-007 UsageLimiter cross-instance atomic usage guard.
+//
+//go:embed sql/usage_window_advisory_lock.sql
+var usageWindowAdvisoryLockSQL string
+
+// Implements DESIGN-007 UsageLimiter atomic limit-enforced record query.
+//
+//go:embed sql/usage_window_record_within_limit.sql
+var usageWindowRecordWithinLimitSQL string
+
 // Implements DESIGN-007 UsageLimiter aggregate query.
 //
 //go:embed sql/usage_window_get_since.sql
@@ -42,6 +52,11 @@ var entitlementListExpiredTrialsSQL string
 //
 //go:embed sql/processed_stripe_event_insert.sql
 var processedStripeEventInsertSQL string
+
+// Implements DESIGN-007 StripeWebhookHandler dead-letter query.
+//
+//go:embed sql/stripe_dead_letter_insert.sql
+var stripeDeadLetterInsertSQL string
 
 // PostgresEntitlementRepository persists subscription and usage state in PostgreSQL.
 // Implements DESIGN-007 EntitlementManager.
@@ -106,6 +121,64 @@ func (r *PostgresEntitlementRepository) RecordUsage(ctx context.Context, userID 
 	return scanUsageWindow(row)
 }
 
+// RecordUsageWithinLimit atomically records usage only while the rolling window is below limit.
+// Implements DESIGN-007 UsageLimiter.
+func (r *PostgresEntitlementRepository) RecordUsageWithinLimit(ctx context.Context, userID uuid.UUID, feature string, occurredAt time.Time, since time.Time, limit int) (UsageWindow, bool, error) {
+	if userID == uuid.Nil {
+		return UsageWindow{}, false, validationError("user id is required")
+	}
+	if strings.TrimSpace(feature) == "" {
+		return UsageWindow{}, false, validationError("feature is required")
+	}
+	if occurredAt.IsZero() {
+		return UsageWindow{}, false, validationError("occurred at is required")
+	}
+	if since.IsZero() {
+		return UsageWindow{}, false, validationError("since is required")
+	}
+	if limit <= 0 {
+		return UsageWindow{}, false, validationError("limit must be positive")
+	}
+	if db, ok := r.db.(transactionalExecutor); ok {
+		var window UsageWindow
+		var recorded bool
+		err := withTransaction(ctx, db, func(tx transactionalExecutor) error {
+			if _, err := tx.Exec(ctx, usageWindowAdvisoryLockSQL, userID, feature); err != nil {
+				return mapPostgresError(err, "lock usage window")
+			}
+			txRepo := NewPostgresEntitlementRepository(tx)
+			current, err := txRepo.GetUsageSince(ctx, userID, feature, since)
+			if err != nil {
+				return err
+			}
+			window = current
+			if current.SearchCount >= limit {
+				return nil
+			}
+			recordedWindow, err := txRepo.RecordUsage(ctx, userID, feature, occurredAt)
+			if err != nil {
+				return err
+			}
+			window.SearchCount = current.SearchCount + 1
+			window.UpdatedAt = recordedWindow.UpdatedAt
+			recorded = true
+			return nil
+		})
+		if err != nil {
+			return UsageWindow{}, false, err
+		}
+		return window, recorded, nil
+	}
+
+	var window UsageWindow
+	var recorded bool
+	err := r.db.QueryRow(ctx, usageWindowRecordWithinLimitSQL, userID, feature, occurredAt, since, limit).Scan(&window.UserID, &window.Feature, &window.StartedAt, &window.SearchCount, &window.CreatedAt, &window.UpdatedAt, &recorded)
+	if err != nil {
+		return UsageWindow{}, false, mapPostgresError(err, "record usage within limit")
+	}
+	return window, recorded, nil
+}
+
 // GetUsageSince returns usage accumulated since a caller-supplied cutoff.
 // Implements DESIGN-007 UsageLimiter.
 func (r *PostgresEntitlementRepository) GetUsageSince(ctx context.Context, userID uuid.UUID, feature string, since time.Time) (UsageWindow, error) {
@@ -155,6 +228,61 @@ func (r *PostgresEntitlementRepository) ListExpiredTrials(ctx context.Context, n
 // InsertProcessedStripeEvent stores webhook idempotency metadata and reports duplicates.
 // Implements DESIGN-007 StripeWebhookHandler.
 func (r *PostgresEntitlementRepository) InsertProcessedStripeEvent(ctx context.Context, event ProcessedStripeEvent) (bool, error) {
+	return insertProcessedStripeEvent(ctx, r.db, event)
+}
+
+// InsertStripeDeadLetter stores sanitized webhook failure metadata.
+// Implements DESIGN-007 StripeWebhookHandler dead-letter persistence.
+func (r *PostgresEntitlementRepository) InsertStripeDeadLetter(ctx context.Context, entry StripeDeadLetter) error {
+	if strings.TrimSpace(entry.EventID) == "" {
+		return validationError("event id is required")
+	}
+	if strings.TrimSpace(entry.EventType) == "" {
+		return validationError("event type is required")
+	}
+	if strings.TrimSpace(entry.FailureCategory) == "" {
+		return validationError("failure category is required")
+	}
+	if strings.TrimSpace(entry.PayloadSHA256) == "" {
+		return validationError("payload hash is required")
+	}
+	_, err := r.db.Exec(ctx, stripeDeadLetterInsertSQL, entry.EventID, entry.EventType, entry.FailureCategory, entry.ErrorMessage, entry.PayloadSHA256, entry.StripeCustomerID, entry.StripeSubscriptionID, entry.UserID)
+	if err != nil {
+		return mapPostgresError(err, "insert stripe dead letter")
+	}
+	return nil
+}
+
+// ProcessStripeWebhookEvent stores provider idempotency and entitlement side effects atomically.
+// Implements DESIGN-007 StripeWebhookHandler.
+func (r *PostgresEntitlementRepository) ProcessStripeWebhookEvent(ctx context.Context, event ProcessedStripeEvent, entitlement *Entitlement) (bool, error) {
+	if entitlement != nil {
+		if err := validateEntitlement(*entitlement); err != nil {
+			return false, err
+		}
+	}
+	db, ok := r.db.(transactionalExecutor)
+	if !ok {
+		return false, NewError(ErrorKindInternal, "stripe webhook transaction support is required", nil)
+	}
+	inserted := false
+	err := withTransaction(ctx, db, func(tx transactionalExecutor) error {
+		var err error
+		inserted, err = insertProcessedStripeEvent(ctx, tx, event)
+		if err != nil || !inserted || entitlement == nil {
+			return err
+		}
+		return NewPostgresEntitlementRepository(tx).AppendEntitlement(ctx, *entitlement)
+	})
+	if err != nil {
+		return false, err
+	}
+	return inserted, nil
+}
+
+// insertProcessedStripeEvent stores webhook idempotency metadata and reports duplicates.
+// Implements DESIGN-007 StripeWebhookHandler.
+func insertProcessedStripeEvent(ctx context.Context, db sqlExecutor, event ProcessedStripeEvent) (bool, error) {
 	if strings.TrimSpace(event.EventID) == "" {
 		return false, validationError("event id is required")
 	}
@@ -171,7 +299,7 @@ func (r *PostgresEntitlementRepository) InsertProcessedStripeEvent(ctx context.C
 	if !json.Valid(payload) {
 		return false, validationError("event payload must be valid json")
 	}
-	_, err := r.db.Exec(ctx, processedStripeEventInsertSQL, event.EventID, event.EventType, event.Outcome, payload)
+	tag, err := db.Exec(ctx, processedStripeEventInsertSQL, event.EventID, event.EventType, event.Outcome, payload)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -179,7 +307,7 @@ func (r *PostgresEntitlementRepository) InsertProcessedStripeEvent(ctx context.C
 		}
 		return false, mapPostgresError(err, "insert processed stripe event")
 	}
-	return true, nil
+	return tag.RowsAffected() > 0, nil
 }
 
 // scanEntitlement reads an entitlement from a PostgreSQL row.
@@ -233,7 +361,7 @@ func validateEntitlement(entitlement Entitlement) error {
 	}
 	seenModes := map[string]struct{}{}
 	for _, mode := range entitlement.AllowedModes {
-		if mode != "catalog" && mode != "substitution" && mode != "daily_diet_alternative" {
+		if mode != "catalog" && mode != "substitution" && mode != "daily_diet" && mode != "daily_diet_alternative" {
 			return validationError("allowed mode is invalid")
 		}
 		if _, exists := seenModes[mode]; exists {

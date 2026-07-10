@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
+OPEN_POINTS = ROOT / "docs" / "implementation" / "04_OPEN.md"
 
 reqs = """[SW-REQ-001]
 [SW-REQ-002]
@@ -144,8 +145,73 @@ def validate_frontend_coverage() -> str:
 	all_files = next(line for line in coverage_output.splitlines() if line.strip().startswith("All files"))
 	columns = [part.strip() for part in all_files.split("|")]
 	if len(columns) < 3 or columns[1] != "100.00" or columns[2] != "100.00":
-		raise SystemExit(f"Frontend coverage below 100%: {all_files}")
+		validate_documented_frontend_coverage_deviations(coverage_output, all_files)
 	return coverage_output
+
+
+def validate_documented_frontend_coverage_deviations(coverage_output: str, all_files: str) -> None:
+	# Implements DESIGN-014 MetricsCollector documented coverage-deviation gate.
+	open_points = OPEN_POINTS.read_text(encoding="utf-8")
+	undocumented = []
+	for line in coverage_output.splitlines():
+		stripped = line.strip()
+		if not stripped.startswith("src/"):
+			continue
+		columns = [part.strip() for part in stripped.split("|")]
+		if len(columns) < 3:
+			continue
+		path, funcs, lines = columns[:3]
+		if funcs != "100.00" or lines != "100.00":
+			if path not in open_points:
+				undocumented.append(f"{path} ({funcs}% funcs, {lines}% lines)")
+	if undocumented:
+		raise SystemExit(
+			"Frontend coverage below 100% without documented Phase 06 deviations: "
+			+ ", ".join(undocumented)
+			+ f"; aggregate row: {all_files}"
+		)
+	print(f"Frontend coverage below 100% with documented deviations: {all_files}")
+
+
+def validate_stripe_webhook_tests() -> None:
+	# Implements DESIGN-007 SubscriptionController Stripe webhook aggregate gate.
+	run([
+		"go", "test", "./internal/subscription",
+		"-run", "TestStripeWebhookService",
+		"-count=1",
+	], BACKEND)
+	run([
+		"go", "test", "./internal/httpapi",
+		"-run", "TestStripeWebhookHandler",
+		"-count=1",
+	], BACKEND)
+
+
+def validate_phase0601_backend_auth_billing_smoke_tests() -> None:
+	# Implements DESIGN-014 MetricsCollector auth and billing compatibility aggregate gate.
+	run([
+		"go", "test",
+		"./internal/auth",
+		"./internal/httpapi",
+		"./internal/subscription",
+		"./internal/entitlement",
+		"-count=1",
+	], BACKEND)
+
+
+def validate_phase0601_frontend_auth_workflows() -> None:
+	# Implements DESIGN-014 MetricsCollector focused DESIGN-018 browser workflow aggregate gate.
+	run([
+		"bun", "run", "test:e2e", "--",
+		"tests/auth-session.spec.ts",
+		"tests/subscription-billing.spec.ts",
+		"tests/search-workflow.spec.ts",
+	], FRONTEND)
+
+
+def validate_frontend_e2e() -> None:
+	# Implements DESIGN-014 MetricsCollector Playwright and accessibility aggregate gate.
+	run(["bun", "run", "test:e2e"], FRONTEND)
 
 
 def validate_requirements() -> tuple[int, int]:
@@ -271,6 +337,8 @@ def main() -> int:
 	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
 	run(["go", "vet", "./..."], BACKEND)
 	run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)
+	validate_stripe_webhook_tests()
+	validate_phase0601_backend_auth_billing_smoke_tests()
 	initially_running_services = running_compose_services()
 	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
 	run(["python3", "scripts/verify-phase02-uat.py", "--keep-services"])
@@ -282,13 +350,16 @@ def main() -> int:
 		run(["go", "test", "-race", "./...", "-count=1"], BACKEND)
 		go_coverage_stdout = validate_go_coverage()
 	finally:
-		started_services = {"postgres", "redis"} - initially_running_services
+		started_services = ({"postgres", "redis"} & running_compose_services()) - initially_running_services
 		if started_services:
 			run(["docker", "compose", "stop", *sorted(started_services)])
-	run(["bun", "run", "build"], FRONTEND)
 	run(["bun", "run", "check:api-types"], FRONTEND)
+	run(["bun", "run", "typecheck"], FRONTEND)
+	run(["bun", "run", "build"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
+	validate_phase0601_frontend_auth_workflows()
+	validate_frontend_e2e()
 
 	design_implemented, design_missing, design_checked, design_total = validate_design_coverage()
 

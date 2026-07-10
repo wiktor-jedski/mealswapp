@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 )
@@ -32,12 +34,20 @@ type SearchHistoryAppender interface {
 	AddHistory(ctx context.Context, userID uuid.UUID, query string, mode string, filtersHash string) (uuid.UUID, error)
 }
 
+// SearchUsageGate defines entitlement and usage checks for search dispatch.
+// Implements DESIGN-007 EntitlementManager and UsageLimiter.
+type SearchUsageGate interface {
+	CheckSearchAllowed(context.Context, entitlement.UsageRequest) (entitlement.UsageDecision, error)
+	RecordCompletedSearch(context.Context, entitlement.UsageDecision) (entitlement.UsageDecision, repository.UsageWindow, error)
+}
+
 // SearchController owns Catalog Search endpoint handlers.
-// Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository.
+// Implements DESIGN-002 SearchController, DESIGN-007 EntitlementManager, DESIGN-007 UsageLimiter, and DESIGN-008 SearchHistoryRepository.
 type SearchController struct {
 	service      SearchService
 	autocomplete AutocompleteService
 	history      SearchHistoryAppender
+	usageGate    SearchUsageGate
 }
 
 // searchResponseDTO is the public HTTP payload for successful search responses.
@@ -153,6 +163,13 @@ func (c *SearchController) WithSearchHistoryAppender(history SearchHistoryAppend
 	return c
 }
 
+// WithSearchUsageGate enables entitlement and usage checks before search dispatch.
+// Implements DESIGN-007 EntitlementManager and UsageLimiter.
+func (c *SearchController) WithSearchUsageGate(usageGate SearchUsageGate) *SearchController {
+	c.usageGate = usageGate
+	return c
+}
+
 // WithAutocompleteService enables ranked autocomplete route exposure.
 // Implements DESIGN-002 SearchController.
 func (c *SearchController) WithAutocompleteService(autocomplete AutocompleteService) *SearchController {
@@ -161,9 +178,9 @@ func (c *SearchController) WithAutocompleteService(autocomplete AutocompleteServ
 }
 
 // Routes returns public search routes.
-// Implements DESIGN-002 SearchController and DESIGN-008 SearchHistoryRepository.
+// Implements DESIGN-002 SearchController, DESIGN-007 EntitlementManager, DESIGN-007 UsageLimiter, and DESIGN-008 SearchHistoryRepository.
 func (c *SearchController) Routes() []RouteDefinition {
-	routes := []RouteDefinition{{Method: fiber.MethodPost, Path: "/search", OptionalAuth: c.history != nil, ExemptCSRF: true, Validate: ValidateJSON(ValidateSearchRequestBody), RateLimit: &RateLimitRule{Scope: "endpoint", MaxRequests: 120, WindowSeconds: 60}, Handler: c.Search}}
+	routes := []RouteDefinition{{Method: fiber.MethodPost, Path: "/search", OptionalAuth: c.history != nil || c.usageGate != nil, ExemptCSRF: true, Validate: ValidateJSON(ValidateSearchRequestBody), RateLimit: &RateLimitRule{Scope: "endpoint", MaxRequests: 120, WindowSeconds: 60}, Handler: c.Search}}
 	if c.autocomplete != nil {
 		routes = append(routes, RouteDefinition{Method: fiber.MethodGet, Path: "/search/autocomplete", OptionalAuth: true, Validate: ValidateQuery(ValidateAutocompleteQueryParams), RateLimit: &RateLimitRule{Scope: "endpoint", MaxRequests: 240, WindowSeconds: 60}, Handler: c.Autocomplete})
 	}
@@ -171,11 +188,18 @@ func (c *SearchController) Routes() []RouteDefinition {
 }
 
 // Search returns Catalog Search results in the shared response envelope.
-// Implements DESIGN-002 SearchController.
+// Implements DESIGN-002 SearchController, DESIGN-007 EntitlementManager, and DESIGN-007 UsageLimiter.
 func (c *SearchController) Search(ctx *fiber.Ctx) error {
 	req, err := ParseSearchRequest(ctx)
 	if err != nil {
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed", Cause: err}
+	}
+	usageDecision, blocked, err := c.checkSearchUsage(ctx, req)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return nil
 	}
 	response, err := c.service.Search(ctx.UserContext(), req)
 	if err != nil {
@@ -193,6 +217,13 @@ func (c *SearchController) Search(ctx *fiber.Ctx) error {
 		appErr.RequestID = requestID(ctx)
 		return ctx.Status(fiber.StatusUnprocessableEntity).JSON(Envelope{Status: "error", RequestID: appErr.RequestID, Data: map[string]any{"rejection": searchRejectionData(*response.Rejection)}, Error: &appErr})
 	}
+	blocked, err = c.recordCompletedSearchUsage(ctx, usageDecision)
+	if err != nil {
+		return err
+	}
+	if blocked {
+		return nil
+	}
 	if err := c.appendAuthenticatedHistory(ctx, req); err != nil {
 		return err
 	}
@@ -201,6 +232,97 @@ func (c *SearchController) Search(ctx *fiber.Ctx) error {
 		return err
 	}
 	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: data})
+}
+
+// checkSearchUsage blocks paid-only or over-limit searches before cache, service, or history side effects.
+// Implements DESIGN-007 EntitlementManager and UsageLimiter.
+func (c *SearchController) checkSearchUsage(ctx *fiber.Ctx, req search.SearchRequest) (entitlement.UsageDecision, bool, error) {
+	if c.usageGate == nil {
+		return entitlement.UsageDecision{}, false, nil
+	}
+	decision, err := c.usageGate.CheckSearchAllowed(ctx.UserContext(), entitlement.UsageRequest{UserID: searchUserID(ctx), Feature: searchFeature(req)})
+	if err != nil {
+		return entitlement.UsageDecision{}, false, err
+	}
+	if !decision.Allowed {
+		return entitlement.UsageDecision{}, true, writeSearchUsageDenial(ctx, decision)
+	}
+	return decision, false, nil
+}
+
+// recordCompletedSearchUsage persists counted free-tier usage only after successful search completion.
+// Implements DESIGN-007 UsageLimiter.
+func (c *SearchController) recordCompletedSearchUsage(ctx *fiber.Ctx, decision entitlement.UsageDecision) (bool, error) {
+	if c.usageGate == nil {
+		return false, nil
+	}
+	recorded, _, err := c.usageGate.RecordCompletedSearch(ctx.UserContext(), decision)
+	if err != nil {
+		return false, err
+	}
+	if !recorded.Allowed {
+		return true, writeSearchUsageDenial(ctx, recorded)
+	}
+	return false, nil
+}
+
+// searchUserID returns the trusted optional-auth identity used for entitlement checks.
+// Implements DESIGN-007 EntitlementManager and UsageLimiter.
+func searchUserID(ctx *fiber.Ctx) *uuid.UUID {
+	user, ok := authenticatedUser(ctx)
+	if !ok {
+		return nil
+	}
+	return &user.UserID
+}
+
+// searchFeature maps the validated search shape to Phase 06 entitlement features.
+// Implements DESIGN-007 EntitlementManager and DESIGN-002 SearchController.
+func searchFeature(req search.SearchRequest) entitlement.Feature {
+	switch req.Mode {
+	case search.SearchModeSubstitution:
+		if len(req.SubstitutionInputs) == 1 {
+			return entitlement.FeatureSingleSubstitution
+		}
+		return entitlement.FeatureMultiSubstitution
+	case search.SearchModeDailyDiet:
+		return entitlement.FeatureDailyDiet
+	case search.SearchModeDailyDietAlternative:
+		return entitlement.FeatureDailyDietAlternative
+	default:
+		return entitlement.FeatureCatalog
+	}
+}
+
+// writeSearchUsageDenial returns deterministic entitlement and free-limit HTTP errors.
+// Implements DESIGN-007 EntitlementManager and UsageLimiter.
+func writeSearchUsageDenial(ctx *fiber.Ctx, decision entitlement.UsageDecision) error {
+	status := fiber.StatusForbidden
+	code := "entitlement_denied"
+	message := "search entitlement denied"
+	if decision.DenyReason == entitlement.UsageDenyReasonFreeLimitReached {
+		status = fiber.StatusTooManyRequests
+		code = "free_usage_limit_reached"
+		message = "free search usage limit reached"
+	}
+	appErr := AppError{HTTPStatus: status, Category: "entitlement", Code: code, Message: message, RequestID: requestID(ctx)}
+	return ctx.Status(status).JSON(Envelope{Status: "error", RequestID: appErr.RequestID, Data: searchUsageDenialData(decision), Error: &appErr})
+}
+
+// searchUsageDenialData exposes stable, non-sensitive entitlement denial metadata.
+// Implements DESIGN-007 EntitlementManager and UsageLimiter.
+func searchUsageDenialData(decision entitlement.UsageDecision) map[string]any {
+	return map[string]any{
+		"feature":            string(decision.Feature),
+		"denyReason":         string(decision.DenyReason),
+		"entitlementReason":  string(decision.EntitlementReason),
+		"tier":               decision.Tier,
+		"status":             decision.Status,
+		"limit":              decision.Limit,
+		"used":               decision.Used,
+		"remaining":          decision.Remaining,
+		"countUsageOnFinish": decision.CountUsageOnFinish,
+	}
 }
 
 // Autocomplete returns ranked food and meal suggestions in the shared response envelope.
@@ -238,6 +360,9 @@ func (c *SearchController) appendAuthenticatedHistory(ctx *fiber.Ctx, req search
 	}
 	user, ok := authenticatedUser(ctx)
 	if !ok {
+		return nil
+	}
+	if strings.TrimSpace(req.Query) == "" {
 		return nil
 	}
 	_, err := c.history.AddHistory(ctx.UserContext(), user.UserID, req.Query, string(req.Mode), searchFiltersHash(req.Filters))

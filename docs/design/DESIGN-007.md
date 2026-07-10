@@ -14,7 +14,7 @@
 - `type SubscriptionTier = "free" | "trial" | "paid"`
 - `interface Entitlement { userId: UUID; tier: SubscriptionTier; status: "active" | "expired" | "past_due" | "cancelled"; searchLimitPer24h: number; allowedModes: SearchMode[]; expiresAt?: time.Time; stripeCustomerId?: string; stripeSubscriptionId?: string }`
 - `interface UsageWindow { userId: UUID; feature: string; startedAt: time.Time; searchCount: number }`
-- `interface PaymentIntentRequest { userId: UUID; priceId: string; successUrl: string; cancelUrl: string }`
+- `interface CheckoutSessionRequest { userId: UUID; priceId: string; successUrl: string; cancelUrl: string }`
 - `interface StripeWebhookEvent { id: string; type: string; payload: []byte; signature: string; receivedAt: time.Time }`
 - `interface ProcessedEvent { eventId: string; eventType: string; processedAt: time.Time; outcome: "success" | "duplicate" | "failed"; payload: []byte }`
 
@@ -22,11 +22,11 @@
 1. Entitlement checks load the user's active tier from ARCH-005 before protected feature execution.
 2. Free users are limited to 3 searches per 24-hour rolling window and `single` mode only.
 3. Trial and paid users receive unlimited searches and all modes while `status = active`.
-4. Payment setup creates a Stripe payment or checkout session; raw card data remains in Stripe Elements.
+4. Payment setup creates a Stripe-hosted Checkout Session; raw card data is captured by Stripe and never handled by the application frontend or backend.
 5. Webhook handler verifies `Stripe-Signature` before parsing the event.
 6. Store `event.id` in `processed_events` inside a transaction; duplicates return 200 without repeating side effects.
-7. For successful payment or subscription events, update entitlement and usage limits in the same transaction.
-8. For failed or cancelled payment events, mark entitlement as `past_due` or `cancelled` without deleting history.
+7. For successful Checkout Session, invoice payment, or subscription lifecycle events, update entitlement and usage limits in the same transaction.
+8. For failed invoice payment or cancelled subscription events, mark entitlement as `past_due` or `cancelled` without deleting history.
 9. Trial tracker creates one 7-day trial on first social login and auto-downgrades expired trials to free.
 10. Hourly reconciliation queries Stripe for active subscriptions and fixes local entitlement drift.
 

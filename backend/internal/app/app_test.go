@@ -68,6 +68,7 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
+		FrontendOrigin: "http://localhost:5173",
 		Environment:    "development",
 		Account: config.AccountConfig{
 			AccessTokenTTL:              15 * time.Minute,
@@ -97,6 +98,7 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 		{fiber.MethodPost, "/api/v1/search", `{"query":"milk","mode":"catalog","page":1,"filters":[]}`},
 		{fiber.MethodGet, "/api/v1/search/autocomplete?query=milk", ""},
 		{fiber.MethodGet, "/api/v1/food-objects/71000000-0000-4000-8000-000000000001", ""},
+		{fiber.MethodPost, "/api/v1/billing/stripe/webhook", `{"bad":true}`},
 	}
 	for _, check := range checks {
 		req := httptest.NewRequest(check.method, check.path, strings.NewReader(check.body))
@@ -114,11 +116,12 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 	}
 }
 
-// TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog verifies DESIGN-002 production search composition.
-func TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog(t *testing.T) {
+// TestNewProductionSearchRouteBlocksAnonymousSubstitutionBeforeCatalog verifies DESIGN-002 and DESIGN-007 production search composition.
+func TestNewProductionSearchRouteBlocksAnonymousSubstitutionBeforeCatalog(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
+		FrontendOrigin: "http://localhost:5173",
 		Environment:    "development",
 		Account: config.AccountConfig{
 			AccessTokenTTL:              15 * time.Minute,
@@ -147,14 +150,14 @@ func TestNewProductionSearchRouteDispatchesSubstitutionPastCatalog(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != fiber.StatusUnprocessableEntity {
+	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("response = %d body=%s", resp.StatusCode, responseBody)
 	}
 	if strings.Contains(string(responseBody), "search mode is not available for catalog results") || strings.Contains(string(responseBody), `"field":"mode"`) {
 		t.Fatalf("substitution request still reached catalog-only rejection: %s", responseBody)
 	}
-	if !strings.Contains(string(responseBody), `"field":"substitutionInputs"`) {
-		t.Fatalf("substitution request did not reach substitution service: %s", responseBody)
+	if !strings.Contains(string(responseBody), `"code":"entitlement_denied"`) || !strings.Contains(string(responseBody), `"feature":"single_substitution"`) {
+		t.Fatalf("substitution request did not stop at entitlement gate: %s", responseBody)
 	}
 }
 
@@ -215,6 +218,29 @@ func TestUnavailableOAuthGatewayAndRedisPurgerFailClosed(t *testing.T) {
 	}
 }
 
+func TestGoogleOAuthGatewayConfiguration(t *testing.T) {
+	missing := NewGoogleOAuthGateway(config.OAuthConfig{})
+	if _, err := missing.StartOAuth(context.Background(), "google", "state"); err == nil {
+		t.Fatal("missing Google config did not fail closed")
+	}
+
+	gateway := NewGoogleOAuthGateway(config.OAuthConfig{
+		GoogleClientID:     "google-client-id",
+		GoogleClientSecret: "google-client-secret",
+		GoogleCallbackURL:  "http://localhost:8080/api/v1/auth/oauth/google/callback",
+	})
+	if _, err := gateway.StartOAuth(context.Background(), "apple", "state"); err == nil {
+		t.Fatal("Apple OAuth unexpectedly enabled")
+	}
+	location, err := gateway.StartOAuth(context.Background(), "google", "state-191")
+	if err != nil {
+		t.Fatalf("StartOAuth() error = %v", err)
+	}
+	if !strings.Contains(location, "accounts.google.com") || !strings.Contains(location, "state=state-191") || strings.Contains(location, "google-client-secret") {
+		t.Fatalf("unexpected Google auth URL: %s", location)
+	}
+}
+
 func TestNewProductionRejectsMissingProductionSecret(t *testing.T) {
 	t.Setenv("MEALSWAPP_LOCAL_SECRET_KEY", "")
 	if _, err := NewProduction(config.Config{Environment: "production"}, fakeProductionPostgres{}, nil, observability.JSONSink{Writer: io.Discard}); err == nil {
@@ -226,6 +252,7 @@ func TestNewProductionReadinessWithOptionalRedis(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
+		FrontendOrigin: "http://localhost:5173",
 		Environment:    "development",
 		Account: config.AccountConfig{
 			AccessCookieName:            "__Host-test_access",

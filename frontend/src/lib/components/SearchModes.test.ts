@@ -6,7 +6,7 @@ import { join } from "node:path";
 //
 // No DOM library (jsdom/happy-dom) is installed and Bun's isolated install-cache layout
 // breaks `svelte/server` rendering, so the component is not rendered in a Bun unit test.
-// These tests assert the Svelte source declares the three mode controls bound to `setMode`,
+// These tests assert the Svelte source declares the four mode controls bound to `setMode`,
 // with `aria-pressed` reflecting `$searchStore.mode`, visible labels, plain active-mode help,
 // centered layout, focus states, and a traceability comment. `vite build` compiles the component (it is wired into SearchShell),
 // validating the Svelte source at build time.
@@ -18,16 +18,19 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 // Implements DESIGN-001 SearchView mode option set verification.
-test("declares Catalog, Substitution, and Daily Diet Alternative mode options", () => {
-	expect(countOccurrences(source, 'id: "search-mode-')).toBe(3);
+test("declares Catalog, Substitution, Daily Diet, and Daily Diet Alternative mode options", () => {
+	expect(countOccurrences(source, 'id: "search-mode-')).toBe(4);
 	expect(source).toContain('id: "search-mode-catalog"');
 	expect(source).toContain('id: "search-mode-substitution"');
 	expect(source).toContain('id: "search-mode-daily-diet"');
+	expect(source).toContain('id: "search-mode-daily-diet-alternative"');
 	expect(source).toContain('value: "catalog"');
 	expect(source).toContain('value: "substitution"');
+	expect(source).toContain('value: "daily_diet"');
 	expect(source).toContain('value: "daily_diet_alternative"');
 	expect(source).toContain('label: "Catalog"');
 	expect(source).toContain('label: "Substitution"');
+	expect(source).toContain('label: "Daily Diet"');
 	expect(source).toContain('label: "Daily Diet Alternative"');
 });
 
@@ -49,6 +52,7 @@ test("uses a labelled nav landmark and cites the DESIGN source", () => {
 test("shows centered plain text explaining the active mode", () => {
 	expect(source).toContain("description: \"Find foods, meals, or ingredients by name.\"");
 	expect(source).toContain("description: \"Find alternatives for a food using quantity and unit context.\"");
+	expect(source).toContain("description: \"Search across saved daily diets.\"");
 	expect(source).toContain("description: \"Search for replacements within a saved daily diet.\"");
 	expect(source).toContain("activeDescription");
 	expect(source).toContain("data-search-mode-description");

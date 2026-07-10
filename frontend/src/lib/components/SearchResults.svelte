@@ -23,9 +23,11 @@
    * `SearchClientError`) to the shell so `DailyDietControls` can render rejection detail.
    */
   let {
+    searchEnabled = true,
     onRejection = () => {},
     onSearchInFlightChange = () => {}
   }: {
+    searchEnabled?: boolean;
     onRejection?: (r: SearchRejection | null) => void;
     onSearchInFlightChange?: (searching: boolean) => void;
   } = $props();
@@ -43,7 +45,10 @@
   const optionsStore = createSearchQueryOptions(committedSearchStore, localCache);
 
   // Bridges the derived options store to a rune so createQuery re-evaluates on committed search changes.
-  let currentOptions: CreateQueryOptions<SearchResponse, SearchClientError, SearchResponse, SearchQueryKey> = $derived($optionsStore);
+  let currentOptions: CreateQueryOptions<SearchResponse, SearchClientError, SearchResponse, SearchQueryKey> = $derived({
+    ...$optionsStore,
+    enabled: searchEnabled && $optionsStore.enabled === true
+  });
 
   // Bridges the immediate search store to a rune for template reads (page) and cache-key derivation.
   let state = $derived($searchStore);
@@ -99,6 +104,9 @@
   /** True only for explicit submitted result-search requests, not autocomplete suggestions. */
   let searchInFlight = $derived(hasStartedSearching && query.isFetching === true);
 
+  /** True only when the active submitted search can render final results or a final error. */
+  let shouldRenderResults = $derived(hasStartedSearching && !searchInFlight && (query.data !== undefined || errorMessage !== null));
+
   // Lifts submitted-search loading state so the shell can render the spinner inside the search input.
   $effect(() => {
     onSearchInFlightChange(searchInFlight);
@@ -119,7 +127,7 @@
 </script>
 
 <!-- Implements DESIGN-001 SearchView ResultsGrid wiring from TanStack Query result. -->
-{#if hasStartedSearching}
+{#if shouldRenderResults}
   <ResultsGrid
     results={query.data?.items ?? []}
     similarityMetadata={query.data?.similarityMetadata ?? []}

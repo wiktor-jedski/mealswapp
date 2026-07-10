@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Implements DESIGN-001 SearchView scenario screenshot capture for frontend UAT reports.
+// Implements DESIGN-001 SearchView and DESIGN-018 AuthView scenario screenshot capture for frontend UAT reports.
 
 import { chromium } from "../frontend/node_modules/playwright/index.mjs";
 import { mkdir } from "node:fs/promises";
@@ -60,6 +60,45 @@ const scenarios = [
       await page.locator("[data-result-card]").first().waitFor({ state: "visible" });
       await page.locator("[data-result-similarity]").first().waitFor({ state: "visible" });
     }
+  },
+  {
+    key: "auth-login",
+    label: "Auth Login View",
+    authState: "anonymous",
+    run: async (page) => {
+      await page.goto(baseUrl);
+      await clickSignIn(page);
+      await page.getByRole("dialog", { name: "Sign in" }).waitFor({ state: "visible" });
+      await page.getByLabel("Email").fill("screenshot@example.com");
+      await page.getByLabel("Password").fill("correct horse battery staple");
+    }
+  },
+  {
+    key: "auth-register",
+    label: "Auth Registration View",
+    authState: "anonymous",
+    run: async (page) => {
+      await page.goto(baseUrl);
+      await clickSignIn(page);
+      await page.getByRole("group", { name: "Authentication mode" }).getByRole("button", { name: "Create account" }).click();
+      await page.locator("[data-register-view]").waitFor({ state: "visible" });
+      await page.getByLabel("Email").fill("screenshot@example.com");
+      await page.getByLabel("Password", { exact: true }).fill("CorrectHorseBatteryStaple1!");
+      await page.getByLabel("Confirm password").fill("CorrectHorseBatteryStaple1!");
+      await page.getByRole("checkbox", { name: /I accept the current Privacy Policy and Terms of Service\./ }).check();
+    }
+  },
+  {
+    key: "authenticated-subscription",
+    label: "Authenticated Subscription View",
+    authState: "authenticated",
+    run: async (page) => {
+      await page.goto(baseUrl);
+      await page.locator("[data-sidebar-sign-out]").waitFor({ state: "attached" });
+      await openMobileSidebarIfNeeded(page);
+      await page.getByRole("navigation", { name: "Account navigation" }).getByRole("button", { name: "Subscription" }).click();
+      await page.locator("[data-subscription-view] [data-subscription-billing]").waitFor({ state: "visible" });
+    }
   }
 ];
 
@@ -69,7 +108,7 @@ const browser = await chromium.launch({ headless: true });
 try {
   for (const viewport of viewports) {
     for (const scenario of scenarios) {
-      const page = await newScenarioPage(browser, viewport);
+      const page = await newScenarioPage(browser, viewport, scenario.authState);
       try {
         await scenario.run(page);
         await page.screenshot({
@@ -93,13 +132,12 @@ async function addSubstitutionInput(page, label) {
   await page.locator(`[data-food-object-id="${foodObjectId(label)}"]`).waitFor({ state: "visible" });
 }
 
-async function newScenarioPage(browser, viewport) {
+async function newScenarioPage(browser, viewport, authState = "authenticated") {
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: 1
   });
   const page = await context.newPage();
-  await installRoutes(page);
   page.on("console", (message) => {
     if (message.type() === "error") {
       console.error(`browser console error: ${message.text()}`);
@@ -108,6 +146,7 @@ async function newScenarioPage(browser, viewport) {
   page.on("pageerror", (error) => {
     console.error(`browser page error: ${error.message}`);
   });
+  await installRoutes(page, authState);
   const close = page.close.bind(page);
   page.close = async (...args) => {
     await close(...args);
@@ -116,18 +155,35 @@ async function newScenarioPage(browser, viewport) {
   return page;
 }
 
-async function installRoutes(page) {
-  await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 200, {
-    status: "ok",
-    requestId: "profile-screenshot-0001",
-    data: {
-      userId: "user-screenshot",
-      displayName: "Screenshot User",
-      unitSystem: "metric",
-      themePreference: "system",
-      requiresUnitRecalculation: false
+async function installRoutes(page, authState) {
+  await page.route(/\/api\/v1\/profile$/, (route) => {
+    if (authState !== "authenticated") {
+      return fulfillJson(route, 401, authErrorEnvelope("profile-screenshot-anonymous", "invalid_credentials", "Not signed in."));
     }
+    return fulfillJson(route, 200, {
+      status: "ok",
+      requestId: "profile-screenshot-0001",
+      data: {
+        userId: "user-screenshot",
+        displayName: "Screenshot User",
+        unitSystem: "metric",
+        themePreference: "system",
+        requiresUnitRecalculation: false
+      }
+    });
+  });
+  await page.route(/\/api\/v1\/auth\/refresh$/, (route) => {
+    if (authState !== "authenticated") {
+      return fulfillJson(route, 401, authErrorEnvelope("refresh-screenshot-anonymous", "invalid_credentials", "Not signed in."));
+    }
+    return fulfillJson(route, 200, authSessionEnvelope());
+  });
+  await page.route(/\/api\/v1\/auth\/csrf-token$/, (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "csrf-screenshot-0001",
+    data: { csrfToken: "csrf-screenshot" }
   }));
+  await page.route(/\/api\/v1\/billing\/entitlement$/, (route) => fulfillJson(route, 200, entitlementEnvelope()));
   await page.route(/\/api\/v1\/search-history$/, (route) => fulfillJson(route, 200, {
     status: "ok",
     requestId: "history-screenshot-0001",
@@ -158,6 +214,64 @@ async function installRoutes(page) {
       : catalogSearchEnvelope(body.query);
     return fulfillJson(route, 200, response);
   });
+}
+
+async function openMobileSidebarIfNeeded(page) {
+  const mobileToggle = page.getByLabel("Open activity sidebar");
+  if (await mobileToggle.isVisible()) {
+    await mobileToggle.click();
+  }
+}
+
+async function clickSignIn(page) {
+  await openMobileSidebarIfNeeded(page);
+  await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+function authSessionEnvelope() {
+  return {
+    status: "ok",
+    requestId: "auth-session-screenshot-0001",
+    data: {
+      userId: "user-screenshot",
+      role: "user",
+      hasVerifiedLoginMethod: true,
+      accessExpiresAt: "2026-07-05T13:00:00Z",
+      refreshExpiresAt: "2026-07-12T13:00:00Z"
+    }
+  };
+}
+
+function entitlementEnvelope() {
+  return {
+    status: "ok",
+    requestId: "entitlement-screenshot-0001",
+    data: {
+      userId: "user-screenshot",
+      tier: "trial",
+      status: "active",
+      allowedModes: ["catalog", "substitution"],
+      searchLimitPer24h: 25,
+      usageUsed: 4,
+      usageRemaining: 21,
+      usageWindowStartedAt: "2026-07-05T00:00:00Z",
+      trialExpiresAt: "2026-07-12T00:00:00Z",
+      billingRecoveryState: "none"
+    }
+  };
+}
+
+function authErrorEnvelope(requestId, code, message) {
+  return {
+    status: "error",
+    requestId,
+    error: {
+      category: "auth",
+      code,
+      message,
+      retryable: false
+    }
+  };
 }
 
 function autocompleteEnvelope(query) {

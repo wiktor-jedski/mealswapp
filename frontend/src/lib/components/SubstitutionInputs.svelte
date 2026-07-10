@@ -13,6 +13,20 @@
 
   // Implements DESIGN-001 SearchView two-step Substitution Input composition (selected items, quantities, units, and explicit search).
 
+  /**
+   * Entitlement-controlled execution state. Composition remains editable even when the final
+   * Substitution request is blocked.
+   *
+   * @remarks Implements DESIGN-001 SearchView Substitution entitlement execution gate.
+   */
+  let {
+    executionAllowed = true,
+    entitlementFeedback = null
+  }: {
+    executionAllowed?: boolean;
+    entitlementFeedback?: string | null;
+  } = $props();
+
   type SubstitutionFilterOption = SearchFilter & {
     label: string;
     description: string;
@@ -299,6 +313,13 @@
     event.preventDefault();
     addSubstitutionFilter(options[0]);
   }
+
+  /** Sends a Substitution request only when the current entitlement allows execution. */
+  function onSubstitutionSearch(): void {
+    if (executionAllowed) {
+      requestSubstitutionSearch();
+    }
+  }
 </script>
 
 <!-- Implements DESIGN-001 SearchView Substitution Input controls. -->
@@ -566,11 +587,18 @@
 
   <button
     type="button"
-    class="justify-self-start rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-    disabled={$searchStore.substitutionInputs.length === 0}
-    onclick={requestSubstitutionSearch}
+    class="w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+    disabled={$searchStore.substitutionInputs.length === 0 || !executionAllowed}
+    aria-describedby={entitlementFeedback ? "substitution-entitlement-feedback" : undefined}
+    onclick={onSubstitutionSearch}
     data-substitution-search
   >
     Find substitutions
   </button>
+
+  {#if entitlementFeedback}
+    <p id="substitution-entitlement-feedback" class="text-sm text-[var(--color-muted)]" data-substitution-entitlement-feedback>
+      {entitlementFeedback}
+    </p>
+  {/if}
 </section>

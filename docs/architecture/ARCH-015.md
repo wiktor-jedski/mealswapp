@@ -12,7 +12,7 @@
 **Dynamic Behavior:**
 
 - **Consent Capture:** Blocks registration completion until Privacy Policy and ToS checkboxes are explicitly checked.
-- **Disclaimer Display:** Renders medical disclaimer on login screen and in About section.
+- **Disclaimer Display:** Publishes medical-disclaimer information in the Terms of Service and, when implemented, the About section.
 - **Data Retention:** Enforces 30-day backup retention with point-in-time recovery capability.
 - **Erasure Processing:** Coordinates complete data deletion across primary database and schedules backup purge.
 

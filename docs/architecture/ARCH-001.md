@@ -6,7 +6,7 @@
 | :--- | :--- |
 | **Type** | Module |
 | **Static Aspects** | SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager, ServiceWorker |
-| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer), TanStack Query |
+| **Dependencies** | ARCH-010 (API Gateway), ARCH-011 (Caching Layer), ARCH-018 (Frontend Authentication Session), TanStack Query |
 | **Traceability** | SW-REQ-001, SW-REQ-002, SW-REQ-003, SW-REQ-005, SW-REQ-007, SW-REQ-008, SW-REQ-009, SW-REQ-011, SW-REQ-012, SW-REQ-013, SW-REQ-014, SW-REQ-015, SW-REQ-018, SW-REQ-025, SW-REQ-048, SW-REQ-077, SW-REQ-085, SW-REQ-086, SW-REQ-087, SW-REQ-088, SW-REQ-089 |
 
 **Dynamic Behavior:**
@@ -15,6 +15,7 @@
 - **Search Input:** Debounces user input by 150ms before triggering API calls. Manages focus states for keyboard navigation (Tab/Shift+Tab).
 - **Offline Detection:** Monitors browser online/offline events. Switches to cached data display and shows offline indicator when disconnected.
 - **Theme Switching:** Real-time CSS variable updates when user toggles light/dark mode. Persists selection to localStorage.
+- **Authenticated UI Coordination:** Consumes ARCH-018 frontend-safe session state so anonymous Catalog Search remains usable while authenticated-only sidebar, saved-data, entitlement, and checkout actions can request sign-in before protected API calls.
 
 **Interface Definition:**
 

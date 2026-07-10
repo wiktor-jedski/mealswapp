@@ -5,7 +5,7 @@
 
 ### 0. Static Aspect Responsibilities
 - `ConsentManager`: owns Privacy Policy and ToS consent capture, versioning, and enforcement.
-- `DisclaimerRenderer`: owns medical disclaimer content retrieval and display locations.
+- `DisclaimerRenderer`: owns versioned medical-disclaimer content for the Terms of Service and future About section.
 - `DataRetentionPolicy`: owns production erasure and 30-day backup retention rules.
 - `BackupManager`: owns backup status, point-in-time recovery checks, and retention enforcement coordination.
 
@@ -19,7 +19,7 @@
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Registration cannot complete until Privacy Policy and ToS checkboxes are explicitly accepted.
 2. Persist consent version, timestamp, and user ID through ARCH-005.
-3. Serve medical disclaimer content to the login screen and About section through a stable content API.
+3. Present medical-disclaimer information in the Terms of Service and future About section; authentication surfaces do not load or render it.
 4. On account erasure request, call ARCH-008 deletion workflow for production data.
 5. Record an erasure request and status transitions for auditability without retaining unnecessary PII.
 6. Enforce 30-day backup retention by marking backups for expiration and verifying purge completion.
@@ -29,7 +29,7 @@
 ### 3. State Management & Error Handling
 - `consent_missing`: block registration completion.
 - `consent_recorded`: registration can proceed.
-- `disclaimer_unavailable`: render bundled fallback content and alert maintainers.
+- `disclaimer_unavailable`: keep the Terms of Service fallback content available and alert maintainers when centrally managed content cannot be retrieved.
 - `erasure_pending`: request accepted but deletion not started.
 - `erasure_processing`: production deletion is underway.
 - `erasure_completed`: production data deleted and backup purge scheduled according to retention.

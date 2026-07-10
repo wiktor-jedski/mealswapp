@@ -178,7 +178,7 @@ func validateSearchModeShape(mode string, body map[string]any) error {
 		if substitutionCount == 0 || hasDailyDietID {
 			return errors.New("substitution search body is invalid")
 		}
-	case search.SearchModeDailyDietAlternative:
+	case search.SearchModeDailyDiet, search.SearchModeDailyDietAlternative:
 		if substitutionCount > 0 || !hasDailyDietID {
 			return errors.New("daily diet alternative search body is invalid")
 		}
@@ -198,7 +198,7 @@ func validateSearchModeDTOShape(dto validatedSearchRequestBodyDTO) error {
 		if len(dto.SubstitutionInputs) == 0 || dto.DailyDietID != nil {
 			return errors.New("substitution search body is invalid")
 		}
-	case search.SearchModeDailyDietAlternative:
+	case search.SearchModeDailyDiet, search.SearchModeDailyDietAlternative:
 		if len(dto.SubstitutionInputs) > 0 || dto.DailyDietID == nil {
 			return errors.New("daily diet alternative search body is invalid")
 		}

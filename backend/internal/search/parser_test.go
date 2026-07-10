@@ -142,6 +142,11 @@ func TestSelectStrategyFromMode(t *testing.T) {
 		},
 		"daily diet mode": {
 			Query: "tomato",
+			Mode:  SearchModeDailyDiet,
+			Page:  1,
+		},
+		"daily diet alternative mode": {
+			Query: "tomato",
 			Mode:  SearchModeDailyDietAlternative,
 			Page:  1,
 		},
@@ -181,7 +186,11 @@ func TestSelectStrategyFromMode(t *testing.T) {
 			if parsed.Strategy != SearchStrategySubstitution {
 				t.Fatalf("%s strategy = %q", name, parsed.Strategy)
 			}
-		case "daily diet mode", "daily diet mode with substitution inputs remains daily diet":
+		case "daily diet mode":
+			if parsed.Strategy != SearchStrategyDailyDiet {
+				t.Fatalf("%s strategy = %q", name, parsed.Strategy)
+			}
+		case "daily diet alternative mode", "daily diet mode with substitution inputs remains daily diet":
 			if parsed.Strategy != SearchStrategyDailyDietAlternative {
 				t.Fatalf("%s strategy = %q", name, parsed.Strategy)
 			}

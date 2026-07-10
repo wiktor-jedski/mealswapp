@@ -17,14 +17,82 @@ function indexOf(fragment: string): number {
 
 // Implements DESIGN-001 SearchView composed component presence verification.
 test("composes sidebar, mode controls, autocomplete, mode-specific controls, results, and offline banner", () => {
-	expect(source).toContain("<SidebarComponent />");
+	expect(source).toContain("<SidebarComponent");
 	expect(source).toContain("<SearchModes />");
 	expect(source).toContain("<AutocompleteDropdown");
-	expect(source).toContain("<SubstitutionInputs />");
+	expect(source).toContain("<SubstitutionInputs");
 	expect(source).toContain("<DailyDietControls");
 	expect(source).not.toContain("<SettingsPanel");
 	expect(source).toContain("<SearchResults");
 	expect(source).toContain("<OfflineBanner />");
+});
+
+// Implements DESIGN-001 SearchView and SidebarComponent subscription view separation verification.
+test("renders billing controls only in the authenticated Subscription view branch", () => {
+	expect(source).toContain("type ShellView = \"search\" | \"subscription\" | \"privacy\" | \"terms\"");
+	expect(source).toContain("data-subscription-view");
+	expect(source).toContain("activeView === \"subscription\"");
+	expect(source).toContain("<SubscriptionBilling />");
+	expect(source).not.toContain("subscription-view-title");
+	expect(source).toContain("{:else}");
+	expect(source.indexOf("<SubscriptionBilling />")).toBeLessThan(source.indexOf("<SearchModes />"));
+	expect(source).toContain("openSubscriptionView");
+	expect(source).toContain("requestProtectedAction($authSessionStore");
+	expect(source).toContain('kind: "account"');
+});
+
+// Implements DESIGN-018 OAuthEntryPoint auth-modal composition verification.
+test("renders Google OAuth entry inside the protected-action auth modal", () => {
+	expect(source).toContain('import OAuthEntryPoint from "./OAuthEntryPoint.svelte"');
+	expect(source).toContain("<OAuthEntryPoint mode={authSurfaceMode} callbackReturn={oauthCallbackReturn} />");
+	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode}")).toBeLessThan(source.indexOf("<LoginView />"));
+	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode}")).toBeLessThan(source.indexOf("<RegisterView"));
+});
+
+// Implements DESIGN-018 AuthView modal-only composition and OAuth callback handoff verification.
+test("uses the modal as the sole auth surface and preserves OAuth callback refresh", () => {
+	expect(source).toContain("oauthCallbackReturn?: boolean");
+	expect(source).toContain("openLoginSurface()");
+	expect(source).toContain("callbackReturn={oauthCallbackReturn}");
+	expect(source).toContain("session.hasVerifiedLoginMethod === true");
+	expect(source).not.toContain("DisclaimerPanel");
+});
+
+// Implements DESIGN-001 SearchView state preservation when returning from Subscription view.
+test("passes sidebar navigation callbacks that return to search without resetting search state", () => {
+	expect(source).toContain("onNavigateSearch={openSearchView}");
+	expect(source).toContain("onNavigateSubscription={openSubscriptionView}");
+	expect(source).toContain("onNavigatePrivacy={openPrivacyView}");
+	expect(source).toContain("onNavigateTerms={openTermsView}");
+	expect(source).toContain("onSignIn={() =>");
+	expect(source).toContain("onSignOut={() => void signOut()}");
+	expect(source).toContain("function openSearchView(): void");
+	expect(source).toContain("function openPrivacyView(): void");
+	expect(source).toContain("function openTermsView(): void");
+	expect(source).toContain('activeView = "search"');
+	expect(source).not.toContain("resetSearch");
+});
+
+// Implements DESIGN-016 ComponentStyles legal views and DESIGN-015 DisclaimerRenderer placement verification.
+test("renders legal views with medical information in Terms of Service", () => {
+	expect(source).toContain('path === "/privacy"');
+	expect(source).toContain('path === "/terms"');
+	expect(source).toContain("data-privacy-view");
+	expect(source).toContain("data-terms-view");
+	expect(source).toContain("Privacy Policy placeholder text.");
+	expect(source).toContain("Terms of Service placeholder text.");
+	expect(source).toContain("data-medical-disclaimer");
+	expect(source).toContain("It does not provide medical advice");
+});
+
+// Implements DESIGN-001 SearchView entitlement query and feedback wiring verification.
+test("starts the entitlement query and renders usage plus blocked-mode feedback", () => {
+	expect(source).toContain("buildEntitlementQueryOptions");
+	expect(source).toContain("setEntitlementStatus");
+	expect(source).toContain("setEntitlementError");
+	expect(source).toContain("resolveSearchEntitlement");
+	expect(source).toContain("data-entitlement-usage");
+	expect(source).toContain("data-entitlement-feedback");
 });
 
 // Implements DESIGN-001 SearchView documented visual order verification.
@@ -41,7 +109,6 @@ test("visual order: modes → autocomplete → mode controls → results → off
 
 // Implements DESIGN-001 SearchView product-facing controls verification.
 test("does not expose debug-style filter or search settings sections in the main Catalog surface", () => {
-	expect(source).not.toContain("<h2");
 	expect(source).not.toContain("Search modes</h2>");
 	expect(source).not.toContain('aria-label="Search filters"');
 	expect(source).not.toContain('id="filter-id"');
@@ -55,6 +122,7 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 	expect(source).toContain("submitSearch");
 	expect(source).toContain("onSubmit={onAutocompleteSubmit}");
 	expect(source).toContain('activeMode !== "substitution"');
+	expect(source).toContain("entitlementDecision.canExecute");
 	expect(source).not.toContain("disabled");
 });
 
@@ -62,6 +130,7 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 test("passes submitted search loading state into the autocomplete search bar", () => {
 	expect(source).toContain("let searchInFlight = $state(false)");
 	expect(source).toContain("searching={searchInFlight}");
+	expect(source).toContain('selectFirstOnEnter={activeMode === "substitution"}');
 	expect(source).toContain("onSearchInFlightChange");
 	expect(source).toContain("searchInFlight = searching");
 });
@@ -79,8 +148,9 @@ test("hydrates substitution autocomplete selections with food-object detail data
 test("passes mode-specific placeholder guidance to the search input", () => {
 	expect(source).toContain("const searchPlaceholders: Record<SearchMode, string>");
 	expect(source).toContain("catalog: \"Search foods, meals, or ingredients…\"");
-	expect(source).toContain("substitution: \"Add a substitution target…\"");
-	expect(source).toContain("daily_diet_alternative: \"Search a saved daily diet…\"");
+	expect(source).toContain("substitution: \"Search a food to add as a substitution target…\"");
+	expect(source).toContain("daily_diet: \"Search saved daily diets…\"");
+	expect(source).toContain("daily_diet_alternative: \"Search within a saved daily diet or paste its ID…\"");
 	expect(source).toContain("placeholder={searchPlaceholders[activeMode]}");
 });
 
@@ -113,6 +183,8 @@ test("animates the desktop sidebar grid column between expanded and collapsed wi
 test("mode-specific controls render conditionally based on searchStore.mode", () => {
 	expect(source).toContain('activeMode === "substitution"');
 	expect(source).toContain('activeMode === "daily_diet_alternative"');
+	expect(source).toContain("executionAllowed={entitlementDecision.canExecute}");
+	expect(source).toContain("searchEnabled={entitlementDecision.canExecute}");
 });
 
 // Implements DESIGN-001 SearchView Daily Diet rejection wiring verification.

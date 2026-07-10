@@ -12,12 +12,12 @@
 - `CulinaryRoleWeighter`: owns single-input Substitution Search score boosts for shared Culinary Roles.
 
 ### 1. Data Structures & Types
-- `type SearchMode = "catalog" | "substitution" | "daily_diet_alternative"`
+- `type SearchMode = "catalog" | "substitution" | "daily_diet" | "daily_diet_alternative"`
 - `interface SearchRequest { query: string; mode: SearchMode; filters: SearchFilter[]; page: number; substitutionInputs?: SubstitutionInput[]; dailyDietId?: string }`
 - `interface SubstitutionInput { foodObjectId: UUID; quantity: decimal; unit: string }`
 - `interface SearchResponse { items: FoodObject[]; totalCount: number; page: number; similarityScores: number[]; warnings: string[]; rejection?: SearchRejection }`
 - `interface SearchRejection { code: string; message: string; field?: string }`
-- `interface ParsedQuery { normalizedText: string; tokens: string[]; strategy: "catalog" | "substitution" | "daily_diet_alternative"; limit: number; offset: number }`
+- `interface ParsedQuery { normalizedText: string; tokens: string[]; strategy: "catalog" | "substitution" | "daily_diet" | "daily_diet_alternative"; limit: number; offset: number }`
 - `interface SearchFilter { filterId: string; kind: "food_category" | "culinary_role" | "food_object_type" | "allergen" | "dietary_preset"; include: boolean }`
 - `interface RankedAutocomplete { itemId: string; label: string; exactMatch: boolean; levenshteinDistance: number; length: number; rank: number }`
 - `interface SearchCandidate { item: FoodObject; textScore: number; similarityScore?: number; culinaryRoleMatchCount: number; finalScore: number }`

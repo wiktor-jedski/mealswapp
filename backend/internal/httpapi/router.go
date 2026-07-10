@@ -253,7 +253,7 @@ func cors(origins []string) fiber.Handler {
 			}
 			ctx.Set("Access-Control-Allow-Origin", origin)
 			ctx.Set("Access-Control-Allow-Credentials", "true")
-			ctx.Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
+			ctx.Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Idempotency-Key")
 			ctx.Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
 		}
 		if ctx.Method() == fiber.MethodOptions {
