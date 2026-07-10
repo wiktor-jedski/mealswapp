@@ -110,6 +110,17 @@ async function fillValidRegistration(page: Page): Promise<void> {
 	await page.getByLabel("I accept the current Privacy Policy and Terms of Service.").check();
 }
 
+async function openRegisterModal(page: Page): Promise<void> {
+	await page.goto("/");
+	const mobileToggle = page.getByLabel("Open activity sidebar");
+	if (await mobileToggle.isVisible()) {
+		await mobileToggle.click();
+	}
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	await page.getByRole("group", { name: "Authentication mode" }).getByRole("button", { name: "Create account" }).click();
+	await expect(page.locator("[data-register-view]")).toBeVisible();
+}
+
 async function browserStorageSnapshot(page: Page): Promise<string> {
 	return page.evaluate(() => {
 		const entries = {
@@ -128,33 +139,33 @@ async function browserStorageSnapshot(page: Page): Promise<string> {
 
 test("registration cannot submit until current consent versions are checked", async ({ page }) => {
 	const api = await stubRegisterApi(page);
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 
 	await page.getByLabel("Email").fill("person@example.com");
 	await page.getByLabel("Password", { exact: true }).fill("correct-horse-1");
 	await page.getByLabel("Confirm password").fill("correct-horse-1");
 
-	await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
+	await expect(page.locator("[data-register-view]").getByRole("button", { name: "Create account" })).toBeDisabled();
 	await page.getByLabel("I accept the current Privacy Policy and Terms of Service.").check();
-	await expect(page.getByRole("button", { name: "Create account" })).toBeEnabled();
+	await expect(page.locator("[data-register-view]").getByRole("button", { name: "Create account" })).toBeEnabled();
 	expect(api.payloads).toHaveLength(0);
 });
 
 test("combined consent checkbox accepts both legal versions and legal links target placeholder views", async ({ page }) => {
 	const api = await stubRegisterApi(page);
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 
 	await page.getByLabel("Email").fill("person@example.com");
 	await page.getByLabel("Password", { exact: true }).fill("correct-horse-1");
 	await page.getByLabel("Confirm password").fill("correct-horse-1");
-	await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
+	await expect(page.locator("[data-register-view]").getByRole("button", { name: "Create account" })).toBeDisabled();
 
 	await expect(page.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
 	await expect(page.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
 	await page.getByLabel("I accept the current Privacy Policy and Terms of Service.").check();
 
 	await expect(page.getByLabel("I accept the current Privacy Policy and Terms of Service.")).toBeChecked();
-	await expect(page.getByRole("button", { name: "Create account" })).toBeEnabled();
+	await expect(page.locator("[data-register-view]").getByRole("button", { name: "Create account" })).toBeEnabled();
 	expect(api.payloads).toHaveLength(0);
 });
 
@@ -170,17 +181,18 @@ test("legal placeholder routes render Privacy Policy and Terms of Service views"
 	await expect(page.locator("[data-terms-view]")).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Terms of Service" })).toBeVisible();
 	await expect(page.getByText("Terms of Service placeholder text.")).toBeVisible();
+	await expect(page.locator("[data-medical-disclaimer]")).toContainText("does not provide medical advice");
 });
 
 test("password mismatch and policy failures are shown safely", async ({ page }) => {
 	const api = await stubRegisterApi(page);
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 
 	await page.getByLabel("Email").fill("person@example.com");
 	await page.getByLabel("Password", { exact: true }).fill("short");
 	await page.getByLabel("Confirm password").fill("different");
 	await page.getByLabel("I accept the current Privacy Policy and Terms of Service.").check();
-	await page.getByRole("button", { name: "Create account" }).click();
+	await page.locator("[data-register-view]").getByRole("button", { name: "Create account" }).click();
 
 	await expect(page.getByRole("alert")).toHaveCount(0);
 	await expect(page.locator("#register-password-error")).toHaveText("Use at least 12 characters.");
@@ -192,9 +204,9 @@ test("password mismatch and policy failures are shown safely", async ({ page }) 
 
 test("duplicate email offers login mode without storing PII or passwords", async ({ page }) => {
 	const api = await stubRegisterApi(page, { registerStatus: "duplicate" });
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 	await fillValidRegistration(page);
-	await page.getByRole("button", { name: "Create account" }).click();
+	await page.locator("[data-register-view]").getByRole("button", { name: "Create account" }).click();
 
 	await expect(page.getByText("An account already exists for this email.")).toBeVisible();
 	await expect(page.getByRole("button", { name: "Log in instead" })).toBeVisible();
@@ -204,30 +216,31 @@ test("duplicate email offers login mode without storing PII or passwords", async
 
 test("stale consent clears acceptance and requires re-acceptance", async ({ page }) => {
 	await stubRegisterApi(page, { registerStatus: "stale" });
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 	await fillValidRegistration(page);
-	await page.getByRole("button", { name: "Create account" }).click();
+	await page.locator("[data-register-view]").getByRole("button", { name: "Create account" }).click();
 
 	await expect(page.getByText("Privacy Policy or Terms changed.")).toBeVisible();
 	await expect(page.getByLabel("I accept the current Privacy Policy and Terms of Service.")).not.toBeChecked();
-	await expect(page.getByRole("button", { name: "Create account" })).toBeDisabled();
+	await expect(page.locator("[data-register-view]").getByRole("button", { name: "Create account" })).toBeDisabled();
 });
 
 test("successful registration creates an authenticated session projection", async ({ page }) => {
 	await stubRegisterApi(page);
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 	await fillValidRegistration(page);
-	await page.getByRole("button", { name: "Create account" }).click();
+	await page.locator("[data-register-view]").getByRole("button", { name: "Create account" }).click();
 
-	await expect(page.getByText("Registration complete. Your browser session is authenticated.")).toBeVisible();
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await expect(page.locator("[data-sidebar-sign-out]")).toBeAttached();
 	expect(await browserStorageSnapshot(page)).not.toMatch(/correct-horse-1|csrf-register-token/);
 });
 
 test("unverified login method restrictions are displayed from server state", async ({ page }) => {
 	await stubRegisterApi(page, { registerStatus: "unverified" });
-	await page.goto("/auth/register");
+	await openRegisterModal(page);
 	await fillValidRegistration(page);
-	await page.getByRole("button", { name: "Create account" }).click();
+	await page.locator("[data-register-view]").getByRole("button", { name: "Create account" }).click();
 
 	await expect(
 		page.getByText("Verify your email before using features that require a verified login method.")

@@ -24,7 +24,7 @@ export interface AppError {
 
 // Implements DESIGN-017 GlobalExceptionHandler response envelope.
 /** Shared API response wrapper with request correlation metadata. */
-export interface Envelope<TData extends Record<string, unknown> = Record<string, unknown>> {
+export interface Envelope<TData = unknown> {
 	status: string;
 	requestId: string;
 	data?: TData;
@@ -33,19 +33,19 @@ export interface Envelope<TData extends Record<string, unknown> = Record<string,
 
 // Implements DESIGN-014 UptimeMonitor liveness contract.
 /** Process liveness payload. */
-export interface HealthData extends Record<string, unknown> {
+export interface HealthData {
 	service: string;
 }
 
 // Implements DESIGN-014 UptimeMonitor readiness contract.
 /** Dependency-readiness payload. */
-export interface ReadinessData extends Record<string, unknown> {
+export interface ReadinessData {
 	checks: Record<string, string>;
 }
 
 // Implements DESIGN-006 AuthController CSRF token-delivery contract.
 /** Session-bound synchronizer token delivered to SPA clients. */
-export interface CSRFTokenData extends Record<string, unknown> {
+export interface CSRFTokenData {
 	csrfToken: string;
 }
 
@@ -55,7 +55,7 @@ export type CSRFTokenEnvelope = Envelope<CSRFTokenData>;
 
 // Implements DESIGN-006 AuthController frontend auth contract.
 /** Authenticated session metadata; token values are carried only by HttpOnly cookies. */
-export interface AuthSessionData extends Record<string, unknown> {
+export interface AuthSessionData {
 	userId: string;
 	role: "user" | "admin";
 	hasVerifiedLoginMethod: boolean;
@@ -85,7 +85,7 @@ export interface LoginRequest {
 
 // Implements DESIGN-006 AuthController frontend verification contract.
 /** Verification completion payload. */
-export interface VerifyEmailData extends Record<string, unknown> {
+export interface VerifyEmailData {
 	hasVerifiedLoginMethod: true;
 }
 
@@ -108,7 +108,7 @@ export interface PasswordResetConsumeRequest {
 
 // Implements DESIGN-006 AuthController frontend password-reset contract.
 /** Password-reset request acceptance payload. */
-export interface PasswordResetAcceptedData extends Record<string, unknown> {
+export interface PasswordResetAcceptedData {
 	accepted: true;
 }
 
@@ -118,7 +118,7 @@ export type PasswordResetRequestEnvelope = Envelope<PasswordResetAcceptedData>;
 
 // Implements DESIGN-006 AuthController frontend password-reset contract.
 /** Password-reset completion payload. */
-export interface PasswordResetConsumeData extends Record<string, unknown> {
+export interface PasswordResetConsumeData {
 	reset: true;
 }
 
@@ -175,11 +175,10 @@ function safeOAuthReturnPath(value: string): string {
 
 // Implements DESIGN-018 AuthApiClient generated request contract.
 /** Shared JSON headers used by generated auth mutation helpers. */
-export interface AuthJsonMutationHeaders {
+export type AuthJsonMutationHeaders = Record<string, string> & {
 	Accept: "application/json";
 	"Content-Type": "application/json";
-	"X-CSRF-Token"?: string;
-}
+};
 
 // Implements DESIGN-018 AuthApiClient generated request contract.
 /** Shared JSON mutation request init for auth payload submissions. */
@@ -247,7 +246,7 @@ export function buildRefreshSessionRequestInit(options: { signal?: AbortSignal }
 	return buildAuthPostRequestInit(options);
 }
 
-function buildAuthJsonMutationRequestInit<TRequest extends Record<string, unknown>>(
+function buildAuthJsonMutationRequestInit<TRequest extends object>(
 	request: TRequest,
 	options: { csrfToken?: string; signal?: AbortSignal } = {}
 ): AuthJsonMutationRequestInit {
@@ -295,7 +294,7 @@ function buildCredentialedGetRequestInit(options: { signal?: AbortSignal } = {})
 
 // Implements DESIGN-008 PreferenceManager frontend profile contract.
 /** User profile and preference response data. */
-export interface ProfileData extends Record<string, unknown> {
+export interface ProfileData {
 	userId: string;
 	displayName: string;
 	unitSystem: "metric" | "imperial";
@@ -339,7 +338,7 @@ export type SavedItemKind = SavedItem["kind"];
 
 // Implements DESIGN-008 SavedDataRepository frontend saved-data contract.
 /** Saved item collection payload. */
-export interface SavedItemsData extends Record<string, unknown> {
+export interface SavedItemsData {
 	items: SavedItem[];
 }
 
@@ -358,7 +357,7 @@ export interface SearchHistoryEntry {
 
 // Implements DESIGN-008 SearchHistoryRepository frontend history contract.
 /** Search-history collection payload. */
-export interface SearchHistoryData extends Record<string, unknown> {
+export interface SearchHistoryData {
 	history: SearchHistoryEntry[];
 }
 
@@ -382,7 +381,7 @@ export type ExportFormat = "json" | "csv";
 
 // Implements DESIGN-008 AccountDeleter frontend deletion contract.
 /** Account deletion request response data. */
-export interface DeletionRequestData extends Record<string, unknown> {
+export interface DeletionRequestData {
 	requestId: string;
 	status: "pending" | "processing" | "completed" | "failed";
 }
@@ -393,7 +392,7 @@ export type DeletionRequestEnvelope = Envelope<DeletionRequestData>;
 
 // Implements DESIGN-015 DisclaimerRenderer frontend disclaimer contract.
 /** Stable Markdown disclaimer content for login and account surfaces. */
-export interface DisclaimerData extends Record<string, unknown> {
+export interface DisclaimerData {
 	location: "login" | "account";
 	version: string;
 	markdown: string;
@@ -481,12 +480,11 @@ export interface CheckoutCreateRequest {
 
 // Implements DESIGN-007 SubscriptionController frontend checkout idempotency contract.
 /** Headers required to create or replay checkout sessions without duplicate side effects. */
-export interface CheckoutCreateHeaders {
+export type CheckoutCreateHeaders = Record<string, string> & {
 	Accept: "application/json";
 	"Content-Type": "application/json";
 	"Idempotency-Key": IdempotencyKey;
-	"X-CSRF-Token"?: string;
-}
+};
 
 // Implements DESIGN-007 SubscriptionController frontend checkout idempotency contract.
 /** RequestInit shape for the generated checkout creation helper. */
@@ -523,7 +521,7 @@ export function buildCheckoutCreateRequestInit(
 
 // Implements DESIGN-007 SubscriptionController frontend checkout contract.
 /** Sanitized hosted checkout session response. */
-export interface CheckoutSessionData extends Record<string, unknown> {
+export interface CheckoutSessionData {
 	checkoutSessionId: string;
 	checkoutUrl: string;
 	plan: CheckoutPlan;
@@ -543,11 +541,10 @@ export interface BillingPortalCreateRequest {
 
 // Implements DESIGN-007 SubscriptionController frontend billing portal contract.
 /** Hosted billing portal creation request headers. */
-export interface BillingPortalCreateHeaders {
+export type BillingPortalCreateHeaders = Record<string, string> & {
 	Accept: "application/json";
 	"Content-Type": "application/json";
-	"X-CSRF-Token"?: string;
-}
+};
 
 // Implements DESIGN-007 SubscriptionController frontend billing portal contract.
 /** RequestInit shape for the generated billing portal creation helper. */
@@ -582,7 +579,7 @@ export function buildBillingPortalCreateRequestInit(
 
 // Implements DESIGN-007 SubscriptionController frontend billing portal contract.
 /** Sanitized hosted billing portal session response. */
-export interface BillingPortalSessionData extends Record<string, unknown> {
+export interface BillingPortalSessionData {
 	portalUrl: string;
 }
 
@@ -592,7 +589,7 @@ export type BillingPortalSessionEnvelope = Envelope<BillingPortalSessionData>;
 
 // Implements DESIGN-007 StripeWebhookHandler frontend-visible webhook contract.
 /** Verified Stripe webhook processing result. */
-export interface StripeWebhookData extends Record<string, unknown> {
+export interface StripeWebhookData {
 	eventId: string;
 	eventType: string;
 	duplicate: boolean;
@@ -616,7 +613,7 @@ export type BillingRecoveryState = "none" | "action_required" | "cancelled" | "e
 
 // Implements DESIGN-007 SubscriptionController frontend entitlement contract.
 /** Sanitized entitlement and billing status payload for the current user. */
-export interface EntitlementStatusData extends Record<string, unknown> {
+export interface EntitlementStatusData {
 	userId: string;
 	tier: SubscriptionTier;
 	status: EntitlementState;
@@ -778,7 +775,7 @@ export interface SearchRejection {
 
 // Implements DESIGN-002 SearchController frontend search response contract.
 /** Search result payload with ranking, warnings, and optional cache metadata. */
-export interface SearchResponse extends Record<string, unknown> {
+export interface SearchResponse {
 	items: FoodObject[];
 	totalCount: number;
 	page: number;
@@ -814,7 +811,7 @@ export interface RankedAutocomplete {
 
 // Implements DESIGN-002 SearchController frontend autocomplete contract.
 /** Autocomplete payload with ranked suggestions and optional cache metadata. */
-export interface AutocompleteResponse extends Record<string, unknown> {
+export interface AutocompleteResponse {
 	items: RankedAutocomplete[];
 	cache?: CacheMetadata;
 }

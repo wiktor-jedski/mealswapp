@@ -120,6 +120,19 @@ func (s *httpEntitlementStatusStore) GetUsageSince(_ context.Context, userID uui
 	return repository.UsageWindow{UserID: userID, Feature: feature, StartedAt: since, SearchCount: s.usageCount}, nil
 }
 
+func TestSubscriptionControllerRoutesRequireBillingRedirectOrigin(t *testing.T) {
+	for name, origin := range map[string]string{"missing": "", "blank": " \t"} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatal("Routes() accepted a missing billing redirect origin")
+				}
+			}()
+			NewSubscriptionController(nil).WithBillingRedirectOrigin(origin).Routes()
+		})
+	}
+}
+
 func TestSubscriptionControllerCreatesCheckoutFromAuthenticatedCookies(t *testing.T) {
 	// Verifies IT-ARCH-007-003.
 	// Verifies ARCH-007.
@@ -129,7 +142,7 @@ func TestSubscriptionControllerCreatesCheckoutFromAuthenticatedCookies(t *testin
 	userID := uuid.New()
 	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
 	service := &fakeCheckoutCreator{result: subscription.CheckoutResult{StatusCode: fiber.StatusOK, Response: subscription.CheckoutResponse{CheckoutSessionID: "cs_test_123", CheckoutURL: "https://checkout.stripe.test/session", Plan: "monthly", PriceID: "price_monthly_test", AmountCents: 300}}}
-	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(service).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(service).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	token, csrfCookies := fetchCSRFToken(t, app)
 
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/checkout", strings.NewReader(`{"plan":"monthly","successUrl":"http://localhost:5173/billing/success","cancelUrl":"http://localhost:5173/billing/cancel"}`))
@@ -160,7 +173,7 @@ func TestSubscriptionControllerCreatesBillingPortalFromAuthenticatedCookies(t *t
 	userID := uuid.New()
 	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
 	portal := &fakeBillingPortalCreator{result: subscription.PortalResponse{PortalURL: "https://billing.stripe.test/session"}}
-	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(nil).WithBillingPortal(portal).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(nil).WithBillingPortal(portal).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	token, csrfCookies := fetchCSRFToken(t, app)
 
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/portal", strings.NewReader(`{"returnUrl":"http://localhost:5173/subscription"}`))
@@ -186,7 +199,7 @@ func TestSubscriptionControllerRejectsBillingPortalWithoutActiveSubscription(t *
 	cfg := testConfig()
 	authenticator, authCookies := testJWTAuth(t, cfg, uuid.New(), nil)
 	portal := &fakeBillingPortalCreator{err: subscription.ErrNoActiveSubscription}
-	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(nil).WithBillingPortal(portal).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(nil).WithBillingPortal(portal).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	token, csrfCookies := fetchCSRFToken(t, app)
 
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/portal", strings.NewReader(`{"returnUrl":"http://localhost:5173/subscription"}`))
@@ -283,7 +296,7 @@ func TestSubscriptionControllerReadsAuthenticatedEntitlementStatus(t *testing.T)
 				store.entitlements[userID] = tc.entitlement(userID)
 			}
 			statusReader := entitlement.NewStatusServiceWithClock(store, store, func() time.Time { return fixedNow })
-			app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSubscriptionController(nil, statusReader).Routes()})
+			app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSubscriptionController(nil, statusReader).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 
 			req := httptest.NewRequest(fiber.MethodGet, "/api/v1/billing/entitlement", nil)
 			addCookies(req, authCookies)
@@ -313,7 +326,7 @@ func TestSubscriptionControllerReadsAuthenticatedEntitlementStatus(t *testing.T)
 
 func TestSubscriptionControllerRejectsAnonymousEntitlementStatus(t *testing.T) {
 	store := &httpEntitlementStatusStore{}
-	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSubscriptionController(nil, entitlement.NewStatusService(store, store)).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Routes: NewSubscriptionController(nil, entitlement.NewStatusService(store, store)).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/billing/entitlement", nil)
 	resp, err := app.Test(req)
 	if err != nil {
@@ -351,7 +364,7 @@ func TestSubscriptionControllerEntitlementStatusEnvelopeMatchesGeneratedContract
 		},
 	}
 	statusReader := entitlement.NewStatusServiceWithClock(store, store, func() time.Time { return expiresAt.Add(-24 * time.Hour) })
-	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSubscriptionController(nil, statusReader).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewSubscriptionController(nil, statusReader).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 
 	req := httptest.NewRequest(fiber.MethodGet, "/api/v1/billing/entitlement", nil)
 	addCookies(req, authCookies)
@@ -385,7 +398,7 @@ func TestSubscriptionControllerMapsIdempotencyAndStripeErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := testConfig()
 			authenticator, authCookies := testJWTAuth(t, cfg, uuid.New(), nil)
-			app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(&fakeCheckoutCreator{err: tc.err}).Routes()})
+			app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(&fakeCheckoutCreator{err: tc.err}).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 			token, csrfCookies := fetchCSRFToken(t, app)
 			req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/checkout", strings.NewReader(`{"plan":"annual","successUrl":"http://localhost:5173/billing/success","cancelUrl":"http://localhost:5173/billing/cancel"}`))
 			req.Header.Set("Content-Type", "application/json")
@@ -416,7 +429,7 @@ func TestSubscriptionControllerReplaysExactCheckoutAndRejectsBodyConflict(t *tes
 	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
 	gateway := &httpFakeCheckoutGateway{}
 	service := subscription.NewCheckoutService(httpTestBillingConfig(), &httpMemoryCheckoutStore{records: map[string]repository.CheckoutIdempotencyRecord{}}, gateway)
-	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(service).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(service).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	token, csrfCookies := fetchCSRFToken(t, app)
 
 	postCheckout := func(body string, key string) (int, Envelope) {
@@ -465,7 +478,7 @@ func TestSubscriptionControllerRejectsRawCardFieldsBeforeService(t *testing.T) {
 	cfg := testConfig()
 	authenticator, authCookies := testJWTAuth(t, cfg, uuid.New(), nil)
 	service := &fakeCheckoutCreator{}
-	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(service).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: NewSubscriptionController(service).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	token, csrfCookies := fetchCSRFToken(t, app)
 
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/checkout", strings.NewReader(`{"plan":"monthly","successUrl":"http://localhost:5173/billing/success","cancelUrl":"http://localhost:5173/billing/cancel","cardNumber":"4242424242424242","cvc":"123"}`))
@@ -527,7 +540,7 @@ func assertEntitlementStatusEnvelope(t *testing.T, data map[string]any, userID u
 
 func TestSubscriptionControllerRejectsUnauthenticatedCheckout(t *testing.T) {
 	service := &fakeCheckoutCreator{err: errors.New("should not be called")}
-	app := mustNewRouter(t, Dependencies{Config: testConfig(), CSRF: NewCSRFManager(testConfig(), nil), Routes: NewSubscriptionController(service).Routes()})
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), CSRF: NewCSRFManager(testConfig(), nil), Routes: NewSubscriptionController(service).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()})
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/billing/checkout", strings.NewReader(`{"plan":"monthly","successUrl":"http://localhost:5173/billing/success","cancelUrl":"http://localhost:5173/billing/cancel"}`))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := app.Test(req)

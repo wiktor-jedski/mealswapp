@@ -4,15 +4,17 @@ package httpapi
 
 import "testing"
 
-func TestValidateCheckoutCreateRequestBodyAcceptsPlanAndRedirects(t *testing.T) {
+const testBillingRedirectOrigin = "http://localhost:5173"
+
+func TestValidateCheckoutCreateRequestBodyForOriginAcceptsPlanAndRedirects(t *testing.T) {
 	body := map[string]any{
 		"plan":       "monthly",
 		"successUrl": "http://localhost:5173/billing/success",
 		"cancelUrl":  "http://localhost:5173/billing/cancel",
 	}
 
-	if err := ValidateCheckoutCreateRequestBody(body); err != nil {
-		t.Fatalf("ValidateCheckoutCreateRequestBody() error = %v", err)
+	if err := ValidateCheckoutCreateRequestBodyForOrigin(body, testBillingRedirectOrigin); err != nil {
+		t.Fatalf("ValidateCheckoutCreateRequestBodyForOrigin() error = %v", err)
 	}
 
 	dto, err := decodeCheckoutCreateRequestBody(body)
@@ -24,15 +26,15 @@ func TestValidateCheckoutCreateRequestBodyAcceptsPlanAndRedirects(t *testing.T) 
 	}
 }
 
-func TestValidateCheckoutCreateRequestBodyAcceptsAnnualPlan(t *testing.T) {
+func TestValidateCheckoutCreateRequestBodyForOriginAcceptsAnnualPlan(t *testing.T) {
 	body := map[string]any{
 		"plan":       "annual",
 		"successUrl": "http://localhost:5173/billing/success",
 		"cancelUrl":  "http://localhost:5173/billing/cancel",
 	}
 
-	if err := ValidateCheckoutCreateRequestBody(body); err != nil {
-		t.Fatalf("ValidateCheckoutCreateRequestBody() error = %v", err)
+	if err := ValidateCheckoutCreateRequestBodyForOrigin(body, testBillingRedirectOrigin); err != nil {
+		t.Fatalf("ValidateCheckoutCreateRequestBodyForOrigin() error = %v", err)
 	}
 }
 
@@ -43,12 +45,24 @@ func TestValidateCheckoutCreateRequestBodyForOriginRejectsCrossOriginRedirects(t
 		"cancelUrl":  "http://localhost:5173/billing/cancel",
 	}
 
-	if err := ValidateCheckoutCreateRequestBodyForOrigin(body, "http://localhost:5173"); err == nil {
+	if err := ValidateCheckoutCreateRequestBodyForOrigin(body, testBillingRedirectOrigin); err == nil {
 		t.Fatal("ValidateCheckoutCreateRequestBodyForOrigin() accepted a cross-origin success URL")
 	}
 }
 
-func TestValidateCheckoutCreateRequestBodyRejectsRawCardFields(t *testing.T) {
+func TestValidateCheckoutCreateRequestBodyForOriginRejectsMissingAllowedOrigin(t *testing.T) {
+	body := map[string]any{
+		"plan":       "monthly",
+		"successUrl": "http://localhost:5173/billing/success",
+		"cancelUrl":  "http://localhost:5173/billing/cancel",
+	}
+
+	if err := ValidateCheckoutCreateRequestBodyForOrigin(body, ""); err == nil {
+		t.Fatal("ValidateCheckoutCreateRequestBodyForOrigin() accepted a missing allowed origin")
+	}
+}
+
+func TestValidateCheckoutCreateRequestBodyForOriginRejectsRawCardFields(t *testing.T) {
 	for _, field := range []string{"card", "cardNumber", "number", "cvc", "cvv", "expiry", "expMonth", "expYear", "paymentMethodData"} {
 		t.Run(field, func(t *testing.T) {
 			body := map[string]any{
@@ -57,14 +71,14 @@ func TestValidateCheckoutCreateRequestBodyRejectsRawCardFields(t *testing.T) {
 				"cancelUrl":  "http://localhost:5173/billing/cancel",
 				field:        "4242424242424242",
 			}
-			if err := ValidateCheckoutCreateRequestBody(body); err == nil {
-				t.Fatalf("ValidateCheckoutCreateRequestBody() accepted raw card field %q", field)
+			if err := ValidateCheckoutCreateRequestBodyForOrigin(body, testBillingRedirectOrigin); err == nil {
+				t.Fatalf("ValidateCheckoutCreateRequestBodyForOrigin() accepted raw card field %q", field)
 			}
 		})
 	}
 }
 
-func TestValidateCheckoutCreateRequestBodyRejectsMalformedShape(t *testing.T) {
+func TestValidateCheckoutCreateRequestBodyForOriginRejectsMalformedShape(t *testing.T) {
 	for name, body := range map[string]map[string]any{
 		"unknown field": {"plan": "monthly", "successUrl": "http://localhost:5173/success", "cancelUrl": "http://localhost:5173/cancel", "coupon": "free"},
 		"bad plan":      {"plan": "weekly", "successUrl": "http://localhost:5173/success", "cancelUrl": "http://localhost:5173/cancel"},
@@ -74,18 +88,18 @@ func TestValidateCheckoutCreateRequestBodyRejectsMalformedShape(t *testing.T) {
 		"fragment url":  {"plan": "monthly", "successUrl": "http://localhost:5173/success#token", "cancelUrl": "http://localhost:5173/cancel"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := ValidateCheckoutCreateRequestBody(body); err == nil {
-				t.Fatal("ValidateCheckoutCreateRequestBody() accepted malformed checkout request")
+			if err := ValidateCheckoutCreateRequestBodyForOrigin(body, testBillingRedirectOrigin); err == nil {
+				t.Fatal("ValidateCheckoutCreateRequestBodyForOrigin() accepted malformed checkout request")
 			}
 		})
 	}
 }
 
-func TestValidateBillingPortalRequestBodyAcceptsReturnURL(t *testing.T) {
+func TestValidateBillingPortalRequestBodyForOriginAcceptsReturnURL(t *testing.T) {
 	body := map[string]any{"returnUrl": "http://localhost:5173/subscription"}
 
-	if err := ValidateBillingPortalRequestBody(body); err != nil {
-		t.Fatalf("ValidateBillingPortalRequestBody() error = %v", err)
+	if err := ValidateBillingPortalRequestBodyForOrigin(body, testBillingRedirectOrigin); err != nil {
+		t.Fatalf("ValidateBillingPortalRequestBodyForOrigin() error = %v", err)
 	}
 
 	dto, err := decodeBillingPortalRequestBody(body)
@@ -100,12 +114,20 @@ func TestValidateBillingPortalRequestBodyAcceptsReturnURL(t *testing.T) {
 func TestValidateBillingPortalRequestBodyForOriginRejectsCrossOriginReturnURL(t *testing.T) {
 	body := map[string]any{"returnUrl": "https://evil.example/subscription"}
 
-	if err := ValidateBillingPortalRequestBodyForOrigin(body, "http://localhost:5173"); err == nil {
+	if err := ValidateBillingPortalRequestBodyForOrigin(body, testBillingRedirectOrigin); err == nil {
 		t.Fatal("ValidateBillingPortalRequestBodyForOrigin() accepted a cross-origin return URL")
 	}
 }
 
-func TestValidateBillingPortalRequestBodyRejectsMalformedShape(t *testing.T) {
+func TestValidateBillingPortalRequestBodyForOriginRejectsMissingAllowedOrigin(t *testing.T) {
+	body := map[string]any{"returnUrl": "http://localhost:5173/subscription"}
+
+	if err := ValidateBillingPortalRequestBodyForOrigin(body, ""); err == nil {
+		t.Fatal("ValidateBillingPortalRequestBodyForOrigin() accepted a missing allowed origin")
+	}
+}
+
+func TestValidateBillingPortalRequestBodyForOriginRejectsMalformedShape(t *testing.T) {
 	for name, body := range map[string]map[string]any{
 		"unknown field": {"returnUrl": "http://localhost:5173/subscription", "customer": "cus_secret"},
 		"missing url":   {},
@@ -113,8 +135,8 @@ func TestValidateBillingPortalRequestBodyRejectsMalformedShape(t *testing.T) {
 		"fragment url":  {"returnUrl": "http://localhost:5173/subscription#token"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := ValidateBillingPortalRequestBody(body); err == nil {
-				t.Fatal("ValidateBillingPortalRequestBody() accepted malformed portal request")
+			if err := ValidateBillingPortalRequestBodyForOrigin(body, testBillingRedirectOrigin); err == nil {
+				t.Fatal("ValidateBillingPortalRequestBodyForOrigin() accepted malformed portal request")
 			}
 		})
 	}

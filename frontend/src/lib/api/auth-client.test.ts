@@ -4,7 +4,6 @@ import type {
 	AppError,
 	AuthSessionEnvelope,
 	CSRFTokenEnvelope,
-	DisclaimerEnvelope,
 	EntitlementStatusEnvelope,
 	LoginRequest,
 	ProfileEnvelope,
@@ -14,7 +13,6 @@ import {
 	AuthClientError,
 	fetchCsrfToken,
 	getOAuthStartUrl,
-	loadDisclaimer,
 	loginWithEmail,
 	logoutCurrentSession,
 	probeProfileSession,
@@ -103,19 +101,6 @@ function profileEnvelope(): ProfileEnvelope {
 			unitSystem: "metric",
 			themePreference: "system",
 			requiresUnitRecalculation: false
-		}
-	};
-}
-
-function disclaimerEnvelope(): DisclaimerEnvelope {
-	return {
-		status: "ok",
-		requestId: "req-disclaimer",
-		data: {
-			location: "login",
-			version: "2026-07",
-			markdown: "Medical disclaimer.",
-			fallback: false
 		}
 	};
 }
@@ -242,29 +227,25 @@ test("auth mutation helpers clear passwords after failed submissions too", async
 	expect(request.password).toBe("");
 });
 
-test("logout, refresh, profile, disclaimer, and entitlement wrappers use generated endpoints and decoding", async () => {
+test("logout, refresh, profile, and entitlement wrappers use generated endpoints and decoding", async () => {
 	globalThis.fetch = fetchMock.fetch as typeof fetch;
 	fetchMock.enqueueResponse(emptyJsonResponse(204));
 	fetchMock.enqueueResponse(jsonResponse(200, authSessionEnvelope()));
 	fetchMock.enqueueResponse(jsonResponse(200, profileEnvelope()));
-	fetchMock.enqueueResponse(jsonResponse(200, disclaimerEnvelope()));
 	fetchMock.enqueueResponse(jsonResponse(200, entitlementEnvelope()));
 
 	await logoutCurrentSession({ csrfToken: "csrf-token" });
 	const session = await refreshAuthSession();
 	const profile = await probeProfileSession();
-	const disclaimer = await loadDisclaimer("login");
 	const entitlement = await refreshEntitlementAfterAuth();
 
 	expect(session.userId).toBe("user-1");
 	expect(profile.displayName).toBe("User One");
-	expect(disclaimer.version).toBe("2026-07");
 	expect(entitlement.usageRemaining).toBe(23);
 	expect(fetchMock.calls.map((call) => call.url)).toEqual([
 		"/api/v1/auth/logout",
 		"/api/v1/auth/refresh",
 		"/api/v1/profile",
-		"/api/v1/disclaimers?location=login",
 		"/api/v1/billing/entitlement"
 	]);
 	expect(fetchMock.calls[0]?.init.method).toBe("POST");

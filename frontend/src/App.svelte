@@ -1,6 +1,5 @@
 <script lang="ts">
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
-  import AuthSurface from "./lib/components/AuthSurface.svelte";
   import SearchShell from "./lib/components/SearchShell.svelte";
   import { registerServiceWorker } from "./lib/cache/service-worker";
   import { initTheme, cleanupTheme } from "./lib/stores/theme";
@@ -33,36 +32,11 @@
 
   registerServiceWorker({ enabled: import.meta.env.PROD });
 
-  // Implements DESIGN-018 AuthView route selection for OAuth callback return handling and registration entry.
-  let isAuthRoute = $state(isCurrentAuthRoute());
-  let isOAuthCallbackRoute = $state(isCurrentOAuthCallbackRoute());
-  let isRegisterRoute = $state(isCurrentRegisterRoute());
-
-  $effect(() => {
-    isAuthRoute = isCurrentAuthRoute();
-    isOAuthCallbackRoute = isCurrentOAuthCallbackRoute();
-    isRegisterRoute = isCurrentRegisterRoute();
-  });
-
-  function isCurrentAuthRoute(): boolean {
-    const path = window.location.pathname;
-    return path === "/auth" || path === "/auth/callback" || path === "/auth/register";
-  }
-
-  function isCurrentOAuthCallbackRoute(): boolean {
-    return window.location.pathname === "/auth/callback";
-  }
-
-  function isCurrentRegisterRoute(): boolean {
-    return window.location.pathname === "/auth/register";
-  }
+  // Implements DESIGN-018 OAuthEntryPoint callback selection without a separate visible auth route.
+  const oauthCallbackReturn = window.location.pathname === "/auth/callback";
 </script>
 
 <!-- Implements DESIGN-001 SearchView shell composition with TanStack Query context. -->
 <QueryClientProvider client={queryClient}>
-  {#if isAuthRoute}
-    <AuthSurface callbackReturn={isOAuthCallbackRoute} registerMode={isRegisterRoute} />
-  {:else}
-    <SearchShell />
-  {/if}
+  <SearchShell {oauthCallbackReturn} />
 </QueryClientProvider>

@@ -4,7 +4,7 @@
 
 This document defines the SWE.5 integration verification obligations for architecture component ARCH-018, the Frontend Authentication Session Module.
 
-The goal is to verify that AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, DisclaimerPanel, OAuthEntryPoint, AuthenticatedActionGuard, SearchView, SidebarComponent, SubscriptionBilling, generated API clients, and safe error mapping collaborate according to the architecture.
+The goal is to verify that AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, OAuthEntryPoint, AuthenticatedActionGuard, SearchView, SidebarComponent, SubscriptionBilling, generated API clients, and safe error mapping collaborate according to the architecture.
 
 ## Component Information
 
@@ -13,9 +13,9 @@ The goal is to verify that AuthView, RegisterView, LoginView, AuthSessionStore, 
 | Architecture Component | ARCH-018 |
 | Name | Frontend Authentication Session Module |
 | Source Documents | `docs/architecture/ARCH-018.md`, `docs/design/DESIGN-018.md`, `docs/design/DESIGN-001.md`, `docs/design/DESIGN-006.md`, `docs/design/DESIGN-007.md`, `docs/design/DESIGN-010.md`, `docs/design/DESIGN-015.md`, `docs/design/DESIGN-017.md` |
-| Related Units | AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, DisclaimerPanel, OAuthEntryPoint, AuthenticatedActionGuard, SearchView, SidebarComponent, SubscriptionBilling, generated API clients |
+| Related Units | AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, OAuthEntryPoint, AuthenticatedActionGuard, SearchView, SidebarComponent, SubscriptionBilling, generated API clients |
 | Collaborating Architecture | ARCH-001, ARCH-006, ARCH-007, ARCH-010, ARCH-015, ARCH-017 |
-| Related Requirements | SW-REQ-044, SW-REQ-046, SW-REQ-058, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-070, SW-REQ-071, SW-REQ-074 |
+| Related Requirements | SW-REQ-044, SW-REQ-046, SW-REQ-058, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-070, SW-REQ-074 |
 
 ## IT-ARCH-018-001 Registration, Login, Logout, and Anonymous Search Fallback
 
@@ -40,7 +40,7 @@ ARCH-018 Frontend Authentication Session Module, centered on AuthView, RegisterV
 
 ### Allowed Test Doubles
 
-- Playwright route interception may stand in for ARCH-006, ARCH-010, ARCH-015, and ARCH-007 HTTP responses while preserving generated frontend response types.
+- Playwright route interception may stand in for ARCH-006, ARCH-010, ARCH-015 consent, and ARCH-007 HTTP responses while preserving generated frontend response types.
 
 ### Trigger / Stimulus
 
@@ -223,7 +223,7 @@ ARCH-018 Frontend Authentication Session Module, centered on OAuthEntryPoint, Au
 ### Allowed Test Doubles
 
 - Unit-level dependency injection may stand in for backend refresh and entitlement responses while preserving generated frontend data structures.
-- Playwright route interception may stand in for disclaimer/profile responses while rendering real OAuth entry UI.
+- Playwright route interception may stand in for profile, session-refresh, and entitlement responses while rendering the real modal OAuth entry UI.
 
 ### Trigger / Stimulus
 
@@ -253,7 +253,8 @@ User opens auth surface with OAuth provider actions and the SPA processes OAuth-
 
 Implemented by:
 
-- `frontend/tests/auth-surface.spec.ts::auth surface loads login disclaimer and exposes generated OAuth provider actions`
+- `frontend/tests/auth-surface.spec.ts::SearchShell modal is the sole auth surface and contains no login disclaimer`
+- `frontend/tests/auth-surface.spec.ts::OAuth callback keeps the SearchShell mounted and refreshes the modal session`
 - `frontend/src/lib/stores/auth-session.test.ts::OAuth-return refresh ignores URL parameters and trusts only server session refresh`
 - `frontend/src/lib/stores/auth-session.test.ts::OAuth-return refresh stores authenticated projection and coordinates entitlement refresh`
 - `frontend/src/lib/api/auth-client.test.ts::getOAuthStartUrl returns generated provider start URLs without provider secrets`
@@ -261,20 +262,19 @@ Implemented by:
 
 Status: PASS.
 
-## IT-ARCH-018-005 Consent, Disclaimer, and Safe Failure Handling
+## IT-ARCH-018-005 Consent and Safe Failure Handling
 
 ### Intent
 
-Verify that ConsentGate and DisclaimerPanel collaborate with ARCH-015 and ARCH-017 so registration is blocked until current consent is accepted, stale consent is recoverable, disclaimer failures use bundled fallback content, and auth errors remain safe.
+Verify that ConsentGate collaborates with ARCH-015 and ARCH-017 so registration is blocked until current consent is accepted, stale consent is recoverable, and auth errors remain safe.
 
 ### System Under Test
 
-ARCH-018 Frontend Authentication Session Module, centered on ConsentGate, DisclaimerPanel, RegisterView, LoginView, and AuthApiClient error mapping.
+ARCH-018 Frontend Authentication Session Module, centered on ConsentGate, RegisterView, LoginView, and AuthApiClient error mapping.
 
 ### Real Components
 
 - ConsentGate
-- DisclaimerPanel
 - RegisterView
 - LoginView
 - AuthApiClient
@@ -286,20 +286,18 @@ ARCH-018 Frontend Authentication Session Module, centered on ConsentGate, Discla
 
 ### Trigger / Stimulus
 
-User opens auth surface while disclaimer API fails, attempts registration without consent, receives stale consent, and receives invalid credential or rate-limit responses.
+User opens the modal auth surface, attempts registration without consent, receives stale consent, and receives invalid credential or rate-limit responses.
 
 ### Expected Integrated Behavior
 
-1. Disclaimer content loads from ARCH-015 when available.
-2. Disclaimer unavailable responses render bundled fallback and keep auth surface usable.
-3. Registration remains disabled until Privacy Policy and Terms of Service versions are accepted.
-4. Stale consent clears acceptance and requires re-acceptance.
-5. Invalid credentials use generic safe copy and do not enumerate accounts.
-6. Rate-limit metadata is normalized and displayed only when safe.
+1. Registration remains disabled until Privacy Policy and Terms of Service versions are accepted.
+2. Stale consent clears acceptance and requires re-acceptance.
+3. Invalid credentials use generic safe copy and do not enumerate accounts.
+4. Rate-limit metadata is normalized and displayed only when safe.
 
 ### Required Evidence
 
-- Tests verify disclaimer fallback, consent blocking, stale consent recovery, generic login feedback, lockout retry timing, and password clearing.
+- Tests verify consent blocking, stale consent recovery, generic login feedback, lockout retry timing, and password clearing.
 - Test traceability comment references `IT-ARCH-018-005`, `ARCH-018`, `DESIGN-018`, `ARCH-015`, `ARCH-017`, and related SW requirements.
 
 ### Requirement Traceability
@@ -308,15 +306,12 @@ User opens auth surface while disclaimer API fails, attempts registration withou
 - SW-REQ-062
 - SW-REQ-063
 - SW-REQ-065
-- SW-REQ-071
 - SW-REQ-074
 
 ### Verification Status
 
 Implemented by:
 
-- `frontend/tests/auth-surface.spec.ts::auth surface loads login disclaimer and exposes generated OAuth provider actions`
-- `frontend/tests/auth-surface.spec.ts::auth surface renders bundled fallback when disclaimer API is unavailable`
 - `frontend/tests/register.spec.ts::registration cannot submit until current consent versions are checked`
 - `frontend/tests/register.spec.ts::stale consent clears acceptance and requires re-acceptance`
 - `frontend/tests/login.spec.ts::login form validates focus order, generic invalid credentials, lockout retry timing, duplicate submissions, and password clearing`

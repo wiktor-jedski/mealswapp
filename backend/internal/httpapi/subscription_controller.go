@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -68,6 +69,9 @@ func (c *SubscriptionController) WithBillingRedirectOrigin(origin string) *Subsc
 // Routes returns authenticated subscription checkout routes.
 // Implements DESIGN-007 SubscriptionController.
 func (c *SubscriptionController) Routes() []RouteDefinition {
+	if strings.TrimSpace(c.billingRedirectOrigin) == "" {
+		panic("httpapi: subscription controller billing redirect origin is required")
+	}
 	return []RouteDefinition{
 		{Method: fiber.MethodPost, Path: "/billing/checkout", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(func(body map[string]any) error {
 			return ValidateCheckoutCreateRequestBodyForOrigin(body, c.billingRedirectOrigin)

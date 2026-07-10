@@ -43,6 +43,12 @@
 
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, entitlement gate, autocomplete search bar, mode-specific controls, results, offline status, and DESIGN-018 login auth surface.
 
+  interface Props {
+    oauthCallbackReturn?: boolean;
+  }
+
+  let { oauthCallbackReturn = false }: Props = $props();
+
   type ShellView = "search" | "subscription" | "privacy" | "terms";
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
@@ -85,6 +91,9 @@
   /** Guards one direct subscription-route attempt after session probing resolves. */
   let guardedInitialSubscriptionRoute = $state(false);
 
+  /** Guards one OAuth callback modal handoff while keeping the normal application shell mounted. */
+  let handledOAuthCallbackReturn = $state(false);
+
   // Keeps the shared entitlement stores synchronized with TanStack Query state for all SearchView controls.
   $effect(() => {
     if (entitlementQuery.data) {
@@ -95,6 +104,14 @@
   $effect(() => {
     if (!$authSurfaceStore.open) {
       authSurfaceMode = "login";
+    }
+  });
+
+  $effect(() => {
+    if (oauthCallbackReturn && !handledOAuthCallbackReturn) {
+      handledOAuthCallbackReturn = true;
+      authSurfaceMode = "login";
+      openLoginSurface();
     }
   });
 
@@ -273,13 +290,18 @@
           </p>
         </section>
       {:else if activeView === "terms"}
-        <!-- Implements DESIGN-016 ComponentStyles placeholder legal content view. -->
+        <!-- Implements DESIGN-016 ComponentStyles legal content view and DESIGN-015 DisclaimerRenderer placement. -->
         <section class="grid max-w-3xl gap-4" aria-labelledby="terms-view-title" data-terms-view>
           <h1 id="terms-view-title" class="text-2xl font-semibold text-[var(--color-text)]">
             Terms of Service
           </h1>
           <p class="text-sm leading-6 text-[var(--color-muted)]">
             Terms of Service placeholder text. Final legal content will be added before production release.
+          </p>
+          <h2 class="text-lg font-semibold text-[var(--color-text)]">Medical information</h2>
+          <p class="text-sm leading-6 text-[var(--color-muted)]" data-medical-disclaimer>
+            Mealswapp provides general food and nutrition information. It does not provide medical advice,
+            diagnosis, or treatment. Consult a qualified healthcare professional for guidance about your health.
           </p>
         </section>
       {:else}
@@ -368,13 +390,15 @@
             Create account
           </button>
         </div>
-        <OAuthEntryPoint mode={authSurfaceMode} />
+        <OAuthEntryPoint mode={authSurfaceMode} callbackReturn={oauthCallbackReturn} />
         {#if authSurfaceMode === "login"}
           <LoginView />
         {:else}
           <RegisterView
-            onRegistered={() => {
-              void runQueuedProtectedActionAfterAuth();
+            onRegistered={(session) => {
+              if (session.hasVerifiedLoginMethod === true) {
+                void runQueuedProtectedActionAfterAuth();
+              }
             }}
             onSwitchToLogin={() => (authSurfaceMode = "login")}
           />

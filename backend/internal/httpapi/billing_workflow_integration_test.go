@@ -120,7 +120,7 @@ func TestPhase06BillingWorkflowIntegrationGate(t *testing.T) {
 	webhookService := subscription.NewStripeWebhookService("whsec_phase06_gate", store)
 	routes := []RouteDefinition{}
 	routes = append(routes, NewSearchController(searchService).WithSearchUsageGate(usageGate).Routes()...)
-	routes = append(routes, NewSubscriptionController(checkoutService, statusReader).Routes()...)
+	routes = append(routes, NewSubscriptionController(checkoutService, statusReader).WithBillingRedirectOrigin(testBillingRedirectOrigin).Routes()...)
 	routes = append(routes, NewStripeWebhookHandler(webhookService, nil).Routes()...)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: routes})
 

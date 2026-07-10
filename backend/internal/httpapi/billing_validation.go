@@ -30,12 +30,6 @@ type billingPortalRequestDTO struct {
 	ReturnURL string `json:"returnUrl"`
 }
 
-// ValidateCheckoutCreateRequestBody rejects malformed checkout requests and raw card fields.
-// Implements DESIGN-007 SubscriptionController.
-func ValidateCheckoutCreateRequestBody(body map[string]any) error {
-	return ValidateCheckoutCreateRequestBodyForOrigin(body, "")
-}
-
 // ValidateCheckoutCreateRequestBodyForOrigin rejects malformed checkout requests and cross-origin redirects.
 // Implements DESIGN-007 SubscriptionController checkout redirect validation.
 func ValidateCheckoutCreateRequestBodyForOrigin(body map[string]any, allowedOrigin string) error {
@@ -66,12 +60,6 @@ func ValidateCheckoutCreateRequestBodyForOrigin(body map[string]any, allowedOrig
 	return nil
 }
 
-// ValidateBillingPortalRequestBody rejects malformed billing portal requests.
-// Implements DESIGN-007 SubscriptionController.
-func ValidateBillingPortalRequestBody(body map[string]any) error {
-	return ValidateBillingPortalRequestBodyForOrigin(body, "")
-}
-
 // ValidateBillingPortalRequestBodyForOrigin rejects malformed billing portal requests and cross-origin return URLs.
 // Implements DESIGN-007 SubscriptionController billing portal request validation.
 func ValidateBillingPortalRequestBodyForOrigin(body map[string]any, allowedOrigin string) error {
@@ -97,7 +85,7 @@ func validateCheckoutRequestRedirectURL(value string, allowedOrigin string) erro
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return errors.New("checkout redirect URL is invalid")
 	}
-	if strings.TrimSpace(allowedOrigin) != "" && !sameOrigin(parsed, allowedOrigin) {
+	if !sameOrigin(parsed, allowedOrigin) {
 		return errors.New("checkout redirect URL origin is not allowed")
 	}
 	return nil

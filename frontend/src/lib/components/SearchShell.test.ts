@@ -44,9 +44,18 @@ test("renders billing controls only in the authenticated Subscription view branc
 // Implements DESIGN-018 OAuthEntryPoint auth-modal composition verification.
 test("renders Google OAuth entry inside the protected-action auth modal", () => {
 	expect(source).toContain('import OAuthEntryPoint from "./OAuthEntryPoint.svelte"');
-	expect(source).toContain("<OAuthEntryPoint mode={authSurfaceMode} />");
-	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode} />")).toBeLessThan(source.indexOf("<LoginView />"));
-	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode} />")).toBeLessThan(source.indexOf("<RegisterView"));
+	expect(source).toContain("<OAuthEntryPoint mode={authSurfaceMode} callbackReturn={oauthCallbackReturn} />");
+	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode}")).toBeLessThan(source.indexOf("<LoginView />"));
+	expect(source.indexOf("<OAuthEntryPoint mode={authSurfaceMode}")).toBeLessThan(source.indexOf("<RegisterView"));
+});
+
+// Implements DESIGN-018 AuthView modal-only composition and OAuth callback handoff verification.
+test("uses the modal as the sole auth surface and preserves OAuth callback refresh", () => {
+	expect(source).toContain("oauthCallbackReturn?: boolean");
+	expect(source).toContain("openLoginSurface()");
+	expect(source).toContain("callbackReturn={oauthCallbackReturn}");
+	expect(source).toContain("session.hasVerifiedLoginMethod === true");
+	expect(source).not.toContain("DisclaimerPanel");
 });
 
 // Implements DESIGN-001 SearchView state preservation when returning from Subscription view.
@@ -64,14 +73,16 @@ test("passes sidebar navigation callbacks that return to search without resettin
 	expect(source).not.toContain("resetSearch");
 });
 
-// Implements DESIGN-016 ComponentStyles placeholder legal content views verification.
-test("renders placeholder Privacy Policy and Terms of Service views", () => {
+// Implements DESIGN-016 ComponentStyles legal views and DESIGN-015 DisclaimerRenderer placement verification.
+test("renders legal views with medical information in Terms of Service", () => {
 	expect(source).toContain('path === "/privacy"');
 	expect(source).toContain('path === "/terms"');
 	expect(source).toContain("data-privacy-view");
 	expect(source).toContain("data-terms-view");
 	expect(source).toContain("Privacy Policy placeholder text.");
 	expect(source).toContain("Terms of Service placeholder text.");
+	expect(source).toContain("data-medical-disclaimer");
+	expect(source).toContain("It does not provide medical advice");
 });
 
 // Implements DESIGN-001 SearchView entitlement query and feedback wiring verification.
@@ -98,7 +109,6 @@ test("visual order: modes → autocomplete → mode controls → results → off
 
 // Implements DESIGN-001 SearchView product-facing controls verification.
 test("does not expose debug-style filter or search settings sections in the main Catalog surface", () => {
-	expect(source).not.toContain("<h2");
 	expect(source).not.toContain("Search modes</h2>");
 	expect(source).not.toContain('aria-label="Search filters"');
 	expect(source).not.toContain('id="filter-id"');

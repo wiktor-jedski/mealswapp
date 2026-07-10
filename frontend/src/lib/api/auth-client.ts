@@ -7,8 +7,6 @@ import {
 	BILLING_ENTITLEMENT_ENDPOINT,
 	PROFILE_ENDPOINT,
 	buildCsrfTokenRequestInit,
-	buildDisclaimerRequestInit,
-	buildDisclaimerUrl,
 	buildEntitlementStatusRequestInit,
 	buildLoginRequestInit,
 	buildLogoutRequestInit,
@@ -20,9 +18,6 @@ import {
 	type AuthSessionData,
 	type AuthSessionEnvelope,
 	type CSRFTokenEnvelope,
-	type DisclaimerData,
-	type DisclaimerEnvelope,
-	type DisclaimerLocation,
 	type EntitlementStatusData,
 	type EntitlementStatusEnvelope,
 	type Envelope,
@@ -149,18 +144,6 @@ export function getOAuthStartUrl(provider: OAuthProvider, returnTo = "/"): strin
 	return buildOAuthStartUrl(provider, returnTo);
 }
 
-/** Loads generated disclaimer content for the requested auth surface. */
-export async function loadDisclaimer(
-	location: DisclaimerLocation = "login",
-	signal?: AbortSignal
-): Promise<DisclaimerData> {
-	const response = await fetch(buildDisclaimerUrl(location), buildDisclaimerRequestInit({ signal }));
-	return decodeAuthData<DisclaimerEnvelope, DisclaimerData>(
-		response,
-		"Disclaimer content is temporarily unavailable. Please use the fallback disclaimer."
-	);
-}
-
 /** Refreshes entitlement data after auth changes using the generated billing contract. */
 export async function refreshEntitlementAfterAuth(signal?: AbortSignal): Promise<EntitlementStatusData> {
 	const response = await fetch(BILLING_ENTITLEMENT_ENDPOINT, buildEntitlementStatusRequestInit({ signal }));
@@ -187,7 +170,7 @@ async function decodeEmptyAuthResponse(response: Response, fallbackMessage: stri
 	}
 }
 
-async function decodeAuthData<TEnvelope extends Envelope<TData>, TData extends Record<string, unknown>>(
+async function decodeAuthData<TEnvelope extends Envelope<TData>, TData extends object>(
 	response: Response,
 	fallbackMessage: string
 ): Promise<TData> {
@@ -195,10 +178,10 @@ async function decodeAuthData<TEnvelope extends Envelope<TData>, TData extends R
 	return envelope.data as TData;
 }
 
-async function decodeAuthEnvelope<TEnvelope extends Envelope>(
+async function decodeAuthEnvelope<TEnvelope extends Envelope<unknown>>(
 	response: Response,
 	fallbackMessage: string
-): Promise<TEnvelope & { data: Record<string, unknown> }> {
+): Promise<TEnvelope & { data: NonNullable<TEnvelope["data"]> }> {
 	const envelope = await readJsonEnvelope(response);
 	if (!response.ok) {
 		throw mapAuthError(envelope, response, fallbackMessage);
@@ -206,22 +189,22 @@ async function decodeAuthEnvelope<TEnvelope extends Envelope>(
 	if (!envelope?.data) {
 		throw malformedAuthEnvelopeError(response.status, envelope?.requestId);
 	}
-	return envelope as TEnvelope & { data: Record<string, unknown> };
+	return envelope as TEnvelope & { data: NonNullable<TEnvelope["data"]> };
 }
 
-async function readJsonEnvelope(response: Response): Promise<Envelope | null> {
+async function readJsonEnvelope(response: Response): Promise<Envelope<unknown> | null> {
 	try {
 		const body = (await response.json()) as unknown;
 		if (typeof body !== "object" || body === null) {
 			return null;
 		}
-		return body as Envelope;
+		return body as Envelope<unknown>;
 	} catch {
 		return null;
 	}
 }
 
-function mapAuthError(envelope: Envelope | null, response: Response, fallbackMessage: string): AuthClientError {
+function mapAuthError(envelope: Envelope<unknown> | null, response: Response, fallbackMessage: string): AuthClientError {
 	const status = response.status;
 	const source = envelope?.error ?? null;
 	const appError: AppError = {

@@ -7,12 +7,22 @@ const runRealStack = process.env.MEALSWAPP_REAL_STACK_E2E === "1";
 
 test.skip(!runRealStack, "Set MEALSWAPP_REAL_STACK_E2E=1 and run the local backend stack to execute real-stack UAT.");
 
+async function openRegisterModal(page: Page): Promise<void> {
+	await page.goto("/");
+	const mobileToggle = page.getByLabel("Open activity sidebar");
+	if (await mobileToggle.isVisible()) {
+		await mobileToggle.click();
+	}
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	await page.getByRole("group", { name: "Authentication mode" }).getByRole("button", { name: "Create account" }).click();
+	await expect(page.locator("[data-register-view]")).toBeVisible();
+}
+
 test("real registration creates HttpOnly cookies before authenticated checkout", async ({ page, context }) => {
 	const email = `uat-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test`;
 	const password = "CorrectHorseBatteryStaple1!";
 
-	await page.goto("/auth/register");
-	await expect(page.locator("[data-register-view]")).toBeVisible();
+	await openRegisterModal(page);
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password", { exact: true }).fill(password);
 	await page.getByLabel("Confirm password").fill(password);
@@ -21,7 +31,7 @@ test("real registration creates HttpOnly cookies before authenticated checkout",
 	const registerResponsePromise = page.waitForResponse((response) =>
 		response.url().includes("/api/v1/auth/register")
 	);
-	await page.getByRole("button", { name: "Create account" }).click();
+	await page.locator("[data-register-view]").getByRole("button", { name: "Create account" }).click();
 	const registerResponse = await registerResponsePromise;
 	expect(registerResponse.status()).toBe(201);
 	await expect(page.getByText("Registration complete. Your browser session is authenticated.")).toBeVisible();

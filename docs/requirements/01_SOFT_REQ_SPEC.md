@@ -949,7 +949,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 
 ---
 ## [SW-REQ-071] Medical Disclaimer Display
-**Statement:** The software shall display a mandatory legal disclaimer stating that the application does not provide medical advice on the initial login screen and within the application 'About' section.
+**Statement:** The software shall state that the application does not provide medical advice within the Terms of Service and the application 'About' section.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -958,7 +958,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 | **Feasibility** | Feasible |
 | **Verification** | Inspection (UI verification) |
 
-**Notes:** Required for liability mitigation.
+**Notes:** Authentication surfaces do not display this disclaimer. The Terms of Service is the current user-facing source; the About section will repeat the information when that section is implemented.
 ---
 
 ## [SW-REQ-072] Data Portability (Right to Access)

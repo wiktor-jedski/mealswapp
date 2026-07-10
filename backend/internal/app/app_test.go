@@ -68,6 +68,7 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
+		FrontendOrigin: "http://localhost:5173",
 		Environment:    "development",
 		Account: config.AccountConfig{
 			AccessTokenTTL:              15 * time.Minute,
@@ -120,6 +121,7 @@ func TestNewProductionSearchRouteBlocksAnonymousSubstitutionBeforeCatalog(t *tes
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
+		FrontendOrigin: "http://localhost:5173",
 		Environment:    "development",
 		Account: config.AccountConfig{
 			AccessTokenTTL:              15 * time.Minute,
@@ -250,6 +252,7 @@ func TestNewProductionReadinessWithOptionalRedis(t *testing.T) {
 	cfg := config.Config{
 		APITimeout:     time.Second,
 		AllowedOrigins: []string{"http://localhost:5173"},
+		FrontendOrigin: "http://localhost:5173",
 		Environment:    "development",
 		Account: config.AccountConfig{
 			AccessCookieName:            "__Host-test_access",

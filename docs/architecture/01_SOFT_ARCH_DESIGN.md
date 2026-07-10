@@ -736,7 +736,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 **Dynamic Behavior:**
 
 - **Consent Capture:** Blocks registration completion until Privacy Policy and ToS checkboxes are explicitly checked.
-- **Disclaimer Display:** Renders medical disclaimer on login screen and in About section.
+- **Disclaimer Display:** Publishes medical-disclaimer information in the Terms of Service and, when implemented, the About section.
 - **Data Retention:** Enforces 30-day backup retention with point-in-time recovery capability.
 - **Erasure Processing:** Coordinates complete data deletion across primary database and schedules backup purge.
 
@@ -843,14 +843,14 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 
 ## [ARCH-018] - Frontend Authentication Session Module
 
-**Description:** Client-side authentication surface for the Svelte SPA. It presents sign-in, registration, consent, disclaimer, OAuth entry, logout, and authenticated-action gating while relying on ARCH-006 and ARCH-010 for all credential validation, token issuance, CSRF validation, and HttpOnly cookie session management.
+**Description:** Client-side authentication surface for the Svelte SPA. It presents sign-in, registration, consent, OAuth entry, logout, and authenticated-action gating while relying on ARCH-006 and ARCH-010 for all credential validation, token issuance, CSRF validation, and HttpOnly cookie session management.
 
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Module |
-| **Static Aspects** | AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, DisclaimerPanel, OAuthEntryPoint, AuthenticatedActionGuard |
+| **Static Aspects** | AuthView, RegisterView, LoginView, AuthSessionStore, AuthApiClient, ConsentGate, OAuthEntryPoint, AuthenticatedActionGuard |
 | **Dependencies** | ARCH-001 (Web Application), ARCH-006 (Authentication), ARCH-007 (Subscription), ARCH-010 (API Gateway), ARCH-015 (Compliance), ARCH-017 (Error Handling), TanStack Query |
-| **Traceability** | SW-REQ-044, SW-REQ-046, SW-REQ-058, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-070, SW-REQ-071, SW-REQ-074 |
+| **Traceability** | SW-REQ-044, SW-REQ-046, SW-REQ-058, SW-REQ-060, SW-REQ-061, SW-REQ-062, SW-REQ-063, SW-REQ-064, SW-REQ-065, SW-REQ-066, SW-REQ-070, SW-REQ-074 |
 
 **Dynamic Behavior:**
 
@@ -858,20 +858,20 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - **Registration:** Collects email, password, current Privacy Policy and ToS consent, retrieves CSRF state from ARCH-010, submits registration to ARCH-006, and displays verified-login restrictions from the backend session/profile projection.
 - **Login:** Collects email and password, retrieves CSRF state, submits login to ARCH-006, handles generic invalid-credential, lockout, and rate-limit errors without revealing whether an email exists, then refreshes entitlement and user-facing session state.
 - **Social login:** Presents Google and Apple OAuth entry actions that navigate to ARCH-006 provider start endpoints. Callback completion is handled through the backend session cookie result and a subsequent session/entitlement refresh.
-- **Compliance display:** Loads login-screen disclaimer content from ARCH-015 and blocks registration completion until explicit consent versions are selected.
+- **Consent enforcement:** Blocks registration completion until explicit Privacy Policy and Terms of Service versions are selected; medical-disclaimer placement belongs to ARCH-015 rather than authentication.
 - **Authenticated action gating:** When anonymous users attempt authenticated-only actions such as Stripe-hosted Checkout, renders sign-in/register guidance instead of calling protected subscription endpoints. After authentication succeeds, refreshes entitlement state and allows the user to retry the action.
 - **Logout and expiry:** Calls ARCH-006 logout, clears frontend-safe session state, preserves anonymous Catalog Search behavior, and maps expired sessions to sign-in guidance through ARCH-017.
 
 **Interface Definition:**
 
-- `Input`: User credentials, consent selections, OAuth provider selection, CSRF token responses, auth/profile/disclaimer/entitlement API responses, browser redirects, session-cookie presence inferred by server responses
+- `Input`: User credentials, consent selections, OAuth provider selection, CSRF token responses, auth/profile/entitlement API responses, browser redirects, session-cookie presence inferred by server responses
 - `Output`: Credentialed HTTPS requests with `credentials: include`, OAuth redirects, frontend-safe authenticated/anonymous session state, sign-in/register UI states, authenticated-action gating decisions
 
 **Alternative Analysis (BP6):**
 
 - *Chosen Approach:* First-party SPA authentication surface backed by HttpOnly cookie sessions and generated API clients
 - *Alternative Considered:* Local development auth shortcut or manual cookie setup for subscription UAT
-- *Trade-off:* A real frontend auth surface satisfies SW-REQ-058, SW-REQ-061, SW-REQ-071, and SW-REQ-074 while allowing Phase 06 checkout UAT to start from the webapp. Manual cookies or local shortcuts would unblock isolated developer testing but would not verify the user-facing account flow, consent capture, disclaimer display, CSRF behavior, or authenticated checkout precondition.
+- *Trade-off:* A real frontend auth surface satisfies SW-REQ-058, SW-REQ-061, and SW-REQ-074 while allowing Phase 06 checkout UAT to start from the webapp. Manual cookies or local shortcuts would unblock isolated developer testing but would not verify the user-facing account flow, consent capture, CSRF behavior, or authenticated checkout precondition.
 
 **Resource Goals (optional):**
 
@@ -888,7 +888,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | Interface | Protocol | Description | Security |
 | :--- | :--- | :--- | :--- |
 | **Client <-> API** | HTTPS (TLS 1.3) | RESTful API endpoints via Fiber | JWT in HttpOnly cookies, Fiber CSRF middleware |
-| **Frontend Auth <-> API Gateway** | HTTPS (TLS 1.3) | CSRF retrieval, registration, login, logout, session recovery, disclaimer retrieval, entitlement refresh, and authenticated checkout start | Credentials sent only over TLS, JWT/refresh tokens remain in HttpOnly cookies, CSRF required for state-changing auth calls |
+| **Frontend Auth <-> API Gateway** | HTTPS (TLS 1.3) | CSRF retrieval, registration, login, logout, session recovery, entitlement refresh, and authenticated checkout start | Credentials sent only over TLS, JWT/refresh tokens remain in HttpOnly cookies, CSRF required for state-changing auth calls |
 | **API <-> Stripe** | HTTPS | Payment processing | Webhook signatures |
 | **API <-> OAuth** | OAuth 2.0 | Google/Apple login via github.com/markbates/goth | PKCE flow |
 | **API <-> USDA** | HTTPS | Food data retrieval | API key |
@@ -904,7 +904,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | **Auth -> Repository** | Query interface | Credentials -> Users |
 | **Subscription -> Auth** | Event | EntitlementUpdates |
 | **Web Application -> Frontend Auth Session** | Store/API client boundary | Authenticated/anonymous session projection -> UI gating and protected-action retry |
-| **Frontend Auth Session -> Compliance** | REST via API Gateway | Disclaimer and consent version data -> login/register surface |
+| **Frontend Auth Session -> Compliance** | REST via API Gateway | Consent version data -> registration surface |
 
 ---
 
@@ -982,7 +982,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 | SW-REQ-068 | ARCH-010, ARCH-013 |
 | SW-REQ-069 | ARCH-006 |
 | SW-REQ-070 | ARCH-006, ARCH-018 |
-| SW-REQ-071 | ARCH-015, ARCH-018 |
+| SW-REQ-071 | ARCH-015 |
 | SW-REQ-072 | ARCH-008, ARCH-015 |
 | SW-REQ-073 | ARCH-008, ARCH-011, ARCH-015 |
 | SW-REQ-074 | ARCH-015, ARCH-018 |
@@ -1011,7 +1011,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 ### 2026-07-05 (Rev 1.2)
 
 **Changed (Phase 06.01 Planning Repair):**
-- **ARCH-018:** Added Frontend Authentication Session Module to cover sign-in, registration, consent, disclaimer, OAuth entry, logout, session projection, and authenticated-action gating needed before Phase 06 checkout UAT can start from the webapp.
+- **ARCH-018:** Added Frontend Authentication Session Module to cover sign-in, registration, consent, OAuth entry, logout, session projection, and authenticated-action gating needed before Phase 06 checkout UAT can start from the webapp.
 - **ARCH-001:** Added dependency on ARCH-018 for frontend-safe authenticated/anonymous session coordination.
 - **ARCH-007:** Reconciled the aggregate SAD with Stripe-hosted Checkout and Checkout/invoice/subscription webhook language.
 

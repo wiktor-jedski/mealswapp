@@ -353,8 +353,9 @@ def main() -> int:
 		started_services = ({"postgres", "redis"} & running_compose_services()) - initially_running_services
 		if started_services:
 			run(["docker", "compose", "stop", *sorted(started_services)])
-	run(["bun", "run", "build"], FRONTEND)
 	run(["bun", "run", "check:api-types"], FRONTEND)
+	run(["bun", "run", "typecheck"], FRONTEND)
+	run(["bun", "run", "build"], FRONTEND)
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
 	validate_phase0601_frontend_auth_workflows()
