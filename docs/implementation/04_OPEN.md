@@ -5,12 +5,15 @@
 Note: not all fields need to be filled. Don't add unnecessary information.
 
 ### Assumptions
+
 - Write here anything that has been assumed about the implementation AND is missing in the design.
 
 ### Clarifications
+
 - Write here anything that needs to be clarified - insert here all of your questions.
 
 ### Actions needed
+
 - Immediate problems that need to be solved and will block us in the future.
 
 ## Phase 00
@@ -94,7 +97,6 @@ No project-owner action is required for Phase 00 at this time.
 - Phase 03.1 production bootstrap composes auth, OAuth, profile, saved-data, export, account-deletion, disclaimer, CSRF, and JWT routes from real repositories. OAuth routes fail closed until Google/Apple provider credentials and callback exchange are configured.
 - Deferred to Phase 08: add an explicit user-owned custom item persistence model before relying on `customItems` in account export or account deletion. Until then, Phase 03 account export keeps `customItems` empty and typed.
 - Deferred to Phase 09: add signed, single-use email-verification tokens and outbound email delivery before production paid-feature unlocks can rely on email-and-password verification.
-- Deferred to Phase 09: add and validate production Google and Apple OAuth provider gateway configuration before enabling live external login. Until then, Phase 03 production bootstrap fails OAuth routes closed.
 
 ### Security review notes
 
@@ -146,7 +148,7 @@ No unresolved Phase 03 code review findings remain at this time.
 
 ### Assumptions
 
-- Accepted:  Phase 05 uses TanStack Query for server state and localStorage for the SW-REQ-003 cache of the 20 most recent unique normalized request/result pairs. Cache recency is updated on reads and writes; malformed or schema-version-mismatched entries are discarded. Phase 09 remains responsible for service-worker API/image interception and broader offline hardening.
+- Accepted: Phase 05 uses TanStack Query for server state and localStorage for the SW-REQ-003 cache of the 20 most recent unique normalized request/result pairs. Cache recency is updated on reads and writes; malformed or schema-version-mismatched entries are discarded. Phase 09 remains responsible for service-worker API/image interception and broader offline hardening.
 - Accepted: Phase 05 renders authenticated history and favorites in the Activity Sidebar from the existing Phase 03 generated contracts. Anonymous users receive empty/sign-in guidance, and activity API failure does not block public Catalog Search.
 - Accepted: Task 139 implementation added pinned `@tanstack/svelte-query@6.1.34`, `@playwright/test@1.61.0`, and `@axe-core/playwright@4.11.3` to `frontend/package.json` with `preview` and `test:e2e` scripts. `bunfig.toml` scopes `bun test` to `src/` to keep Playwright specs under `tests/` out of the unit test runner. The `check` script intentionally excludes `test:e2e` to keep the unit/build/drift gate deterministic and not dependent on browser binaries.
 - Accepted Project-owner decision: Phase 05 does not implement macro visibility toggles. Result cards always show the required protein, carbohydrate, and fat values from the generated search contract; SettingsPanel scope is limited to unit and theme preferences.
@@ -226,7 +228,12 @@ No unresolved Phase 03 code review findings remain at this time.
 
 ### Actions needed
 
-- Phase 06.01 UAT evidence must come from the real frontend sign-in/register surface and HttpOnly-cookie session workflows. A local development auth shortcut remains test-only support and is not accepted as checkout UAT evidence.
+- Resolved: Phase 06.01 UAT evidence must come from the real frontend sign-in/register surface and HttpOnly-cookie session workflows. A local development auth shortcut remains test-only support and is not accepted as checkout UAT evidence.
+- Remove the unused permissive HTTP validation wrappers `ValidateCheckoutCreateRequestBody` and `ValidateBillingPortalRequestBody` from `backend/internal/httpapi/billing_validation.go`. Production routes already use their `...ForOrigin` counterparts with the configured frontend origin; the wrappers are called only by unit tests and omit that origin restriction. Update those tests to call the origin-aware validators with an explicit allowed origin.
+- Fail closed when the billing redirect origin is missing. `SubscriptionController.Routes()` currently accepts an empty `billingRedirectOrigin`, causing checkout and billing-portal URL validation to accept any absolute HTTP(S) return URL; production wiring currently sets the origin, but test or future composition can omit it silently. Reject route registration when no origin is configured, update controller tests to configure an explicit test origin, and add focused coverage for the missing-origin failure.
+- Remove the separate `AuthSurface` page and `/auth` / `/auth/register` UI paths; the SearchShell modal is the product's sole sign-in and registration surface. Mount `DisclaimerPanel` within that in-app auth flow so users see the mandatory medical disclaimer in the path they actually use. Preserve the existing OAuth callback-return session refresh currently selected by `/auth/callback`, without retaining a separate visible auth page.
+- OpenAPI-generated frontend request helpers constrain JSON request payloads as `TRequest extends Record<string, unknown>`. Fixed-shape generated DTO interfaces such as `RegisterRequest` do not have a string index signature, so `buildRegisterRequestInit(request, ...)` produces a TypeScript/LSP error. Generated `Envelope<TData>` likewise constrains response payloads as `TData extends Record<string, unknown>`, rejecting fixed-shape DTOs such as `FoodObject`. Generated fixed-shape header interfaces such as `AuthJsonMutationHeaders`, `CheckoutCreateHeaders`, and `BillingPortalCreateHeaders` likewise lack the string index signature required by browser `HeadersInit`, so generated request-init objects are rejected by `fetch` at `registerWithEmail`, `loginWithEmail`, `createCheckoutSession`, and `createBillingPortalSession`. Broaden the JSON-helper constraint to `TRequest extends object` (or another JSON-serializable object type that accepts the generated DTOs), remove or broaden the envelope constraint, and generate `HeadersInit`-compatible header types for every endpoint helper. Add a TypeScript type-checking validation so this class of generated-contract defect cannot pass tests unnoticed.
+- Deferred to Phase 09: add and validate production Google and Apple OAuth provider gateway configuration before enabling live external login. At that point, reshape the current Google-only fields in `config.OAuthConfig` into provider-specific nested configuration (for example, `OAuthConfig.Google GoogleOAuthConfig` and `OAuthConfig.Apple AppleOAuthConfig`) rather than forcing Apple credentials into Google-oriented or falsely generic fields. Until then, Phase 03 production bootstrap fails OAuth routes closed.
 
 ## Phase 09
 
