@@ -53,7 +53,7 @@
   }
 
   function configuredOAuthProviders(): OAuthProvider[] {
-    const configured = import.meta.env.VITE_MEALSWAPP_OAUTH_PROVIDERS ?? "";
+    const configured = import.meta.env.VITE_MEALSWAPP_OAUTH_PROVIDERS ?? "google";
     return configured
       .split(",")
       .map((provider) => provider.trim().toLowerCase())

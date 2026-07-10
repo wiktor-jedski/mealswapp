@@ -253,7 +253,7 @@ User opens auth surface with OAuth provider actions and the SPA processes OAuth-
 
 Implemented by:
 
-- `frontend/tests/auth-surface.spec.ts::SearchShell modal is the sole auth surface and contains no login disclaimer`
+- `frontend/tests/auth-surface.spec.ts::SearchShell modal is the sole auth surface and exposes Google sign-in`
 - `frontend/tests/auth-surface.spec.ts::OAuth callback keeps the SearchShell mounted and refreshes the modal session`
 - `frontend/src/lib/stores/auth-session.test.ts::OAuth-return refresh ignores URL parameters and trusts only server session refresh`
 - `frontend/src/lib/stores/auth-session.test.ts::OAuth-return refresh stores authenticated projection and coordinates entitlement refresh`

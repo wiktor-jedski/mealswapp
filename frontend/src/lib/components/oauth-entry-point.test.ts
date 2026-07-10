@@ -110,6 +110,7 @@ test("component declares Google-only action plus callback refresh feedback", () 
 	expect(source).toContain('mode?: "login" | "register"');
 	expect(source).toContain('mode === "register" ? "Register with a provider" : "Sign in with a provider"');
 	expect(source).toContain("VITE_MEALSWAPP_OAUTH_PROVIDERS");
+	expect(source).toContain('VITE_MEALSWAPP_OAUTH_PROVIDERS ?? "google"');
 	expect(source).toContain('provider === "google"');
 	expect(source).toContain("providerLabels[provider]");
 	expect(source).toContain("providers.length > 0 || callbackReturn");

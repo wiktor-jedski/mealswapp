@@ -31,13 +31,15 @@ async function openAuthModal(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
-test("SearchShell modal is the sole auth surface and contains no login disclaimer", async ({ page }) => {
+test("SearchShell modal is the sole auth surface and exposes Google sign-in", async ({ page }) => {
   await stubAnonymousProfileProbe(page);
   await page.goto("/");
   await openAuthModal(page);
 
   await expect(page.locator("[data-auth-surface]")).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Sign in" })).toBeVisible();
+  await expect(page.locator("[data-oauth-provider='google']")).toBeVisible();
+  await expect(page.locator("[data-oauth-provider='apple']")).toHaveCount(0);
   await expect(page.locator("[data-auth-disclaimer]")).toHaveCount(0);
 
   const accessibilityScanResults = await new AxeBuilder({ page })
