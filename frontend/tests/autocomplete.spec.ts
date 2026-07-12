@@ -116,7 +116,7 @@ test("focuses the search bar on initial load and after mode changes", async ({ p
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
 	await expect(input).toBeFocused();
-	await expect(input).toHaveAttribute("placeholder", "Search saved daily diets…");
+	await expect(input).toHaveAttribute("placeholder", "Search meals to add to your day…");
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Search across saved daily diets.");
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();

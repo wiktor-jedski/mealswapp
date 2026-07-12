@@ -2,6 +2,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import {
     searchStore,
+    substitutionState,
     setQuery,
     submitSearch,
     addSubstitutionInput,
@@ -10,6 +11,7 @@
   } from "../stores/search";
   import { sidebarStore } from "../stores/sidebar";
   import type {
+    FoodObject,
     SearchMode,
     SearchRejection,
     RankedAutocomplete
@@ -18,6 +20,7 @@
   import SearchModes from "./SearchModes.svelte";
   import AutocompleteDropdown from "./AutocompleteDropdown.svelte";
   import SubstitutionInputs from "./SubstitutionInputs.svelte";
+  import DailyDietCollection, { type DailyDietMealSelection } from "./DailyDietCollection.svelte";
   import DailyDietControls from "./DailyDietControls.svelte";
   import SearchResults from "./SearchResults.svelte";
   import OfflineBanner from "./OfflineBanner.svelte";
@@ -54,6 +57,11 @@
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
   let rejection = $state<SearchRejection | null>(null);
 
+  /** Hydrated autocomplete meals queued for the Daily Diet draft editor. */
+  let dailyDietSelections = $state<DailyDietMealSelection[]>([]);
+  let dailyDietSelectionError = $state<string | null>(null);
+  let dailyDietSelectionKey = 0;
+
   /** True while an explicit submitted search request is fetching results. */
   let searchInFlight = $state(false);
 
@@ -61,12 +69,18 @@
   const searchPlaceholders: Record<SearchMode, string> = {
     catalog: "Search foods, meals, or ingredients…",
     substitution: "Search a food to add as a substitution target…",
-    daily_diet: "Search saved daily diets…",
+    daily_diet: "Search meals to add to your day…",
     daily_diet_alternative: "Search within a saved daily diet or paste its ID…"
   };
 
   /** Active mode mirrored from the store for shell-level conditional rendering and focus keys. */
   let activeMode = $derived($searchStore.mode);
+
+  $effect(() => {
+    if (activeMode !== "daily_diet" && dailyDietSelections.length > 0) {
+      dailyDietSelections = [];
+    }
+  });
 
   /** Current-user entitlement query resolved through the generated billing client. */
   const entitlementQuery = createQuery(() => ({
@@ -79,7 +93,7 @@
     status: $entitlementStatusStore,
     error: $entitlementErrorStore,
     mode: activeMode,
-    substitutionInputCount: $searchStore.substitutionInputs.length
+    substitutionInputCount: $substitutionState?.substitutionInputs.length ?? 0
   }));
 
   /** Active email auth mode for the guarded protected-action modal. */
@@ -140,7 +154,11 @@
    * suggestion's food object id; otherwise commits the selected suggestion label as the search.
    */
   function onAutocompleteSelect(item: RankedAutocomplete): void {
-    if (activeMode === "substitution") {
+    if (activeMode === "daily_diet") {
+      if (entitlementDecision.canExecute && $authSessionStore.status === "authenticated" && $authSessionStore.hasVerifiedLoginMethod === true) {
+        void hydrateDailyDietMeal(item);
+      }
+    } else if (activeMode === "substitution") {
       addSubstitutionInput(
         {
           foodObjectId: item.itemId,
@@ -154,6 +172,18 @@
     } else {
       setQuery(item.label);
       submitSearch(item.label);
+    }
+  }
+
+  /** Hydrates one autocomplete-selected meal before it enters the server-owned Daily Diet request. */
+  async function hydrateDailyDietMeal(item: RankedAutocomplete): Promise<void> {
+    dailyDietSelectionError = null;
+    try {
+      const meal: FoodObject = await fetchFoodObject(item.itemId, new AbortController().signal);
+      dailyDietSelections = [...dailyDietSelections, { key: ++dailyDietSelectionKey, item: meal }];
+      setQuery("");
+    } catch {
+      dailyDietSelectionError = "That meal could not be added. Please try again.";
     }
   }
 
@@ -176,7 +206,7 @@
 
   /** Commits typed text only for result-searching modes; Substitution uses autocomplete as an item picker. */
   function onAutocompleteSubmit(query: string): void {
-    if (activeMode !== "substitution" && entitlementDecision.canExecute) {
+    if (activeMode !== "substitution" && activeMode !== "daily_diet" && entitlementDecision.canExecute) {
       submitSearch(query);
     }
   }
@@ -325,7 +355,7 @@
           placeholder={searchPlaceholders[activeMode]}
           focusKey={activeMode}
           searching={searchInFlight}
-          selectFirstOnEnter={activeMode === "substitution"}
+          selectFirstOnEnter={activeMode === "substitution" || activeMode === "daily_diet"}
           onQueryInput={setQuery}
           onSubmit={onAutocompleteSubmit}
           onSelect={onAutocompleteSelect}
@@ -333,15 +363,50 @@
 
         {#if activeMode === "substitution"}
           <SubstitutionInputs executionAllowed={entitlementDecision.canExecute} entitlementFeedback={entitlementDecision.feedback} />
+        {:else if activeMode === "daily_diet"}
+          <DailyDietCollection
+            authStatus={$authSessionStore.status}
+            authenticated={$authSessionStore.status === "authenticated" && $authSessionStore.hasVerifiedLoginMethod === true}
+            userId={$authSessionStore.userId ?? null}
+            executionAllowed={entitlementDecision.canExecute}
+            entitlementFeedback={entitlementDecision.feedback}
+            selections={dailyDietSelections}
+            selectionError={dailyDietSelectionError}
+            onSignIn={() => {
+              requestProtectedAction($authSessionStore, {
+                kind: "saved_data",
+                label: "build a Daily Diet",
+                continueAfterAuth: async () => undefined
+              });
+              authSurfaceMode = "login";
+            }}
+          />
         {:else if activeMode === "daily_diet_alternative"}
-          <DailyDietControls {rejection} executionAllowed={entitlementDecision.canExecute} />
+          <DailyDietControls
+            {rejection}
+            authStatus={$authSessionStore.status}
+            authenticated={$authSessionStore.status === "authenticated" && $authSessionStore.hasVerifiedLoginMethod === true}
+            userId={$authSessionStore.userId ?? null}
+            executionAllowed={entitlementDecision.canExecute}
+            entitlementFeedback={entitlementDecision.feedback}
+            onSignIn={() => {
+              requestProtectedAction($authSessionStore, {
+                kind: "saved_data",
+                label: "use a saved Daily Diet",
+                continueAfterAuth: async () => undefined
+              });
+              authSurfaceMode = "login";
+            }}
+          />
         {/if}
 
-        <SearchResults
-          searchEnabled={entitlementDecision.canExecute}
-          onRejection={(r) => (rejection = r)}
-          onSearchInFlightChange={(searching) => (searchInFlight = searching)}
-        />
+        {#if activeMode !== "daily_diet"}
+          <SearchResults
+            searchEnabled={entitlementDecision.canExecute}
+            onRejection={(r) => (rejection = r)}
+            onSearchInFlightChange={(searching) => (searchInFlight = searching)}
+          />
+        {/if}
 
         <OfflineBanner />
       {/if}

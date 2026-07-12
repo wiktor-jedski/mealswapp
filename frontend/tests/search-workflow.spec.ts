@@ -2,6 +2,8 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import type {
   AuthSessionEnvelope,
   AutocompleteEnvelope,
+  DailyDiet,
+  DailyDietCollectionEnvelope,
   EntitlementStatusEnvelope,
   FoodObjectEnvelope,
   ProfileEnvelope,
@@ -145,6 +147,15 @@ const authSessionEnvelope: AuthSessionEnvelope = {
   }
 };
 
+const savedDailyDiet: DailyDiet = {
+  id: "diet-search-workflow",
+  name: "Training day",
+  entries: [{ id: "diet-entry-1", mealId: "food-apple", quantity: 100, unit: "g", position: 0 }],
+  aggregateMacros: { protein: 1, carbohydrates: 14, fat: 0.2, calories: 62 },
+  createdAt: "2026-07-05T00:00:00Z",
+  updatedAt: "2026-07-05T00:00:00Z"
+};
+
 /** Builds an entitlement envelope from generated billing types for search-mode fixtures. */
 function entitlementEnvelope(overrides: Partial<EntitlementStatusEnvelope["data"]> = {}): EntitlementStatusEnvelope {
   return {
@@ -190,6 +201,12 @@ async function stubAnonymousEntitlement(page: Page): Promise<void> {
         retryable: false
       }
     })
+  );
+}
+
+async function stubSavedDiets(page: Page, diets: DailyDiet[] = [savedDailyDiet]): Promise<void> {
+  await page.route(/\/api\/v1\/daily-diets$/, (route) =>
+    fulfillJson(route, 200, { status: "ok", requestId: "daily-diets-workflow-0001", data: { diets } } satisfies DailyDietCollectionEnvelope)
   );
 }
 
@@ -426,11 +443,12 @@ test("free users get entitlement feedback for Daily Diet Alternative without sen
     searchRequestCount += 1;
     await fulfillJson(route, 200, searchEnvelope(2, 1));
   });
+  await stubSavedDiets(page, []);
   await page.goto("/");
 
   await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
   await expect(page.locator("[data-entitlement-feedback]")).toContainText("trial and paid plans");
-  await expect(page.locator("#daily-diet-id")).toHaveAttribute("aria-disabled", "true");
+  await expect(page.locator("[data-daily-diet-alternative-entitlement]")).toContainText("trial and paid plans");
   await page.getByLabel("Food search").fill("apple");
   await page.getByLabel("Food search").press("Enter");
 
@@ -441,27 +459,19 @@ test("free users get entitlement feedback for Daily Diet Alternative without sen
 for (const tier of ["trial", "paid"] as const) {
   // Implements DESIGN-001 SearchView trial/paid Daily Diet entitlement unlock verification.
   test(`${tier} users can execute paid Daily Diet mode`, async ({ page }) => {
-    let seenMode: SearchMode | null = null;
     await stubEntitlement(page, entitlementEnvelope({
       tier,
       allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"],
       usageRemaining: null
     }));
     await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
-    await page.route(/\/api\/v1\/search$/, async (route) => {
-      const body = (await route.request().postDataJSON()) as SearchRequest;
-      seenMode = body.mode;
-      await fulfillJson(route, 200, searchEnvelope(1, 1));
-    });
+    await stubSavedDiets(page, []);
     await page.goto("/");
 
     await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
     await expect(page.locator("[data-entitlement-feedback]")).toHaveCount(0);
-    await page.getByLabel("Food search").fill("apple");
-    await page.getByLabel("Food search").press("Enter");
-
-    await expect(page.locator("[data-result-card]")).toHaveCount(1);
-    expect(seenMode).toBe("daily_diet");
+    await expect(page.locator("[data-daily-diet-collection]")).toBeVisible();
+    await expect(page.locator("[data-daily-diet-empty]")).toBeVisible();
   });
 
   // Implements DESIGN-001 SearchView trial/paid Daily Diet Alternative entitlement unlock verification.
@@ -478,11 +488,13 @@ for (const tier of ["trial", "paid"] as const) {
       seenMode = body.mode;
       await fulfillJson(route, 200, searchEnvelope(1, 1));
     });
+    await stubSavedDiets(page);
     await page.goto("/");
 
     await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
     await expect(page.locator("[data-entitlement-feedback]")).toHaveCount(0);
-    await page.locator("#daily-diet-id").fill("00000000-0000-0000-0000-000000000000");
+    await page.getByRole("radio", { name: "Use Training day as Daily Diet Alternative input" }).click();
+    await expect(page.locator("[data-daily-diet-alternative-selected]")).toBeVisible();
     await page.getByLabel("Food search").fill("apple");
     await page.getByLabel("Food search").press("Enter");
 
@@ -555,6 +567,7 @@ test("billing recovery state blocks paid-mode search without network side effect
 test("Catalog results can add full item data to the substitution input list", async ({ page }) => {
   const seenRequests: SearchRequest[] = [];
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
+  await page.route(/\/api\/v1\/food-objects\/[^/]+$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "food-object-workflow-0002", data: foodObject(1) } satisfies FoodObjectEnvelope));
   await page.route(/\/api\/v1\/search$/, async (route) => {
     const body = (await route.request().postDataJSON()) as SearchRequest;
     seenRequests.push(body);
@@ -597,10 +610,13 @@ test("Daily Diet Alternative search shows the structured 422 rejection", async (
   };
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 422, rejectionEnvelope));
+  await stubEntitlement(page, entitlementEnvelope());
+  await stubSavedDiets(page);
   await page.goto("/");
 
   await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
-  await page.locator("#daily-diet-id").fill("00000000-0000-0000-0000-000000000000");
+  await page.getByRole("radio", { name: "Use Training day as Daily Diet Alternative input" }).click();
+  await expect(page.locator("[data-daily-diet-alternative-selected]")).toBeVisible();
   await page.getByLabel("Food search").fill("apple");
   await page.getByLabel("Food search").press("Enter");
 

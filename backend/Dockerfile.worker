@@ -1,0 +1,28 @@
+# Implements DESIGN-004 LPSolverWrapper packaged worker boundary.
+FROM golang:1.25-bookworm AS build
+
+ARG CLP_PACKAGE_VERSION=1.17.11-3
+WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes "coinor-clp=${CLP_PACKAGE_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o /out/mealswapp-worker ./cmd/worker
+RUN MEALSWAPP_CLP_EXECUTABLE=/usr/bin/clp MEALSWAPP_CLP_VERSION=1.17.11 go test -count=1 ./internal/optimization
+
+FROM debian:bookworm-slim
+
+ARG CLP_PACKAGE_VERSION=1.17.11-3
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes "coinor-clp=${CLP_PACKAGE_VERSION}" ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && /usr/bin/clp -version | grep --fixed-strings "1.17.11"
+
+RUN useradd --system --no-create-home --uid 10001 mealswapp
+COPY --from=build /out/mealswapp-worker /usr/local/bin/mealswapp-worker
+ENV MEALSWAPP_CLP_EXECUTABLE=/usr/bin/clp \
+    MEALSWAPP_CLP_VERSION=1.17.11
+USER mealswapp
+ENTRYPOINT ["/usr/local/bin/mealswapp-worker"]

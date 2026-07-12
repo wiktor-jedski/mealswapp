@@ -15,7 +15,7 @@ Language: Go
 Framework: Fiber
 Query builder: raw SQL
 Internal API: Direct function calls
-LP Solver: go-coinor/clp
+LP Solver: native COIN-OR CLP `1.17.11` executable invoked by a pure-Go `exec.CommandContext` wrapper in the dedicated worker; no CGO binding and no solver execution in the Fiber API process
 Cosine Similarity: Custom implementation
 API Documentation: OpenAPI
 Testing: testing package (built-in)
@@ -23,7 +23,7 @@ Database: PostgreSQL
 Cache/Session/Job Queue: Redis
 Password hashing: Argon2 (golang.org/x/crypto/argon2)
 Session management: Fiber session middleware
-Job queue: go-redis/queue or machinery (Redis-backed)
+Job queue: Redis Streams through `github.com/redis/go-redis/v9` (`XADD`, `XREADGROUP`, `XAUTOCLAIM`, `XACK`)
 Logging: Fiber logger middleware + GCP Cloud Monitoring
 
 ### Data Layer

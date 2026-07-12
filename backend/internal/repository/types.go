@@ -304,6 +304,37 @@ type SavedItem struct {
 	CreatedAt time.Time
 }
 
+// SavedDiet stores one user-owned daily diet and its ordered meal entries.
+// Implements DESIGN-008 SavedDataRepository.
+type SavedDiet struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	Name      string
+	Entries   []SavedDietMealEntry
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// SavedDietMealEntry stores one positive, canonically-unitized meal quantity.
+// Implements DESIGN-008 SavedDataRepository.
+type SavedDietMealEntry struct {
+	ID          uuid.UUID
+	SavedDietID uuid.UUID
+	MealID      uuid.UUID
+	Quantity    float64
+	Unit        string
+	Position    int
+	CreatedAt   time.Time
+}
+
+// DailyDiet is the descriptive alias used by the Phase 07 API boundary.
+// Implements DESIGN-008 SavedDataRepository.
+type DailyDiet = SavedDiet
+
+// DailyDietMealEntry is the descriptive alias used by the Phase 07 API boundary.
+// Implements DESIGN-008 SavedDataRepository.
+type DailyDietMealEntry = SavedDietMealEntry
+
 // SearchHistoryEntry stores one user-owned search history record.
 // Implements DESIGN-008 SearchHistoryRepository.
 type SearchHistoryEntry struct {
@@ -521,6 +552,36 @@ type SavedItemRepository interface {
 	RemoveItem(ctx context.Context, userID uuid.UUID, itemID uuid.UUID, kind SavedItemKind) error
 	ListItems(ctx context.Context, userID uuid.UUID, kind *SavedItemKind) ([]SavedItem, error)
 }
+
+// DailyDietRepository defines user-scoped saved daily-diet persistence.
+// Implements DESIGN-008 SavedDataRepository.
+type DailyDietRepository interface {
+	Create(ctx context.Context, userID uuid.UUID, diet SavedDiet) (uuid.UUID, error)
+	Get(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) (SavedDiet, error)
+	List(ctx context.Context, userID uuid.UUID) ([]SavedDiet, error)
+	Replace(ctx context.Context, userID uuid.UUID, diet SavedDiet) error
+	Delete(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) error
+}
+
+// AtomicDailyDietMutationResult describes one durable idempotency claim.
+// Implements DESIGN-008 SavedDataRepository and ProfileController.
+type AtomicDailyDietMutationResult struct {
+	DietID      uuid.UUID
+	Idempotency CheckoutIdempotencyRecord
+	Replayed    bool
+}
+
+// DailyDietMutationRepository adds atomic create/idempotency and ownership-aware delete behavior.
+// Implements DESIGN-008 SavedDataRepository and ProfileController.
+type DailyDietMutationRepository interface {
+	DailyDietRepository
+	CreateWithIdempotency(ctx context.Context, userID uuid.UUID, diet SavedDiet, record CheckoutIdempotencyRecord) (AtomicDailyDietMutationResult, error)
+	DeleteIfOwned(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) (deleted bool, exists bool, err error)
+}
+
+// SavedDietRepository is the repository name used by optimization services.
+// Implements DESIGN-008 SavedDataRepository.
+type SavedDietRepository = DailyDietRepository
 
 // SearchHistoryRepository defines search-history persistence behavior.
 // Implements DESIGN-008 SearchHistoryRepository.

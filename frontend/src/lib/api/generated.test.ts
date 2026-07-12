@@ -9,17 +9,23 @@ import {
 	BILLING_CHECKOUT_ENDPOINT,
 	BILLING_ENTITLEMENT_ENDPOINT,
 	BILLING_PORTAL_ENDPOINT,
+	DAILY_DIETS_ENDPOINT,
 	DISCLAIMER_ENDPOINT,
+	OPTIMIZATION_JOBS_ENDPOINT,
 	PROFILE_ENDPOINT,
 	buildBillingPortalCreateRequestInit,
 	buildCsrfTokenRequestInit,
 	buildDisclaimerRequestInit,
 	buildDisclaimerUrl,
 	buildCheckoutCreateRequestInit,
+	buildDailyDietCreateRequestInit,
 	buildEntitlementStatusRequestInit,
 	buildLoginRequestInit,
 	buildLogoutRequestInit,
 	buildOAuthStartUrl,
+	buildOptimizationJobRequestInit,
+	buildOptimizationJobUrl,
+	buildOptimizationSubmissionRequestInit,
 	buildProfileRequestInit,
 	buildRefreshSessionRequestInit,
 	buildRegisterRequestInit,
@@ -30,7 +36,12 @@ import {
 	type CSRFTokenEnvelope,
 	type AuthSessionEnvelope,
 	type DisclaimerEnvelope,
-	type EntitlementStatusEnvelope
+	type EntitlementStatusEnvelope,
+	type DailyDietCreateRequest,
+	type DietOptimizationRequest,
+	type OptimizationJobAcknowledgementEnvelope,
+	type OptimizationJobData,
+	type OptimizationAlternative
 } from "./generated";
 
 // Implements DESIGN-018 AuthApiClient generated contract verification.
@@ -223,4 +234,101 @@ test("generated entitlement helper reads status with credentialed JSON headers",
 	expect(init.method).toBe("GET");
 	expect(init.credentials).toBe("include");
 	expect(init.headers.Accept).toBe("application/json");
+});
+
+// Implements DESIGN-004 JobStatusTracker and DESIGN-008 SavedDataRepository generated contract verification.
+test("generated daily-diet and optimization contracts enforce protected request shapes", () => {
+	const dietRequest: DailyDietCreateRequest = {
+		name: "Training day",
+		entries: [{ mealId: "00000000-0000-0000-0000-000000000001", quantity: 100, unit: "g", position: 0 }]
+	};
+	const optimizationRequest: DietOptimizationRequest = {
+		dailyDietId: "00000000-0000-0000-0000-000000000002",
+		targetMacros: { protein: 120, carbohydrates: 180, fat: 60 },
+		tolerancePercent: 10,
+		 excludedMealIds: []
+	};
+	const alternative: OptimizationAlternative = {
+		meals: [{ mealId: "00000000-0000-0000-0000-000000000004", quantity: 100, unit: "g", position: 0 }],
+		macros: { protein: 120, carbohydrates: 180, fat: 60, calories: 1740 },
+		similarityScore: 0.9
+	};
+	const completedJob: OptimizationJobData = {
+		jobId: "00000000-0000-0000-0000-000000000005",
+		dailyDietId: "00000000-0000-0000-0000-000000000002",
+		status: "completed",
+		pollUrl: "/api/v1/optimization/jobs/00000000-0000-0000-0000-000000000005",
+		createdAt: "2026-07-11T00:00:00Z",
+		startedAt: "2026-07-11T00:00:01Z",
+		finishedAt: "2026-07-11T00:00:02Z",
+		alternatives: [alternative]
+	};
+	const failedJob: OptimizationJobData = {
+		jobId: "00000000-0000-0000-0000-000000000006",
+		dailyDietId: "00000000-0000-0000-0000-000000000002",
+		status: "failed",
+		pollUrl: "/api/v1/optimization/jobs/00000000-0000-0000-0000-000000000006",
+		createdAt: "2026-07-11T00:00:00Z",
+		failure: { code: "solver_timeout", message: "The optimization took too long." }
+	};
+	const queuedJob: OptimizationJobData = {
+		jobId: "00000000-0000-0000-0000-000000000007",
+		dailyDietId: "00000000-0000-0000-0000-000000000002",
+		status: "queued",
+		pollUrl: "/api/v1/optimization/jobs/00000000-0000-0000-0000-000000000007",
+		createdAt: "2026-07-11T00:00:00Z"
+	};
+	const processingJob: OptimizationJobData = {
+		...queuedJob,
+		status: "processing",
+		startedAt: "2026-07-11T00:00:01Z"
+	};
+	const cancelledJob: OptimizationJobData = {
+		...queuedJob,
+		status: "cancelled",
+		finishedAt: "2026-07-11T00:00:01Z"
+	};
+	// @ts-expect-error Queued jobs cannot expose alternatives.
+	const invalidQueuedJob: OptimizationJobData = { ...queuedJob, alternatives: [] };
+	// @ts-expect-error Completed jobs require alternatives.
+	const invalidCompletedJob: OptimizationJobData = { ...completedJob, alternatives: [] };
+	// @ts-expect-error Completed jobs cannot expose a failure.
+	const invalidCompletedJobWithFailure: OptimizationJobData = {
+		...completedJob,
+		failure: { code: "worker_crash", message: "Optimization failed." }
+	};
+	// @ts-expect-error Failed jobs require a safe failure.
+	const invalidFailedJob: OptimizationJobData = {
+		jobId: failedJob.jobId,
+		dailyDietId: failedJob.dailyDietId,
+		status: "failed",
+		pollUrl: failedJob.pollUrl,
+		createdAt: failedJob.createdAt
+	};
+	const acknowledgement: OptimizationJobAcknowledgementEnvelope = {
+		status: "accepted",
+		requestId: "req-optimization",
+		data: { jobId: "00000000-0000-0000-0000-000000000003", status: "queued", pollUrl: "/api/v1/optimization/jobs/00000000-0000-0000-0000-000000000003" }
+	};
+	const dietInit = buildDailyDietCreateRequestInit(dietRequest, "diet-key-123", { csrfToken: "csrf-token" });
+	const submitInit = buildOptimizationSubmissionRequestInit(optimizationRequest, "optimization-key-123", { csrfToken: "csrf-token" });
+	const pollInit = buildOptimizationJobRequestInit();
+
+	expect(DAILY_DIETS_ENDPOINT).toBe("/api/v1/daily-diets");
+	expect(OPTIMIZATION_JOBS_ENDPOINT).toBe("/api/v1/optimization/jobs");
+	expect(buildOptimizationJobUrl("job/1")).toBe("/api/v1/optimization/jobs/job%2F1");
+	expect(dietInit.headers["Idempotency-Key"]).toBe("diet-key-123");
+	expect(submitInit.headers["X-CSRF-Token"]).toBe("csrf-token");
+	expect(pollInit.credentials).toBe("include");
+	expect(acknowledgement.data?.status).toBe("queued");
+	expect(completedJob.status).toBe("completed");
+	expect(completedJob.alternatives).toHaveLength(1);
+	expect(failedJob.failure.code).toBe("solver_timeout");
+	expect(queuedJob.status).toBe("queued");
+	expect(processingJob.status).toBe("processing");
+	expect(cancelledJob.status).toBe("cancelled");
+	expect(invalidQueuedJob.status).toBe("queued");
+	expect(invalidCompletedJob.status).toBe("completed");
+	expect(invalidCompletedJobWithFailure.status).toBe("completed");
+	expect(invalidFailedJob.status).toBe("failed");
 });

@@ -133,6 +133,19 @@ def start_api(port: int) -> subprocess.Popen[str]:
 	)
 
 
+def start_worker() -> subprocess.Popen[str]:
+	# Implements DESIGN-014 MetricsCollector worker heartbeat readiness gate.
+	print("+ go run ./cmd/worker")
+	return subprocess.Popen(
+		["go", "run", "./cmd/worker"],
+		cwd=BACKEND,
+		text=True,
+		env={**os.environ, **backend_env()},
+		stdout=subprocess.PIPE,
+		stderr=subprocess.STDOUT,
+	)
+
+
 def stop_process(process: subprocess.Popen[str]) -> None:
 	if process.poll() is not None:
 		return
@@ -188,20 +201,25 @@ def main() -> int:
 
 	started_services: set[str] = set()
 	api_process: subprocess.Popen[str] | None = None
+	worker_process: subprocess.Popen[str] | None = None
 	try:
 		started_services = ensure_local_dependencies()
 		run_migrations()
 
 		port = free_port()
 		api_process = start_api(port)
+		worker_process = start_worker()
 		base_url = f"http://127.0.0.1:{port}"
 		wait_for_http(f"{base_url}/health")
+		wait_for_http(f"{base_url}/ready")
 		for endpoint in HEALTH_ENDPOINTS:
 			assert_endpoint(base_url, endpoint)
 
 		print("Local stack verification passed.")
 		return 0
 	finally:
+		if worker_process is not None:
+			stop_process(worker_process)
 		if api_process is not None:
 			stop_process(api_process)
 		if not args.keep_services:

@@ -23,7 +23,12 @@ import {
 	submitSearch,
 	updateSubstitutionInput
 } from "./search";
-import type { SearchState } from "./search";
+import type {
+	DailyDietAlternativeSearchState,
+	DailyDietSearchState,
+	SearchState,
+	SubstitutionSearchState
+} from "./search";
 
 afterEach(() => {
 	resetSearch();
@@ -43,6 +48,30 @@ function foodObject(id = "food-1", name = "Apple"): FoodObject {
 	};
 }
 
+function currentSubstitutionState(): SubstitutionSearchState {
+	const state = get(searchStore);
+	if (state.mode !== "substitution") {
+		throw new Error(`Expected substitution mode, got ${state.mode}`);
+	}
+	return state;
+}
+
+function currentDailyDietAlternativeState(): DailyDietAlternativeSearchState {
+	const state = get(searchStore);
+	if (state.mode !== "daily_diet_alternative") {
+		throw new Error(`Expected daily diet alternative mode, got ${state.mode}`);
+	}
+	return state;
+}
+
+function currentDailyDietState(): DailyDietSearchState {
+	const state = get(searchStore);
+	if (state.mode !== "daily_diet") {
+		throw new Error(`Expected daily diet mode, got ${state.mode}`);
+	}
+	return state;
+}
+
 // Implements DESIGN-001 SearchView initial mode verification.
 test("createInitialSearchState defaults to catalog mode", () => {
 	const state = createInitialSearchState();
@@ -58,10 +87,10 @@ test("searchStore starts in catalog mode with empty query and page 1", () => {
 	expect(state.searchSubmitted).toBe(false);
 	expect(state.page).toBe(1);
 	expect(state.filters).toEqual([]);
-	expect(state.substitutionInputs).toEqual([]);
-	expect(state.substitutionInputLabels).toEqual({});
-	expect(state.substitutionInputItems).toEqual({});
-	expect(state.dailyDietId).toBeUndefined();
+	expect(state).not.toHaveProperty("substitutionInputs");
+	expect(state).not.toHaveProperty("substitutionInputLabels");
+	expect(state).not.toHaveProperty("substitutionInputItems");
+	expect(state).not.toHaveProperty("dailyDietId");
 	expect(state.loading).toBe(false);
 	expect(state.error).toBeNull();
 });
@@ -76,9 +105,9 @@ test("setMode clears substitution inputs when leaving substitution mode and rese
 
 	const state = get(searchStore);
 	expect(state.mode).toBe("catalog");
-	expect(state.substitutionInputs).toEqual([]);
-	expect(state.substitutionInputLabels).toEqual({});
-	expect(state.substitutionInputItems).toEqual({});
+	expect(state).not.toHaveProperty("substitutionInputs");
+	expect(state).not.toHaveProperty("substitutionInputLabels");
+	expect(state).not.toHaveProperty("substitutionInputItems");
 	expect(state.submittedQuery).toBe("");
 	expect(state.searchSubmitted).toBe(false);
 	expect(state.page).toBe(1);
@@ -94,8 +123,23 @@ test("setMode clears dailyDietId when leaving daily_diet_alternative and resets 
 
 	const state = get(searchStore);
 	expect(state.mode).toBe("catalog");
-	expect(state.dailyDietId).toBeUndefined();
+	expect(state).not.toHaveProperty("dailyDietId");
 	expect(state.page).toBe(1);
+});
+
+// Implements DESIGN-001 SearchView mode-specific state shape verification.
+test("setMode creates only the valid Daily Diet and Daily Diet Alternative fields", () => {
+	setMode("daily_diet");
+	const dailyDiet = currentDailyDietState();
+	expect(dailyDiet.dailyDietCollections).toEqual([]);
+	expect(dailyDiet).not.toHaveProperty("substitutionInputs");
+	expect(dailyDiet).not.toHaveProperty("dailyDietId");
+
+	setMode("daily_diet_alternative");
+	const alternative = currentDailyDietAlternativeState();
+	expect(alternative.dailyDietId).toBeUndefined();
+	expect(alternative).not.toHaveProperty("substitutionInputs");
+	expect(alternative).not.toHaveProperty("dailyDietCollections");
 });
 
 // Implements DESIGN-001 SearchView same-mode setMode verification.
@@ -106,8 +150,9 @@ test("setMode keeps compatible state when reselecting the same mode", () => {
 	setMode("substitution");
 
 	const state = get(searchStore);
-	expect(state.substitutionInputs).toHaveLength(1);
-	expect(state.substitutionInputItems["food-1"]).toBeUndefined();
+	const substitutionState = currentSubstitutionState();
+	expect(substitutionState.substitutionInputs).toHaveLength(1);
+	expect(substitutionState.substitutionInputItems["food-1"]).toBeUndefined();
 	expect(state.page).toBe(1);
 });
 
@@ -193,7 +238,7 @@ test("substitution input add, update, and remove reset page to 1", () => {
 	updateSubstitutionInput("food-1", { quantity: 200 });
 	expect(get(searchStore).page).toBe(1);
 	expect(get(searchStore).searchSubmitted).toBe(false);
-	expect(get(searchStore).substitutionInputs[0]?.quantity).toBe(200);
+	expect(currentSubstitutionState().substitutionInputs[0]?.quantity).toBe(200);
 
 	requestSubstitutionSearch();
 	expect(get(searchStore).searchSubmitted).toBe(true);
@@ -202,7 +247,7 @@ test("substitution input add, update, and remove reset page to 1", () => {
 	removeSubstitutionInput("food-1");
 	expect(get(searchStore).page).toBe(1);
 	expect(get(searchStore).searchSubmitted).toBe(false);
-	expect(get(searchStore).substitutionInputs).toEqual([]);
+	expect(currentSubstitutionState().substitutionInputs).toEqual([]);
 });
 
 // Implements DESIGN-001 SearchView substitution input dedup verification.
@@ -211,10 +256,10 @@ test("addSubstitutionInput replaces existing inputs with the same food object id
 	addSubstitutionInput({ foodObjectId: "food-1", quantity: 100, unit: "g" });
 	addSubstitutionInput({ foodObjectId: "food-1", quantity: 200, unit: "ml" }, "Apple");
 
-	const inputs = get(searchStore).substitutionInputs;
+	const inputs = currentSubstitutionState().substitutionInputs;
 	expect(inputs).toHaveLength(1);
 	expect(inputs[0]).toEqual({ foodObjectId: "food-1", quantity: 200, unit: "ml" });
-	expect(get(searchStore).substitutionInputLabels["food-1"]).toBe("Apple");
+	expect(currentSubstitutionState().substitutionInputLabels["food-1"]).toBe("Apple");
 });
 
 // Implements DESIGN-001 SearchView Catalog-to-Substitution selected item display data verification.
@@ -223,12 +268,12 @@ test("addSubstitutionInput can preserve full FoodObject display data for catalog
 	const item = foodObject();
 	addSubstitutionInput({ foodObjectId: item.id, quantity: 100, unit: "g" }, item.name, item);
 
-	const state = get(searchStore);
+	const state = currentSubstitutionState();
 	expect(state.substitutionInputLabels[item.id]).toBe("Apple");
 	expect(state.substitutionInputItems[item.id]).toEqual(item);
 
 	removeSubstitutionInput(item.id);
-	expect(get(searchStore).substitutionInputItems[item.id]).toBeUndefined();
+	expect(currentSubstitutionState().substitutionInputItems[item.id]).toBeUndefined();
 });
 
 // Implements DESIGN-001 SearchView substitution filter cleanup verification.
@@ -241,7 +286,7 @@ test("removeSubstitutionInput clears filters when the input list becomes empty",
 	removeSubstitutionInput(item.id);
 
 	const state = get(searchStore);
-	expect(state.substitutionInputs).toEqual([]);
+	expect(currentSubstitutionState().substitutionInputs).toEqual([]);
 	expect(state.filters).toEqual([]);
 	expect(state.searchSubmitted).toBe(false);
 });
@@ -255,7 +300,7 @@ test("setSubstitutionInputItem hydrates display data without reordering the inpu
 
 	setSubstitutionInputItem(hydrated);
 
-	const state = get(searchStore);
+	const state = currentSubstitutionState();
 	expect(state.substitutionInputs.map((input) => input.foodObjectId)).toEqual(["food-1", "food-2"]);
 	expect(state.substitutionInputLabels["food-1"]).toBe("Apple Hydrated");
 	expect(state.substitutionInputItems["food-1"]).toEqual(hydrated);
@@ -269,7 +314,7 @@ test("setSubstitutionInputItem ignores late hydration after an input is removed"
 
 	setSubstitutionInputItem(foodObject("food-1", "Apple Hydrated"));
 
-	const state = get(searchStore);
+	const state = currentSubstitutionState();
 	expect(state.substitutionInputs).toEqual([]);
 	expect(state.substitutionInputLabels["food-1"]).toBeUndefined();
 	expect(state.substitutionInputItems["food-1"]).toBeUndefined();
@@ -281,7 +326,7 @@ test("setDailyDietId resets page to 1", () => {
 	setPage(5);
 	setDailyDietId("diet-9");
 	expect(get(searchStore).page).toBe(1);
-	expect(get(searchStore).dailyDietId).toBe("diet-9");
+	expect(currentDailyDietAlternativeState().dailyDietId).toBe("diet-9");
 });
 
 // Implements DESIGN-001 SearchView page index verification.
@@ -323,9 +368,9 @@ test("resetSearch restores the default catalog state", () => {
 	expect(state.query).toBe("");
 	expect(state.submittedQuery).toBe("");
 	expect(state.searchSubmitted).toBe(false);
-	expect(state.substitutionInputs).toEqual([]);
-	expect(state.substitutionInputLabels).toEqual({});
-	expect(state.substitutionInputItems).toEqual({});
+	expect(state).not.toHaveProperty("substitutionInputs");
+	expect(state).not.toHaveProperty("substitutionInputLabels");
+	expect(state).not.toHaveProperty("substitutionInputItems");
 	expect(state.page).toBe(1);
 });
 
@@ -445,10 +490,11 @@ test("updateSubstitutionInput leaves other inputs unchanged when the id does not
 
 // Implements DESIGN-001 SearchView request key equal-id comparator verification.
 test("searchRequestKey is stable for duplicate filter and substitution input ids", () => {
-	const base = createInitialSearchState();
-	base.mode = "substitution";
 	const withDuplicates: SearchState = {
-		...base,
+		mode: "substitution",
+		query: "",
+		submittedQuery: "",
+		searchSubmitted: false,
 		filters: [
 			{ filterId: "dup", kind: "food_category", include: true },
 			{ filterId: "dup", kind: "food_category", include: true }
@@ -456,7 +502,12 @@ test("searchRequestKey is stable for duplicate filter and substitution input ids
 		substitutionInputs: [
 			{ foodObjectId: "dup-food", quantity: 100, unit: "g" },
 			{ foodObjectId: "dup-food", quantity: 200, unit: "ml" }
-		]
+		],
+		page: 1,
+		substitutionInputLabels: {},
+		substitutionInputItems: {},
+		loading: false,
+		error: null
 	};
 
 	const key = searchRequestKey(withDuplicates);

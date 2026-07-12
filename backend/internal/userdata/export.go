@@ -26,12 +26,17 @@ type ExportService struct {
 	history    repository.EncryptedSearchHistoryRepository
 	consent    repository.ConsentRepository
 	encryption *security.EncryptionService
+	diets      repository.DailyDietRepository
 }
 
 // NewExportService creates account export behavior.
 // Implements DESIGN-008 DataExporter.
-func NewExportService(identity ExportIdentityRepository, profiles repository.EncryptedUserProfileRepository, saved repository.SavedItemRepository, history repository.EncryptedSearchHistoryRepository, consent repository.ConsentRepository, encryption *security.EncryptionService) *ExportService {
-	return &ExportService{identity: identity, profiles: profiles, saved: saved, history: history, consent: consent, encryption: encryption}
+func NewExportService(identity ExportIdentityRepository, profiles repository.EncryptedUserProfileRepository, saved repository.SavedItemRepository, history repository.EncryptedSearchHistoryRepository, consent repository.ConsentRepository, encryption *security.EncryptionService, diets ...repository.DailyDietRepository) *ExportService {
+	var dietRepository repository.DailyDietRepository
+	if len(diets) > 0 {
+		dietRepository = diets[0]
+	}
+	return &ExportService{identity: identity, profiles: profiles, saved: saved, history: history, consent: consent, encryption: encryption, diets: dietRepository}
 }
 
 // ExportPayload is a serialized account export response.
@@ -49,6 +54,7 @@ type ExportBundle struct {
 	User        ExportUser             `json:"user"`
 	Consent     []ExportConsent        `json:"consent"`
 	SavedItems  []repository.SavedItem `json:"savedItems"`
+	SavedDiets  []repository.SavedDiet `json:"savedDiets"`
 	History     []SearchHistoryEntry   `json:"history"`
 	CustomItems []ExportCustomItem     `json:"customItems"`
 }
@@ -145,13 +151,20 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 	for _, record := range consentRecords {
 		consent = append(consent, ExportConsent{PrivacyPolicyVersion: record.PrivacyPolicyVersion, TermsVersion: record.TermsVersion})
 	}
+	diets := []repository.SavedDiet{}
+	if s.diets != nil {
+		diets, err = s.diets.List(ctx, userID)
+		if err != nil {
+			return ExportBundle{}, err
+		}
+	}
 	role := user.Role
 	if role == "" {
 		role = repository.UserRoleUser
 	}
 	return ExportBundle{
 		User:    ExportUser{UserID: userID, Email: email, Role: role, DisplayName: displayName, UnitSystem: profile.UnitSystem, ThemePreference: profile.ThemePreference},
-		Consent: consent, SavedItems: saved, History: history, CustomItems: []ExportCustomItem{},
+		Consent: consent, SavedItems: saved, SavedDiets: diets, History: history, CustomItems: []ExportCustomItem{},
 	}, nil
 }
 
@@ -180,6 +193,12 @@ func encodeCSV(bundle ExportBundle) []byte {
 	}
 	for _, item := range bundle.SavedItems {
 		rows = append(rows, []string{"savedItems", string(item.Kind), item.ItemID.String()})
+	}
+	for _, diet := range bundle.SavedDiets {
+		rows = append(rows, []string{"savedDiets", diet.Name, diet.ID.String()})
+		for _, entry := range diet.Entries {
+			rows = append(rows, []string{"savedDietMeals", diet.ID.String(), entry.MealID.String()})
+		}
 	}
 	for _, entry := range bundle.History {
 		rows = append(rows, []string{"history", entry.Mode, entry.Query})

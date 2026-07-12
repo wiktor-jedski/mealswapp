@@ -38,6 +38,8 @@ type Dependencies struct {
 	Config       config.Config
 	PostgresPing func(context.Context) error
 	RedisPing    func(context.Context) error
+	WorkerPing   func(context.Context) error
+	QueueStats   func(context.Context) (observability.QueueSnapshot, error)
 	Audit        security.AuditLogger
 	Logs         observability.LogSink
 	Metrics      observability.MetricsCollector
@@ -347,7 +349,7 @@ func ready(deps Dependencies) fiber.Handler {
 	return func(ctx *fiber.Ctx) error {
 		checks := map[string]string{}
 		status := fiber.StatusOK
-		for name, ping := range map[string]func(context.Context) error{"postgres": deps.PostgresPing, "redis": deps.RedisPing} {
+		for name, ping := range map[string]func(context.Context) error{"postgres": deps.PostgresPing, "redis": deps.RedisPing, "worker": deps.WorkerPing} {
 			if ping == nil {
 				continue
 			}
@@ -362,11 +364,24 @@ func ready(deps Dependencies) fiber.Handler {
 			}
 			recordMetric(ctx, deps.Metrics, "dependency_health", health, "state", map[string]string{"dependency": name})
 		}
+		data := map[string]any{"checks": checks}
+		if deps.QueueStats != nil {
+			snapshot, err := deps.QueueStats(ctx.UserContext())
+			if err != nil {
+				checks["optimization_queue"] = "unavailable"
+				status = fiber.StatusServiceUnavailable
+				recordMetric(ctx, deps.Metrics, "dependency_health", 0, "state", map[string]string{"dependency": "optimization_queue"})
+			} else {
+				checks["optimization_queue"] = "ok"
+				data["queue"] = snapshot
+				recordMetric(ctx, deps.Metrics, "dependency_health", 1, "state", map[string]string{"dependency": "optimization_queue"})
+			}
+		}
 		state := "ready"
 		if status != fiber.StatusOK {
 			state = "not_ready"
 		}
-		return ctx.Status(status).JSON(Envelope{Status: state, RequestID: requestID(ctx), Data: map[string]any{"checks": checks}})
+		return ctx.Status(status).JSON(Envelope{Status: state, RequestID: requestID(ctx), Data: data})
 	}
 }
 

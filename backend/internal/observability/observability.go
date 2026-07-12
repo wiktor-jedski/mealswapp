@@ -111,8 +111,24 @@ type AlertRule struct {
 // DefaultAlertRules returns the Phase 02 latency alert baseline.
 // Implements DESIGN-014 AlertManager.
 func DefaultAlertRules() []AlertRule {
-	return []AlertRule{
+	rules := []AlertRule{
 		{Name: "api_latency_warning", Metric: "http_request_latency_seconds_p95", Threshold: 1.5, Comparison: ">", DurationSeconds: 60, Severity: "warning"},
 		{Name: "api_latency_critical", Metric: "http_request_latency_seconds_p95", Threshold: 2, Comparison: ">", DurationSeconds: 60, Severity: "critical"},
+	}
+	return append(rules, OptimizationAlertRules()...)
+}
+
+// OptimizationAlertRules returns the Phase 07 queue and worker capacity
+// thresholds. Deployments may tune notification routing, but not the bounded
+// metric vocabulary or the solver hard deadline.
+// Implements DESIGN-014 AlertManager and SW-REQ-080/SW-REQ-082.
+func OptimizationAlertRules() []AlertRule {
+	return []AlertRule{
+		{Name: "optimization_queue_depth_warning", Metric: MetricOptimizationQueueDepth, Threshold: 20, Comparison: ">", DurationSeconds: 60, Severity: "warning"},
+		{Name: "optimization_queue_age_warning", Metric: MetricOptimizationQueueAgeSeconds, Threshold: 5, Comparison: ">", DurationSeconds: 60, Severity: "warning"},
+		{Name: "optimization_queue_age_critical", Metric: MetricOptimizationQueueAgeSeconds, Threshold: 15, Comparison: ">", DurationSeconds: 60, Severity: "critical"},
+		{Name: "optimization_worker_utilization_warning", Metric: MetricOptimizationWorkerUtilization, Threshold: 0.7, Comparison: ">", DurationSeconds: 300, Severity: "warning"},
+		{Name: "optimization_worker_utilization_critical", Metric: MetricOptimizationWorkerUtilization, Threshold: 0.9, Comparison: ">", DurationSeconds: 300, Severity: "critical"},
+		{Name: "optimization_solve_duration_critical", Metric: MetricOptimizationSolveDuration, Threshold: 30, Comparison: ">=", DurationSeconds: 1, Severity: "critical"},
 	}
 }

@@ -112,7 +112,7 @@ def run(command: list[str], cwd: Path = ROOT) -> None:
 	run_env(command, cwd=cwd)
 
 
-def run_env(command: list[str], cwd: Path = ROOT, capture: bool = False) -> subprocess.CompletedProcess[str]:
+def run_env(command: list[str], cwd: Path = ROOT, capture: bool = False, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
 	env = {
 		**dict(os.environ),
 		"GOCACHE": str(BACKEND / ".go-cache"),
@@ -120,6 +120,8 @@ def run_env(command: list[str], cwd: Path = ROOT, capture: bool = False) -> subp
 		"BUN_TMPDIR": str(FRONTEND / ".bun-tmp"),
 		"BUN_INSTALL": str(FRONTEND / ".bun-install"),
 	}
+	if extra_env:
+		env.update(extra_env)
 	return subprocess.run(command, cwd=cwd, check=True, env=env, text=True, capture_output=capture)
 
 
@@ -130,9 +132,10 @@ def running_compose_services() -> set[str]:
 
 def validate_go_coverage() -> str:
 	print("+ go test ./internal/... -count=1 -coverprofile=coverage.out")
-	run_env(["go", "test", "./internal/...", "-count=1", "-coverprofile=coverage.out"], BACKEND)
+	run_env(["go", "test", "./internal/...", "-p", "1", "-count=1", "-coverprofile=coverage.out"], BACKEND, extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/12"})
 	result = run_env(["go", "tool", "cover", "-func=coverage.out"], BACKEND, capture=True)
 	print(result.stdout, end="")
+	validate_phase07_go_coverage(result.stdout)
 	return result.stdout
 
 
@@ -146,6 +149,7 @@ def validate_frontend_coverage() -> str:
 	columns = [part.strip() for part in all_files.split("|")]
 	if len(columns) < 3 or columns[1] != "100.00" or columns[2] != "100.00":
 		validate_documented_frontend_coverage_deviations(coverage_output, all_files)
+	validate_phase07_frontend_coverage(coverage_output)
 	return coverage_output
 
 
@@ -166,11 +170,142 @@ def validate_documented_frontend_coverage_deviations(coverage_output: str, all_f
 				undocumented.append(f"{path} ({funcs}% funcs, {lines}% lines)")
 	if undocumented:
 		raise SystemExit(
-			"Frontend coverage below 100% without documented Phase 06 deviations: "
+			"Frontend coverage below 100% without documented deviations: "
 			+ ", ".join(undocumented)
 			+ f"; aggregate row: {all_files}"
 		)
 	print(f"Frontend coverage below 100% with documented deviations: {all_files}")
+
+
+PHASE07_GO_PACKAGES = {
+	"github.com/wiktor-jedski/mealswapp/backend/internal/dailydiet",
+	"github.com/wiktor-jedski/mealswapp/backend/internal/optimization",
+	"github.com/wiktor-jedski/mealswapp/backend/internal/queue",
+	"github.com/wiktor-jedski/mealswapp/backend/internal/worker",
+}
+PHASE07_FRONTEND_SOURCES = {
+	"src/lib/api/daily-diet-client.ts",
+	"src/lib/api/generated.ts",
+	"src/lib/api/optimization-client.ts",
+	"src/lib/stores/daily-diet.ts",
+	"src/lib/stores/optimization.ts",
+	"src/lib/stores/search.ts",
+}
+
+
+def validate_phase07_go_coverage(coverage_output: str) -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 07 coverage-deviation gate.
+	package_totals: dict[str, str] = {}
+	for package in sorted(PHASE07_GO_PACKAGES):
+		extra_env = {}
+		if package.endswith("/queue"):
+			extra_env["MEALSWAPP_REDIS_URL"] = "redis://localhost:6379/12"
+		elif package.endswith("/worker"):
+			extra_env["MEALSWAPP_REDIS_URL"] = "redis://localhost:6379/13"
+		result = run_env(["go", "test", package, "-count=1", "-cover"], BACKEND, capture=True, extra_env=extra_env)
+		output = f"{result.stdout}\n{result.stderr}"
+		match = re.search(r"coverage: ([0-9.]+)% of statements", output)
+		if match:
+			package_totals[package] = f"{match.group(1)}%"
+		print(output, end="")
+	missing = sorted(PHASE07_GO_PACKAGES - package_totals.keys())
+	if missing:
+		raise SystemExit("Phase 07 Go coverage is missing package totals: " + ", ".join(missing))
+	below = {package: total for package, total in package_totals.items() if total != "100.0%"}
+	if below:
+		open_points = OPEN_POINTS.read_text(encoding="utf-8")
+		undocumented = [
+			f"{package} ({total})"
+			for package, total in sorted(below.items())
+			if (package not in open_points and package.rsplit("/", 1)[-1] not in open_points) or total not in open_points
+		]
+		if undocumented:
+			raise SystemExit(
+				"Phase 07 Go coverage below 100% without documented measured exceptions: "
+				+ ", ".join(undocumented)
+			)
+		print("Phase 07 Go coverage below 100% with documented measured exceptions: " + ", ".join(f"{package} {total}" for package, total in sorted(below.items())))
+	else:
+		print("Phase 07 Go coverage passed: all dedicated Phase 07 packages are at 100%.")
+
+
+def validate_phase07_frontend_coverage(coverage_output: str) -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 07 frontend coverage gate.
+	rows: dict[str, tuple[str, str]] = {}
+	for line in coverage_output.splitlines():
+		stripped = line.strip()
+		if not stripped.startswith("src/"):
+			continue
+		columns = [part.strip() for part in stripped.split("|")]
+		if len(columns) >= 3:
+			rows[columns[0]] = (columns[1], columns[2])
+	missing = sorted(PHASE07_FRONTEND_SOURCES - rows.keys())
+	if missing:
+		raise SystemExit("Phase 07 frontend coverage is missing source rows: " + ", ".join(missing))
+	below = {
+		path: values
+		for path, values in rows.items()
+		if path in PHASE07_FRONTEND_SOURCES and values[1] != "100.00"
+	}
+	if below:
+		open_points = OPEN_POINTS.read_text(encoding="utf-8")
+		undocumented = [
+			f"{path} ({funcs}% funcs, {lines}% lines)"
+			for path, (funcs, lines) in sorted(below.items())
+			if path not in open_points or f"{funcs}% funcs, {lines}% lines" not in open_points
+		]
+		if undocumented:
+			raise SystemExit(
+				"Phase 07 frontend coverage below 100% without documented measured exceptions: "
+				+ ", ".join(undocumented)
+			)
+		print("Phase 07 frontend coverage below 100% with documented measured exceptions: " + ", ".join(f"{path} {lines}% lines" for path, (_, lines) in sorted(below.items())))
+	else:
+		print("Phase 07 frontend coverage passed: all testable source rows are at 100%.")
+
+
+def validate_go_format() -> None:
+	# Implements DESIGN-014 MetricsCollector backend formatting gate.
+	cache_dirs = {".go-cache", ".go-mod-cache"}
+	go_files = sorted(
+		str(path)
+		for path in BACKEND.rglob("*.go")
+		if not cache_dirs.intersection(path.relative_to(BACKEND).parts)
+	)
+	result = run_env(["gofmt", "-l", *go_files], BACKEND, capture=True)
+	if result.stdout.strip():
+		raise SystemExit("Go formatting check failed:\n" + result.stdout)
+
+
+def validate_phase07_backend_workflows() -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 07 focused backend aggregate gate.
+	def run_phase07_test(command: list[str], redis_db: int | None = None) -> None:
+		extra_env = {} if redis_db is None else {"MEALSWAPP_REDIS_URL": f"redis://localhost:6379/{redis_db}"}
+		print(f"+ {' '.join(command)}" + (f"  # Redis DB {redis_db}" if redis_db is not None else ""))
+		run_env(command, BACKEND, extra_env=extra_env)
+
+	run_phase07_test(["go", "test", "./internal/migrations", "-run", "^TestRun", "-count=1"])
+	run_phase07_test(["go", "test", "./internal/repository", "-run", "^TestPostgresSavedDiet", "-count=1"])
+	run_phase07_test(["go", "test", "./internal/dailydiet", "-count=1"])
+	run_phase07_test(["go", "test", "./internal/optimization", "-run", "^(TestBuild|TestGenerate|TestLPSolver|TestValidate|TestSafe)", "-count=1"])
+	run_phase07_test(["go", "test", "./internal/queue", "-run", "^TestJobQueue", "-count=1"], 15)
+	run_phase07_test(["go", "test", "./internal/worker", "-run", "^(TestRun|TestRedis|TestOptimization)", "-count=1"], 15)
+	run_phase07_test(["go", "test", "./internal/httpapi", "-run", "^(TestProfileControllerDailyDiet|TestOptimizationHTTP)", "-count=1"], 14)
+	run_phase07_test(["go", "test", "./internal/app", "-run", "^(TestDailyDietProductionAPIWithLivePostgres|TestTask206)", "-count=1"], 14)
+
+
+def validate_phase07_frontend_workflows() -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 07 Daily Diet and accessibility gate.
+	run([
+		"bun", "run", "test:e2e", "--",
+		"tests/daily-diet-workflow.spec.ts",
+		"tests/phase07-browser-acceptance.spec.ts",
+	], FRONTEND)
+
+
+def validate_phase07_capacity_tests() -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 07 capacity regression gate.
+	run(["python3", "-m", "unittest", "scripts/test_verify_optimization_capacity.py"])
 
 
 def validate_stripe_webhook_tests() -> None:
@@ -201,7 +336,7 @@ def validate_phase0601_backend_auth_billing_smoke_tests() -> None:
 
 def validate_phase0601_frontend_auth_workflows() -> None:
 	# Implements DESIGN-014 MetricsCollector focused DESIGN-018 browser workflow aggregate gate.
-	run([
+		run([
 		"bun", "run", "test:e2e", "--",
 		"tests/auth-session.spec.ts",
 		"tests/subscription-billing.spec.ts",
@@ -210,7 +345,7 @@ def validate_phase0601_frontend_auth_workflows() -> None:
 
 
 def validate_frontend_e2e() -> None:
-	# Implements DESIGN-014 MetricsCollector Playwright and accessibility aggregate gate.
+	# Implements DESIGN-014 MetricsCollector complete Playwright and axe aggregate gate.
 	run(["bun", "run", "test:e2e"], FRONTEND)
 
 
@@ -241,6 +376,8 @@ TRACEABLE_FILES = {
 	"scripts/start-services.sh", "scripts/validate-traceability.py",
 	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py", "scripts/verify-phase02-uat.py", "scripts/verify-phase03-uat.py",
+	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
+	"scripts/verify-clp-worker-image.sh",
 }
 SKIP_TRACEABILITY_NAMES = {"bun.lock", "go.mod", "go.sum"}
 
@@ -335,6 +472,7 @@ def main() -> int:
 	run(["python3", "scripts/validate-task-list.py"])
 	# Implements DESIGN-010 RouteHandler contract and backend quality gates.
 	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
+	validate_phase07_capacity_tests()
 	run(["go", "vet", "./..."], BACKEND)
 	run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)
 	validate_stripe_webhook_tests()
@@ -343,11 +481,14 @@ def main() -> int:
 	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
 	run(["python3", "scripts/verify-phase02-uat.py", "--keep-services"])
 	run(["python3", "scripts/verify-phase03-uat.py", "--keep-services"])
+	validate_phase07_backend_workflows()
 	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
-	run(["go", "fmt", "./..."], BACKEND)
+	validate_go_format()
 	try:
-		run(["go", "test", "./...", "-count=1"], BACKEND)
-		run(["go", "test", "-race", "./...", "-count=1"], BACKEND)
+		# Keep package-parallel Redis integration tests isolated from the local stack and
+		# from the focused gates above; this is test isolation, not a product override.
+		run_env(["go", "test", "./...", "-p", "1", "-count=1"], BACKEND, extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/10"})
+		run_env(["go", "test", "-race", "./...", "-p", "1", "-count=1"], BACKEND, extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/11"})
 		go_coverage_stdout = validate_go_coverage()
 	finally:
 		started_services = ({"postgres", "redis"} & running_compose_services()) - initially_running_services
@@ -359,6 +500,7 @@ def main() -> int:
 	run(["bun", "test"], FRONTEND)
 	bun_coverage_stdout = validate_frontend_coverage()
 	validate_phase0601_frontend_auth_workflows()
+	validate_phase07_frontend_workflows()
 	validate_frontend_e2e()
 
 	design_implemented, design_missing, design_checked, design_total = validate_design_coverage()

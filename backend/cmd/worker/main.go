@@ -9,6 +9,10 @@ import (
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/database"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/optimization"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
 )
 
@@ -32,9 +36,26 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// run worker using internal func
-	// can error if pinging redis fails
-	if err := worker.Run(ctx, cfg, redisClient); err != nil {
+	pg, err := database.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("open postgres: %v", err)
+	}
+	defer pg.Close()
+
+	telemetrySink := observability.JSONSink{Writer: os.Stdout}
+	telemetry := observability.NewOptimizationTelemetry(telemetrySink, telemetrySink, 1)
+	store := worker.NewRedisOptimizationJobStore(redisClient).WithTelemetry(telemetry)
+	mealRepository := repository.NewPostgresMealRepository(pg)
+	dietRepository := repository.NewPostgresSavedDataRepository(pg)
+	inputs := worker.NewRepositoryOptimizationInputLoader(optimization.NewConstraintBuilder(mealRepository, dietRepository))
+	solver := optimization.NewLPSolverWrapper(optimization.CLPConfig{
+		Executable:      cfg.CLPExecutable,
+		ExpectedVersion: cfg.CLPVersion,
+	})
+	processor := worker.NewOptimizationProcessor(store, inputs, solver).WithTelemetry(telemetry)
+	// Compose the complete processor at the dedicated worker boundary; the API
+	// process never runs optimization synchronously.
+	if err := worker.RunWithProcessor(ctx, cfg, redisClient, processor.ProcessOptimizationJob, processor.Terminal); err != nil {
 		log.Fatalf("worker stopped: %v", err)
 	}
 }

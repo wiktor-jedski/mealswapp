@@ -23,6 +23,24 @@ type memoryExportRepository struct {
 	errAt   string
 }
 
+type memoryExportDiets struct {
+	diets []repository.SavedDiet
+}
+
+func (r memoryExportDiets) Create(context.Context, uuid.UUID, repository.SavedDiet) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (r memoryExportDiets) Get(context.Context, uuid.UUID, uuid.UUID) (repository.SavedDiet, error) {
+	return repository.SavedDiet{}, nil
+}
+func (r memoryExportDiets) List(context.Context, uuid.UUID) ([]repository.SavedDiet, error) {
+	return r.diets, nil
+}
+func (r memoryExportDiets) Replace(context.Context, uuid.UUID, repository.SavedDiet) error {
+	return nil
+}
+func (r memoryExportDiets) Delete(context.Context, uuid.UUID, uuid.UUID) error { return nil }
+
 func (r *memoryExportRepository) GetEncryptedUserByID(_ context.Context, userID uuid.UUID) (repository.EncryptedAuthUser, error) {
 	if r.errAt == "identity" {
 		return repository.EncryptedAuthUser{}, errors.New("identity failed")
@@ -103,7 +121,9 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 		history: []repository.EncryptedSearchHistoryEntry{{ID: uuid.New(), UserID: userID, Query: encrypt("tomato"), Mode: "search", FiltersHash: "hash"}},
 		consent: []repository.ConsentRecord{{UserID: userID, PrivacyPolicyVersion: "privacy-v1", TermsVersion: "terms-v1"}},
 	}
-	service := NewExportService(repo, repo, repo, repo, repo, encryption)
+	dietID := uuid.New()
+	diets := memoryExportDiets{diets: []repository.SavedDiet{{ID: dietID, UserID: userID, Name: "Training Day", Entries: []repository.SavedDietMealEntry{{MealID: uuid.New(), Position: 0}}}}}
+	service := NewExportService(repo, repo, repo, repo, repo, encryption, diets)
 	payload, err := service.BuildExport(ctx, userID, "json")
 	if err != nil {
 		t.Fatalf("BuildExport(json) error = %v", err)
@@ -112,7 +132,7 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if err := json.Unmarshal(payload.Body, &bundle); err != nil {
 		t.Fatalf("decode export json: %v", err)
 	}
-	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 0 {
+	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.SavedDiets) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 0 {
 		t.Fatalf("json bundle = %#v", bundle)
 	}
 	var rawBundle map[string]any
@@ -126,7 +146,7 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildExport(csv) error = %v", err)
 	}
-	if !strings.Contains(string(csvPayload.Body), "history,search,tomato") || !strings.Contains(string(csvPayload.Body), "customItems,count,0") {
+	if !strings.Contains(string(csvPayload.Body), "history,search,tomato") || !strings.Contains(string(csvPayload.Body), "savedDiets,Training Day,"+dietID.String()) || !strings.Contains(string(csvPayload.Body), "customItems,count,0") {
 		t.Fatalf("csv body = %s", csvPayload.Body)
 	}
 	if _, err := service.BuildExport(ctx, userID, "xml"); err == nil {

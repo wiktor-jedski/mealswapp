@@ -6,6 +6,7 @@ import {
 	buildSearchRequest,
 	resetSearch,
 	searchStore,
+	setDailyDietId,
 	setMode
 } from "../stores/search";
 
@@ -61,7 +62,7 @@ test("Substitution Input quantities are preserved on SearchRequest.substitutionI
 test("daily_diet_alternative mode exposes dailyDietId on SearchRequest without substitutionInputs", () => {
 	setMode("daily_diet_alternative");
 	const dietId = "11111111-2222-3333-4444-555555555555";
-	searchStore.update((state) => ({ ...state, dailyDietId: dietId }));
+	setDailyDietId(dietId);
 
 	const request = buildSearchRequest(get(searchStore));
 

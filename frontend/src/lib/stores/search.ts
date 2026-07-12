@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { derived, writable } from "svelte/store";
 import type {
 	SearchFilter,
 	SearchMode,
@@ -9,32 +9,66 @@ import type {
 
 // Implements DESIGN-001 SearchView typed search state, mode transitions, and SearchRequest construction.
 
-/**
- * Typed SPA search state backing the SearchView.
- *
- * @remarks Implements DESIGN-001 SearchView SearchState.
- */
-export interface SearchState {
-	mode: SearchMode;
+/** Shared state carried by every SearchView mode. */
+interface CommonSearchState {
 	query: string;
 	submittedQuery: string;
 	searchSubmitted: boolean;
 	filters: SearchFilter[];
 	page: number;
-	substitutionInputs: SubstitutionInput[];
-	substitutionInputLabels: Record<string, string>;
-	substitutionInputItems: Record<string, FoodObject>;
-	dailyDietId: string | undefined;
 	loading: boolean;
 	error: string | null;
 }
+
+/** Catalog mode has no substitution or daily-diet-specific state. */
+export type CatalogSearchState = CommonSearchState & {
+	mode: "catalog";
+};
+
+/** Substitution mode owns all selected-input display and request state. */
+export type SubstitutionSearchState = CommonSearchState & {
+	mode: "substitution";
+	substitutionInputs: SubstitutionInput[];
+	substitutionInputLabels: Record<string, string>;
+	substitutionInputItems: Record<string, FoodObject>;
+};
+
+/** Minimal saved-diet identity used by the mode model before the full collection workflow lands. */
+export interface DailyDietCollectionViewModel {
+	id: string;
+	name: string;
+}
+
+/** Daily Diet mode owns the saved-diet collection list; it has no substitution or alternative id. */
+export type DailyDietSearchState = CommonSearchState & {
+	mode: "daily_diet";
+	dailyDietCollections: DailyDietCollectionViewModel[];
+};
+
+/** Daily Diet Alternative mode owns the selected saved-diet identifier. */
+export type DailyDietAlternativeSearchState = CommonSearchState & {
+	mode: "daily_diet_alternative";
+	dailyDietId: string | undefined;
+};
+
+/**
+ * Typed SPA search state backing the SearchView.
+ *
+ * @remarks Implements DESIGN-001 SearchView SearchState as a discriminated union so mode-only
+ * fields cannot be represented in incompatible Catalog, Substitution, or Daily Diet states.
+ */
+export type SearchState =
+	| CatalogSearchState
+	| SubstitutionSearchState
+	| DailyDietSearchState
+	| DailyDietAlternativeSearchState;
 
 /**
  * Default Catalog-mode search state.
  *
  * @remarks Implements DESIGN-001 SearchView startup initialization (mode = "catalog").
  */
-export function createInitialSearchState(): SearchState {
+export function createInitialSearchState(): CatalogSearchState {
 	return {
 		mode: "catalog",
 		query: "",
@@ -42,10 +76,6 @@ export function createInitialSearchState(): SearchState {
 		searchSubmitted: false,
 		filters: [],
 		page: 1,
-		substitutionInputs: [],
-		substitutionInputLabels: {},
-		substitutionInputItems: {},
-		dailyDietId: undefined,
 		loading: false,
 		error: null
 	};
@@ -58,24 +88,76 @@ export function createInitialSearchState(): SearchState {
  */
 export const searchStore = writable<SearchState>(createInitialSearchState());
 
+/** Typed projection for components that render only while Substitution mode is active. */
+export const substitutionState = derived(searchStore, (state): SubstitutionSearchState | null =>
+	state.mode === "substitution" ? state : null
+);
+
+/** Typed projection for components that render only while Daily Diet Alternative is active. */
+export const dailyDietAlternativeState = derived(
+	searchStore,
+	(state): DailyDietAlternativeSearchState | null =>
+		state.mode === "daily_diet_alternative" ? state : null
+);
+
+/** Narrows a SearchState to the mode that owns Substitution Inputs. */
+export function isSubstitutionState(state: SearchState): state is SubstitutionSearchState {
+	return state.mode === "substitution";
+}
+
+/** Narrows a SearchState to the mode that owns the Daily Diet identifier. */
+export function isDailyDietAlternativeState(state: SearchState): state is DailyDietAlternativeSearchState {
+	return state.mode === "daily_diet_alternative";
+}
+
 /**
  * Switches the active search mode, clearing state that is incompatible with the new mode and resetting pagination.
  *
  * @remarks Implements DESIGN-001 SearchView setSearchMode.
  */
 export function setMode(mode: SearchMode): void {
-	searchStore.update((state) => ({
-		...state,
-		mode,
-		page: 1,
-		submittedQuery: "",
-		substitutionInputs: mode === "substitution" ? state.substitutionInputs : [],
-		substitutionInputLabels: mode === "substitution" ? state.substitutionInputLabels : {},
-		substitutionInputItems: mode === "substitution" ? state.substitutionInputItems : {},
-		searchSubmitted: false,
-		dailyDietId: mode === "daily_diet_alternative" ? state.dailyDietId : undefined
-	}));
+	searchStore.update((state): SearchState => {
+		if (state.mode === mode) {
+			return {
+				...state,
+				page: 1,
+				submittedQuery: "",
+				searchSubmitted: false
+			};
+		}
+
+		const common: CommonSearchState = {
+			query: state.query,
+			submittedQuery: "",
+			searchSubmitted: false,
+			filters: state.filters,
+			page: 1,
+			loading: state.loading,
+			error: state.error
+		};
+
+		switch (mode) {
+			case "catalog":
+				return { ...common, mode };
+			case "substitution":
+				const pending = state.mode === "catalog" ? pendingCatalogSubstitution : [];
+				pendingCatalogSubstitution = [];
+				return {
+					...common,
+					mode,
+					substitutionInputs: pending.map(({ input }) => input),
+					substitutionInputLabels: Object.fromEntries(pending.map(({ input, label, item }) => [input.foodObjectId, item?.name ?? label ?? input.foodObjectId])),
+					substitutionInputItems: Object.fromEntries(pending.filter(({ item }) => item).map(({ input, item }) => [input.foodObjectId, item as FoodObject]))
+				};
+			case "daily_diet":
+				return { ...common, mode, dailyDietCollections: [] };
+			case "daily_diet_alternative":
+				return { ...common, mode, dailyDietId: undefined };
+		}
+	});
 }
+
+let pendingCatalogSubstitution: Array<{ input: SubstitutionInput; label?: string; item?: FoodObject }> = [];
 
 /**
  * Updates the free-text query and resets pagination so new results start at page one.
@@ -111,12 +193,17 @@ export function submitSearch(query?: string): void {
  * @remarks Implements DESIGN-001 SearchView explicit two-step Substitution Search execution.
  */
 export function requestSubstitutionSearch(): void {
-	searchStore.update((state) => ({
-		...state,
-		submittedQuery: "",
-		searchSubmitted: state.mode === "substitution" && state.substitutionInputs.length > 0,
-		page: 1
-	}));
+	searchStore.update((state) => {
+		if (state.mode !== "substitution") {
+			return state;
+		}
+		return {
+			...state,
+			submittedQuery: "",
+			searchSubmitted: state.substitutionInputs.length > 0,
+			page: 1
+		};
+	});
 }
 
 /**
@@ -176,20 +263,31 @@ export function setPage(page: number): void {
  * @remarks Implements DESIGN-001 SearchView Substitution Input composition.
  */
 export function addSubstitutionInput(input: SubstitutionInput, label?: string, item?: FoodObject): void {
-	searchStore.update((state) => ({
-		...state,
-		substitutionInputs: mergeSubstitutionInput(state.substitutionInputs, input),
-		substitutionInputLabels: {
-			...state.substitutionInputLabels,
-			[input.foodObjectId]: item?.name ?? label ?? state.substitutionInputLabels[input.foodObjectId] ?? input.foodObjectId
-		},
-		substitutionInputItems: {
-			...state.substitutionInputItems,
-			...(item ? { [input.foodObjectId]: item } : {})
-		},
-		searchSubmitted: false,
-		page: 1
-	}));
+	searchStore.update((state) => {
+		if (state.mode !== "substitution") {
+			if (state.mode === "catalog") {
+				pendingCatalogSubstitution = [
+					...pendingCatalogSubstitution.filter(({ input: existing }) => existing.foodObjectId !== input.foodObjectId),
+					{ input, label, item }
+				];
+			}
+			return state;
+		}
+		return {
+			...state,
+			substitutionInputs: mergeSubstitutionInput(state.substitutionInputs, input),
+			substitutionInputLabels: {
+				...state.substitutionInputLabels,
+				[input.foodObjectId]: item?.name ?? label ?? state.substitutionInputLabels[input.foodObjectId] ?? input.foodObjectId
+			},
+			substitutionInputItems: {
+				...state.substitutionInputItems,
+				...(item ? { [input.foodObjectId]: item } : {})
+			},
+			searchSubmitted: false,
+			page: 1
+		};
+	});
 }
 
 /**
@@ -199,6 +297,9 @@ export function addSubstitutionInput(input: SubstitutionInput, label?: string, i
  */
 export function setSubstitutionInputItem(item: FoodObject): void {
 	searchStore.update((state) => {
+		if (state.mode !== "substitution") {
+			return state;
+		}
 		if (!state.substitutionInputs.some((input) => input.foodObjectId === item.id)) {
 			return state;
 		}
@@ -223,6 +324,9 @@ export function setSubstitutionInputItem(item: FoodObject): void {
  */
 export function removeSubstitutionInput(foodObjectId: string): void {
 	searchStore.update((state) => {
+		if (state.mode !== "substitution") {
+			return state;
+		}
 		const substitutionInputs = state.substitutionInputs.filter(
 			(existing) => existing.foodObjectId !== foodObjectId
 		);
@@ -247,16 +351,21 @@ export function updateSubstitutionInput(
 	foodObjectId: string,
 	patch: Partial<Pick<SubstitutionInput, "quantity" | "unit">>
 ): void {
-	searchStore.update((state) => ({
-		...state,
-		substitutionInputs: state.substitutionInputs.map((existing) =>
-			existing.foodObjectId === foodObjectId
-				? { ...existing, ...patch }
-				: existing
-		),
-		searchSubmitted: false,
-		page: 1
-	}));
+	searchStore.update((state) => {
+		if (state.mode !== "substitution") {
+			return state;
+		}
+		return {
+			...state,
+			substitutionInputs: state.substitutionInputs.map((existing) =>
+				existing.foodObjectId === foodObjectId
+					? { ...existing, ...patch }
+					: existing
+			),
+			searchSubmitted: false,
+			page: 1
+		};
+	});
 }
 
 /**
@@ -265,11 +374,9 @@ export function updateSubstitutionInput(
  * @remarks Implements DESIGN-001 SearchView Daily Diet Alternative selection.
  */
 export function setDailyDietId(dailyDietId: string | undefined): void {
-	searchStore.update((state) => ({
-		...state,
-		dailyDietId,
-		page: 1
-	}));
+	searchStore.update((state) =>
+		state.mode === "daily_diet_alternative" ? { ...state, dailyDietId, page: 1 } : state
+	);
 }
 
 /**
@@ -336,6 +443,8 @@ export function buildSearchRequest(state: SearchState): SearchRequest {
  * @remarks Implements DESIGN-001 SearchView query-key derivation (step 6).
  */
 export function searchRequestKey(state: SearchState): string {
+	const inputs = state.mode === "substitution" ? state.substitutionInputs : [];
+	const dailyDietId = state.mode === "daily_diet_alternative" ? state.dailyDietId : undefined;
 	const normalized = {
 		mode: state.mode,
 		query: state.query.trim(),
@@ -347,14 +456,14 @@ export function searchRequestKey(state: SearchState): string {
 				include: filter.include
 			})),
 		page: state.page,
-		inputs: [...state.substitutionInputs]
+		inputs: [...inputs]
 			.sort(compareSubstitutionInput)
 			.map((input) => ({
 				id: input.foodObjectId,
 				quantity: input.quantity,
 				unit: input.unit
 			})),
-		dailyDietId: state.dailyDietId ?? ""
+		dailyDietId: dailyDietId ?? ""
 	};
 
 	return JSON.stringify(normalized);

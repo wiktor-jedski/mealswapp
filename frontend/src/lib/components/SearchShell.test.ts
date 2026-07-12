@@ -130,7 +130,7 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 test("passes submitted search loading state into the autocomplete search bar", () => {
 	expect(source).toContain("let searchInFlight = $state(false)");
 	expect(source).toContain("searching={searchInFlight}");
-	expect(source).toContain('selectFirstOnEnter={activeMode === "substitution"}');
+	expect(source).toContain('selectFirstOnEnter={activeMode === "substitution" || activeMode === "daily_diet"}');
 	expect(source).toContain("onSearchInFlightChange");
 	expect(source).toContain("searchInFlight = searching");
 });
@@ -149,7 +149,7 @@ test("passes mode-specific placeholder guidance to the search input", () => {
 	expect(source).toContain("const searchPlaceholders: Record<SearchMode, string>");
 	expect(source).toContain("catalog: \"Search foods, meals, or ingredients…\"");
 	expect(source).toContain("substitution: \"Search a food to add as a substitution target…\"");
-	expect(source).toContain("daily_diet: \"Search saved daily diets…\"");
+	expect(source).toContain("daily_diet: \"Search meals to add to your day…\"");
 	expect(source).toContain("daily_diet_alternative: \"Search within a saved daily diet or paste its ID…\"");
 	expect(source).toContain("placeholder={searchPlaceholders[activeMode]}");
 });
