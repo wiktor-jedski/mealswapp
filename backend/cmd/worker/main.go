@@ -53,6 +53,7 @@ func main() {
 		ExpectedVersion: cfg.CLPVersion,
 	})
 	processor := worker.NewOptimizationProcessor(store, inputs, solver).WithTelemetry(telemetry)
+	processor.WithAdmissionGate(worker.NewRedisOptimizationAdmissionGate(redisClient, worker.OptimizationAdmissionConfig{}))
 	// Compose the complete processor at the dedicated worker boundary; the API
 	// process never runs optimization synchronously.
 	if err := worker.RunWithProcessor(ctx, cfg, redisClient, processor.ProcessOptimizationJob, processor.Terminal); err != nil {

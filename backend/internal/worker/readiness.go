@@ -12,6 +12,7 @@ import (
 
 // Implements DESIGN-014 UptimeMonitor and DESIGN-004 JobQueueManager worker readiness.
 const (
+	// WorkerHeartbeatKey stores dedicated optimizer worker readiness heartbeats.
 	WorkerHeartbeatKey      = "mealswapp:optimization:worker:heartbeat:v1"
 	workerHeartbeatInterval = 5 * time.Second
 	workerHeartbeatTTL      = 15 * time.Second

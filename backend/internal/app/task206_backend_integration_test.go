@@ -119,7 +119,8 @@ func TestTask206BackendIntegrationGate(t *testing.T) {
 	ctx, cancel = context.WithCancel(context.Background())
 	workerDone = startTask206Worker(t, ctx, cfg, db, redisClient)
 
-	// Two independent submissions are accepted concurrently and both complete.
+	// One independent submission is accepted while a concurrent second request
+	// is rejected before durable publication by the per-user admission gate.
 	concurrentIDs := submitTask206Concurrent(t, server, nominalBody, userCookies, csrfToken, 2)
 	for _, jobID := range concurrentIDs {
 		result := waitTask206Job(t, server, jobID, userCookies, workerDone)
@@ -319,12 +320,12 @@ func createTask206SavedDiet(t *testing.T, server *fiber.App, cookies []*http.Coo
 	return liveUUIDFromData(t, envelope.Data, "id")
 }
 
-func task206OptimizationBody(dietID uuid.UUID, target optimization.MacroTarget, excluded []uuid.UUID) string {
+func task206OptimizationBody(dietID uuid.UUID, _ optimization.MacroTarget, excluded []uuid.UUID) string {
 	ids := make([]string, 0, len(excluded))
 	for _, id := range excluded {
 		ids = append(ids, fmt.Sprintf("%q", id.String()))
 	}
-	return fmt.Sprintf(`{"dailyDietId":%q,"targetMacros":{"protein":%v,"carbohydrates":%v,"fat":%v},"tolerancePercent":0,"excludedMealIds":[%s]}`, dietID.String(), target.Protein, target.Carbohydrates, target.Fat, strings.Join(ids, ","))
+	return fmt.Sprintf(`{"dailyDietId":%q,"tolerancePercent":0,"excludedMealIds":[%s]}`, dietID.String(), strings.Join(ids, ","))
 }
 
 func submitTask206Job(t *testing.T, server *fiber.App, body string, cookies []*http.Cookie, csrfToken, key string) uuid.UUID {
@@ -368,7 +369,8 @@ func submitTask206Concurrent(t *testing.T, server *fiber.App, body string, cooki
 	wait.Wait()
 	close(responses)
 	close(errorsCh)
-	jobIDs := make([]uuid.UUID, 0, count)
+	jobIDs := make([]uuid.UUID, 0, 1)
+	rejected := 0
 	for err := range errorsCh {
 		if err != nil {
 			t.Fatalf("concurrent submission: %v", err)
@@ -377,13 +379,17 @@ func submitTask206Concurrent(t *testing.T, server *fiber.App, body string, cooki
 	for response := range responses {
 		envelope := decodeLiveDailyDietEnvelope(t, response)
 		response.Body.Close()
+		if response.StatusCode == fiber.StatusTooManyRequests && envelope.Error != nil && envelope.Error.Code == "optimization_in_progress" {
+			rejected++
+			continue
+		}
 		if response.StatusCode != fiber.StatusAccepted {
 			t.Fatalf("concurrent submission status = %d body = %+v", response.StatusCode, envelope)
 		}
 		jobIDs = append(jobIDs, liveUUIDFromData(t, envelope.Data, "jobId"))
 	}
-	if len(jobIDs) != count {
-		t.Fatalf("concurrent jobs = %d, want %d", len(jobIDs), count)
+	if len(jobIDs) != 1 || rejected != count-1 {
+		t.Fatalf("concurrent submissions accepted=%d rejected=%d, want 1 and %d", len(jobIDs), rejected, count-1)
 	}
 	return jobIDs
 }
@@ -395,7 +401,7 @@ func startTask206Worker(t *testing.T, ctx context.Context, cfg config.Config, db
 	store := worker.NewRedisOptimizationJobStore(redisClient)
 	inputs := worker.NewRepositoryOptimizationInputLoader(optimization.NewConstraintBuilder(mealRepository, dietRepository))
 	solver := optimization.NewLPSolverWrapper(optimization.CLPConfig{Executable: cfg.CLPExecutable, ExpectedVersion: cfg.CLPVersion})
-	processor := worker.NewOptimizationProcessor(store, inputs, solver)
+	processor := worker.NewOptimizationProcessor(store, inputs, solver).WithAdmissionGate(worker.NewRedisOptimizationAdmissionGate(redisClient, worker.OptimizationAdmissionConfig{}))
 	done := make(chan error, 1)
 	go func() {
 		done <- worker.RunWithProcessor(ctx, cfg, redisClient, processor.Process, processor.Terminal)
@@ -473,7 +479,7 @@ func assertTask206Alternatives(t *testing.T, envelope httpapi.Envelope, mealIDs 
 		if !task206CloseEnough(macros["protein"].(float64), protein) || !task206CloseEnough(macros["carbohydrates"].(float64), carbohydrates) || !task206CloseEnough(macros["fat"].(float64), fat) {
 			t.Fatalf("alternative %d macros = %+v, want %.2f/%.2f/%.2f", index, macros, protein, carbohydrates, fat)
 		}
-		calories := alternative["calories"].(float64)
+		calories := macros["calories"].(float64)
 		if calories < previousCalories-1e-7 {
 			t.Fatalf("calories are not ordered at alternative %d: previous=%v current=%v", index, previousCalories, calories)
 		}

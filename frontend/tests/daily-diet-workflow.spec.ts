@@ -215,6 +215,25 @@ test("authenticated user builds, edits, saves, and selects a two-meal Daily Diet
   expect(axe.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical")).toEqual([]);
 });
 
+test("logout clears the authenticated user's unsaved Daily Diet draft", async ({ page }) => {
+  await stubAuthenticatedDailyDiet(page);
+  await page.route(/\/api\/v1\/auth\/logout$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-logout" }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Daily Diet", exact: true }).click();
+  await selectMeal(page, "apple", "Apple");
+  await selectMeal(page, "oats", "Oats");
+  await expect(page.locator("[data-daily-diet-meal]")).toHaveCount(2);
+
+  const mobileToggle = page.getByLabel("Open activity sidebar");
+  if (await mobileToggle.isVisible()) {
+    await mobileToggle.click();
+  }
+  await page.getByRole("button", { name: "Sign out" }).click();
+
+  await expect(page.locator("[data-daily-diet-meal]")).toHaveCount(0);
+  await expect(page.locator("[data-daily-diet-auth-guidance]")).toContainText("Sign in to build and save a Daily Diet.");
+});
+
 test("anonymous Daily Diet view gives sign-in guidance without loading protected collections", async ({ page }) => {
   let dailyDietRequests = 0;
   await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 401, { status: "error", requestId: "daily-diet-anonymous", error: { category: "auth", code: "anonymous_session", message: "Please sign in.", retryable: false } }));

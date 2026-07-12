@@ -34,7 +34,7 @@ The implementation keeps CLP behind an injectable pure-Go child-process boundary
 - `go test -count=1 ./internal/optimization ./internal/worker ./internal/config` — PASS
 - `go test -race -count=1 ./internal/optimization` — PASS
 - `go vet ./internal/optimization ./internal/worker ./internal/config` — PASS
-- `CGO_ENABLED=0 go build ./cmd/worker` — PASS
+- `CGO_ENABLED=0 go build -o /tmp/mealswapp-worker ./cmd/worker` — PASS
 - `govulncheck@v1.3.0 ./internal/optimization ./internal/worker ./internal/config` — PASS (`No vulnerabilities found`)
 - `docker build --file backend/Dockerfile.worker --tag mealswapp-worker:task-201-review .` — PASS, including pinned CLP installation, `CGO_ENABLED=0` worker build, exact runtime version check, and real CLP integration test
 - `python3 scripts/validate-task-list.py` — PASS

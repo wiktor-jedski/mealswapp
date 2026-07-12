@@ -50,7 +50,6 @@ function jsonResponse(status: number, body: unknown): Response {
 
 const request: DietOptimizationRequest = {
 	dailyDietId: "00000000-0000-0000-0000-000000000001",
-	targetMacros: { protein: 40, carbohydrates: 80, fat: 20 },
 	tolerancePercent: 10,
 	excludedMealIds: []
 };
@@ -80,7 +79,7 @@ test("submit uses generated DTO JSON, cookies, CSRF, and exactly one caller-owne
 	expect(JSON.parse(String(call?.init.body))).toEqual(request);
 });
 
-test("polling decodes completed alternatives and tolerates the backend calorie placement while preserving generated DTO shape", async () => {
+test("polling decodes completed alternatives through the generated nutrition projection", async () => {
 	globalThis.fetch = fetchMock.fetch;
 	const response: OptimizationJobStatusEnvelope = {
 		status: "ok",
@@ -104,6 +103,48 @@ test("polling decodes completed alternatives and tolerates the backend calorie p
 	expect(fetchMock.calls[0]?.init.headers).toEqual({ Accept: "application/json" });
 	expect(job.status).toBe("completed");
 	if (job.status === "completed") expect(job.alternatives[0]?.macros.calories).toBe(640);
+});
+
+test("polling decodes failed jobs with contract-shaped partial alternatives", async () => {
+	globalThis.fetch = fetchMock.fetch;
+	fetchMock.enqueue(jsonResponse(200, {
+		status: "ok",
+		requestId: "optimization-partial",
+		data: {
+			jobId: acknowledgement.data!.jobId,
+			dailyDietId: request.dailyDietId,
+			status: "failed",
+			pollUrl: acknowledgement.data!.pollUrl,
+			createdAt: "2026-07-11T00:00:00Z",
+			alternatives: [{ meals: [{ mealId: "meal-1", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }],
+			failure: { code: "solver_timeout", message: "Optimization timed out." }
+		}
+	}));
+
+	const job = await getOptimizationJob(acknowledgement.data!.jobId);
+
+	expect(job.status).toBe("failed");
+	if (job.status === "failed") expect(job.alternatives?.[0]?.macros.calories).toBe(640);
+});
+
+test("polling rejects the legacy top-level calorie placement", async () => {
+	globalThis.fetch = fetchMock.fetch;
+	fetchMock.enqueue(jsonResponse(200, {
+		status: "ok",
+		requestId: "optimization-legacy",
+		data: {
+			jobId: acknowledgement.data!.jobId,
+			dailyDietId: request.dailyDietId,
+			status: "completed",
+			pollUrl: acknowledgement.data!.pollUrl,
+			createdAt: "2026-07-11T00:00:00Z",
+			startedAt: "2026-07-11T00:00:01Z",
+			finishedAt: "2026-07-11T00:00:02Z",
+			alternatives: [{ meals: [{ mealId: "meal-1", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20 }, calories: 640, similarityScore: 0.8 }]
+		}
+	}));
+
+	await expect(getOptimizationJob(acknowledgement.data!.jobId)).rejects.toBeInstanceOf(OptimizationClientError);
 });
 
 test("polling maps expired and queue responses to safe retryable errors", async () => {

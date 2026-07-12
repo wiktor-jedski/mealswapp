@@ -244,7 +244,6 @@ test("generated daily-diet and optimization contracts enforce protected request 
 	};
 	const optimizationRequest: DietOptimizationRequest = {
 		dailyDietId: "00000000-0000-0000-0000-000000000002",
-		targetMacros: { protein: 120, carbohydrates: 180, fat: 60 },
 		tolerancePercent: 10,
 		 excludedMealIds: []
 	};

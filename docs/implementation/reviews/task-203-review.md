@@ -53,7 +53,7 @@
 - `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./internal/queue ./internal/worker ./internal/optimization ./internal/repository` — pass; real Redis worker/queue tests ran.
 - `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test -race ./internal/queue ./internal/worker` — pass.
 - `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go vet ./internal/queue ./internal/worker ./internal/optimization ./cmd/worker` — pass.
-- `cd backend && CGO_ENABLED=0 GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go build ./cmd/worker` — pass.
+- `cd backend && CGO_ENABLED=0 GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go build -o /tmp/mealswapp-worker ./cmd/worker` — pass.
 - `python3 scripts/validate-task-list.py` — pass.
 - `python3 scripts/validate-traceability.py` — pass.
 - `git diff --check -- backend/cmd/worker backend/internal/worker backend/internal/queue` — pass.

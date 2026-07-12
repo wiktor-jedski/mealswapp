@@ -21,13 +21,21 @@ import (
 
 // Implements DESIGN-004 JobQueueManager.
 const (
-	DefaultStream             = "mealswapp:optimization:jobs:v1"
-	DefaultGroup              = "optimization-workers"
-	DefaultVisibilityTimeout  = 45 * time.Second
-	DefaultReadBlock          = time.Second
-	DefaultBatchSize          = int64(1)
-	DefaultMaxAttempts        = 3
-	DefaultCompletedTTL       = time.Hour
+	// DefaultStream is the Redis Stream used for optimization job delivery.
+	DefaultStream = "mealswapp:optimization:jobs:v1"
+	// DefaultGroup is the Redis consumer group shared by optimization workers.
+	DefaultGroup = "optimization-workers"
+	// DefaultVisibilityTimeout bounds one reserved delivery before reclamation.
+	DefaultVisibilityTimeout = 45 * time.Second
+	// DefaultReadBlock bounds one blocking Redis Stream read.
+	DefaultReadBlock = time.Second
+	// DefaultBatchSize limits each reservation to one optimization job.
+	DefaultBatchSize = int64(1)
+	// DefaultMaxAttempts limits terminal processing attempts per job.
+	DefaultMaxAttempts = 3
+	// DefaultCompletedTTL retains terminal job completion markers.
+	DefaultCompletedTTL = time.Hour
+	// DefaultAttemptTTL retains bounded delivery-attempt counters.
 	DefaultAttemptTTL         = 24 * time.Hour
 	minimumVisibilityTimeout  = 30 * time.Second
 	jobIDField                = "job_id"

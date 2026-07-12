@@ -394,7 +394,6 @@ test("paid fixture completes the keyboard-only meal selection, save, polling, al
 
 	expect(runtime.submissions).toEqual([{
 		dailyDietId: DIET_ID,
-		targetMacros: { protein: 31, carbohydrates: 82, fat: 7.2 },
 		tolerancePercent: 10,
 		excludedMealIds: []
 	}]);

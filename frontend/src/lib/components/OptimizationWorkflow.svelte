@@ -17,9 +17,6 @@
   const controller = createOptimizationController();
   const optimizationStore = controller.store;
   let configuredDietId = $state<string | null>(null);
-  let targetProtein = $state(0);
-  let targetCarbohydrates = $state(0);
-  let targetFat = $state(0);
   let tolerancePercent = $state(10);
   let formError = $state<string | null>(null);
 
@@ -27,7 +24,7 @@
     selectedDietId ? $dailyDietStore.collections.find((diet) => diet.id === selectedDietId) ?? null : null
   );
   let optimizationState = $derived<OptimizationState>($optimizationStore);
-  let activeRequest = $derived(selectedDietId ? buildRequest(selectedDietId, targetProtein, targetCarbohydrates, targetFat, tolerancePercent) : null);
+  let activeRequest = $derived(selectedDietId ? buildRequest(selectedDietId, tolerancePercent) : null);
   let busy = $derived(optimizationState.phase === "submitting" || optimizationState.phase === "queued" || optimizationState.phase === "processing");
   let canSubmit = $derived(Boolean(selectedDiet && executionAllowed && activeRequest && !busy));
 
@@ -36,48 +33,32 @@
     configuredDietId = selectedDietId;
     controller.setDiet(selectedDietId);
     formError = null;
-    if (selectedDiet) {
-      targetProtein = selectedDiet.aggregateMacros.protein;
-      targetCarbohydrates = selectedDiet.aggregateMacros.carbohydrates;
-      targetFat = selectedDiet.aggregateMacros.fat;
-    } else {
-      targetProtein = 0;
-      targetCarbohydrates = 0;
-      targetFat = 0;
-    }
   });
 
   $effect(() => () => controller.dispose());
 
   function buildRequest(
     dailyDietId: string,
-    protein: number,
-    carbohydrates: number,
-    fat: number,
     tolerance: number
   ): DietOptimizationRequest {
     return {
       dailyDietId,
-      targetMacros: { protein, carbohydrates, fat },
       tolerancePercent: tolerance,
       excludedMealIds: []
     };
   }
 
-  function updateNumber(field: "protein" | "carbohydrates" | "fat" | "tolerance", event: Event): void {
+  function updateTolerance(event: Event): void {
     const value = Number((event.currentTarget as HTMLInputElement).value);
-    if (field === "protein") targetProtein = value;
-    if (field === "carbohydrates") targetCarbohydrates = value;
-    if (field === "fat") targetFat = value;
-    if (field === "tolerance") tolerancePercent = value;
+    tolerancePercent = value;
     formError = null;
   }
 
   async function submitOptimization(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (!activeRequest || !canSubmit) return;
-    if ([...Object.values(activeRequest.targetMacros), activeRequest.tolerancePercent].some((value) => !Number.isFinite(value) || value < 0)) {
-      formError = "Targets and tolerance must be zero or greater.";
+    if (!Number.isFinite(activeRequest.tolerancePercent) || activeRequest.tolerancePercent < 0) {
+      formError = "Tolerance must be zero or greater.";
       return;
     }
     if (activeRequest.tolerancePercent > 100) {
@@ -106,7 +87,7 @@
 >
   <div class="grid gap-1">
     <h2 id="optimization-title" class="text-lg font-semibold">Optimize this Daily Diet</h2>
-    <p class="text-sm text-[var(--color-muted)]">Keep the selected diet’s macro targets or adjust them before generating alternatives.</p>
+    <p class="text-sm text-[var(--color-muted)]">Alternatives match the selected diet’s server-calculated macro targets.</p>
   </div>
 
   {#if !selectedDiet}
@@ -116,23 +97,16 @@
   {:else}
     <form class="grid gap-4" aria-label="Daily Diet optimization form" onsubmit={submitOptimization}>
       <fieldset class="grid gap-3">
-        <legend class="font-data text-xs uppercase text-[var(--color-muted)]">Target macros</legend>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <label class="grid gap-1 text-sm" for="optimization-protein">
-            Protein (g)
-            <input id="optimization-protein" class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 font-data text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" step="0.1" value={targetProtein} oninput={(event) => updateNumber("protein", event)} disabled={!executionAllowed || busy} />
-          </label>
-          <label class="grid gap-1 text-sm" for="optimization-carbohydrates">
-            Carbohydrates (g)
-            <input id="optimization-carbohydrates" class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 font-data text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" step="0.1" value={targetCarbohydrates} oninput={(event) => updateNumber("carbohydrates", event)} disabled={!executionAllowed || busy} />
-          </label>
-          <label class="grid gap-1 text-sm" for="optimization-fat">
-            Fat (g)
-            <input id="optimization-fat" class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 font-data text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" step="0.1" value={targetFat} oninput={(event) => updateNumber("fat", event)} disabled={!executionAllowed || busy} />
-          </label>
+        <legend class="font-data text-xs uppercase text-[var(--color-muted)]">Server-derived target macros</legend>
+        <dl class="grid grid-cols-3 gap-3 rounded border border-[var(--color-border)] p-3 font-data text-sm">
+          <div><dt class="text-[var(--color-muted)]">Protein</dt><dd data-optimization-target-protein>{formatNumber(selectedDiet.aggregateMacros.protein)}g</dd></div>
+          <div><dt class="text-[var(--color-muted)]">Carbohydrates</dt><dd data-optimization-target-carbohydrates>{formatNumber(selectedDiet.aggregateMacros.carbohydrates)}g</dd></div>
+          <div><dt class="text-[var(--color-muted)]">Fat</dt><dd data-optimization-target-fat>{formatNumber(selectedDiet.aggregateMacros.fat)}g</dd></div>
+        </dl>
+        <div class="grid gap-3 sm:max-w-xs">
           <label class="grid gap-1 text-sm" for="optimization-tolerance">
             Tolerance (%)
-            <input id="optimization-tolerance" class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 font-data text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" max="100" step="0.1" value={tolerancePercent} oninput={(event) => updateNumber("tolerance", event)} disabled={!executionAllowed || busy} />
+            <input id="optimization-tolerance" class="rounded border border-[#E0E0E0] bg-white px-3 py-2 font-data text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" max="100" step="0.1" value={tolerancePercent} oninput={updateTolerance} disabled={!executionAllowed || busy} />
           </label>
         </div>
       </fieldset>
@@ -150,14 +124,14 @@
       <div class="flex flex-wrap items-center gap-2">
         <button
           type="submit"
-          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!canSubmit}
           data-optimization-submit
         >
           {#if optimizationState.phase === "submitting"}Submitting…{:else if busy}Optimization in progress…{:else}Generate alternatives{/if}
         </button>
         {#if optimizationState.retryMode !== "none" && optimizationState.phase !== "completed"}
-          <button type="button" class="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void retryOptimization()} data-optimization-retry>
+          <button type="button" class="rounded border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void retryOptimization()} data-optimization-retry>
             Try again
           </button>
         {/if}
@@ -185,7 +159,7 @@
       <div class="grid gap-2 rounded border border-[var(--color-error)] p-3" role="alert" data-optimization-error>
         <p class="font-medium">{optimizationState.failure?.message ?? "Optimization could not be completed."}</p>
         {#if optimizationState.failure?.code === "solver_infeasible"}
-          <p class="text-sm text-[var(--color-muted)]">Try increasing the tolerance or changing the macro targets.</p>
+          <p class="text-sm text-[var(--color-muted)]">Try increasing the tolerance or editing the saved Daily Diet.</p>
         {/if}
       </div>
     {/if}
@@ -216,7 +190,7 @@
           {/each}
         </ol>
         {#if optimizationState.phase === "completed"}
-          <button type="button" class="justify-self-start rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => activeRequest && void controller.submit(activeRequest)} data-optimization-new>
+          <button type="button" class="justify-self-start rounded border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => activeRequest && void controller.submit(activeRequest)} data-optimization-new>
             Generate fresh alternatives
           </button>
         {/if}

@@ -610,6 +610,8 @@ paths:
           $ref: "#/components/responses/Error"
         "422":
           $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/Error"
         "503":
           $ref: "#/components/responses/Error"
   # Implements DESIGN-004 JobStatusTracker polling contract.
@@ -1337,41 +1339,21 @@ components:
       type: string
       enum: [failed_validation, solver_timeout, solver_infeasible, queue_unavailable, worker_crash, result_expired]
       description: Stable safe failure code; internal exception text and infrastructure details are never returned.
-    MacroTarget:
-      type: object
-      additionalProperties: false
-      required: [protein, carbohydrates, fat]
-      description: Client-requested optimization target constraints, not server-reported current-diet totals.
-      properties:
-        protein:
-          type: number
-          minimum: 0
-          maximum: 1000000
-        carbohydrates:
-          type: number
-          minimum: 0
-          maximum: 1000000
-        fat:
-          type: number
-          minimum: 0
-          maximum: 1000000
     DietOptimizationRequest:
       type: object
       additionalProperties: false
-      required: [dailyDietId, targetMacros, tolerancePercent, excludedMealIds]
-      description: Optimization constraints for one server-owned saved daily diet. Original meal data and current aggregate totals are loaded and calculated by the server.
+      required: [dailyDietId, tolerancePercent, excludedMealIds]
+      description: Optimization constraints for one server-owned saved daily diet. Original meal data and authoritative aggregate targets are loaded and calculated by the server.
       properties:
         dailyDietId:
           type: string
           format: uuid
-        targetMacros:
-          $ref: "#/components/schemas/MacroTarget"
         tolerancePercent:
           type: number
           minimum: 0
           maximum: 100
           multipleOf: 0.1
-          description: Allowed percentage deviation around each requested macro target.
+          description: Allowed percentage deviation around each server-derived saved-diet macro target.
         excludedMealIds:
           type: array
           maxItems: 100

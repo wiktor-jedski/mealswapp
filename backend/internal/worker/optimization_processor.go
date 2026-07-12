@@ -22,6 +22,12 @@ const (
 	optimizationJobKeyPrefix     = "mealswapp:optimization:job:v1:"
 	optimizationExpiredKeyPrefix = "mealswapp:optimization:expired:v1:"
 	optimizationJobTTL           = time.Hour
+	// OptimizationJobDeadline bounds repository loading and all alternative
+	// solver attempts under one ownership-safe processing window.
+	OptimizationJobDeadline = 30 * time.Second
+	// OptimizationFinalizationTimeout bounds terminal timeout publication after
+	// the processing context has expired.
+	OptimizationFinalizationTimeout = 5 * time.Second
 )
 
 // OptimizationJobStatus is the worker-visible terminal state vocabulary.
@@ -30,11 +36,16 @@ type OptimizationJobStatus string
 
 // Implements DESIGN-004 JobStatusTracker.
 const (
-	OptimizationJobQueued     OptimizationJobStatus = "queued"
+	// OptimizationJobQueued identifies a job awaiting worker reservation.
+	OptimizationJobQueued OptimizationJobStatus = "queued"
+	// OptimizationJobProcessing identifies a job owned by an active worker.
 	OptimizationJobProcessing OptimizationJobStatus = "processing"
-	OptimizationJobCompleted  OptimizationJobStatus = "completed"
-	OptimizationJobFailed     OptimizationJobStatus = "failed"
-	OptimizationJobCancelled  OptimizationJobStatus = "cancelled"
+	// OptimizationJobCompleted identifies a job with validated alternatives.
+	OptimizationJobCompleted OptimizationJobStatus = "completed"
+	// OptimizationJobFailed identifies a job with a safe terminal failure.
+	OptimizationJobFailed OptimizationJobStatus = "failed"
+	// OptimizationJobCancelled identifies a job cancelled before completion.
+	OptimizationJobCancelled OptimizationJobStatus = "cancelled"
 )
 
 // OptimizationJobFailure contains only a stable user-safe failure code and
@@ -366,16 +377,25 @@ type OptimizationSolver interface {
 // DiversityPenalizer, SolutionValidator, and JobStatusTracker.
 // Implements DESIGN-004 JobQueueManager.
 type OptimizationProcessor struct {
-	jobs      OptimizationJobStore
-	inputs    OptimizationInputLoader
-	solver    OptimizationSolver
-	telemetry *observability.OptimizationTelemetry
+	jobs                OptimizationJobStore
+	inputs              OptimizationInputLoader
+	solver              OptimizationSolver
+	telemetry           *observability.OptimizationTelemetry
+	jobDeadline         time.Duration
+	finalizationTimeout time.Duration
+	admission           OptimizationAdmissionGate
 }
 
 // NewOptimizationProcessor constructs a dedicated worker processor.
 // Implements DESIGN-004 JobQueueManager.
 func NewOptimizationProcessor(jobs OptimizationJobStore, inputs OptimizationInputLoader, solver OptimizationSolver) *OptimizationProcessor {
-	return &OptimizationProcessor{jobs: jobs, inputs: inputs, solver: solver}
+	return &OptimizationProcessor{
+		jobs:                jobs,
+		inputs:              inputs,
+		solver:              solver,
+		jobDeadline:         OptimizationJobDeadline,
+		finalizationTimeout: OptimizationFinalizationTimeout,
+	}
 }
 
 // WithTelemetry attaches worker and solver telemetry to the dedicated worker
@@ -384,6 +404,15 @@ func NewOptimizationProcessor(jobs OptimizationJobStore, inputs OptimizationInpu
 func (p *OptimizationProcessor) WithTelemetry(telemetry *observability.OptimizationTelemetry) *OptimizationProcessor {
 	if p != nil {
 		p.telemetry = telemetry
+	}
+	return p
+}
+
+// WithAdmissionGate releases per-user capacity after authoritative terminal publication.
+// Implements DESIGN-004 JobStatusTracker.
+func (p *OptimizationProcessor) WithAdmissionGate(admission OptimizationAdmissionGate) *OptimizationProcessor {
+	if p != nil {
+		p.admission = admission
 	}
 	return p
 }
@@ -403,40 +432,47 @@ func (p *OptimizationProcessor) ProcessOptimizationJob(ctx context.Context, deli
 	if err != nil {
 		return fmt.Errorf("optimization job ID is invalid: %w", err)
 	}
-	job, err := p.jobs.Load(ctx, jobID)
+	jobDeadline := p.jobDeadline
+	if jobDeadline <= 0 {
+		jobDeadline = OptimizationJobDeadline
+	}
+	processingCtx, cancelProcessing := context.WithTimeout(ctx, jobDeadline)
+	defer cancelProcessing()
+
+	job, err := p.jobs.Load(processingCtx, jobID)
 	if err != nil {
 		return err
 	}
 	if terminalJobStatus(job.Status) {
-		return nil
+		return p.releaseAdmission(processingCtx, job.UserID, job.JobID)
 	}
-	if err := ctx.Err(); err != nil {
+	if err := processingCtx.Err(); err != nil {
 		return err
 	}
-	job, err = p.jobs.MarkProcessing(ctx, jobID, time.Now())
+	job, err = p.jobs.MarkProcessing(processingCtx, jobID, time.Now())
 	if err != nil {
-		return err
+		return p.handleProcessingError(ctx, processingCtx, job.UserID, jobID, nil, err)
 	}
 	if terminalJobStatus(job.Status) {
-		return nil
+		return p.releaseAdmission(processingCtx, job.UserID, job.JobID)
 	}
 	if p.telemetry != nil {
 		p.telemetry.WorkerStarted(ctx)
 		defer p.telemetry.WorkerFinished(ctx)
 	}
 
-	inputs, err := p.inputs.Load(ctx, job)
+	inputs, err := p.inputs.Load(processingCtx, job)
 	if err != nil {
-		return p.handleProcessingError(ctx, jobID, nil, err)
+		return p.handleProcessingError(ctx, processingCtx, job.UserID, jobID, nil, err)
 	}
 	model, err := optimization.BuildConstraints(inputs.Request, inputs.Meals)
 	if err != nil {
-		return p.handleProcessingError(ctx, jobID, nil, err)
+		return p.handleProcessingError(ctx, processingCtx, job.UserID, jobID, nil, err)
 	}
 	if _, err := optimization.BuildObjective(model.Variables); err != nil {
-		return p.handleProcessingError(ctx, jobID, nil, err)
+		return p.handleProcessingError(ctx, processingCtx, job.UserID, jobID, nil, err)
 	}
-	alternatives, err := optimization.GenerateValidatedAlternatives(ctx, inputs.Request, inputs.Meals, optimization.MaxAlternativeCount, func(solveCtx context.Context, nextModel optimization.LPModel, objective optimization.ObjectiveFunction) (optimization.LPSolution, error) {
+	alternatives, err := optimization.GenerateValidatedAlternatives(processingCtx, inputs.Request, inputs.Meals, optimization.MaxAlternativeCount, func(solveCtx context.Context, nextModel optimization.LPModel, objective optimization.ObjectiveFunction) (optimization.LPSolution, error) {
 		started := time.Now()
 		solution, solveErr := p.solver.Solve(solveCtx, nextModel, objective)
 		if p.telemetry != nil {
@@ -445,16 +481,22 @@ func (p *OptimizationProcessor) ProcessOptimizationJob(ctx context.Context, deli
 		return solution, solveErr
 	})
 	if err != nil {
-		return p.handleProcessingError(ctx, jobID, alternatives, err)
+		return p.handleProcessingError(ctx, processingCtx, job.UserID, jobID, alternatives, err)
 	}
 	if len(alternatives) == 0 {
-		return p.publishFailure(ctx, jobID, alternatives, optimization.FailureCodeValidation)
+		return p.publishFailure(processingCtx, job.UserID, jobID, alternatives, optimization.FailureCodeValidation)
 	}
-	err = p.jobs.PublishCompleted(ctx, jobID, alternatives, time.Now())
+	if err := processingCtx.Err(); err != nil {
+		return p.handleProcessingError(ctx, processingCtx, job.UserID, jobID, alternatives, err)
+	}
+	err = p.jobs.PublishCompleted(processingCtx, jobID, alternatives, time.Now())
 	if err == nil && p.telemetry != nil {
 		p.telemetry.JobOutcome(ctx, "completed")
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return p.releaseAdmission(processingCtx, job.UserID, jobID)
 }
 
 // Process is a concise queue.Processor adapter for the orchestration method.
@@ -476,6 +518,10 @@ func (p *OptimizationProcessor) Terminal(ctx context.Context, delivery queue.Job
 	if err != nil {
 		return err
 	}
+	job, err := p.jobs.Load(ctx, jobID)
+	if err != nil {
+		return err
+	}
 	err = p.jobs.PublishFailed(ctx, jobID, nil, OptimizationJobFailure{
 		Code:    optimization.FailureCodeWorkerCrash,
 		Message: safeFailureMessage(optimization.FailureCodeWorkerCrash),
@@ -483,14 +529,26 @@ func (p *OptimizationProcessor) Terminal(ctx context.Context, delivery queue.Job
 	if err == nil && p.telemetry != nil {
 		p.telemetry.JobOutcome(ctx, "worker_crash")
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return p.releaseAdmission(ctx, job.UserID, jobID)
 }
 
 // handleProcessingError maps terminal solver/validation failures to safe
 // publication while leaving infrastructure failures pending for retry.
 // Implements DESIGN-004 JobQueueManager retry and JobStatusTracker.
-func (p *OptimizationProcessor) handleProcessingError(ctx context.Context, jobID uuid.UUID, alternatives []optimization.DietAlternative, err error) error {
-	if ctx.Err() != nil || errors.Is(err, queue.ErrQueueUnavailable) {
+func (p *OptimizationProcessor) handleProcessingError(parentCtx, processingCtx context.Context, userID, jobID uuid.UUID, alternatives []optimization.DietAlternative, err error) error {
+	if errors.Is(processingCtx.Err(), context.DeadlineExceeded) && parentCtx.Err() == nil {
+		finalizationTimeout := p.finalizationTimeout
+		if finalizationTimeout <= 0 {
+			finalizationTimeout = OptimizationFinalizationTimeout
+		}
+		finalizationCtx, cancelFinalization := context.WithTimeout(context.WithoutCancel(parentCtx), finalizationTimeout)
+		defer cancelFinalization()
+		return p.publishFailure(finalizationCtx, userID, jobID, alternatives, optimization.FailureCodeSolverTimeout)
+	}
+	if parentCtx.Err() != nil || errors.Is(err, queue.ErrQueueUnavailable) {
 		return err
 	}
 	code := optimization.FailureCodeOf(err)
@@ -500,12 +558,12 @@ func (p *OptimizationProcessor) handleProcessingError(ctx context.Context, jobID
 	if code != optimization.FailureCodeValidation && code != optimization.FailureCodeSolverTimeout && code != optimization.FailureCodeSolverInfeasible {
 		return err
 	}
-	return p.publishFailure(ctx, jobID, alternatives, code)
+	return p.publishFailure(processingCtx, userID, jobID, alternatives, code)
 }
 
 // publishFailure writes a safe terminal failure before queue acknowledgement.
 // Implements DESIGN-004 JobStatusTracker.
-func (p *OptimizationProcessor) publishFailure(ctx context.Context, jobID uuid.UUID, alternatives []optimization.DietAlternative, code optimization.OptimizationFailureCode) error {
+func (p *OptimizationProcessor) publishFailure(ctx context.Context, userID, jobID uuid.UUID, alternatives []optimization.DietAlternative, code optimization.OptimizationFailureCode) error {
 	err := p.jobs.PublishFailed(ctx, jobID, alternatives, OptimizationJobFailure{
 		Code:    code,
 		Message: safeFailureMessage(code),
@@ -513,7 +571,19 @@ func (p *OptimizationProcessor) publishFailure(ctx context.Context, jobID uuid.U
 	if err == nil && p.telemetry != nil {
 		p.telemetry.JobOutcome(ctx, telemetryStatusForFailure(code))
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return p.releaseAdmission(ctx, userID, jobID)
+}
+
+// releaseAdmission returns terminal per-user capacity when a gate is configured.
+// Implements DESIGN-004 JobStatusTracker.
+func (p *OptimizationProcessor) releaseAdmission(ctx context.Context, userID, jobID uuid.UUID) error {
+	if p == nil || p.admission == nil {
+		return nil
+	}
+	return p.admission.Release(ctx, userID, jobID)
 }
 
 // solverTelemetryStatus maps solver errors to a fixed metric status.

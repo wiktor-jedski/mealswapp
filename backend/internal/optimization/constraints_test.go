@@ -2,6 +2,7 @@
 package optimization
 
 import (
+	"context"
 	"math"
 	"reflect"
 	"testing"
@@ -91,6 +92,103 @@ func TestBuildConstraintsDerivesTargetFromPersistedOriginalDiet(t *testing.T) {
 	assertConstraintBounds(t, model.Constraints[0], 35, 35)
 	assertConstraintBounds(t, model.Constraints[1], 35, 35)
 	assertConstraintBounds(t, model.Constraints[2], 7, 7)
+}
+
+func TestBuildConstraintsNormalizesImperialOriginalDietQuantities(t *testing.T) {
+	tests := []struct {
+		name           string
+		state          repository.PhysicalState
+		metricQuantity float64
+		metricUnit     string
+		imperialUnit   string
+	}{
+		{name: "solid ounces", state: repository.PhysicalStateSolid, metricQuantity: 28.3495, metricUnit: "g", imperialUnit: "oz"},
+		{name: "liquid fluid ounces", state: repository.PhysicalStateLiquid, metricQuantity: 29.5735, metricUnit: "ml", imperialUnit: "fl_oz"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			meal := repository.MealEntity{
+				ID:            constraintMealA,
+				PhysicalState: tt.state,
+				MacrosPer100:  repository.MacroValues{Protein: 20, Carbohydrates: 10, Fat: 2},
+			}
+			request := func(quantity float64, unit string) DietOptimizationRequest {
+				return DietOptimizationRequest{
+					OriginalDiet: repository.SavedDiet{Entries: []repository.SavedDietMealEntry{{
+						MealID: constraintMealA, Quantity: quantity, Unit: unit, Position: 0,
+					}}},
+					TolerancePercent: 0,
+					MaxQuantity:      1000,
+				}
+			}
+
+			metricModel, err := BuildConstraints(request(tt.metricQuantity, tt.metricUnit), []repository.MealEntity{meal})
+			if err != nil {
+				t.Fatalf("BuildConstraints(metric) error = %v", err)
+			}
+			imperialModel, err := BuildConstraints(request(1, tt.imperialUnit), []repository.MealEntity{meal})
+			if err != nil {
+				t.Fatalf("BuildConstraints(imperial) error = %v", err)
+			}
+			if !reflect.DeepEqual(imperialModel, metricModel) {
+				t.Fatalf("imperial model differs from equivalent metric model:\nimperial=%+v\nmetric=%+v", imperialModel, metricModel)
+			}
+		})
+	}
+}
+
+func TestBuildConstraintsRejectsOriginalDietUnitsForWrongPhysicalState(t *testing.T) {
+	tests := []struct {
+		name string
+		meal repository.MealEntity
+		unit string
+	}{
+		{
+			name: "solid fluid ounces",
+			meal: repository.MealEntity{ID: constraintMealA, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}},
+			unit: "fl_oz",
+		},
+		{
+			name: "liquid ounces",
+			meal: repository.MealEntity{ID: constraintMealA, PhysicalState: repository.PhysicalStateLiquid, MacrosPer100: repository.MacroValues{Protein: 10}},
+			unit: "oz",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := BuildConstraints(DietOptimizationRequest{
+				OriginalDiet: repository.SavedDiet{Entries: []repository.SavedDietMealEntry{{
+					MealID: constraintMealA, Quantity: 1, Unit: tt.unit,
+				}}},
+			}, []repository.MealEntity{tt.meal})
+			if err == nil {
+				t.Fatal("BuildConstraints() accepted a unit incompatible with the meal physical state")
+			}
+		})
+	}
+}
+
+func TestConstraintBuilderLoadsLargeCatalogInBoundedPages(t *testing.T) {
+	userID, dietID := uuid.New(), uuid.New()
+	meals := make([]repository.MealEntity, 201)
+	for index := range meals {
+		meals[index] = repository.MealEntity{ID: uuid.New(), MacrosPer100: repository.MacroValues{Protein: 1}}
+	}
+	mealRepo := &pagedConstraintMealRepository{meals: meals}
+	dietRepo := &constraintDietRepository{diet: repository.SavedDiet{
+		ID: dietID, UserID: userID,
+		Entries: []repository.SavedDietMealEntry{{MealID: meals[0].ID, Quantity: 100, Unit: "g"}},
+	}}
+
+	inputs, err := NewConstraintBuilder(mealRepo, dietRepo).LoadFromSavedDiet(context.Background(), userID, dietID, DietOptimizationRequest{})
+	if err != nil {
+		t.Fatalf("LoadFromSavedDiet() error = %v", err)
+	}
+	if len(inputs.Meals) != 201 || mealRepo.searchCalls != 3 || mealRepo.getCalls != 1 {
+		t.Fatalf("loaded=%d searchCalls=%d getCalls=%d, want 201, 3, 1", len(inputs.Meals), mealRepo.searchCalls, mealRepo.getCalls)
+	}
 }
 
 func TestBuildConstraintsAddsDeterministicAlternativeConstraint(t *testing.T) {
@@ -294,3 +392,57 @@ func matrixCanReachLowerBounds(model LPModel) bool {
 	}
 	return true
 }
+
+type pagedConstraintMealRepository struct {
+	meals                 []repository.MealEntity
+	searchCalls, getCalls int
+}
+
+func (r *pagedConstraintMealRepository) GetByID(_ context.Context, id uuid.UUID, _ repository.RepositoryContext) (repository.MealEntity, error) {
+	r.getCalls++
+	for _, meal := range r.meals {
+		if meal.ID == id {
+			return meal, nil
+		}
+	}
+	return repository.MealEntity{}, repository.NewError(repository.ErrorKindNotFound, "missing meal", nil)
+}
+
+func (r *pagedConstraintMealRepository) Search(_ context.Context, query repository.RepositoryQuery) ([]repository.MealEntity, int, error) {
+	r.searchCalls++
+	if query.Offset >= len(r.meals) {
+		return []repository.MealEntity{}, len(r.meals), nil
+	}
+	end := query.Offset + query.Limit
+	if end > len(r.meals) {
+		end = len(r.meals)
+	}
+	return append([]repository.MealEntity(nil), r.meals[query.Offset:end]...), len(r.meals), nil
+}
+
+func (*pagedConstraintMealRepository) CalculateMacros(context.Context, uuid.UUID) (repository.MacroValues, error) {
+	return repository.MacroValues{}, nil
+}
+func (*pagedConstraintMealRepository) Create(context.Context, repository.MealEntity) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (*pagedConstraintMealRepository) Update(context.Context, repository.MealEntity) error {
+	return nil
+}
+func (*pagedConstraintMealRepository) Delete(context.Context, uuid.UUID) error { return nil }
+
+type constraintDietRepository struct{ diet repository.SavedDiet }
+
+func (*constraintDietRepository) Create(context.Context, uuid.UUID, repository.SavedDiet) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (r *constraintDietRepository) Get(context.Context, uuid.UUID, uuid.UUID) (repository.SavedDiet, error) {
+	return r.diet, nil
+}
+func (*constraintDietRepository) List(context.Context, uuid.UUID) ([]repository.SavedDiet, error) {
+	return nil, nil
+}
+func (*constraintDietRepository) Replace(context.Context, uuid.UUID, repository.SavedDiet) error {
+	return nil
+}
+func (*constraintDietRepository) Delete(context.Context, uuid.UUID, uuid.UUID) error { return nil }

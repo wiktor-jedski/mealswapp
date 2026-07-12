@@ -36,6 +36,17 @@ export function displayUnitForBasis(macroBasis: MacroBasis, unitSystem: UnitSyst
 }
 
 /**
+ * Returns the editable display quantity equivalent to the 100 g/ml nutrition basis.
+ *
+ * @remarks Implements DESIGN-001 SearchView Daily Diet draft initialization.
+ */
+export function defaultDisplayQuantity(macroBasis: MacroBasis, unitSystem: UnitSystem): number {
+	const baseUnit: SubstitutionUnit = macroBasis === "100ml" ? "ml" : "g";
+	const displayUnit = displayUnitForBasis(macroBasis, unitSystem);
+	return normalizeDisplayQuantity(convertQuantity(100, baseUnit, displayUnit));
+}
+
+/**
  * User-facing label for generated substitution units.
  *
  * @remarks Implements DESIGN-001 SearchView human-readable unit labels.

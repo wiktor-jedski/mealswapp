@@ -30,7 +30,7 @@ func TestOptimizationHTTPSubmissionAndPolling(t *testing.T) {
 	queue := &optimizationHTTPQueue{}
 	diets := &optimizationHTTPDiets{dietID: dietID, ownerID: userID}
 	telemetrySink := &observability.MemorySink{}
-	controller := NewOptimizationController(store, queue, diets, &optimizationHTTPEntitlements{allowed: true}, newOptimizationHTTPIdempotencyStore()).WithTelemetry(observability.NewOptimizationTelemetry(telemetrySink, telemetrySink, 1))
+	controller := NewOptimizationController(store, queue, diets, &optimizationHTTPEntitlements{allowed: true}, newOptimizationHTTPIdempotencyStore(), &optimizationHTTPAdmission{}).WithTelemetry(observability.NewOptimizationTelemetry(telemetrySink, telemetrySink, 1))
 	authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: controller.Routes()})
 	csrf, cookies := fetchCSRFToken(t, app, cookies...)
@@ -48,7 +48,7 @@ func TestOptimizationHTTPSubmissionAndPolling(t *testing.T) {
 		t.Fatalf("missing accepted optimization metric: %+v", telemetrySink.Metrics)
 	}
 	job := store.jobs[jobID]
-	if job.UserID != userID || job.DailyDietID != dietID || job.TargetMacros.Protein != 20 || job.Status != worker.OptimizationJobQueued {
+	if job.UserID != userID || job.DailyDietID != dietID || job.TolerancePercent != 20 || job.Status != worker.OptimizationJobQueued {
 		t.Fatalf("saved job = %+v, want server-owned queued request", job)
 	}
 	if got := response.Header.Get(fiber.HeaderLocation); got != optimizationPollPath+jobID.String() {
@@ -73,6 +73,14 @@ func TestOptimizationHTTPSubmissionAndPolling(t *testing.T) {
 	poll = optimizationHTTPPoll(t, app, jobID, cookies)
 	if poll.StatusCode != fiber.StatusOK || poll.Data["status"] != string(worker.OptimizationJobCompleted) || len(poll.Data["alternatives"].([]any)) != 1 {
 		t.Fatalf("completed poll = %d %+v", poll.StatusCode, poll.Data)
+	}
+	alternative := poll.Data["alternatives"].([]any)[0].(map[string]any)
+	macros := alternative["macros"].(map[string]any)
+	if macros["calories"] != float64(290) {
+		t.Fatalf("completed alternative macros = %+v, want nested calories 290", macros)
+	}
+	if _, exists := alternative["calories"]; exists {
+		t.Fatalf("completed alternative = %+v, must not expose legacy top-level calories", alternative)
 	}
 
 	job.Status = worker.OptimizationJobFailed
@@ -101,7 +109,7 @@ func TestOptimizationHTTPEntitlementAndOwnershipGuards(t *testing.T) {
 	queue := &optimizationHTTPQueue{}
 	store := newOptimizationHTTPJobStore()
 	diets := &optimizationHTTPDiets{dietID: dietID}
-	controller := NewOptimizationController(store, queue, diets, &optimizationHTTPEntitlements{}, newOptimizationHTTPIdempotencyStore())
+	controller := NewOptimizationController(store, queue, diets, &optimizationHTTPEntitlements{}, newOptimizationHTTPIdempotencyStore(), &optimizationHTTPAdmission{})
 	freeUser := uuid.New()
 	authenticator, cookies := testJWTAuth(t, testConfig(), freeUser, nil)
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: controller.Routes()})
@@ -127,12 +135,59 @@ func TestOptimizationHTTPAnonymousSubmissionIsDeniedBeforeSideEffects(t *testing
 	queue := &optimizationHTTPQueue{}
 	store := newOptimizationHTTPJobStore()
 	dietID := uuid.New()
-	controller := NewOptimizationController(store, queue, &optimizationHTTPDiets{dietID: dietID}, &optimizationHTTPEntitlements{allowed: true}, newOptimizationHTTPIdempotencyStore())
+	controller := NewOptimizationController(store, queue, &optimizationHTTPDiets{dietID: dietID}, &optimizationHTTPEntitlements{allowed: true}, newOptimizationHTTPIdempotencyStore(), &optimizationHTTPAdmission{})
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), CSRF: NewCSRFManager(testConfig(), nil), Routes: controller.Routes()})
 
 	response := optimizationHTTPSubmit(t, app, optimizationHTTPBody(dietID, 20), nil, "", "anonymous-key")
 	if response.StatusCode != fiber.StatusUnauthorized || queue.calls != 0 || len(store.jobs) != 0 {
 		t.Fatalf("anonymous submit status=%d queue=%d jobs=%d, want 401 before side effects", response.StatusCode, queue.calls, len(store.jobs))
+	}
+}
+
+func TestOptimizationHTTPAdmissionRejectsBeforeDurableSideEffects(t *testing.T) {
+	tests := []struct {
+		name, code string
+		status     worker.OptimizationAdmissionStatus
+	}{
+		{name: "active job", code: "optimization_in_progress", status: worker.OptimizationAdmissionActive},
+		{name: "hourly rate", code: "optimization_rate_limited", status: worker.OptimizationAdmissionRateLimited},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userID, dietID := uuid.New(), uuid.New()
+			store := newOptimizationHTTPJobStore()
+			queue := &optimizationHTTPQueue{}
+			idempotency := newOptimizationHTTPIdempotencyStore()
+			admission := &optimizationHTTPAdmission{decision: worker.OptimizationAdmissionDecision{Status: tt.status, RetryAfter: time.Minute}}
+			controller := NewOptimizationController(store, queue, &optimizationHTTPDiets{dietID: dietID, ownerID: userID}, &optimizationHTTPEntitlements{allowed: true}, idempotency, admission)
+			authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
+			app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: controller.Routes()})
+			csrf, cookies := fetchCSRFToken(t, app, cookies...)
+
+			response := optimizationHTTPSubmit(t, app, optimizationHTTPBody(dietID, 20), cookies, csrf, "admission-key-1")
+			if response.StatusCode != fiber.StatusTooManyRequests || response.Error == nil || response.Error.Code != tt.code {
+				t.Fatalf("response = %d %+v, want 429 %s", response.StatusCode, response.Error, tt.code)
+			}
+			if response.Header.Get(fiber.HeaderRetryAfter) == "" || queue.calls != 0 || len(store.jobs) != 0 || len(idempotency.records) != 0 {
+				t.Fatalf("rejected side effects retry=%q queue=%d jobs=%d idempotency=%d", response.Header.Get(fiber.HeaderRetryAfter), queue.calls, len(store.jobs), len(idempotency.records))
+			}
+		})
+	}
+}
+
+func TestOptimizationHTTPRejectsClientAuthoredTargetMacros(t *testing.T) {
+	userID, dietID := uuid.New(), uuid.New()
+	store := newOptimizationHTTPJobStore()
+	queue := &optimizationHTTPQueue{}
+	controller := NewOptimizationController(store, queue, &optimizationHTTPDiets{dietID: dietID, ownerID: userID}, &optimizationHTTPEntitlements{allowed: true}, newOptimizationHTTPIdempotencyStore(), &optimizationHTTPAdmission{})
+	authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: controller.Routes()})
+	csrf, cookies := fetchCSRFToken(t, app, cookies...)
+	body := `{"dailyDietId":"` + dietID.String() + `","targetMacros":{"protein":40,"carbohydrates":80,"fat":20},"tolerancePercent":10,"excludedMealIds":[]}`
+
+	response := optimizationHTTPSubmit(t, app, body, cookies, csrf, "legacy-target-key")
+	if response.StatusCode != fiber.StatusBadRequest || queue.calls != 0 || len(store.jobs) != 0 {
+		t.Fatalf("legacy target response=%d queue=%d jobs=%d, want side-effect-free 400", response.StatusCode, queue.calls, len(store.jobs))
 	}
 }
 
@@ -144,7 +199,7 @@ func TestOptimizationHTTPIdempotencyAndQueueFailure(t *testing.T) {
 	store := newOptimizationHTTPJobStore()
 	queue := &optimizationHTTPQueue{}
 	idempotency := newOptimizationHTTPIdempotencyStore()
-	controller := NewOptimizationController(store, queue, &optimizationHTTPDiets{dietID: dietID, ownerID: userID}, &optimizationHTTPEntitlements{allowed: true}, idempotency)
+	controller := NewOptimizationController(store, queue, &optimizationHTTPDiets{dietID: dietID, ownerID: userID}, &optimizationHTTPEntitlements{allowed: true}, idempotency, &optimizationHTTPAdmission{})
 	authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: controller.Routes()})
 	csrf, cookies := fetchCSRFToken(t, app, cookies...)
@@ -169,7 +224,7 @@ func TestOptimizationHTTPIdempotencyAndQueueFailure(t *testing.T) {
 	if reordered.StatusCode != fiber.StatusConflict || queue.calls != 2 {
 		t.Fatalf("reordered-body status=%d queueCalls=%d, want 409 and no replay publication", reordered.StatusCode, queue.calls)
 	}
-	syntacticallyChanged := `{"excludedMealIds":["` + firstExcluded.String() + `","` + secondExcluded.String() + `"],"dailyDietId":"` + dietID.String() + `","targetMacros":{"fat":10,"carbohydrates":30,"protein":22},"tolerancePercent":5}`
+	syntacticallyChanged := `{"excludedMealIds":["` + firstExcluded.String() + `","` + secondExcluded.String() + `"],"dailyDietId":"` + dietID.String() + `","tolerancePercent":22}`
 	if changed := optimizationHTTPSubmit(t, app, syntacticallyChanged, cookies, csrf, "ordered-key-1"); changed.StatusCode != fiber.StatusConflict || queue.calls != 2 {
 		t.Fatalf("syntactically changed body status=%d queueCalls=%d, want 409 and no replay publication", changed.StatusCode, queue.calls)
 	}
@@ -198,7 +253,7 @@ func TestOptimizationHTTPConcurrentControllersClaimOneJob(t *testing.T) {
 
 	buildApp := func() (*fiber.App, []*http.Cookie, string) {
 		authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
-		app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: NewOptimizationController(store, queue, diets, &optimizationHTTPEntitlements{allowed: true}, idempotency).Routes()})
+		app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, CSRF: NewCSRFManager(testConfig(), nil), Routes: NewOptimizationController(store, queue, diets, &optimizationHTTPEntitlements{allowed: true}, idempotency, &optimizationHTTPAdmission{}).Routes()})
 		csrf, cookies := fetchCSRFToken(t, app, cookies...)
 		return app, cookies, csrf
 	}
@@ -237,7 +292,7 @@ func TestOptimizationHTTPExpiryKeepsOwnerIsolation(t *testing.T) {
 	owner, other, jobID := uuid.New(), uuid.New(), uuid.New()
 	store := newOptimizationHTTPJobStore()
 	store.expired[jobID] = worker.OptimizationJobExpiredError{UserID: owner}
-	controller := NewOptimizationController(store, nil, nil, nil, nil)
+	controller := NewOptimizationController(store, nil, nil, nil, nil, nil)
 	ownerAuth, ownerCookies := testJWTAuth(t, testConfig(), owner, nil)
 	ownerApp := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: ownerAuth, Routes: controller.Routes()})
 	ownerPoll := optimizationHTTPPoll(t, ownerApp, jobID, ownerCookies)
@@ -272,7 +327,7 @@ func TestOptimizationHTTPFailedPollingUsesSafeSolverMessages(t *testing.T) {
 				JobID: jobID, UserID: userID, DailyDietID: uuid.New(), Status: worker.OptimizationJobFailed,
 				CreatedAt: time.Now().UTC(), Failure: &worker.OptimizationJobFailure{Code: tt.code, Message: tt.message},
 			})
-			controller := NewOptimizationController(store, nil, nil, nil, nil)
+			controller := NewOptimizationController(store, nil, nil, nil, nil, nil)
 			authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
 			app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, Routes: controller.Routes()})
 
@@ -301,7 +356,7 @@ func optimizationHTTPBodyWithExcluded(dietID uuid.UUID, protein float64, exclude
 	for _, id := range excluded {
 		excludedValues = append(excludedValues, id.String())
 	}
-	payload := map[string]any{"dailyDietId": dietID.String(), "targetMacros": map[string]float64{"protein": protein, "carbohydrates": 30, "fat": 10}, "tolerancePercent": 5.0, "excludedMealIds": excludedValues}
+	payload := map[string]any{"dailyDietId": dietID.String(), "tolerancePercent": protein, "excludedMealIds": excludedValues}
 	encoded, _ := json.Marshal(payload)
 	return string(encoded)
 }
@@ -402,6 +457,29 @@ type optimizationHTTPQueue struct {
 	calls   int
 	err     error
 	entries map[string]string
+}
+
+type optimizationHTTPAdmission struct {
+	decision worker.OptimizationAdmissionDecision
+	err      error
+	acquires int
+	releases int
+}
+
+func (a *optimizationHTTPAdmission) Acquire(_ context.Context, req worker.OptimizationAdmissionRequest) (worker.OptimizationAdmissionDecision, error) {
+	a.acquires++
+	if a.err != nil {
+		return worker.OptimizationAdmissionDecision{}, a.err
+	}
+	if a.decision.Status == "" {
+		return worker.OptimizationAdmissionDecision{Status: worker.OptimizationAdmissionAcquired, JobID: req.JobID}, nil
+	}
+	return a.decision, nil
+}
+
+func (a *optimizationHTTPAdmission) Release(context.Context, uuid.UUID, uuid.UUID) error {
+	a.releases++
+	return nil
 }
 
 func (q *optimizationHTTPQueue) Enqueue(_ context.Context, jobID string) (string, error) {

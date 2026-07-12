@@ -25,4 +25,5 @@ WHERE ($1::boolean OR m.deleted_at IS NULL)
           WHERE t.kind = 'culinary_role' AND t.id = ANY($5::uuid[])
       )
   )
-ORDER BY lower(btrim(m.name)), m.id;
+ORDER BY lower(btrim(m.name)), m.id
+LIMIT $6 OFFSET $7;

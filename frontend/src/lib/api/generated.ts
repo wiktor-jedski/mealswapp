@@ -516,18 +516,9 @@ export function buildDailyDietDeleteRequestInit(options: { csrfToken?: string; s
 }
 
 // Implements DESIGN-004 JobStatusTracker frontend optimization contract.
-/** Requested macro target constraints; these are not server-reported totals. */
-export interface MacroTarget {
-	protein: number;
-	carbohydrates: number;
-	fat: number;
-}
-
-// Implements DESIGN-004 JobStatusTracker frontend optimization contract.
 /** Asynchronous optimization submission for one server-owned saved diet. */
 export interface DietOptimizationRequest {
 	dailyDietId: string;
-	targetMacros: MacroTarget;
 	tolerancePercent: number;
 	excludedMealIds: string[];
 }

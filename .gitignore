@@ -11,6 +11,7 @@ go.work
 .go-mod-cache/
 backend/.go-cache/
 backend/.go-mod-cache/
+/backend/worker
 
 ### Redis ###
 # Ignore redis binary dump (dump.rdb) files

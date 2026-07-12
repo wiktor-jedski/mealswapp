@@ -15,7 +15,7 @@ Language: Go
 Framework: Fiber
 Query builder: raw SQL
 Internal API: Direct function calls
-LP Solver: native COIN-OR CLP `1.17.11` executable invoked by a pure-Go `exec.CommandContext` wrapper in the dedicated worker; no CGO binding and no solver execution in the Fiber API process
+LP Solver: native COIN-OR CLP `1.17.11` executable invoked by a pure-Go `exec.CommandContext` wrapper in the dedicated optimizer container; the `linux/amd64` Ubuntu 24.04 image packages the checksum-pinned official COIN-OR Ubuntu 24 release artifact with the Go worker, with no CGO binding and no solver execution in the Fiber API process
 Cosine Similarity: Custom implementation
 API Documentation: OpenAPI
 Testing: testing package (built-in)

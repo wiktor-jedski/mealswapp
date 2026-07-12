@@ -355,10 +355,11 @@ func targetForRequest(req DietOptimizationRequest, meals map[string]repository.M
 		if !ok {
 			return MacroTarget{}, validationError("original diet meal is not available: " + entry.MealID.String())
 		}
-		if err := validateMealQuantity(entry, meal); err != nil {
+		baseQuantity, err := quantityInNutritionBasis(entry, meal)
+		if err != nil {
 			return MacroTarget{}, err
 		}
-		factor := entry.Quantity / 100
+		factor := baseQuantity / 100
 		target.Protein += meal.MacrosPer100.Protein * factor
 		target.Carbohydrates += meal.MacrosPer100.Carbohydrates * factor
 		target.Fat += meal.MacrosPer100.Fat * factor
@@ -379,22 +380,47 @@ func originalMealsToEntries(meals []MealQuantity) []repository.SavedDietMealEntr
 	return entries
 }
 
-// validateMealQuantity validates a persisted original-diet quantity and unit.
-// Implements DESIGN-004 ConstraintBuilder.
-func validateMealQuantity(entry repository.SavedDietMealEntry, meal repository.MealEntity) error {
+// quantityInNutritionBasis converts a persisted original-diet quantity to the
+// meal's per-100 g or per-100 ml repository macro basis.
+// Implements DESIGN-004 ConstraintBuilder and DESIGN-005 UnitConverter.
+func quantityInNutritionBasis(entry repository.SavedDietMealEntry, meal repository.MealEntity) (float64, error) {
 	if !finite(entry.Quantity) || entry.Quantity <= 0 {
-		return validationError("original diet quantities must be finite and positive")
+		return 0, validationError("original diet quantities must be finite and positive")
 	}
-	if entry.Unit != "g" && entry.Unit != "ml" {
-		return validationError("original diet quantity unit must be g or ml")
+
+	baseUnit := ""
+	switch meal.PhysicalState {
+	case repository.PhysicalStateSolid:
+		if entry.Unit != "g" && entry.Unit != "oz" {
+			return 0, validationError("solid meal quantities must use g or oz")
+		}
+		baseUnit = "g"
+	case repository.PhysicalStateLiquid:
+		if entry.Unit != "ml" && entry.Unit != "fl_oz" {
+			return 0, validationError("liquid meal quantities must use ml or fl_oz")
+		}
+		baseUnit = "ml"
+	case "":
+		switch entry.Unit {
+		case "g", "oz":
+			baseUnit = "g"
+		case "ml", "fl_oz":
+			baseUnit = "ml"
+		default:
+			return 0, validationError("original diet quantity unit is invalid")
+		}
+	default:
+		return 0, validationError("original diet meal physical state is invalid")
 	}
-	if meal.PhysicalState == repository.PhysicalStateSolid && entry.Unit != "g" {
-		return validationError("solid meal quantities must use g")
+
+	quantity, err := repository.ConvertUnit(entry.Quantity, entry.Unit, baseUnit)
+	if err != nil {
+		return 0, validationError("original diet quantity unit conversion failed")
 	}
-	if meal.PhysicalState == repository.PhysicalStateLiquid && entry.Unit != "ml" {
-		return validationError("liquid meal quantities must use ml")
+	if !finite(quantity) || quantity <= 0 {
+		return 0, validationError("converted original diet quantity must be finite and positive")
 	}
-	return nil
+	return quantity, nil
 }
 
 // validateMacroTarget validates all macro target aliases and values.

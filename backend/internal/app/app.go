@@ -85,10 +85,12 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	optimizationTelemetry := observability.NewOptimizationTelemetry(telemetry, telemetry, 1)
 	var optimizationJobs httpapi.OptimizationJobStateStore
 	var optimizationQueue httpapi.OptimizationJobEnqueuer
+	var optimizationAdmission worker.OptimizationAdmissionGate
 	var workerPing func(context.Context) error
 	var queueStats func(context.Context) (observability.QueueSnapshot, error)
 	if redisClient != nil {
 		optimizationJobs = worker.NewRedisOptimizationJobStore(redisClient).WithTelemetry(optimizationTelemetry)
+		optimizationAdmission = worker.NewRedisOptimizationAdmissionGate(redisClient, worker.OptimizationAdmissionConfig{})
 		queueManager := queue.NewJobQueueManager(redisClient, queue.Config{}).WithTelemetry(optimizationTelemetry)
 		optimizationQueue = queueManager
 		queueStats = func(ctx context.Context) (observability.QueueSnapshot, error) {
@@ -118,7 +120,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		}).WithSearchHistoryAppender(userDataService).WithSearchUsageGate(usageLimiter),
 		httpapi.NewFoodObjectController(foodRepo),
 		httpapi.NewUserDataController(userDataService),
-		httpapi.NewOptimizationController(optimizationJobs, optimizationQueue, savedRepo, entitlementManager, idempotencyRepo).WithTelemetry(optimizationTelemetry),
+		httpapi.NewOptimizationController(optimizationJobs, optimizationQueue, savedRepo, entitlementManager, idempotencyRepo, optimizationAdmission).WithTelemetry(optimizationTelemetry),
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption, savedRepo)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),

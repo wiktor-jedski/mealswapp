@@ -130,6 +130,16 @@ intended as the phase-level source for expanding docs/implementation/02_TASK_LIS
 - Obtain privacy-law review before production for the pseudonymous deletion-receipt fields and provisional three-year retention period introduced in Phase 03. Do not launch with deletion receipts enabled until the reviewed retention purpose, field set, and retention period are accepted.
 - Exit criteria: offline cached searches render, connection loss preserves state, WCAG/keyboard checks pass, performance and readiness gates are documented, and trusted-proxy deployment tests pass before enabling `MEALSWAPP_TRUST_PROXY=true`.
 
+### Phase 10: Macro-Target Diet Generation
+
+- Add a standalone macro-target optimization workflow that does not require a saved Daily Diet and is explicitly distinct from Phase 07 saved-diet alternatives.
+- Add requirements and product decisions for target Protein, Carbohydrate, and Fat entry, meal-count and quantity bounds, dietary filters, exclusions, diversity, result saving, and entitlement behavior.
+- Extend the optimization OpenAPI contract with an explicit discriminated request variant such as `mode = macro_target`; require `targetMacros` and reject `dailyDietId` for that variant.
+- Reuse the Phase 07 Redis queue, worker, CLP solver, whole-job deadline, admission limits, polling, solution validation, and result rendering rather than introducing another optimization engine.
+- Remove duplicated internal optimization calorie state: derive the calorie estimate from protein, carbohydrates, and fat at a single nutrition-projection boundary instead of retaining `DietAlternative.Calories`, while preserving the documented API calorie value and validating persisted-job compatibility.
+- Add a separate frontend mode with editable macro controls only after its terminology, navigation, and save behavior are accepted.
+- Exit criteria: standalone targets generate validated diets without a saved-diet input, request variants cannot be confused, generated frontend types enforce the distinction, and integration/browser/UAT evidence covers the complete workflow.
+
 ## Public APIs and Interfaces
 
 - Backend exposes versioned REST under /api/v1: auth, profile/preferences, search/autocomplete, optimization jobs, subscription/billing, saved data, admin, external search, health, and readiness.

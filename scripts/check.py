@@ -374,6 +374,7 @@ TRACEABLE_FILES = {
 	"docker-compose.yml", "scripts/check.py", "scripts/generate_report.py",
 	"scripts/generate-api-types.py",
 	"scripts/start-services.sh", "scripts/validate-traceability.py",
+	"scripts/validate-phase07-go-doc.py",
 	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py", "scripts/verify-phase02-uat.py", "scripts/verify-phase03-uat.py",
 	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
@@ -470,6 +471,7 @@ def main() -> int:
 	checked_reqs, total_reqs = validate_requirements()
 	run(["python3", "scripts/validate-traceability.py"])
 	run(["python3", "scripts/validate-task-list.py"])
+	run(["python3", "scripts/validate-phase07-go-doc.py"])
 	# Implements DESIGN-010 RouteHandler contract and backend quality gates.
 	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
 	validate_phase07_capacity_tests()

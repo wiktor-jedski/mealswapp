@@ -2991,23 +2991,24 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("GetByID() scan error = %v, want connection", err)
 	}
 
-	repo = NewPostgresMealRepository(&fakeSQLExecutor{queryErr: queryErr})
+	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, queryErr: queryErr})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() query error = %v, want connection", err)
 	}
 
-	repo = NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
+	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rows: &fakeRows{next: true, scanErr: scanErr}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() scan error = %v, want connection", err)
 	}
 
-	repo = NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{err: queryErr}})
+	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rows: &fakeRows{err: queryErr}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() rows error = %v, want connection", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{
 		rowsList:  []pgx.Rows{&fakeRows{next: true, values: []any{mealID}}},
+		rowList:   []fakeRow{{values: []any{1}}, {values: mealValues}},
 		queryErrs: []error{nil, queryErr},
 	})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
@@ -3426,20 +3427,22 @@ func TestPostgresRepositoryErrorBranches(t *testing.T) {
 }
 
 type fakeSQLExecutor struct {
-	rows      pgx.Rows
-	rowsList  []pgx.Rows
-	row       fakeRow
-	rowList   []fakeRow
-	queryErr  error
-	queryErrs []error
-	queryN    int
-	execErr   error
-	execErrs  []error
-	execTags  []pgconn.CommandTag
-	execN     int
-	rowN      int
-	beginErr  error
-	tx        *fakeTx
+	rows       pgx.Rows
+	rowsList   []pgx.Rows
+	row        fakeRow
+	rowList    []fakeRow
+	queryErr   error
+	queryErrs  []error
+	queryN     int
+	queryCalls int
+	queryArgs  [][]any
+	execErr    error
+	execErrs   []error
+	execTags   []pgconn.CommandTag
+	execN      int
+	rowN       int
+	beginErr   error
+	tx         *fakeTx
 }
 
 func (e *fakeSQLExecutor) Begin(context.Context) (pgx.Tx, error) {
@@ -3472,7 +3475,9 @@ func (e *fakeSQLExecutor) Exec(context.Context, string, ...any) (pgconn.CommandT
 	return pgconn.CommandTag{}, e.execErr
 }
 
-func (e *fakeSQLExecutor) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (e *fakeSQLExecutor) Query(_ context.Context, _ string, args ...any) (pgx.Rows, error) {
+	e.queryCalls++
+	e.queryArgs = append(e.queryArgs, append([]any(nil), args...))
 	if len(e.queryErrs) > 0 {
 		index := e.queryN
 		if index >= len(e.queryErrs) {

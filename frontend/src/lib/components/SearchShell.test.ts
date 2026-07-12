@@ -144,6 +144,15 @@ test("hydrates substitution autocomplete selections with food-object detail data
 	expect(source).toContain("updateSubstitutionInput");
 });
 
+// Implements DESIGN-001 SearchView identity-scoped Daily Diet selection verification.
+test("clears parent-owned Daily Diet selections when authenticated identity changes", () => {
+	expect(source).toContain("let dailyDietSelectionsUserId = $state<string | null>(null)");
+	expect(source).toContain("function clearIdentityOwnedDailyDietSelections(): void");
+	expect(source).toContain("dailyDietSelections = []");
+	expect(source).toContain("dailyDietSelectionError = null");
+	expect(source).toContain("dailyDietSelectionsUserId !== authenticatedUserId");
+});
+
 // Implements DESIGN-001 SearchView mode-specific placeholder guidance verification.
 test("passes mode-specific placeholder guidance to the search input", () => {
 	expect(source).toContain("const searchPlaceholders: Record<SearchMode, string>");

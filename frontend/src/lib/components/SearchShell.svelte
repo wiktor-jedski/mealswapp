@@ -61,6 +61,7 @@
   let dailyDietSelections = $state<DailyDietMealSelection[]>([]);
   let dailyDietSelectionError = $state<string | null>(null);
   let dailyDietSelectionKey = 0;
+  let dailyDietSelectionsUserId = $state<string | null>(null);
 
   /** True while an explicit submitted search request is fetching results. */
   let searchInFlight = $state(false);
@@ -78,7 +79,17 @@
 
   $effect(() => {
     if (activeMode !== "daily_diet" && dailyDietSelections.length > 0) {
-      dailyDietSelections = [];
+      clearIdentityOwnedDailyDietSelections();
+    }
+  });
+
+  $effect(() => {
+    const authenticatedUserId = $authSessionStore.status === "authenticated"
+      ? $authSessionStore.userId ?? null
+      : null;
+    if (dailyDietSelectionsUserId !== authenticatedUserId) {
+      clearIdentityOwnedDailyDietSelections();
+      dailyDietSelectionsUserId = authenticatedUserId;
     }
   });
 
@@ -185,6 +196,12 @@
     } catch {
       dailyDietSelectionError = "That meal could not be added. Please try again.";
     }
+  }
+
+  /** Clears hydrated Daily Diet selections owned by a previous authenticated identity. */
+  function clearIdentityOwnedDailyDietSelections(): void {
+    dailyDietSelections = [];
+    dailyDietSelectionError = null;
   }
 
   /**

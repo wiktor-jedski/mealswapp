@@ -41,7 +41,7 @@ Missing polls, absent evidence, monitor failure, malformed queue values, or any 
 - `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./...` — passed.
 - `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test -race ./internal/observability ./internal/queue ./internal/worker ./internal/httpapi ./internal/app` — passed.
 - `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go vet ./...` — passed.
-- `cd backend && CGO_ENABLED=0 GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go build ./cmd/worker` — passed.
+- `cd backend && CGO_ENABLED=0 GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go build -o /tmp/mealswapp-worker ./cmd/worker` — passed.
 - `python3 scripts/validate-task-list.py` — passed: 212 sequential tasks with ordered dependencies.
 - `python3 scripts/validate-traceability.py` — passed.
 

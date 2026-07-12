@@ -578,6 +578,32 @@ func TestRemainingRepositoryCoverageBranches(t *testing.T) {
 	}
 }
 
+func TestMealSearchSkipsPageAndHydrationBeyondTotal(t *testing.T) {
+	db := &fakeSQLExecutor{row: fakeRow{values: []any{0}}, rows: &fakeRows{}}
+	meals, total, err := NewPostgresMealRepository(db).Search(context.Background(), RepositoryQuery{Limit: 100, Offset: 100})
+	if err != nil || total != 0 || len(meals) != 0 {
+		t.Fatalf("Search() = %d meals, total %d, %v", len(meals), total, err)
+	}
+	if db.queryCalls != 0 {
+		t.Fatalf("page query calls = %d, want 0 beyond total", db.queryCalls)
+	}
+}
+
+func TestMealSearchAppliesPaginationInSQL(t *testing.T) {
+	db := &fakeSQLExecutor{row: fakeRow{values: []any{250}}, rows: &fakeRows{}}
+	meals, total, err := NewPostgresMealRepository(db).Search(context.Background(), RepositoryQuery{Limit: 100, Offset: 100})
+	if err != nil || total != 250 || len(meals) != 0 {
+		t.Fatalf("Search() = %d meals, total %d, %v", len(meals), total, err)
+	}
+	if db.queryCalls != 1 || len(db.queryArgs) != 1 {
+		t.Fatalf("page query calls = %d args=%v, want one", db.queryCalls, db.queryArgs)
+	}
+	args := db.queryArgs[0]
+	if len(args) != 7 || args[5] != 100 || args[6] != 100 {
+		t.Fatalf("page query args = %#v, want limit=100 offset=100", args)
+	}
+}
+
 func foodFixtureValues(id uuid.UUID) []any {
 	now := time.Now()
 	return []any{id, "Fixture", PhysicalStateSolid, 0, (*float64)(nil), (*float64)(nil), (*float64)(nil), (*string)(nil), (*string)(nil), (*string)(nil), 0.0, 0.0, 0.0, []byte(`{}`), (*string)(nil), (*time.Time)(nil), now, now}

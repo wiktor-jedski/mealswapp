@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/optimization"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/queue"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
@@ -58,6 +58,7 @@ type OptimizationController struct {
 	diets        repository.DailyDietRepository
 	entitlements OptimizationEntitlementChecker
 	idempotency  repository.CheckoutIdempotencyRepository
+	admission    worker.OptimizationAdmissionGate
 	telemetry    *observability.OptimizationTelemetry
 	mu           sync.Mutex
 }
@@ -67,8 +68,8 @@ var _ Controller = (*OptimizationController)(nil)
 
 // NewOptimizationController constructs the asynchronous optimization API boundary.
 // Implements DESIGN-004 JobStatusTracker.
-func NewOptimizationController(jobs OptimizationJobStateStore, enqueuer OptimizationJobEnqueuer, diets repository.DailyDietRepository, entitlements OptimizationEntitlementChecker, idempotency repository.CheckoutIdempotencyRepository) *OptimizationController {
-	return &OptimizationController{jobs: jobs, queue: enqueuer, diets: diets, entitlements: entitlements, idempotency: idempotency}
+func NewOptimizationController(jobs OptimizationJobStateStore, enqueuer OptimizationJobEnqueuer, diets repository.DailyDietRepository, entitlements OptimizationEntitlementChecker, idempotency repository.CheckoutIdempotencyRepository, admission worker.OptimizationAdmissionGate) *OptimizationController {
+	return &OptimizationController{jobs: jobs, queue: enqueuer, diets: diets, entitlements: entitlements, idempotency: idempotency, admission: admission}
 }
 
 // WithTelemetry attaches bounded submission metrics and logs to the API
@@ -123,7 +124,7 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.entitlements == nil || c.idempotency == nil {
+	if c.entitlements == nil || c.idempotency == nil || c.admission == nil {
 		outcome = "dependency_error"
 		return optimizationDependencyError()
 	}
@@ -144,13 +145,51 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 	if _, err := c.diets.Get(ctx.UserContext(), user.UserID, req.DailyDietID); err != nil {
 		return optimizationError(err)
 	}
+	if existing, found, lookupErr := c.lookupOptimizationIdempotency(ctx.UserContext(), user.UserID, key, bodyHash); lookupErr != nil {
+		return optimizationError(lookupErr)
+	} else if found {
+		return c.repairOptimizationPublication(ctx, user.UserID, req, key, bodyHash, existing)
+	}
 
 	jobID := uuid.New()
+	acquiredJobID := jobID
+	admissionDecision, err := c.admission.Acquire(ctx.UserContext(), worker.OptimizationAdmissionRequest{
+		UserID: user.UserID, JobID: jobID, IdempotencyKey: key, BodyHash: bodyHash, CountRate: true,
+	})
+	if err != nil {
+		outcome = "dependency_error"
+		return optimizationError(err)
+	}
+	ownedSlot := admissionDecision.Status == worker.OptimizationAdmissionAcquired
+	if ownedSlot {
+		defer func() {
+			if ownedSlot {
+				_ = c.admission.Release(context.WithoutCancel(ctx.UserContext()), user.UserID, acquiredJobID)
+			}
+		}()
+	}
+	switch admissionDecision.Status {
+	case worker.OptimizationAdmissionAcquired:
+	case worker.OptimizationAdmissionReplay:
+		jobID = admissionDecision.JobID
+	case worker.OptimizationAdmissionConflict:
+		outcome = "rejected"
+		return optimizationIdempotencyConflict()
+	case worker.OptimizationAdmissionActive:
+		outcome = "rejected"
+		setOptimizationRetryAfter(ctx, admissionDecision.RetryAfter)
+		return optimizationAdmissionError("optimization_in_progress", "An optimization is already in progress.")
+	case worker.OptimizationAdmissionRateLimited:
+		outcome = "rejected"
+		setOptimizationRetryAfter(ctx, admissionDecision.RetryAfter)
+		return optimizationAdmissionError("optimization_rate_limited", "Too many optimization jobs were requested. Please try again later.")
+	default:
+		return optimizationDependencyError()
+	}
 	job := worker.OptimizationJob{
 		JobID:            jobID,
 		UserID:           user.UserID,
 		DailyDietID:      req.DailyDietID,
-		TargetMacros:     req.TargetMacros,
 		TolerancePercent: req.TolerancePercent,
 		ExcludedMealIDs:  append([]uuid.UUID(nil), req.ExcludedMealIDs...),
 		Status:           worker.OptimizationJobQueued,
@@ -165,7 +204,6 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 		UserID: user.UserID, Method: optimizationMethod, Route: optimizationJobsRoute,
 		Key: key, BodyHash: bodyHash, StatusCode: fiber.StatusAccepted, ResponseBody: payload,
 	}
-	claimed := true
 	if err := c.idempotency.StoreCheckoutIdempotency(ctx.UserContext(), record); err != nil {
 		if !repository.IsKind(err, repository.ErrorKindConflict) {
 			return optimizationError(err)
@@ -177,33 +215,77 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 		if !found {
 			return optimizationError(err)
 		}
-		record = original
-		jobID, err = optimizationJobIDFromAcknowledgement(record)
-		if err != nil {
-			return optimizationDependencyError()
+		if ownedSlot {
+			if err := c.admission.Release(ctx.UserContext(), user.UserID, acquiredJobID); err != nil {
+				return optimizationError(err)
+			}
+			ownedSlot = false
 		}
-		job.JobID = jobID
-		claimed = false
+		outcome = "replayed"
+		return c.repairOptimizationPublication(ctx, user.UserID, req, key, bodyHash, original)
 	}
 	// The durable claim is made before publication. Replays repair a crash or
 	// queue outage by repeating this idempotent save/enqueue pair for the same
 	// server-created job ID.
 	if err := c.jobs.Save(ctx.UserContext(), job); err != nil {
-		if !claimed && errors.Is(err, worker.ErrOptimizationJobNotFound) {
-			return c.writeAcknowledgement(ctx, record, true)
-		}
 		return optimizationError(err)
 	}
 	if _, err := c.queue.Enqueue(ctx.UserContext(), jobID.String()); err != nil {
 		outcome = "queue_error"
 		return optimizationQueueError()
 	}
-	if claimed {
-		outcome = "accepted"
-	} else {
-		outcome = "replayed"
+	ownedSlot = false
+	outcome = "accepted"
+	return c.writeAcknowledgement(ctx, record, false)
+}
+
+// repairOptimizationPublication reacquires capacity without recounting an exact retry.
+// Implements DESIGN-004 JobStatusTracker.
+func (c *OptimizationController) repairOptimizationPublication(ctx *fiber.Ctx, userID uuid.UUID, req optimizationSubmissionRequest, key, bodyHash string, record repository.CheckoutIdempotencyRecord) error {
+	jobID, err := optimizationJobIDFromAcknowledgement(record)
+	if err != nil {
+		return optimizationDependencyError()
 	}
-	return c.writeAcknowledgement(ctx, record, !claimed)
+	decision, err := c.admission.Acquire(ctx.UserContext(), worker.OptimizationAdmissionRequest{
+		UserID: userID, JobID: jobID, IdempotencyKey: key, BodyHash: bodyHash, CountRate: false,
+	})
+	if err != nil {
+		return optimizationError(err)
+	}
+	ownedSlot := decision.Status == worker.OptimizationAdmissionAcquired
+	if ownedSlot {
+		defer func() {
+			if ownedSlot {
+				_ = c.admission.Release(context.WithoutCancel(ctx.UserContext()), userID, jobID)
+			}
+		}()
+	}
+	switch decision.Status {
+	case worker.OptimizationAdmissionAcquired, worker.OptimizationAdmissionReplay:
+	case worker.OptimizationAdmissionConflict:
+		return optimizationIdempotencyConflict()
+	case worker.OptimizationAdmissionActive:
+		setOptimizationRetryAfter(ctx, decision.RetryAfter)
+		return optimizationAdmissionError("optimization_in_progress", "An optimization is already in progress.")
+	default:
+		return optimizationDependencyError()
+	}
+	job := worker.OptimizationJob{
+		JobID: jobID, UserID: userID, DailyDietID: req.DailyDietID,
+		TolerancePercent: req.TolerancePercent, ExcludedMealIDs: append([]uuid.UUID(nil), req.ExcludedMealIDs...),
+		Status: worker.OptimizationJobQueued, CreatedAt: time.Now().UTC(),
+	}
+	if err := c.jobs.Save(ctx.UserContext(), job); err != nil {
+		if errors.Is(err, worker.ErrOptimizationJobNotFound) {
+			return c.writeAcknowledgement(ctx, record, true)
+		}
+		return optimizationError(err)
+	}
+	if _, err := c.queue.Enqueue(ctx.UserContext(), jobID.String()); err != nil {
+		return optimizationQueueError()
+	}
+	ownedSlot = false
+	return c.writeAcknowledgement(ctx, record, true)
 }
 
 // GetJob returns a job only when its owner matches the authenticated session.
@@ -240,22 +322,12 @@ func (c *OptimizationController) GetJob(ctx *fiber.Ctx) error {
 // validateOptimizationSubmissionBody validates the JSON shape before any service dispatch.
 // Implements DESIGN-004 JobStatusTracker and DESIGN-010 RequestValidator.
 func validateOptimizationSubmissionBody(body map[string]any) error {
-	if len(body) != 4 {
+	if len(body) != 3 {
 		return errors.New("optimization request contains unsupported fields")
 	}
 	dailyDietID, ok := body["dailyDietId"].(string)
 	if !ok || !validUUIDString(dailyDietID) {
 		return errors.New("daily diet id is invalid")
-	}
-	target, ok := body["targetMacros"].(map[string]any)
-	if !ok || len(target) != 3 {
-		return errors.New("optimization target is invalid")
-	}
-	for _, field := range []string{"protein", "carbohydrates", "fat"} {
-		value, ok := target[field].(float64)
-		if !ok || !finiteOptimizationNumber(value) || value < 0 || value > 1_000_000 {
-			return errors.New("optimization target is invalid")
-		}
 	}
 	tolerance, ok := body["tolerancePercent"].(float64)
 	if !ok || !finiteOptimizationNumber(tolerance) || tolerance < 0 || tolerance > 100 || math.Abs(tolerance*10-math.Round(tolerance*10)) > 1e-9 {
@@ -284,7 +356,6 @@ func validateOptimizationSubmissionBody(body map[string]any) error {
 // Implements DESIGN-004 JobStatusTracker.
 type optimizationSubmissionRequest struct {
 	DailyDietID      uuid.UUID
-	TargetMacros     optimization.MacroTarget
 	TolerancePercent float64
 	ExcludedMealIDs  []uuid.UUID
 }
@@ -293,12 +364,7 @@ type optimizationSubmissionRequest struct {
 // Implements DESIGN-004 JobStatusTracker and DESIGN-010 RequestValidator.
 func parseOptimizationSubmission(ctx *fiber.Ctx) (optimizationSubmissionRequest, error) {
 	var raw struct {
-		DailyDietID  string `json:"dailyDietId"`
-		TargetMacros struct {
-			Protein       float64 `json:"protein"`
-			Carbohydrates float64 `json:"carbohydrates"`
-			Fat           float64 `json:"fat"`
-		} `json:"targetMacros"`
+		DailyDietID      string   `json:"dailyDietId"`
 		TolerancePercent float64  `json:"tolerancePercent"`
 		ExcludedMealIDs  []string `json:"excludedMealIds"`
 	}
@@ -309,7 +375,7 @@ func parseOptimizationSubmission(ctx *fiber.Ctx) (optimizationSubmissionRequest,
 	if err != nil || dailyDietID == uuid.Nil {
 		return optimizationSubmissionRequest{}, optimizationValidationError()
 	}
-	if !finiteOptimizationNumber(raw.TargetMacros.Protein) || !finiteOptimizationNumber(raw.TargetMacros.Carbohydrates) || !finiteOptimizationNumber(raw.TargetMacros.Fat) || raw.TargetMacros.Protein < 0 || raw.TargetMacros.Carbohydrates < 0 || raw.TargetMacros.Fat < 0 || raw.TargetMacros.Protein > 1_000_000 || raw.TargetMacros.Carbohydrates > 1_000_000 || raw.TargetMacros.Fat > 1_000_000 || !finiteOptimizationNumber(raw.TolerancePercent) || raw.TolerancePercent < 0 || raw.TolerancePercent > 100 || math.Abs(raw.TolerancePercent*10-math.Round(raw.TolerancePercent*10)) > 1e-9 || len(raw.ExcludedMealIDs) > maximumExcludedMeals {
+	if !finiteOptimizationNumber(raw.TolerancePercent) || raw.TolerancePercent < 0 || raw.TolerancePercent > 100 || math.Abs(raw.TolerancePercent*10-math.Round(raw.TolerancePercent*10)) > 1e-9 || len(raw.ExcludedMealIDs) > maximumExcludedMeals {
 		return optimizationSubmissionRequest{}, optimizationValidationError()
 	}
 	excluded := make([]uuid.UUID, 0, len(raw.ExcludedMealIDs))
@@ -325,7 +391,7 @@ func parseOptimizationSubmission(ctx *fiber.Ctx) (optimizationSubmissionRequest,
 		seen[id] = struct{}{}
 		excluded = append(excluded, id)
 	}
-	return optimizationSubmissionRequest{DailyDietID: dailyDietID, TargetMacros: optimization.MacroTarget{Protein: raw.TargetMacros.Protein, Carbohydrates: raw.TargetMacros.Carbohydrates, Fat: raw.TargetMacros.Fat}, TolerancePercent: raw.TolerancePercent, ExcludedMealIDs: excluded}, nil
+	return optimizationSubmissionRequest{DailyDietID: dailyDietID, TolerancePercent: raw.TolerancePercent, ExcludedMealIDs: excluded}, nil
 }
 
 // optimizationRequestHash creates the digest of the validated request bytes.
@@ -405,9 +471,12 @@ func optimizationJobData(job worker.OptimizationJob) map[string]any {
 				meals = append(meals, map[string]any{"mealId": meal.MealID.String(), "quantity": meal.Quantity, "unit": meal.Unit, "position": meal.Position})
 			}
 			alternatives = append(alternatives, map[string]any{
-				"meals":    meals,
-				"macros":   map[string]any{"protein": alternative.Macros.Protein, "carbohydrates": alternative.Macros.Carbohydrates, "fat": alternative.Macros.Fat},
-				"calories": alternative.Calories, "similarityScore": alternative.SimilarityScore,
+				"meals": meals,
+				"macros": map[string]any{
+					"protein": alternative.Macros.Protein, "carbohydrates": alternative.Macros.Carbohydrates,
+					"fat": alternative.Macros.Fat, "calories": alternative.Calories,
+				},
+				"similarityScore": alternative.SimilarityScore,
 			})
 		}
 		data["alternatives"] = alternatives
@@ -475,6 +544,28 @@ func optimizationEntitlementDenied() AppError {
 	return AppError{HTTPStatus: fiber.StatusForbidden, Category: "entitlement", Code: "entitlement_denied", Message: "an active trial or paid subscription is required for optimization"}
 }
 
+// optimizationIdempotencyConflict returns the stable changed-body replay error.
+// Implements DESIGN-004 JobStatusTracker.
+func optimizationIdempotencyConflict() AppError {
+	return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "idempotency_key_conflict", Message: "Idempotency-Key was already used with a different request body"}
+}
+
+// optimizationAdmissionError returns a safe retryable per-user capacity error.
+// Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter.
+func optimizationAdmissionError(code, message string) AppError {
+	return AppError{HTTPStatus: fiber.StatusTooManyRequests, Category: "rate_limit", Code: code, Message: message, Retryable: true}
+}
+
+// setOptimizationRetryAfter writes a positive whole-second retry delay.
+// Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter.
+func setOptimizationRetryAfter(ctx *fiber.Ctx, retryAfter time.Duration) {
+	seconds := int64(math.Ceil(retryAfter.Seconds()))
+	if seconds < 1 {
+		seconds = 1
+	}
+	ctx.Set(fiber.HeaderRetryAfter, strconv.FormatInt(seconds, 10))
+}
+
 // optimizationDependencyError returns the generic unavailable response.
 // Implements DESIGN-004 JobStatusTracker.
 func optimizationDependencyError() AppError {
@@ -513,7 +604,7 @@ func optimizationError(err error) error {
 	case repository.IsKind(err, repository.ErrorKindValidation):
 		return optimizationValidationError()
 	case repository.IsKind(err, repository.ErrorKindConflict):
-		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "idempotency_key_conflict", Message: "Idempotency-Key was already used with a different request body"}
+		return optimizationIdempotencyConflict()
 	default:
 		return err
 	}

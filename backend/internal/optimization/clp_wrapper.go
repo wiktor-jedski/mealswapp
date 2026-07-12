@@ -18,9 +18,13 @@ import (
 
 // Implements DESIGN-004 LPSolverWrapper as a pure-Go child-process boundary.
 const (
+	// DefaultCLPExecutable is the default native solver command resolved by the worker.
 	DefaultCLPExecutable = "clp"
-	SupportedCLPVersion  = "1.17.11"
-	SolverDeadline       = 30 * time.Second
+	// SupportedCLPVersion is the exact native solver version accepted at readiness.
+	SupportedCLPVersion = "1.17.11"
+	// SolverDeadline is the maximum duration allowed for one CLP invocation.
+	SolverDeadline = 30 * time.Second
+	// MaxSolverOutputBytes bounds solver-controlled stdout and stderr capture.
 	MaxSolverOutputBytes = 64 * 1024
 	maxSolverModelBytes  = 1 << 20
 	maxSolverDiagnostic  = 4 * 1024
@@ -32,9 +36,12 @@ type SolverStatus string
 
 // Implements DESIGN-004 LPSolverWrapper solver statuses.
 const (
-	SolverStatusOptimal    SolverStatus = "optimal"
+	// SolverStatusOptimal identifies a solved model with an optimal solution.
+	SolverStatusOptimal SolverStatus = "optimal"
+	// SolverStatusInfeasible identifies a model with no feasible solution.
 	SolverStatusInfeasible SolverStatus = "infeasible"
-	SolverStatusUnbounded  SolverStatus = "unbounded"
+	// SolverStatusUnbounded identifies a model with an unbounded objective.
+	SolverStatusUnbounded SolverStatus = "unbounded"
 )
 
 // SolverErrorKind classifies failures at the solver process boundary.
@@ -43,28 +50,47 @@ type SolverErrorKind string
 
 // Implements DESIGN-004 LPSolverWrapper error kinds.
 const (
+	// SolverErrorUnavailable identifies a missing or inaccessible CLP executable.
 	SolverErrorUnavailable SolverErrorKind = "unavailable"
-	SolverErrorVersion     SolverErrorKind = "version"
-	SolverErrorInfeasible  SolverErrorKind = "infeasible"
-	SolverErrorUnbounded   SolverErrorKind = "unbounded"
-	SolverErrorCanceled    SolverErrorKind = "canceled"
-	SolverErrorTimeout     SolverErrorKind = "timeout"
-	SolverErrorMalformed   SolverErrorKind = "malformed_output"
-	SolverErrorNonZero     SolverErrorKind = "nonzero_exit"
+	// SolverErrorVersion identifies an unsupported CLP executable version.
+	SolverErrorVersion SolverErrorKind = "version"
+	// SolverErrorInfeasible identifies an infeasible CLP result.
+	SolverErrorInfeasible SolverErrorKind = "infeasible"
+	// SolverErrorUnbounded identifies an unbounded CLP result.
+	SolverErrorUnbounded SolverErrorKind = "unbounded"
+	// SolverErrorCanceled identifies a solver invocation cancelled by its context.
+	SolverErrorCanceled SolverErrorKind = "canceled"
+	// SolverErrorTimeout identifies a solver invocation exceeding its deadline.
+	SolverErrorTimeout SolverErrorKind = "timeout"
+	// SolverErrorMalformed identifies solver output that cannot be safely decoded.
+	SolverErrorMalformed SolverErrorKind = "malformed_output"
+	// SolverErrorNonZero identifies an unsuccessful CLP process exit.
+	SolverErrorNonZero SolverErrorKind = "nonzero_exit"
+	// SolverErrorOutputLimit identifies solver output exceeding its safety bound.
 	SolverErrorOutputLimit SolverErrorKind = "output_limit"
-	SolverErrorValidation  SolverErrorKind = "validation"
+	// SolverErrorValidation identifies an invalid model or wrapper configuration.
+	SolverErrorValidation SolverErrorKind = "validation"
 )
 
 // Implements DESIGN-004 LPSolverWrapper sentinel errors.
 var (
+	// ErrSolverUnavailable is the sentinel for an unavailable CLP executable.
 	ErrSolverUnavailable = errors.New("solver executable unavailable")
-	ErrSolverVersion     = errors.New("solver executable version unsupported")
-	ErrSolverInfeasible  = errors.New("solver reported infeasible")
-	ErrSolverUnbounded   = errors.New("solver reported unbounded")
-	ErrSolverCanceled    = errors.New("solver canceled")
-	ErrSolverTimeout     = errors.New("solver deadline exceeded")
-	ErrSolverMalformed   = errors.New("solver output malformed")
-	ErrSolverNonZero     = errors.New("solver exited unsuccessfully")
+	// ErrSolverVersion is the sentinel for an unsupported CLP version.
+	ErrSolverVersion = errors.New("solver executable version unsupported")
+	// ErrSolverInfeasible is the sentinel for an infeasible solver result.
+	ErrSolverInfeasible = errors.New("solver reported infeasible")
+	// ErrSolverUnbounded is the sentinel for an unbounded solver result.
+	ErrSolverUnbounded = errors.New("solver reported unbounded")
+	// ErrSolverCanceled is the sentinel for a cancelled solver invocation.
+	ErrSolverCanceled = errors.New("solver canceled")
+	// ErrSolverTimeout is the sentinel for an expired solver deadline.
+	ErrSolverTimeout = errors.New("solver deadline exceeded")
+	// ErrSolverMalformed is the sentinel for malformed solver output.
+	ErrSolverMalformed = errors.New("solver output malformed")
+	// ErrSolverNonZero is the sentinel for an unsuccessful solver exit.
+	ErrSolverNonZero = errors.New("solver exited unsuccessfully")
+	// ErrSolverOutputLimit is the sentinel for solver output exceeding its bound.
 	ErrSolverOutputLimit = errors.New("solver output exceeded limit")
 )
 

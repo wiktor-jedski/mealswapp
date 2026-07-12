@@ -5,7 +5,7 @@
     FoodObject,
     MacroProjection
   } from "../api/generated";
-  import { convertQuantity, displayUnitForBasis, formatDisplayQuantity, unitLabel } from "../units";
+  import { convertQuantity, defaultDisplayQuantity, displayUnitForBasis, formatDisplayQuantity, unitLabel } from "../units";
   import { preferencesStore } from "../stores/preferences";
   import {
     clearDailyDietState,
@@ -67,13 +67,17 @@
 
   $effect(() => {
     if (authStatus === "authenticated" && authenticated && userId && loadedUserId !== userId) {
-      if (loadedUserId !== null) clearDailyDietState();
+      if (loadedUserId !== null) {
+        resetIdentityOwnedDraft();
+        clearDailyDietState();
+      }
       loadedUserId = userId;
       void loadDailyDiets().catch(() => undefined);
       return;
     }
     if (!authenticated && loadedUserId !== null) {
       loadedUserId = null;
+      resetIdentityOwnedDraft();
       clearDailyDietState();
     }
   });
@@ -91,7 +95,7 @@
         {
           key: selection.key,
           item: selection.item,
-          quantity: 100,
+          quantity: defaultDisplayQuantity(selection.item.macroBasis, $preferencesStore.unitSystem),
           unit: displayUnitForBasis(selection.item.macroBasis, $preferencesStore.unitSystem)
         }
       ];
@@ -189,6 +193,16 @@
     savedDietId = null;
     draftError = null;
   }
+
+  /** Clears all editable state owned by the previous authenticated identity. */
+  function resetIdentityOwnedDraft(): void {
+    draftName = "My Daily Diet";
+    draftMeals = [];
+    consumedSelectionKeys = new Set(selections.map((selection) => selection.key));
+    draftError = null;
+    serverAggregate = null;
+    savedDietId = null;
+  }
 </script>
 
 <!-- Implements DESIGN-001 SearchView Daily Diet collection editor and authenticated-action guidance. -->
@@ -211,7 +225,7 @@
       <p class="text-sm">Sign in to build and save a Daily Diet.</p>
       <button
         type="button"
-        class="w-fit rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+        class="w-fit rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         onclick={onSignIn}
       >
         Sign in to continue
@@ -235,7 +249,7 @@
         Collection name
         <input
           id="daily-diet-name"
-          class="rounded border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          class="rounded border border-[#E0E0E0] bg-white px-3 py-2 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
           value={draftName}
           oninput={(event) => { draftName = (event.currentTarget as HTMLInputElement).value; }}
           disabled={!canEdit}
@@ -258,7 +272,7 @@
                     Quantity
                     <input
                       id={`daily-diet-quantity-${meal.key}`}
-                      class="rounded border border-[var(--color-border)] bg-transparent px-2 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                      class="rounded border border-[#E0E0E0] bg-white px-2 py-2 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                       type="number"
                       min="0.01"
                       step="0.01"
@@ -272,7 +286,7 @@
                     Unit
                     <select
                       id={`daily-diet-unit-${meal.key}`}
-                      class="rounded border border-[var(--color-border)] bg-transparent px-2 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                      class="rounded border border-[#E0E0E0] bg-white px-2 py-2 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
                       value={meal.unit}
                       aria-label={`Unit for ${meal.item.name}`}
                       onchange={(event) => updateUnit(meal.key, event)}
@@ -286,9 +300,9 @@
                 </div>
               </div>
               <div class="flex flex-wrap items-start gap-2 sm:justify-end">
-                <button type="button" class="rounded border px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-label={`Move ${meal.item.name} up`} onclick={() => moveMeal(meal.key, -1)} disabled={!canEdit || index === 0}>↑</button>
-                <button type="button" class="rounded border px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-label={`Move ${meal.item.name} down`} onclick={() => moveMeal(meal.key, 1)} disabled={!canEdit || index === draftMeals.length - 1}>↓</button>
-                <button type="button" class="rounded border border-[var(--color-error)] px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-label={`Remove ${meal.item.name}`} onclick={() => removeMeal(meal.key)} disabled={!canEdit}>Remove</button>
+                <button type="button" class="rounded border px-2 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-label={`Move ${meal.item.name} up`} onclick={() => moveMeal(meal.key, -1)} disabled={!canEdit || index === 0}>↑</button>
+                <button type="button" class="rounded border px-2 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-label={`Move ${meal.item.name} down`} onclick={() => moveMeal(meal.key, 1)} disabled={!canEdit || index === draftMeals.length - 1}>↓</button>
+                <button type="button" class="rounded border border-[var(--color-error)] px-2 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" aria-label={`Remove ${meal.item.name}`} onclick={() => removeMeal(meal.key)} disabled={!canEdit}>Remove</button>
               </div>
             </li>
           {/each}
@@ -317,13 +331,13 @@
       <div class="flex flex-wrap gap-2">
         <button
           type="submit"
-          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
           disabled={!canEdit || draftMeals.length < 2 || $dailyDietStore.mutation === "creating"}
           data-daily-diet-save
         >
           {$dailyDietStore.mutation === "creating" ? "Saving…" : "Save Daily Diet"}
         </button>
-        <button type="button" class="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={resetDraft} disabled={!canEdit || draftMeals.length === 0}>
+        <button type="button" class="rounded border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={resetDraft} disabled={!canEdit || draftMeals.length === 0}>
           Clear draft
         </button>
       </div>
@@ -336,7 +350,7 @@
     {:else if $dailyDietStore.status === "error" && $dailyDietStore.collections.length === 0}
       <div class="grid gap-2 rounded border border-[var(--color-error)] px-3 py-3" role="alert" data-saved-daily-diets-error>
         <p>{$dailyDietStore.error?.message ?? "Saved Daily Diets could not be loaded."}</p>
-        <button type="button" class="w-fit rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadDailyDiets()}>
+        <button type="button" class="w-fit rounded border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadDailyDiets()}>
           Try again
         </button>
       </div>

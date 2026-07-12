@@ -11,11 +11,22 @@ const source = readFileSync(join(import.meta.dir, "OptimizationWorkflow.svelte")
 test("submits generated optimization fields for the selected saved diet", () => {
 	expect(source).toContain("DietOptimizationRequest");
 	expect(source).toContain("dailyDietId,");
-	expect(source).toContain("targetMacros: { protein, carbohydrates, fat }");
 	expect(source).toContain("tolerancePercent: tolerance");
 	expect(source).toContain("excludedMealIds: []");
+	expect(source).not.toContain("targetMacros:");
 	expect(source).toContain("controller.submit(activeRequest)");
 	expect(source).toContain("data-optimization-submit");
+});
+
+test("renders saved-diet macro targets as read-only server-derived values", () => {
+	expect(source).toContain("Server-derived target macros");
+	expect(source).toContain("selectedDiet.aggregateMacros.protein");
+	expect(source).toContain("selectedDiet.aggregateMacros.carbohydrates");
+	expect(source).toContain("selectedDiet.aggregateMacros.fat");
+	expect(source).toContain("data-optimization-target-protein");
+	expect(source).not.toContain('id="optimization-protein"');
+	expect(source).not.toContain('id="optimization-carbohydrates"');
+	expect(source).not.toContain('id="optimization-fat"');
 });
 
 test("renders bounded progress skeletons and every API terminal state", () => {

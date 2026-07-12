@@ -157,9 +157,8 @@ function normalizeAlternatives(value: unknown, status: number, requestId: string
 			throw malformedResponse(status, requestId);
 		}
 		const macros = raw.macros;
-		const calories = finiteNumber(macros.calories) ? macros.calories : finiteNumber(raw.calories) ? raw.calories : null;
 		if (
-			calories === null ||
+			!finiteNumber(macros.calories) ||
 			!finiteNumber(macros.protein) ||
 			!finiteNumber(macros.carbohydrates) ||
 			!finiteNumber(macros.fat) ||
@@ -173,7 +172,7 @@ function normalizeAlternatives(value: unknown, status: number, requestId: string
 				protein: macros.protein,
 				carbohydrates: macros.carbohydrates,
 				fat: macros.fat,
-				calories
+				calories: macros.calories
 			},
 			similarityScore: raw.similarityScore
 		};

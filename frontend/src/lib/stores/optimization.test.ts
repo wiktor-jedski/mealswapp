@@ -14,7 +14,6 @@ import {
 
 const request: DietOptimizationRequest = {
 	dailyDietId: "diet-1",
-	targetMacros: { protein: 40, carbohydrates: 80, fat: 20 },
 	tolerancePercent: 10,
 	excludedMealIds: []
 };

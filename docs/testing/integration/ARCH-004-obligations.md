@@ -48,7 +48,7 @@ ARCH-004 JobStatusTracker and OptimizationController at the authenticated API bo
 
 ### Trigger / Stimulus
 
-An authenticated user submits a saved-diet optimization request with intentionally incorrect client target macros, then polls the job as the owner and as a different authenticated user. Anonymous and free-tier users also attempt submission.
+An authenticated user submits a saved-diet optimization request containing only the saved-diet ID, tolerance, and exclusions, then polls the job as the owner and as a different authenticated user. A legacy request containing client target macros is rejected before side effects. Anonymous and free-tier users also attempt submission.
 
 ### Expected Integrated Behavior
 

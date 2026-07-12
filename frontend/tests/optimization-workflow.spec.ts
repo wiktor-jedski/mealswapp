@@ -130,7 +130,7 @@ test("submits generated optimization request, shows bounded skeleton progress, r
 	await expect(page.locator("[data-optimization-results]")).toContainText("Validated alternatives");
 	await expect(page.getByRole("button", { name: "Generate fresh alternatives" })).toBeVisible();
 
-	expect(body).toEqual({ dailyDietId: "00000000-0000-0000-0000-000000000001", targetMacros: { protein: 40, carbohydrates: 80, fat: 20 }, tolerancePercent: 10, excludedMealIds: [] });
+	expect(body).toEqual({ dailyDietId: "00000000-0000-0000-0000-000000000001", tolerancePercent: 10, excludedMealIds: [] });
 	expect(keys).toHaveLength(1);
 	expect(keys[0]?.length).toBeGreaterThanOrEqual(8);
 	const axe = await new AxeBuilder({ page }).include("[data-optimization-workflow]").analyze();

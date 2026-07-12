@@ -39,6 +39,7 @@
 11. Use raw SQL with parameter binding through `pgx` or `lib/pq`; never concatenate user input into SQL.
 12. Maintain indexes for item name, food_category classifications, culinary_role classifications, micronutrient vocabulary keys, and common filter columns.
 13. Return domain entities with normalized macros, validated micronutrients, and hydrated classification lists for callers.
+14. Apply meal-search `LIMIT` and `OFFSET` in SQL after a filter-equivalent count query; hydrate only IDs in the requested page so iterative consumers never rehydrate earlier pages.
 
 ### 3. State Management & Error Handling
 - `not_found`: repository returns typed not-found errors; controllers map to 404.

@@ -13,6 +13,11 @@ import (
 //go:embed sql/meal_search.sql
 var mealSearchSQL string
 
+// Implements DESIGN-005 MealEntity search count query.
+//
+//go:embed sql/meal_search_count.sql
+var mealSearchCountSQL string
+
 // Implements DESIGN-005 MealEntity create query.
 //
 //go:embed sql/meal_create.sql
@@ -124,7 +129,15 @@ func (r *PostgresMealRepository) Search(ctx context.Context, q RepositoryQuery) 
 		offset = 0
 	}
 
-	rows, err := r.db.Query(ctx, mealSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs)
+	var total int
+	if err := r.db.QueryRow(ctx, mealSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err, "count meals")
+	}
+	if offset >= total {
+		return []MealEntity{}, total, nil
+	}
+
+	rows, err := r.db.Query(ctx, mealSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs, limit, offset)
 	if err != nil {
 		return nil, 0, mapPostgresError(err, "search meals")
 	}
@@ -146,15 +159,7 @@ func (r *PostgresMealRepository) Search(ctx context.Context, q RepositoryQuery) 
 		return nil, 0, mapPostgresError(err, "iterate meal search")
 	}
 
-	total := len(matches)
-	if offset >= total {
-		return []MealEntity{}, total, nil
-	}
-	end := offset + limit
-	if end > total {
-		end = total
-	}
-	return matches[offset:end], total, nil
+	return matches, total, nil
 }
 
 // CalculateMacros returns aggregate macro values for a meal.

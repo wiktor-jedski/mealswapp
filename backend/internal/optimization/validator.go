@@ -27,12 +27,18 @@ type OptimizationFailureCode string
 
 // Implements DESIGN-004 SolutionValidator and JobStatusTracker.
 const (
-	FailureCodeValidation       OptimizationFailureCode = "failed_validation"
-	FailureCodeSolverTimeout    OptimizationFailureCode = "solver_timeout"
+	// FailureCodeValidation identifies rejected or invalid solver output.
+	FailureCodeValidation OptimizationFailureCode = "failed_validation"
+	// FailureCodeSolverTimeout identifies a job that exceeded its solver deadline.
+	FailureCodeSolverTimeout OptimizationFailureCode = "solver_timeout"
+	// FailureCodeSolverInfeasible identifies a model with no feasible solution.
 	FailureCodeSolverInfeasible OptimizationFailureCode = "solver_infeasible"
+	// FailureCodeQueueUnavailable identifies an unavailable job queue dependency.
 	FailureCodeQueueUnavailable OptimizationFailureCode = "queue_unavailable"
-	FailureCodeWorkerCrash      OptimizationFailureCode = "worker_crash"
-	FailureCodeResultExpired    OptimizationFailureCode = "result_expired"
+	// FailureCodeWorkerCrash identifies exhausted recovery after worker failure.
+	FailureCodeWorkerCrash OptimizationFailureCode = "worker_crash"
+	// FailureCodeResultExpired identifies a terminal result outside its retention window.
+	FailureCodeResultExpired OptimizationFailureCode = "result_expired"
 )
 
 // OptimizationFailure is a safe terminal optimization error. Cause is kept

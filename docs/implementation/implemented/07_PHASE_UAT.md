@@ -187,7 +187,7 @@ The local gate is not a claim of the production `SW-REQ-082` 1,000-user target.
 The thresholds and accepted local limit are in
 [phase07-task-208-capacity.md](../phase07-task-208-capacity.md).
 
-### Failed Docker CLP-image check
+### Docker optimizer-image check
 
 Exact command:
 
@@ -195,19 +195,21 @@ Exact command:
 bash scripts/verify-clp-worker-image.sh
 ```
 
-Result: **EXPECTED FAILURE / DEFERRED EXTERNAL FIXTURE**. The build fails
-while installing the pinned package with:
+Result: **PASS**. The no-cache `linux/amd64` build downloads COIN-OR's
+official Ubuntu 24 CLP `1.17.11` release artifact, verifies its pinned SHA-256,
+builds the Go worker with `CGO_ENABLED=0`, and packages both in a minimal Ubuntu
+24.04 optimizer runtime under a non-root user. Runtime verification reports:
 
 ```text
-E: Version '1.17.11-3' for 'coinor-clp' was not found
+Coin LP version 1.17.11, build Mar 11 2026
 ```
 
-The local `/usr/bin/clp` check reports `Coin LP version 1.17.11`, and the bare
-aggregate gate passed, but Debian Bookworm does not publish the exact Docker
-package requested by `backend/Dockerfile.worker`. The image fixture remains
-deferred to the release/platform maintainer for 2026-07-18; rerun the command
-and `CGO_ENABLED=0` worker build before marking it complete. Evidence:
-[04_OPEN.md](../04_OPEN.md:270) and [Task 209 review](../reviews/task-209-review.md:28).
+The image is deliberately amd64-only because the upstream `1.17.11` release
+does not publish an Ubuntu ARM64 artifact. CLP runs as a child process inside
+the dedicated optimizer container; it is not deployed as a separate service
+and is not present in the Fiber API process. Evidence:
+[04_OPEN.md](../04_OPEN.md:270), `backend/Dockerfile.worker`, and
+`scripts/verify-clp-worker-image.sh`.
 
 ### Task 211 documentation validation
 
@@ -266,8 +268,9 @@ Traceability: `192`, `194`, `196`, `197`, `DESIGN-001`, `DESIGN-008`, and
 
 Steps:
 
-1. Select the saved collection as Daily Diet Alternative input and submit valid
-   macro targets with a fresh `Idempotency-Key`.
+1. Select the saved collection as Daily Diet Alternative input and submit a
+   tolerance and exclusions with a fresh `Idempotency-Key`; confirm its current
+   server-calculated aggregate macros are displayed read-only.
 2. Confirm the API returns `202 Accepted`, a server-created job ID, and a poll
    URL without running a solver in the API process.
 3. Poll as the owner through queued, processing, and terminal states.
@@ -356,8 +359,9 @@ follow-ups remain outside the completed Phase 07 implementation:
   deferred to the backend/platform maintainer for 2026-07-18;
 - the optional WebSocket notification path is deferred to the
   product/architecture owner for review on 2026-07-18; and
-- the pinned CLP worker-image package/artifact is deferred to the
-  release/platform maintainer for 2026-07-18.
+- the dedicated optimizer image is currently limited to `linux/amd64`; an
+  ARM64 deployment would require a separately verified source build because
+  upstream does not publish a matching Ubuntu artifact.
 
 These are not hidden exceptions: each is recorded with its owner, target date,
 and focused verification in `docs/implementation/04_OPEN.md`.
@@ -388,10 +392,9 @@ Requirement coverage: `SW-REQ-006`, `SW-REQ-021`, `SW-REQ-022`, `SW-REQ-023`,
 - The Phase 07 coverage deviations are accepted only for the specific
   defensive, dependency-failure, process-bootstrap, timer, abort, rollback,
   and teardown branches listed in `docs/implementation/04_OPEN.md`.
-- The aggregate gate passed with the repository-pinned CLP `1.17.11`, but the
-  Debian Bookworm `coinor-clp=1.17.11-3` worker-image fixture is not available.
-  The image fixture must not be described as passed until its focused script
-  succeeds.
+- The dedicated `linux/amd64` optimizer image packages the CGO-disabled Go
+  worker and the checksum-pinned official Ubuntu 24 CLP `1.17.11` artifact;
+  its no-cache focused verification passes.
 - Account deletion currently purges the generic user cache namespace; it does
   not yet proactively invalidate optimization job namespaces. The owner/date
   follow-up is documented above and is not represented as completed evidence.
