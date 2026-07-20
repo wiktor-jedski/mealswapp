@@ -100,7 +100,11 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sidebar-animated-content {
-    transition: none;
+  /* Implements DESIGN-016 ComponentStyles reduced-motion behavior across theme token changes. */
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }
