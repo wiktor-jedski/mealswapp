@@ -1120,6 +1120,15 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create berry meal: %v", err)
 	}
+	milkMealID, err := mealRepo.Create(ctx, MealEntity{
+		Type:          MealTypeSingle,
+		Name:          "Milk Bowl",
+		PhysicalState: PhysicalStateLiquid,
+		MacrosPer100:  MacroValues{Protein: 3, Carbohydrates: 5, Fat: 1},
+	})
+	if err != nil {
+		t.Fatalf("create milk meal: %v", err)
+	}
 
 	maxPrep := 5
 	meals, total, err := mealRepo.Search(ctx, RepositoryQuery{
@@ -1140,8 +1149,16 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search() infix meal name error = %v", err)
 	}
+	if total != 3 || len(meals) != 3 || meals[0].ID != berryMealID || meals[1].ID != milkMealID || meals[2].ID != oatMealID {
+		t.Fatalf("Search() infix meal name total=%d meals=%#v, want berry, milk, then oat", total, meals)
+	}
+
+	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "Bowl", FoodObjectTypes: []PhysicalState{PhysicalStateSolid}, Limit: 10})
+	if err != nil {
+		t.Fatalf("Search() physical-state filter error = %v", err)
+	}
 	if total != 2 || len(meals) != 2 || meals[0].ID != berryMealID || meals[1].ID != oatMealID {
-		t.Fatalf("Search() infix meal name total=%d meals=%#v, want berry then oat", total, meals)
+		t.Fatalf("Search() solid filter total=%d meals=%#v, want berry then oat", total, meals)
 	}
 
 	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "Berry", Limit: 1, Offset: 0})
@@ -1335,7 +1352,7 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create meal A: %v", err)
 	}
-	mealB, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeSingle, Name: "Diet Meal B", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{Carbohydrates: 20}})
+	mealB, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeSingle, Name: "Diet Meal B", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{Carbohydrates: 20}})
 	if err != nil {
 		t.Fatalf("create meal B: %v", err)
 	}
@@ -1396,6 +1413,12 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 		if _, err := savedRepo.Create(ctx, userID, SavedDiet{Entries: []SavedDietMealEntry{entry}}); !IsKind(err, ErrorKindValidation) {
 			t.Fatalf("invalid entry %#v error = %v, want validation", entry, err)
 		}
+	}
+	if _, err := savedRepo.Create(ctx, userID, SavedDiet{Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 1, Unit: "ml"}}}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("cross-basis repository Create() error = %v, want validation", err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO saved_diet_meal_entries (saved_diet_id, meal_id, quantity, unit, position) VALUES ($1, $2, 1, 'ml', 9)`, dietID, mealA); !IsKind(mapPostgresError(err, "cross-basis saved diet test"), ErrorKindValidation) {
+		t.Fatalf("cross-basis database insert error = %v, want validation", err)
 	}
 	if _, err := savedRepo.SaveItem(ctx, otherUserID, dietID, SavedItemKindSavedDiet); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("cross-user saved_diet item error = %v, want validation", err)
@@ -2886,6 +2909,7 @@ func TestPostgresMealRepositoryLiquidRecipeNormalizationAndUnits(t *testing.T) {
 		{FoodItemID: liquidID, Quantity: 1, Unit: "fl_oz"},
 		{FoodItemID: liquidID, Quantity: 1, Unit: "serving"},
 	}
+	var recipeID uuid.UUID
 	for _, ingredient := range valid {
 		id, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeComposite, Name: "Liquid Recipe " + ingredient.Unit, PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{ingredient}})
 		if err != nil {
@@ -2901,6 +2925,13 @@ func TestPostgresMealRepositoryLiquidRecipeNormalizationAndUnits(t *testing.T) {
 		}
 		if !meal.NormalizedMacrosAvailable || meal.MacrosPer100 != (MacroValues{Protein: wantProtein}) {
 			t.Fatalf("GetByID() liquid %s meal = %#v", ingredient.Unit, meal)
+		}
+		recipeID = id
+	}
+	for _, unit := range []string{"ml", "cup"} {
+		_, err := db.Exec(ctx, `INSERT INTO recipe_ingredients (meal_id, food_item_id, quantity, unit, position) VALUES ($1, $2, 1, $3, 1)`, recipeID, solidID, unit)
+		if !IsKind(mapPostgresError(err, "recipe unit boundary test"), ErrorKindValidation) {
+			t.Fatalf("database recipe unit %q error = %v, want validation", unit, err)
 		}
 	}
 }

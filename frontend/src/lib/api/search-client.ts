@@ -1,4 +1,4 @@
-import { derived, type Readable } from "svelte/store";
+import { derived, get, type Readable } from "svelte/store";
 import { keepPreviousData, type QueryFunctionContext } from "@tanstack/query-core";
 import type { CreateQueryOptions } from "@tanstack/svelte-query";
 
@@ -14,6 +14,7 @@ import type {
 	SearchResponseEnvelope
 } from "./generated";
 import { buildSearchRequest, searchRequestKey, type SearchState } from "../stores/search";
+import { selectedDailyDietId } from "../stores/selected-daily-diet";
 import { LocalQueryCache } from "../cache/local-query-cache";
 
 // Implements DESIGN-001 SearchView TanStack Query search/autocomplete client over generated envelopes.
@@ -170,19 +171,20 @@ export async function fetchFoodObject(id: string, signal: AbortSignal): Promise<
 export function buildSearchQueryOptions(
 	state: SearchState,
 	localCache: LocalQueryCache,
-	timeoutMs: number = SEARCH_TIMEOUT_MS
+	timeoutMs: number = SEARCH_TIMEOUT_MS,
+	selectedId: string | null = get(selectedDailyDietId)
 ): CreateQueryOptions<SearchResponse, SearchClientError, SearchResponse, SearchQueryKey> {
-	const requestKey = searchRequestKey(state);
-	const request = buildSearchRequest(state);
+	const requestKey = searchRequestKey(state, selectedId);
+	const request = buildSearchRequest(state, selectedId);
 	const queryKey: SearchQueryKey = [SEARCH_QUERY_NAMESPACE, requestKey];
 	const enabled =
 		state.mode === "substitution"
 			? state.searchSubmitted && state.substitutionInputs.length > 0
-			: state.query.trim().length > 0;
+			: state.query.trim().length > 0 && (state.mode !== "daily_diet_alternative" || selectedId !== null);
 
 	return {
 		queryKey,
-		// Implements DESIGN-001 SearchView execution guard: Catalog/Daily require submitted text; Substitution requires the explicit two-step search action with at least one input.
+		// Implements DESIGN-001 SearchView execution guard: Alternative also requires its authoritative selected Daily Diet ID.
 		enabled,
 		staleTime: LOCAL_CACHE_STALE_MS,
 		gcTime: LOCAL_CACHE_STALE_MS * 2,
@@ -201,7 +203,9 @@ export function createSearchQueryOptions(
 	localCache: LocalQueryCache,
 	timeoutMs: number = SEARCH_TIMEOUT_MS
 ): Readable<CreateQueryOptions<SearchResponse, SearchClientError, SearchResponse, SearchQueryKey>> {
-	return derived(state, ($state) => buildSearchQueryOptions($state, localCache, timeoutMs));
+	return derived([state, selectedDailyDietId], ([$state, $selectedId]) =>
+		buildSearchQueryOptions($state, localCache, timeoutMs, $selectedId)
+	);
 }
 
 /**

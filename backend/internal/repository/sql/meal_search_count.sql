@@ -24,4 +24,5 @@ WHERE ($1::boolean OR m.deleted_at IS NULL)
           JOIN classifications t ON t.id = mt.classification_id
           WHERE t.kind = 'culinary_role' AND t.id = ANY($5::uuid[])
       )
-  );
+  )
+	AND (coalesce(cardinality($6::text[]), 0) = 0 OR m.physical_state = ANY($6::text[]));

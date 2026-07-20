@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { SearchRejection } from "../api/generated";
   import { clearDailyDietState, dailyDietStore, loadDailyDiets, selectDailyDiet } from "../stores/daily-diet";
+  import { clearOptimizationIdentity } from "../stores/optimization";
+  import { selectedDailyDietId } from "../stores/selected-daily-diet";
   import type { AuthStatus } from "../stores/auth-session";
   import { formatDisplayQuantity } from "../units";
   import OptimizationWorkflow from "./OptimizationWorkflow.svelte";
@@ -30,13 +32,17 @@
 
   $effect(() => {
     if (authStatus === "authenticated" && authenticated && userId && loadedUserId !== userId) {
-      if (loadedUserId !== null) clearDailyDietState();
+      if (loadedUserId !== null) {
+        clearOptimizationIdentity();
+        clearDailyDietState();
+      }
       loadedUserId = userId;
       void loadDailyDiets().catch(() => undefined);
       return;
     }
     if (!authenticated && loadedUserId !== null) {
       loadedUserId = null;
+      clearOptimizationIdentity();
       clearDailyDietState();
     }
   });
@@ -95,9 +101,9 @@
         {#each $dailyDietStore.collections as diet (diet.id)}
           <button
             type="button"
-            class="grid gap-1 rounded border p-3 text-left focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {($dailyDietStore.selectedId === diet.id ? 'border-[var(--color-primary)]' : 'border-[var(--color-border)]')}"
+            class="grid gap-1 rounded border p-3 text-left focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {($selectedDailyDietId === diet.id ? 'border-[var(--color-primary)]' : 'border-[var(--color-border)]')}"
             role="radio"
-            aria-checked={$dailyDietStore.selectedId === diet.id}
+            aria-checked={$selectedDailyDietId === diet.id}
             aria-label={`Use ${diet.name} as Daily Diet Alternative input`}
             onclick={() => selectDailyDiet(diet.id)}
             disabled={!executionAllowed}
@@ -108,11 +114,11 @@
           </button>
         {/each}
       </div>
-      {#if $dailyDietStore.selectedId}
+      {#if $selectedDailyDietId}
         <p class="text-sm text-[var(--color-muted)]" role="status" data-daily-diet-alternative-selected>
           Selected collection is ready for Daily Diet Alternative search.
         </p>
-        <OptimizationWorkflow selectedDietId={$dailyDietStore.selectedId} executionAllowed={executionAllowed} />
+        <OptimizationWorkflow selectedDietId={$selectedDailyDietId} identityId={userId} executionAllowed={executionAllowed} />
       {/if}
     {/if}
   {/if}

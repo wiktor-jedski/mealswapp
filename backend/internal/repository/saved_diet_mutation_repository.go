@@ -1,98 +1,106 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
+	"io"
+	"math"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-// Implements DESIGN-008 ProfileController daily-diet idempotency claim query.
-//
-//go:embed sql/checkout_idempotency_claim.sql
-var checkoutIdempotencyClaimSQL string
+// Implements DESIGN-008 SavedDataRepository fixed daily-diet create scope.
+const (
+	dailyDietCreateMethod = "POST"
+	dailyDietCreateRoute  = "/daily-diets"
+)
 
-// Implements DESIGN-008 ProfileController daily-diet idempotency lock query.
+// Implements DESIGN-008 SavedDataRepository typed daily-diet create claim query.
 //
-//go:embed sql/checkout_idempotency_get_for_update.sql
-var checkoutIdempotencyGetForUpdateSQL string
+//go:embed sql/daily_diet_create_claim.sql
+var dailyDietCreateClaimSQL string
+
+// Implements DESIGN-008 SavedDataRepository typed daily-diet create claim read query.
+//
+//go:embed sql/daily_diet_create_claim_get.sql
+var dailyDietCreateClaimGetSQL string
 
 // Implements DESIGN-008 SavedDataRepository atomic daily-diet parent query.
 //
-//go:embed sql/saved_diet_create_with_id.sql
-var savedDietCreateWithIDSQL string
+//go:embed sql/saved_diet_create_snapshot.sql
+var savedDietCreateSnapshotSQL string
+
+// Implements DESIGN-008 SavedDataRepository atomic daily-diet entry query.
+//
+//go:embed sql/saved_diet_entry_insert_snapshot.sql
+var savedDietEntryInsertSnapshotSQL string
 
 // Implements DESIGN-008 SavedDataRepository ownership-aware deletion query.
 //
 //go:embed sql/saved_diet_exists.sql
 var savedDietExistsSQL string
 
-// Implements DESIGN-008 SavedDataRepository and ProfileController atomic mutation contract.
+// Implements DESIGN-008 SavedDataRepository atomic mutation contract.
 var _ DailyDietMutationRepository = (*PostgresSavedDataRepository)(nil)
 
-// CreateWithIdempotency claims the request key and persists the complete daily-diet write atomically.
-// Implements DESIGN-008 SavedDataRepository and ProfileController.
-func (r *PostgresSavedDataRepository) CreateWithIdempotency(ctx context.Context, userID uuid.UUID, diet SavedDiet, record CheckoutIdempotencyRecord) (AtomicDailyDietMutationResult, error) {
-	if err := validateSavedDietInput(userID, diet, false); err != nil {
-		return AtomicDailyDietMutationResult{}, err
+// GetDailyDietCreateClaim loads and validates an immutable response for an exact request hash.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func (r *PostgresSavedDataRepository) GetDailyDietCreateClaim(ctx context.Context, userID uuid.UUID, key string, bodyHash string) (DailyDietCreateClaimResult, error) {
+	if err := validateDailyDietCreateScope(userID, key, bodyHash); err != nil {
+		return DailyDietCreateClaimResult{}, err
 	}
-	entries, err := normalizeSavedDietEntries(diet.Entries)
+	record, err := scanDailyDietCreateClaim(r.db.QueryRow(ctx, dailyDietCreateClaimGetSQL, userID, dailyDietCreateMethod, dailyDietCreateRoute, key))
 	if err != nil {
-		return AtomicDailyDietMutationResult{}, err
+		return DailyDietCreateClaimResult{}, err
 	}
-	if record.UserID != userID || record.Method != "POST" || record.Route != "/daily-diets" {
-		return AtomicDailyDietMutationResult{}, validationError("daily diet idempotency scope is invalid")
+	if record.bodyHash != bodyHash {
+		return DailyDietCreateClaimResult{}, NewError(ErrorKindConflict, "idempotency key reused with different body", nil)
 	}
-	if err := validateCheckoutIdempotencyRecord(record); err != nil {
-		return AtomicDailyDietMutationResult{}, err
-	}
-	claimedDietID, err := dailyDietIDFromIdempotencyResponse(record.ResponseBody)
-	if err != nil {
-		return AtomicDailyDietMutationResult{}, err
-	}
-	if diet.ID != uuid.Nil && diet.ID != claimedDietID {
-		return AtomicDailyDietMutationResult{}, validationError("daily diet idempotency id does not match diet id")
-	}
-	diet.ID = claimedDietID
+	return DailyDietCreateClaimResult{Response: record.response, StatusCode: record.statusCode, Replayed: true}, nil
+}
 
-	var result AtomicDailyDietMutationResult
+// ClaimDailyDietCreate atomically claims a key and writes the exact immutable response snapshot.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func (r *PostgresSavedDataRepository) ClaimDailyDietCreate(ctx context.Context, claim DailyDietCreateClaim) (DailyDietCreateClaimResult, error) {
+	if err := validateDailyDietCreateClaim(claim); err != nil {
+		return DailyDietCreateClaimResult{}, err
+	}
+	payload, err := json.Marshal(claim.Response)
+	if err != nil {
+		return DailyDietCreateClaimResult{}, validationError("daily diet create response is invalid")
+	}
+
+	var result DailyDietCreateClaimResult
 	err = withTransaction(ctx, r.db, func(db transactionalExecutor) error {
-		claimed, claimErr := scanCheckoutIdempotencyRecord(db.QueryRow(ctx, checkoutIdempotencyClaimSQL, record.UserID, record.Method, record.Route, record.Key, record.BodyHash, record.StatusCode, record.ResponseBody))
+		record, claimErr := scanDailyDietCreateClaim(db.QueryRow(ctx, dailyDietCreateClaimSQL, claim.UserID, dailyDietCreateMethod, dailyDietCreateRoute, claim.Key, claim.BodyHash, claim.StatusCode, payload))
 		if claimErr == nil {
-			if err := createSavedDietRows(ctx, db, userID, diet, entries); err != nil {
+			if err := createSavedDietSnapshot(ctx, db, claim); err != nil {
 				return err
 			}
-			result = AtomicDailyDietMutationResult{DietID: diet.ID, Idempotency: claimed}
+			result = DailyDietCreateClaimResult{Response: record.response, StatusCode: record.statusCode}
 			return nil
 		}
 		if !IsKind(claimErr, ErrorKindNotFound) {
 			return claimErr
 		}
 
-		existing, existingErr := scanCheckoutIdempotencyRecord(db.QueryRow(ctx, checkoutIdempotencyGetForUpdateSQL, record.UserID, record.Method, record.Route, record.Key))
+		existing, existingErr := scanDailyDietCreateClaim(db.QueryRow(ctx, dailyDietCreateClaimGetSQL, claim.UserID, dailyDietCreateMethod, dailyDietCreateRoute, claim.Key))
 		if existingErr != nil {
-			if IsKind(existingErr, ErrorKindNotFound) {
-				return NewError(ErrorKindRetryable, "daily diet idempotency claim disappeared", existingErr)
-			}
 			return existingErr
 		}
-		if existing.BodyHash != record.BodyHash {
+		if existing.bodyHash != claim.BodyHash {
 			return NewError(ErrorKindConflict, "idempotency key reused with different body", nil)
 		}
-		existingDietID, err := dailyDietIDFromIdempotencyResponse(existing.ResponseBody)
-		if err != nil {
-			return err
-		}
-		result = AtomicDailyDietMutationResult{DietID: existingDietID, Idempotency: existing, Replayed: true}
+		result = DailyDietCreateClaimResult{Response: existing.response, StatusCode: existing.statusCode, Replayed: true}
 		return nil
 	})
-	if err != nil {
-		return AtomicDailyDietMutationResult{}, err
-	}
-	return result, nil
+	return result, err
 }
 
 // DeleteIfOwned deletes a diet and reports whether an existing row belonged to another user.
@@ -123,54 +131,148 @@ func (r *PostgresSavedDataRepository) DeleteIfOwned(ctx context.Context, userID 
 	return deleted, exists, err
 }
 
-// createSavedDietRows writes the parent, ordered entries, and saved-item index in the caller's transaction.
-// Implements DESIGN-008 SavedDataRepository.
-func createSavedDietRows(ctx context.Context, db transactionalExecutor, userID uuid.UUID, diet SavedDiet, entries []SavedDietMealEntry) error {
-	if err := db.QueryRow(ctx, savedDietCreateWithIDSQL, diet.ID, userID, normalizeSavedDietName(diet.Name)).Scan(&diet.ID); err != nil {
-		return mapPostgresError(err, "create saved diet")
+// dailyDietCreateRecord is the validated internal persistence row.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+type dailyDietCreateRecord struct {
+	bodyHash   string
+	statusCode int
+	response   DailyDietCreateResponse
+}
+
+// scanDailyDietCreateClaim decodes only the canonical persisted response shape.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func scanDailyDietCreateClaim(row pgx.Row) (dailyDietCreateRecord, error) {
+	var userID uuid.UUID
+	var method, route, key, bodyHash string
+	var statusCode int
+	var payload []byte
+	var createdAt, updatedAt time.Time
+	if err := row.Scan(&userID, &method, &route, &key, &bodyHash, &statusCode, &payload, &createdAt, &updatedAt); err != nil {
+		return dailyDietCreateRecord{}, mapPostgresError(err, "scan daily diet create claim")
 	}
-	if err := replaceSavedDietEntries(ctx, db, diet.ID, entries); err != nil {
+	if method != dailyDietCreateMethod || route != dailyDietCreateRoute || statusCode != 201 {
+		return dailyDietCreateRecord{}, NewError(ErrorKindInternal, "daily diet create claim scope is invalid", nil)
+	}
+	response, err := decodeDailyDietCreateResponse(payload)
+	if err != nil {
+		return dailyDietCreateRecord{}, err
+	}
+	if err := validateDailyDietCreateScope(userID, key, bodyHash); err != nil {
+		return dailyDietCreateRecord{}, NewError(ErrorKindInternal, "daily diet create claim is invalid", err)
+	}
+	return dailyDietCreateRecord{bodyHash: bodyHash, statusCode: statusCode, response: response}, nil
+}
+
+// decodeDailyDietCreateResponse rejects unknown, trailing, dual, and legacy response bodies.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func decodeDailyDietCreateResponse(payload []byte) (DailyDietCreateResponse, error) {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	var response DailyDietCreateResponse
+	if err := decoder.Decode(&response); err != nil {
+		return DailyDietCreateResponse{}, NewError(ErrorKindInternal, "daily diet create response is invalid", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return DailyDietCreateResponse{}, NewError(ErrorKindInternal, "daily diet create response has trailing data", nil)
+	}
+	var required struct {
+		AggregateMacros *struct {
+			Protein       *float64 `json:"protein"`
+			Carbohydrates *float64 `json:"carbohydrates"`
+			Fat           *float64 `json:"fat"`
+			Calories      *float64 `json:"calories"`
+		} `json:"aggregateMacros"`
+	}
+	if err := json.Unmarshal(payload, &required); err != nil || required.AggregateMacros == nil || required.AggregateMacros.Protein == nil || required.AggregateMacros.Carbohydrates == nil || required.AggregateMacros.Fat == nil || required.AggregateMacros.Calories == nil {
+		return DailyDietCreateResponse{}, NewError(ErrorKindInternal, "daily diet create response macros are incomplete", err)
+	}
+	if err := validateDailyDietCreateResponse(response); err != nil {
+		return DailyDietCreateResponse{}, NewError(ErrorKindInternal, "daily diet create response is invalid", err)
+	}
+	return response, nil
+}
+
+// validateDailyDietCreateClaim checks that persistence input and response describe one exact resource.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func validateDailyDietCreateClaim(claim DailyDietCreateClaim) error {
+	if err := validateDailyDietCreateScope(claim.UserID, claim.Key, claim.BodyHash); err != nil {
 		return err
 	}
-	return ensureSavedDietItem(ctx, db, userID, diet.ID)
+	if claim.StatusCode != 201 {
+		return validationError("daily diet create status must be 201")
+	}
+	if err := validateSavedDietInput(claim.UserID, claim.Diet, false); err != nil {
+		return err
+	}
+	if claim.Diet.ID != claim.Response.ID || claim.Diet.UserID != claim.UserID || !claim.Diet.CreatedAt.Equal(claim.Response.CreatedAt) || !claim.Diet.UpdatedAt.Equal(claim.Response.UpdatedAt) {
+		return validationError("daily diet create identities do not match")
+	}
+	if err := validateDailyDietCreateResponse(claim.Response); err != nil {
+		return err
+	}
+	if len(claim.Diet.Entries) != len(claim.Response.Entries) {
+		return validationError("daily diet create entries do not match")
+	}
+	for index, entry := range claim.Diet.Entries {
+		responseEntry := claim.Response.Entries[index]
+		if entry.ID != responseEntry.ID || entry.SavedDietID != claim.Diet.ID || entry.MealID != responseEntry.MealID || entry.Quantity != responseEntry.Quantity || entry.Unit != responseEntry.Unit || entry.Position != responseEntry.Position {
+			return validationError("daily diet create entries do not match")
+		}
+	}
+	return nil
 }
 
-// scanCheckoutIdempotencyRecord scans one durable mutation idempotency row.
-// Implements DESIGN-008 ProfileController daily-diet idempotency.
-func scanCheckoutIdempotencyRecord(row pgx.Row) (CheckoutIdempotencyRecord, error) {
-	var record CheckoutIdempotencyRecord
-	err := row.Scan(
-		&record.UserID,
-		&record.Method,
-		&record.Route,
-		&record.Key,
-		&record.BodyHash,
-		&record.StatusCode,
-		&record.ResponseBody,
-		&record.CreatedAt,
-		&record.UpdatedAt,
-	)
-	if err != nil {
-		return CheckoutIdempotencyRecord{}, mapPostgresError(err, "scan checkout idempotency")
+// validateDailyDietCreateScope checks the fixed user, key, and SHA-256 request scope.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func validateDailyDietCreateScope(userID uuid.UUID, key string, bodyHash string) error {
+	if userID == uuid.Nil {
+		return validationError("user id is required")
 	}
-	return record, nil
+	if len(strings.TrimSpace(key)) < 8 || len(key) > 255 {
+		return validationError("idempotency key is invalid")
+	}
+	decoded, err := hex.DecodeString(bodyHash)
+	if err != nil || len(decoded) != 32 {
+		return validationError("body hash must be sha256")
+	}
+	return nil
 }
 
-// dailyDietIDFromIdempotencyResponse extracts the durable resource reference.
-// Implements DESIGN-008 ProfileController daily-diet idempotency.
-func dailyDietIDFromIdempotencyResponse(payload []byte) (uuid.UUID, error) {
-	var response struct {
-		DailyDietID uuid.UUID `json:"dailyDietId"`
-		ID          uuid.UUID `json:"id"`
+// validateDailyDietCreateResponse checks the exact immutable response domain shape.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func validateDailyDietCreateResponse(response DailyDietCreateResponse) error {
+	if response.ID == uuid.Nil || strings.TrimSpace(response.Name) == "" || response.CreatedAt.IsZero() || response.UpdatedAt.IsZero() || len(response.Entries) == 0 || len(response.Entries) > 100 {
+		return validationError("daily diet create response is incomplete")
 	}
-	if err := json.Unmarshal(payload, &response); err != nil {
-		return uuid.Nil, NewError(ErrorKindInternal, "daily diet idempotency response is invalid", err)
+	positions := make(map[int]struct{}, len(response.Entries))
+	for _, entry := range response.Entries {
+		if entry.ID == uuid.Nil || entry.MealID == uuid.Nil || entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) || ValidateQuantityUnit(entry.Unit) != nil || entry.Position < 0 || entry.Position >= 100 {
+			return validationError("daily diet create response entry is invalid")
+		}
+		if _, exists := positions[entry.Position]; exists {
+			return validationError("daily diet create response positions are duplicated")
+		}
+		positions[entry.Position] = struct{}{}
 	}
-	if response.DailyDietID != uuid.Nil {
-		return response.DailyDietID, nil
+	macros := response.AggregateMacros
+	for _, value := range []float64{macros.Protein, macros.Carbohydrates, macros.Fat, macros.Calories} {
+		if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+			return validationError("daily diet create response macros are invalid")
+		}
 	}
-	if response.ID != uuid.Nil {
-		return response.ID, nil
+	return nil
+}
+
+// createSavedDietSnapshot writes response-identical parent, entries, and saved-item rows.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func createSavedDietSnapshot(ctx context.Context, db transactionalExecutor, claim DailyDietCreateClaim) error {
+	if _, err := db.Exec(ctx, savedDietCreateSnapshotSQL, claim.Diet.ID, claim.UserID, claim.Diet.Name, claim.Diet.CreatedAt, claim.Diet.UpdatedAt); err != nil {
+		return mapPostgresError(err, "create saved diet")
 	}
-	return uuid.Nil, NewError(ErrorKindInternal, "daily diet idempotency response has no diet id", errors.New("missing daily diet id"))
+	for _, entry := range claim.Diet.Entries {
+		if _, err := db.Exec(ctx, savedDietEntryInsertSnapshotSQL, entry.ID, claim.Diet.ID, entry.MealID, entry.Quantity, entry.Unit, entry.Position, entry.CreatedAt); err != nil {
+			return mapPostgresError(err, "create saved diet entry")
+		}
+	}
+	return ensureSavedDietItem(ctx, db, claim.UserID, claim.Diet.ID)
 }

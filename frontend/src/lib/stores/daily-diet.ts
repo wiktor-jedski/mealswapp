@@ -3,6 +3,7 @@ import { get, writable, type Writable } from "svelte/store";
 import {
 	dailyDietApi,
 	DailyDietClientError,
+	generateDailyDietIdempotencyKey,
 	type DailyDietApi,
 	type DailyDietMutationOptions
 } from "../api/daily-diet-client";
@@ -12,7 +13,7 @@ import type {
 	DailyDietCreateRequest,
 	DailyDietReplaceRequest
 } from "../api/generated";
-import { setDailyDietId } from "./search";
+import { selectedDailyDietId } from "./selected-daily-diet";
 
 // Implements DESIGN-001 SearchView Daily Diet collection store/controller.
 // Implements DESIGN-008 SavedDataRepository user-owned collection state without client persistence.
@@ -24,9 +25,8 @@ export type DailyDietLoadStatus = "idle" | "loading" | "success" | "empty" | "er
 export type DailyDietMutation = "idle" | "creating" | "replacing" | "deleting";
 
 /** Frontend state for authenticated user-owned collections; no session secrets or user IDs are stored. */
-export interface DailyDietState {
+	export interface DailyDietState {
 	collections: DailyDiet[];
-	selectedId: string | null;
 	status: DailyDietLoadStatus;
 	mutation: DailyDietMutation;
 	loading: boolean;
@@ -37,7 +37,6 @@ export interface DailyDietState {
 export function createInitialDailyDietState(): DailyDietState {
 	return {
 		collections: [],
-		selectedId: null,
 		status: "idle",
 		mutation: "idle",
 		loading: false,
@@ -52,12 +51,15 @@ export const dailyDietStore = writable<DailyDietState>(createInitialDailyDietSta
 export interface DailyDietControllerOptions {
 	api?: DailyDietApi;
 	store?: Writable<DailyDietState>;
+	selectionStore?: Writable<string | null>;
+	createIdempotencyKey?: typeof generateDailyDietIdempotencyKey;
 }
 
 /** Controller operations for loading and reconciling user-owned Daily Diet collections. */
 export interface DailyDietController {
 	load(signal?: AbortSignal): Promise<DailyDiet[]>;
 	create(request: DailyDietCreateRequest, options?: DailyDietMutationOptions): Promise<DailyDiet>;
+	discardCreateIntent(): void;
 	replace(dietId: string, request: DailyDietReplaceRequest, options?: Pick<DailyDietMutationOptions, "csrfToken" | "signal">): Promise<DailyDiet>;
 	select(dietId: string | null): void;
 	remove(dietId: string, options?: Pick<DailyDietMutationOptions, "csrfToken" | "signal">): Promise<void>;
@@ -65,54 +67,78 @@ export interface DailyDietController {
 }
 
 /** Creates a Daily Diet controller bound to a Svelte store and generated-contract API. */
-export function createDailyDietController({ api = dailyDietApi, store = dailyDietStore }: DailyDietControllerOptions = {}): DailyDietController {
-	let operation = 0;
+export function createDailyDietController({
+	api = dailyDietApi,
+	store = dailyDietStore,
+	selectionStore = selectedDailyDietId,
+	createIdempotencyKey = generateDailyDietIdempotencyKey
+}: DailyDietControllerOptions = {}): DailyDietController {
+	type ReadLifecycle = { controller: AbortController; promise: Promise<DailyDiet[]> };
+	type MutationLifecycle = { kind: Exclude<DailyDietMutation, "idle">; controller: AbortController; promise: Promise<unknown> };
+	let activeRead: ReadLifecycle | null = null;
+	let activeMutation: MutationLifecycle | null = null;
+	let createIntent: { fingerprint: string; idempotencyKey: string } | null = null;
 
-	async function load(signal?: AbortSignal): Promise<DailyDiet[]> {
-		const currentOperation = ++operation;
-		update(store, (state) => ({ ...state, status: "loading", loading: true, error: null, mutation: "idle" }));
-		try {
-			const collections = await api.listDailyDiets(signal);
-			if (currentOperation !== operation) return collections;
-			update(store, (state) => ({
-				...state,
-				collections,
-				selectedId: retainSelection(state.selectedId, collections),
-				status: collections.length === 0 ? "empty" : "success",
-				mutation: "idle",
-				loading: false,
-				error: null
-			}));
-			return collections;
-		} catch (error) {
-			if (currentOperation === operation) setFailure(store, error);
-			throw error;
-		}
+	function load(signal?: AbortSignal): Promise<DailyDiet[]> {
+		if (signal?.aborted) return Promise.reject(signal.reason ?? abortReason("Aborted"));
+		activeRead?.controller.abort(abortReason("Superseded Daily Diet read"));
+		const controller = new AbortController();
+		const chained = chainAbortSignal(controller.signal, signal);
+		const lifecycle: ReadLifecycle = { controller, promise: Promise.resolve([]) };
+		activeRead = lifecycle;
+		if (!activeMutation) update(store, (state) => ({ ...state, status: "loading", loading: true, error: null }));
+		const promise = (async () => {
+			try {
+				while (activeMutation) await waitForSettlement(activeMutation.promise, chained.signal);
+				throwIfAborted(chained.signal);
+				if (activeRead === lifecycle) update(store, (state) => ({ ...state, status: "loading", loading: true, error: null }));
+				const collections = await api.listDailyDiets(chained.signal);
+				if (activeRead !== lifecycle || chained.signal.aborted) return collections;
+				selectionStore.update((selectedId) => retainSelection(selectedId, collections));
+				store.set({
+					collections,
+					status: collections.length === 0 ? "empty" : "success",
+					mutation: "idle",
+					loading: false,
+					error: null
+				});
+				return collections;
+			} catch (error) {
+				if (activeRead === lifecycle && !chained.signal.aborted) setFailure(store, error);
+				throw error;
+			} finally {
+				chained.cancel();
+				if (activeRead === lifecycle) activeRead = null;
+			}
+		})();
+		lifecycle.promise = promise;
+		return promise;
 	}
 
-	async function create(request: DailyDietCreateRequest, options: DailyDietMutationOptions = {}): Promise<DailyDiet> {
-		const currentOperation = ++operation;
-		update(store, (state) => ({ ...state, mutation: "creating", loading: true, error: null }));
+	function create(request: DailyDietCreateRequest, options: DailyDietMutationOptions = {}): Promise<DailyDiet> {
+		if (activeMutation?.kind === "creating") return activeMutation.promise as Promise<DailyDiet>;
+		if (activeMutation) return Promise.reject(mutationInProgress());
+		const fingerprint = JSON.stringify(request);
 		try {
-			const created = await api.createDailyDiet(request, options);
-			if (currentOperation === operation) {
-				update(store, (state) => {
-					const collections = upsert(state.collections, created);
-					return {
-						...state,
-						collections,
-						status: "success",
-						mutation: "idle",
-						loading: false,
-						error: null
-					};
-				});
+			if (createIntent?.fingerprint !== fingerprint) {
+				createIntent = { fingerprint, idempotencyKey: createIdempotencyKey() };
 			}
-			return created;
 		} catch (error) {
-			if (currentOperation === operation) setFailure(store, error);
-			throw error;
+			setFailure(store, error);
+			return Promise.reject(error);
 		}
+		const intent = createIntent;
+		if (!intent) throw new Error("Daily Diet create intent was not initialized");
+		return runMutation("creating", options.signal, async (signal) => {
+			return api.createDailyDiet(request, { ...options, signal, idempotencyKey: intent.idempotencyKey });
+		}, (created) => {
+			update(store, (state) => ({ ...state, collections: upsert(state.collections, created) }));
+			if (createIntent === intent) createIntent = null;
+		});
+	}
+
+	function discardCreateIntent(): void {
+		createIntent = null;
 	}
 
 	async function replace(
@@ -120,38 +146,13 @@ export function createDailyDietController({ api = dailyDietApi, store = dailyDie
 		request: DailyDietReplaceRequest,
 		options: Pick<DailyDietMutationOptions, "csrfToken" | "signal"> = {}
 	): Promise<DailyDiet> {
-		const currentOperation = ++operation;
-		const previous = get(store);
-		const existing = previous.collections.find((diet) => diet.id === dietId);
-		update(store, (state) => ({
-			...state,
-			collections: existing && canOptimisticallyReplace(existing, request)
-				? upsert(state.collections, optimisticReplace(existing, request))
-				: state.collections,
-			mutation: "replacing",
-			loading: true,
-			error: null
-		}));
-		try {
-			const replaced = await api.replaceDailyDiet(dietId, request, options);
-			if (currentOperation === operation) {
-				update(store, (state) => ({
-					...state,
-					collections: upsert(state.collections, replaced),
-					selectedId: retainSelection(state.selectedId, upsert(state.collections, replaced)),
-					status: "success",
-					mutation: "idle",
-					loading: false,
-					error: null
-				}));
-			}
-			return replaced;
-		} catch (error) {
-			if (currentOperation === operation) {
-				store.set({ ...previous, status: "error", mutation: "idle", loading: false, error: projectError(error) });
-			}
-			throw error;
-		}
+		if (activeMutation) return Promise.reject(mutationInProgress());
+		return runMutation(
+			"replacing",
+			options.signal,
+			(signal) => api.replaceDailyDiet(dietId, request, { ...options, signal }),
+			(replaced) => update(store, (state) => ({ ...state, collections: upsert(state.collections, replaced) }))
+		);
 	}
 
 	function select(dietId: string | null): void {
@@ -159,47 +160,72 @@ export function createDailyDietController({ api = dailyDietApi, store = dailyDie
 		if (dietId !== null && !state.collections.some((diet) => diet.id === dietId)) {
 			return;
 		}
-		store.update((current) => ({ ...current, selectedId: dietId, error: null }));
-		// Daily Diet Alternative owns this projection; Catalog and Substitution state remain untouched.
-		setDailyDietId(dietId ?? undefined);
+		selectionStore.set(dietId);
+		store.update((current) => ({ ...current, error: null }));
 	}
 
 	async function remove(
 		dietId: string,
 		options: Pick<DailyDietMutationOptions, "csrfToken" | "signal"> = {}
 	): Promise<void> {
-		const currentOperation = ++operation;
-		update(store, (state) => ({ ...state, mutation: "deleting", loading: true, error: null }));
-		try {
-			await api.deleteDailyDiet(dietId, options);
-			if (currentOperation === operation) {
-				update(store, (state) => {
-					const collections = state.collections.filter((diet) => diet.id !== dietId);
-					return {
-						...state,
-						collections,
-						selectedId: state.selectedId === dietId ? null : state.selectedId,
-						status: collections.length === 0 ? "empty" : "success",
-						mutation: "idle",
-						loading: false,
-						error: null
-					};
-				});
-				if (get(store).selectedId === null) setDailyDietId(undefined);
-			}
-		} catch (error) {
-			if (currentOperation === operation) setFailure(store, error);
-			throw error;
-		}
+		if (activeMutation) return Promise.reject(mutationInProgress());
+		return runMutation("deleting", options.signal, async (signal) => {
+			await api.deleteDailyDiet(dietId, { ...options, signal });
+		}, () => {
+			update(store, (state) => ({ ...state, collections: state.collections.filter((diet) => diet.id !== dietId) }));
+			selectionStore.update((selectedId) => selectedId === dietId ? null : selectedId);
+		});
 	}
 
 	function clear(): void {
-		operation += 1;
+		activeRead?.controller.abort(abortReason("Daily Diet state cleared"));
+		activeMutation?.controller.abort(abortReason("Daily Diet state cleared"));
+		activeRead = null;
+		activeMutation = null;
+		createIntent = null;
 		store.set(createInitialDailyDietState());
-		setDailyDietId(undefined);
+		selectionStore.set(null);
 	}
 
-	return { load, create, replace, select, remove, clear };
+	function runMutation<T>(
+		kind: Exclude<DailyDietMutation, "idle">,
+		externalSignal: AbortSignal | undefined,
+		execute: (signal: AbortSignal) => Promise<T>,
+		commit: (result: T) => void
+	): Promise<T> {
+		if (externalSignal?.aborted) return Promise.reject(externalSignal.reason ?? abortReason("Aborted"));
+		activeRead?.controller.abort(abortReason("Daily Diet mutation started"));
+		activeRead = null;
+		const controller = new AbortController();
+		const chained = chainAbortSignal(controller.signal, externalSignal);
+		const lifecycle: MutationLifecycle = { kind, controller, promise: Promise.resolve() };
+		activeMutation = lifecycle;
+		update(store, (state) => ({ ...state, mutation: kind, loading: true, error: null }));
+		const promise = (async () => {
+			try {
+				throwIfAborted(chained.signal);
+				const result = await execute(chained.signal);
+				if (activeMutation === lifecycle && !chained.signal.aborted) {
+					commit(result);
+					finishMutation(store);
+				}
+				return result;
+			} catch (error) {
+				if (activeMutation === lifecycle) {
+					if (chained.signal.aborted) finishCancelledMutation(store);
+					else setFailure(store, error);
+				}
+				throw error;
+			} finally {
+				chained.cancel();
+				if (activeMutation === lifecycle) activeMutation = null;
+			}
+		})();
+		lifecycle.promise = promise;
+		return promise;
+	}
+
+	return { load, create, discardCreateIntent, replace, select, remove, clear };
 }
 
 /** Default production controller used by Daily Diet UI components. */
@@ -211,7 +237,10 @@ export const loadDailyDiets = dailyDietController.load;
 /** Creates a collection and reconciles the server-returned aggregate DTO into the store. */
 export const createDailyDiet = dailyDietController.create;
 
-/** Replaces a collection with rollback for the narrow safe optimistic projection. */
+/** Clears the memory-only retry key when the editable create intent changes. */
+export const clearDailyDietCreateIntent = dailyDietController.discardCreateIntent;
+
+/** Replaces a collection only with the decoded server-returned aggregate DTO. */
 export const replaceDailyDiet = dailyDietController.replace;
 
 /** Selects only a collection already present in server state. */
@@ -229,6 +258,20 @@ function update(store: Writable<DailyDietState>, updater: (state: DailyDietState
 
 function setFailure(store: Writable<DailyDietState>, error: unknown): void {
 	store.update((state) => ({ ...state, status: "error", mutation: "idle", loading: false, error: projectError(error) }));
+}
+
+function finishMutation(store: Writable<DailyDietState>): void {
+	store.update((state) => ({
+		...state,
+		status: state.collections.length === 0 ? "empty" : "success",
+		mutation: "idle",
+		loading: false,
+		error: null
+	}));
+}
+
+function finishCancelledMutation(store: Writable<DailyDietState>): void {
+	store.update((state) => ({ ...state, mutation: "idle", loading: false }));
 }
 
 function projectError(error: unknown): AppError {
@@ -253,17 +296,46 @@ function upsert(collections: DailyDiet[], diet: DailyDiet): DailyDiet[] {
 	return collections.map((item, index) => (index === existingIndex ? diet : item));
 }
 
-function canOptimisticallyReplace(existing: DailyDiet, request: DailyDietReplaceRequest): boolean {
-	return existing.entries.length === request.entries.length && request.entries.every((entry, index) => {
-		const current = existing.entries[index];
-		return current?.mealId === entry.mealId && current.position === entry.position;
+function mutationInProgress(): DailyDietClientError {
+	return new DailyDietClientError({
+		category: "validation",
+		code: "daily_diet_mutation_in_progress",
+		message: "Another Daily Diet change is still in progress.",
+		retryable: true
+	}, 409);
+}
+
+function abortReason(message: string): DOMException {
+	return new DOMException(message, "AbortError");
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+	if (signal.aborted) throw signal.reason ?? abortReason("Aborted");
+}
+
+function waitForSettlement(promise: Promise<unknown>, signal: AbortSignal): Promise<void> {
+	throwIfAborted(signal);
+	return new Promise((resolve, reject) => {
+		const abort = () => reject(signal.reason ?? abortReason("Aborted"));
+		signal.addEventListener("abort", abort, { once: true });
+		promise.then(() => resolve(), () => resolve()).finally(() => signal.removeEventListener("abort", abort));
 	});
 }
 
-function optimisticReplace(existing: DailyDiet, request: DailyDietReplaceRequest): DailyDiet {
+function chainAbortSignal(primary: AbortSignal, secondary?: AbortSignal): { signal: AbortSignal; cancel: () => void } {
+	const controller = new AbortController();
+	const abort = (source: AbortSignal) => controller.abort(source.reason ?? abortReason("Aborted"));
+	const onPrimary = () => abort(primary);
+	const onSecondary = () => secondary && abort(secondary);
+	if (primary.aborted) abort(primary);
+	else primary.addEventListener("abort", onPrimary, { once: true });
+	if (secondary?.aborted) abort(secondary);
+	else secondary?.addEventListener("abort", onSecondary, { once: true });
 	return {
-		...existing,
-		name: request.name,
-		entries: existing.entries.map((entry, index) => ({ ...entry, ...request.entries[index] }))
+		signal: controller.signal,
+		cancel: () => {
+			primary.removeEventListener("abort", onPrimary);
+			secondary?.removeEventListener("abort", onSecondary);
+		}
 	};
 }

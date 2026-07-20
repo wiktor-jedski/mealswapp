@@ -6,10 +6,80 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestCloneLabelsPreservesNilSemanticsAndMutationIndependence(t *testing.T) {
+	tests := []struct {
+		name   string
+		labels map[string]string
+		want   map[string]string
+	}{
+		{name: "nil", labels: nil, want: nil},
+		{name: "empty", labels: map[string]string{}, want: nil},
+		{name: "populated", labels: map[string]string{"outcome": "accepted"}, want: map[string]string{"outcome": "accepted"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cloneLabels(tt.labels)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("cloneLabels(%v) = %#v, want %#v", tt.labels, got, tt.want)
+			}
+			if len(tt.labels) == 0 {
+				return
+			}
+			tt.labels["outcome"] = "rejected"
+			if got["outcome"] != "accepted" {
+				t.Fatalf("destination changed with source: %#v", got)
+			}
+			got["outcome"] = "error"
+			if tt.labels["outcome"] != "rejected" {
+				t.Fatalf("source changed with destination: %#v", tt.labels)
+			}
+		})
+	}
+}
+
+func TestOptimizationSubmissionOutcomesAreBoundedAndRaceSafe(t *testing.T) {
+	outcomes := []OptimizationSubmissionOutcome{
+		OptimizationSubmissionAccepted,
+		OptimizationSubmissionReplayed,
+		OptimizationSubmissionRejected,
+		OptimizationSubmissionDependencyError,
+		OptimizationSubmissionQueueError,
+		OptimizationSubmissionError,
+	}
+	sink := &MemorySink{}
+	telemetry := NewOptimizationTelemetry(sink, sink, 1)
+	var workers sync.WaitGroup
+	for _, outcome := range outcomes {
+		outcome := outcome
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			telemetry.Submission(context.Background(), outcome)
+		}()
+	}
+	workers.Wait()
+	telemetry.Submission(context.Background(), OptimizationSubmissionOutcome("user@example.test"))
+
+	if len(sink.Metrics) != len(outcomes) || len(sink.Logs) != len(outcomes) {
+		t.Fatalf("emissions metrics=%d logs=%d, want %d each", len(sink.Metrics), len(sink.Logs), len(outcomes))
+	}
+	allowed := optimizationSubmissionOutcomes()
+	for _, point := range sink.Metrics {
+		if point.Name != MetricOptimizationSubmissionTotal || len(point.Labels) != 1 {
+			t.Fatalf("unbounded submission metric: %+v", point)
+		}
+		if _, ok := allowed[point.Labels["outcome"]]; !ok {
+			t.Fatalf("outcome %q is outside fixed allowlist", point.Labels["outcome"])
+		}
+	}
+}
 
 func TestMemorySinkAndAlertRules(t *testing.T) {
 	sink := &MemorySink{}
@@ -30,7 +100,7 @@ func TestMemorySinkAndAlertRules(t *testing.T) {
 func TestOptimizationTelemetryUsesBoundedLabelsAndNoPrivateData(t *testing.T) {
 	sink := &MemorySink{}
 	telemetry := NewOptimizationTelemetry(sink, sink, 2)
-	telemetry.Submission(context.Background(), "accepted")
+	telemetry.Submission(context.Background(), OptimizationSubmissionAccepted)
 	telemetry.QueueStats(context.Background(), 3, 2*time.Second, 4*time.Second)
 	telemetry.WorkerStarted(context.Background())
 	telemetry.Solve(context.Background(), 250*time.Millisecond, "timeout")

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 # Implements DESIGN-014 MetricsCollector capacity-gate verification.
+# Verifies IT-ARCH-004-007, ARCH-004, and SW-REQ-080/SW-REQ-082.
 
 import importlib.util
 import unittest
 from collections import Counter
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("verify-optimization-capacity.py")
@@ -60,6 +62,29 @@ class CapacityGateTests(unittest.TestCase):
         report["poll"]["samples"] = 0
         self.assertFalse(capacity.capacity_gate_passes(report, 32))
 
+    def test_gate_rejects_same_key_replay_drift(self):
+        report = self.valid_report()
+        report["replay"]["acknowledgementMatches"] = 31
+        self.assertFalse(capacity.capacity_gate_passes(report, 32))
+
+    def test_submit_and_poll_replays_same_key_without_reporting_identifiers(self):
+        calls = []
+
+        def request_json(url, method="GET", headers=None, body=None, timeout=5.0):
+            calls.append((url, method, dict(headers or {}), body, timeout))
+            if len(calls) <= 2:
+                return 202, {"data": {"jobId": "private-job", "pollUrl": "/private-poll", "status": "queued"}}, 0.01
+            return 200, {"data": {"status": "completed"}}, 0.01
+
+        with mock.patch.object(capacity, "request_json", side_effect=request_json):
+            result = capacity.submit_and_poll("http://test", "/submit", b'{"private":"body"}', {"Cookie": "private-cookie"}, 1, 0)
+
+        self.assertEqual(calls[0][2]["Idempotency-Key"], calls[1][2]["Idempotency-Key"])
+        self.assertTrue(result["replayMatchesAcknowledgement"])
+        self.assertNotIn("private-job", repr(result))
+        self.assertNotIn("private-poll", repr(result))
+        self.assertNotIn("private-cookie", repr(result))
+
     def test_gate_accepts_complete_readiness_and_queue_worker_evidence(self):
         self.assertTrue(capacity.capacity_gate_passes(self.valid_report(), 32))
 
@@ -67,6 +92,7 @@ class CapacityGateTests(unittest.TestCase):
     def valid_report():
         return {
             "submission": {"statuses": Counter({"202": 32}), "p95LatencySeconds": 1.1, "samples": 32},
+            "replay": {"statuses": Counter({"202": 32}), "p95LatencySeconds": 1.1, "samples": 32, "acknowledgementMatches": 32},
             "poll": {"p95LatencySeconds": 1.2, "samples": 32},
             "readiness": {
                 "statuses": Counter({"200": 2}),

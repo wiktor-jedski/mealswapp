@@ -111,6 +111,11 @@ def submit_and_poll(base_url: str, submit_path: str, body: bytes, headers: dict[
     poll_path = data.get("pollUrl") if isinstance(data, dict) else None
     if status != 202 or not isinstance(poll_path, str) or not poll_path.startswith("/"):
         return result
+    replay_status, replay_payload, replay_latency = request_json(base_url + submit_path, "POST", submit_headers, body)
+    replay_data = replay_payload.get("data", {})
+    result["replayStatus"] = replay_status
+    result["replayLatencySeconds"] = replay_latency
+    result["replayMatchesAcknowledgement"] = replay_status == 202 and replay_data == data
     deadline = time.monotonic() + poll_timeout
     while time.monotonic() < deadline:
         poll_status, poll_payload, poll_latency = request_json(base_url + poll_path, "GET", {key: value for key, value in headers.items() if key != "Content-Type"})
@@ -143,15 +148,18 @@ def parse_args() -> argparse.Namespace:
 def capacity_gate_passes(report: dict[str, Any], request_count: int) -> bool:
     try:
         submission = report["submission"]
+        replay = report["replay"]
         poll = report["poll"]
         readiness = report["readiness"]
         queue_evidence = report["queueEvidence"]
         queue_worker_evidence = report["queueWorkerEvidence"]
         if submission["statuses"].get("202", 0) != request_count or submission["samples"] != request_count:
             return False
+        if replay["statuses"].get("202", 0) != request_count or replay["samples"] != request_count or replay["acknowledgementMatches"] != request_count:
+            return False
         if poll["samples"] <= 0:
             return False
-        if submission["p95LatencySeconds"] >= CAPACITY_LATENCY_LIMIT_SECONDS or poll["p95LatencySeconds"] >= CAPACITY_LATENCY_LIMIT_SECONDS:
+        if submission["p95LatencySeconds"] >= CAPACITY_LATENCY_LIMIT_SECONDS or replay["p95LatencySeconds"] >= CAPACITY_LATENCY_LIMIT_SECONDS or poll["p95LatencySeconds"] >= CAPACITY_LATENCY_LIMIT_SECONDS:
             return False
         if readiness["monitorAlive"] or readiness["monitorErrors"]:
             return False
@@ -195,8 +203,10 @@ def main() -> int:
     elapsed = time.perf_counter() - started
 
     submission_latencies = [result["submitLatencySeconds"] for result in results]
+    replay_latencies = [result["replayLatencySeconds"] for result in results if "replayLatencySeconds" in result]
     poll_latencies = [poll["latencySeconds"] for result in results for poll in result["pollStatuses"]]
     statuses = Counter(str(result.get("submitStatus")) for result in results)
+    replay_statuses = Counter(str(result.get("replayStatus")) for result in results if "replayStatus" in result)
     terminal_statuses = Counter(str(result.get("terminalStatus", "not_accepted")) for result in results)
     readiness_statuses = Counter(str(sample["status"]) for sample in ready_samples)
     valid_readiness_samples = [sample for sample in ready_samples if readiness_sample_is_valid(sample)]
@@ -210,6 +220,12 @@ def main() -> int:
         "concurrency": args.concurrency,
         "elapsedSeconds": elapsed,
         "submission": {"statuses": statuses, "p95LatencySeconds": p95(submission_latencies), "samples": len(submission_latencies)},
+        "replay": {
+            "statuses": replay_statuses,
+            "p95LatencySeconds": p95(replay_latencies),
+            "samples": len(replay_latencies),
+            "acknowledgementMatches": sum(result.get("replayMatchesAcknowledgement") is True for result in results),
+        },
         "poll": {"p95LatencySeconds": p95(poll_latencies), "samples": len(poll_latencies)},
         "terminalStatuses": terminal_statuses,
         "readiness": {

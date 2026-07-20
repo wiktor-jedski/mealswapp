@@ -8,10 +8,12 @@
   import { convertQuantity, defaultDisplayQuantity, displayUnitForBasis, formatDisplayQuantity, unitLabel } from "../units";
   import { preferencesStore } from "../stores/preferences";
   import {
+    clearDailyDietCreateIntent,
     clearDailyDietState,
     createDailyDiet,
     dailyDietStore,
-    loadDailyDiets
+    loadDailyDiets,
+    replaceDailyDiet
   } from "../stores/daily-diet";
   import type { AuthStatus } from "../stores/auth-session";
 
@@ -57,6 +59,7 @@
   let draftError = $state<string | null>(null);
   let serverAggregate = $state<MacroProjection | null>(null);
   let savedDietId = $state<string | null>(null);
+  let editingDietId = $state<string | null>(null);
 
   let canEdit = $derived(authenticated && executionAllowed);
   let collectionError = $derived<AppError | null>($dailyDietStore.error);
@@ -90,6 +93,7 @@
       if (!canEdit) continue;
       nextKeys.add(selection.key);
       added = true;
+	  clearDailyDietCreateIntent();
       draftMeals = [
         ...draftMeals,
         {
@@ -123,6 +127,7 @@
   }
 
   function updateQuantity(key: number, event: Event): void {
+	clearDailyDietCreateIntent();
     const quantity = Number((event.currentTarget as HTMLInputElement).value);
     draftMeals = draftMeals.map((meal) => meal.key === key ? { ...meal, quantity } : meal);
     serverAggregate = null;
@@ -130,6 +135,7 @@
   }
 
   function updateUnit(key: number, event: Event): void {
+	clearDailyDietCreateIntent();
     const unit = (event.currentTarget as HTMLSelectElement).value as CanonicalQuantityUnit;
     draftMeals = draftMeals.map((meal) => meal.key === key ? { ...meal, unit } : meal);
     serverAggregate = null;
@@ -140,6 +146,7 @@
     const index = draftMeals.findIndex((meal) => meal.key === key);
     const target = index + direction;
     if (index < 0 || target < 0 || target >= draftMeals.length) return;
+	clearDailyDietCreateIntent();
     const next = [...draftMeals];
     [next[index], next[target]] = [next[target], next[index]];
     draftMeals = next;
@@ -148,6 +155,7 @@
   }
 
   function removeMeal(key: number): void {
+	clearDailyDietCreateIntent();
     draftMeals = draftMeals.filter((meal) => meal.key !== key);
     serverAggregate = null;
     savedDietId = null;
@@ -171,7 +179,7 @@
     }
     draftError = null;
     try {
-      const saved = await createDailyDiet({
+      const request = {
         name,
         entries: draftMeals.map((meal, position) => ({
           mealId: meal.item.id,
@@ -179,8 +187,12 @@
           unit: meal.unit,
           position
         }))
-      });
+      };
+      const saved = editingDietId
+        ? await replaceDailyDiet(editingDietId, request)
+        : await createDailyDiet(request);
       savedDietId = saved.id;
+      editingDietId = saved.id;
       serverAggregate = saved.aggregateMacros;
     } catch {
       draftError = "Your Daily Diet could not be saved. Please try again.";
@@ -188,9 +200,11 @@
   }
 
   function resetDraft(): void {
+	clearDailyDietCreateIntent();
     draftMeals = [];
     serverAggregate = null;
     savedDietId = null;
+    editingDietId = null;
     draftError = null;
   }
 
@@ -202,6 +216,7 @@
     draftError = null;
     serverAggregate = null;
     savedDietId = null;
+    editingDietId = null;
   }
 </script>
 
@@ -251,7 +266,7 @@
           id="daily-diet-name"
           class="rounded border border-[#E0E0E0] bg-white px-3 py-2 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
           value={draftName}
-          oninput={(event) => { draftName = (event.currentTarget as HTMLInputElement).value; }}
+          oninput={(event) => { clearDailyDietCreateIntent(); draftName = (event.currentTarget as HTMLInputElement).value; }}
           disabled={!canEdit}
         />
       </label>
@@ -331,11 +346,11 @@
       <div class="flex flex-wrap gap-2">
         <button
           type="submit"
-          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!canEdit || draftMeals.length < 2 || $dailyDietStore.mutation === "creating"}
+          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed"
+          disabled={!canEdit || draftMeals.length < 2 || $dailyDietStore.mutation !== "idle"}
           data-daily-diet-save
         >
-          {$dailyDietStore.mutation === "creating" ? "Saving…" : "Save Daily Diet"}
+          {$dailyDietStore.mutation === "creating" || $dailyDietStore.mutation === "replacing" ? "Saving…" : editingDietId ? "Update Daily Diet" : "Save Daily Diet"}
         </button>
         <button type="button" class="rounded border px-3 py-2 text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={resetDraft} disabled={!canEdit || draftMeals.length === 0}>
           Clear draft

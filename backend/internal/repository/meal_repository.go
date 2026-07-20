@@ -129,15 +129,16 @@ func (r *PostgresMealRepository) Search(ctx context.Context, q RepositoryQuery) 
 		offset = 0
 	}
 
+	physicalStates := physicalStatesToStrings(q.FoodObjectTypes)
 	var total int
-	if err := r.db.QueryRow(ctx, mealSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, mealSearchCountSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs, physicalStates).Scan(&total); err != nil {
 		return nil, 0, mapPostgresError(err, "count meals")
 	}
 	if offset >= total {
 		return []MealEntity{}, total, nil
 	}
 
-	rows, err := r.db.Query(ctx, mealSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs, limit, offset)
+	rows, err := r.db.Query(ctx, mealSearchSQL, q.IncludeDeleted, q.Name, q.MaxPrepMinutes, q.FoodCategoryIDs, q.CulinaryRoleIDs, physicalStates, limit, offset)
 	if err != nil {
 		return nil, 0, mapPostgresError(err, "search meals")
 	}
@@ -317,7 +318,7 @@ func (r *PostgresMealRepository) validateIngredients(ctx context.Context, mealID
 		if ingredient.FoodItemID == uuid.Nil {
 			return validationError("ingredient food item id is required")
 		}
-		if ingredient.Quantity <= 0 {
+		if ingredient.Quantity <= 0 || invalidNumber(ingredient.Quantity) {
 			return validationError("ingredient quantity must be positive")
 		}
 		if _, ok := seenPositions[ingredient.Position]; ok {
@@ -457,32 +458,23 @@ func (r *PostgresMealRepository) hydrateMealClassifications(ctx context.Context,
 // ingredientBasisQuantity converts an ingredient quantity to its macro-calculation basis.
 // Implements DESIGN-005 MealEntity.
 func ingredientBasisQuantity(ingredient RecipeIngredientEntity, food FoodItemEntity) (float64, error) {
-	if err := ValidatePhysicalState(food.PhysicalState); err != nil {
+	if invalidNumber(ingredient.Quantity) {
+		return 0, validationError("ingredient quantity must be finite")
+	}
+	if err := ValidateRecipeIngredientUnit(ingredient.Unit, food.PhysicalState); err != nil {
 		return 0, err
 	}
 	switch ingredient.Unit {
 	case "g":
-		if food.PhysicalState != PhysicalStateSolid {
-			return 0, unitConversionError("unit %q requires a solid ingredient", ingredient.Unit)
-		}
 		return ingredient.Quantity, nil
 	case "oz":
-		if food.PhysicalState != PhysicalStateSolid {
-			return 0, unitConversionError("unit %q requires a solid ingredient", ingredient.Unit)
-		}
 		return ConvertUnit(ingredient.Quantity, "oz", "g")
 	case "ml":
-		if food.PhysicalState != PhysicalStateLiquid {
-			return 0, unitConversionError("unit %q requires a liquid ingredient", ingredient.Unit)
-		}
 		return ingredient.Quantity, nil
 	case "fl_oz":
-		if food.PhysicalState != PhysicalStateLiquid {
-			return 0, unitConversionError("unit %q requires a liquid ingredient", ingredient.Unit)
-		}
 		return ConvertUnit(ingredient.Quantity, "fl_oz", "ml")
 	case "serving":
-		quantity, _, err := ConvertServingToBase(ingredient.Quantity, food.AverageUnitWeightGrams, food.AverageServingVolumeMilliliters, food.PhysicalState)
+		quantity, _, err := ConvertRecipeServingToBase(ingredient.Quantity, food.AverageUnitWeightGrams, food.AverageServingVolumeMilliliters, food.PhysicalState)
 		return quantity, err
 	default:
 		return 0, unitConversionError("unsupported ingredient unit %q", ingredient.Unit)

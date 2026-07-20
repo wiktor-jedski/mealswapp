@@ -40,8 +40,7 @@ const validDailyDietState = {
 
 const validDailyDietAlternativeState = {
 	...commonState,
-	mode: "daily_diet_alternative",
-	dailyDietId: "diet-1"
+	mode: "daily_diet_alternative"
 } satisfies DailyDietAlternativeSearchState;
 
 // Negative constructions prove Catalog rejects every mode-specific field.
@@ -121,7 +120,7 @@ const dailyDietAlternativeWithSubstitutionInputItems: DailyDietAlternativeSearch
 };
 const dailyDietAlternativeWithDailyDietCollections: DailyDietAlternativeSearchState = {
 	...validDailyDietAlternativeState,
-	// @ts-expect-error Daily Diet Alternative owns one id, not Daily Diet collections.
+	// @ts-expect-error Daily Diet Alternative consumes shared selection, not collections.
 	dailyDietCollections: []
 };
 
@@ -152,12 +151,6 @@ const dailyDietWithoutCollections: DailyDietSearchState = {
 	...commonState,
 	mode: "daily_diet"
 };
-// @ts-expect-error Daily Diet Alternative requires dailyDietId, even when empty.
-const dailyDietAlternativeWithoutId: DailyDietAlternativeSearchState = {
-	...commonState,
-	mode: "daily_diet_alternative"
-};
-
 type Assert<Condition extends true> = Condition;
 type HasKey<Type, Key extends PropertyKey> = Key extends keyof Type ? true : false;
 
@@ -185,8 +178,8 @@ type DailyDietCannotCarryDailyDietId = Assert<
 type DailyDietOwnsCollections = Assert<
 	HasKey<DailyDietSearchState, "dailyDietCollections">
 >;
-type DailyDietAlternativeOwnsId = Assert<
-	HasKey<DailyDietAlternativeSearchState, "dailyDietId">
+type DailyDietAlternativeCannotCarryId = Assert<
+	HasKey<DailyDietAlternativeSearchState, "dailyDietId"> extends false ? true : false
 >;
 type DailyDietAlternativeCannotCarrySubstitutionInputs = Assert<
 	HasKey<DailyDietAlternativeSearchState, "substitutionInputs"> extends false ? true : false
@@ -205,7 +198,7 @@ export type SearchStateModeShapeChecks =
 	| DailyDietCannotCarrySubstitutionInputs
 	| DailyDietCannotCarryDailyDietId
 	| DailyDietOwnsCollections
-	| DailyDietAlternativeOwnsId
+	| DailyDietAlternativeCannotCarryId
 	| DailyDietAlternativeCannotCarrySubstitutionInputs
 	| DailyDietAlternativeCannotCarryDailyDietCollections
 	| (SearchState extends CatalogSearchState | SubstitutionSearchState | DailyDietSearchState | DailyDietAlternativeSearchState ? true : false);

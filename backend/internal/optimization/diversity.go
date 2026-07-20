@@ -2,6 +2,7 @@ package optimization
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strings"
 
@@ -13,11 +14,9 @@ import (
 const (
 	// MaxAlternativeCount is the public result ceiling required by SW-REQ-030.
 	MaxAlternativeCount = 3
-	// DefaultDiversityPenalty is an additive calorie-equivalent objective weight.
-	// It is deliberately finite and non-zero, while remaining a best-effort
-	// preference rather than a hard exclusion of an original meal.
-	DefaultDiversityPenalty    = 0.1
-	diversityValidationEpsilon = 1e-8
+	// DefaultDiversityPenalty counts one base quantity unit (g or ml) of an
+	// original meal in the lexicographic secondary objective.
+	DefaultDiversityPenalty = 1
 )
 
 // DiversityPenalizer adds a soft objective penalty to meal IDs from the
@@ -32,18 +31,8 @@ type DiversityPenalizer struct {
 // Implements DESIGN-004 DiversityPenalizer.
 func NewDiversityPenalizer(req DietOptimizationRequest) DiversityPenalizer {
 	ids := make(map[string]struct{})
-	if len(req.OriginalDiet.Entries) > 0 {
-		for _, entry := range req.OriginalDiet.Entries {
-			if entry.MealID != uuid.Nil {
-				ids[entry.MealID.String()] = struct{}{}
-			}
-		}
-	} else {
-		for _, meal := range req.OriginalMeals {
-			if meal.MealID != uuid.Nil {
-				ids[meal.MealID.String()] = struct{}{}
-			}
-		}
+	for _, entry := range req.OriginalDiet.Entries {
+		ids[entry.MealID.String()] = struct{}{}
 	}
 	return DiversityPenalizer{OriginalMealIDs: ids, Penalty: DefaultDiversityPenalty}
 }
@@ -78,66 +67,170 @@ type AlternativeSolveFunc func(context.Context, LPModel, ObjectiveFunction) (LPS
 // Implements DESIGN-004 DiversityPenalizer.
 type LPSolution = map[string]float64
 
-// GenerateAlternatives repeatedly builds and solves a model, adding a
-// normalized overlap constraint for each accepted solution. Duplicate meal
+// GenerateAlternatives repeatedly builds and solves a model, excluding one
+// deterministic selected meal from each accepted solution. Duplicate meal
 // sets are discarded and the caller-provided limit can never exceed three.
 // Implements DESIGN-004 DiversityPenalizer for SW-REQ-023 and SW-REQ-030.
 func GenerateAlternatives(ctx context.Context, req DietOptimizationRequest, meals []repository.MealEntity, limit int, solve AlternativeSolveFunc) ([]LPSolution, error) {
+	limit, attemptBudget := alternativeGenerationLimits(limit)
+	validator := newSolutionValidator(meals, generationInstrumentationFromContext(ctx))
+	validated, err := generateAlternativePipeline(ctx, cloneOptimizationRequest(req), validator, limit, attemptBudget, solve)
+	results := make([]LPSolution, len(validated))
+	for index := range validated {
+		results[index] = validated[index].solution
+	}
+	return results, err
+}
+
+// alternativeGenerationLimits caps the result count before deriving its
+// attempt budget, making the multiplication bounded and overflow-safe.
+// Implements DESIGN-004 DiversityPenalizer attempt policy.
+func alternativeGenerationLimits(limit int) (int, int) {
 	if limit <= 0 {
-		return []LPSolution{}, nil
+		return limit, 0
+	}
+	limit = min(limit, MaxAlternativeCount)
+	return limit, limit * 3
+}
+
+// validatedAlternative couples one canonical assignment to its sole
+// repository-derived publication projection.
+// Implements DESIGN-004 DiversityPenalizer and SolutionValidator.
+type validatedAlternative struct {
+	solution    LPSolution
+	alternative DietAlternative
+}
+
+// generateAlternativePipeline owns canonical validation and commits iteration
+// state only after one repository projection has accepted the solver result.
+// Attempt exhaustion returns already accepted alternatives without an error;
+// any later solve, model, duplicate, or projection failure returns them with a
+// safe terminal error.
+// Implements DESIGN-004 DiversityPenalizer and SolutionValidator.
+func generateAlternativePipeline(ctx context.Context, req DietOptimizationRequest, validator *SolutionValidator, limit, attemptBudget int, solve AlternativeSolveFunc) ([]validatedAlternative, error) {
+	if limit <= 0 {
+		return []validatedAlternative{}, nil
 	}
 	if limit > MaxAlternativeCount {
 		limit = MaxAlternativeCount
 	}
+	if ctx == nil {
+		return nil, safeOptimizationFailure(validationError("alternative context is required"))
+	}
 	if solve == nil {
 		return nil, safeOptimizationFailure(validationError("alternative solver is required"))
 	}
-
-	previous := cloneSolutions(req.PreviousSolutions)
-	seen := make(map[string]struct{}, len(previous))
-	for _, solution := range previous {
-		if len(solution) > 0 {
-			seen[selectedMealSetKey(solution)] = struct{}{}
-		}
+	if validator == nil || validator.snapshotErr != nil || len(validator.meals) == 0 {
+		return nil, safeOptimizationFailure(validationError("repository meal snapshot is invalid"))
 	}
-	results := make([]LPSolution, 0, limit)
-	maxAttempts := limit * 3
-	for attempts := 0; len(results) < limit && attempts < maxAttempts; attempts++ {
+
+	previous := []LPSolution{}
+	seen := make(map[string]struct{})
+	results := make([]validatedAlternative, 0, limit)
+	for attempts := 0; len(results) < limit && attempts < attemptBudget; attempts++ {
 		if err := ctx.Err(); err != nil {
 			return results, safeOptimizationFailure(err)
 		}
-		nextRequest := req
-		nextRequest.PreviousSolutions = cloneSolutions(previous)
-		model, err := BuildConstraints(nextRequest, meals)
+		model, err := buildConstraintsFromIndex(req, validator.meals, validator.orderedMealIDs, cloneSolutions(previous))
 		if err != nil {
 			return results, safeOptimizationFailure(err)
 		}
-		objective, err := BuildObjective(model.Variables)
+		policy, err := BuildObjective(model.Variables)
 		if err != nil {
 			return results, safeOptimizationFailure(err)
 		}
-		solution, err := solve(ctx, model, objective)
+		canonical, err := solveObjectivePolicy(ctx, model, policy, solve)
 		if err != nil {
 			return results, safeOptimizationFailure(err)
 		}
-		if _, err := ValidateSolution(solution, req, meals); err != nil {
-			return results, safeOptimizationFailure(err)
-		}
-		canonical, key, err := canonicalSolution(solution, model)
+		alternative, err := validator.Validate(canonical, req)
 		if err != nil {
 			return results, safeOptimizationFailure(err)
 		}
-		previous = append(previous, canonical)
+		key := selectedMealSetKey(canonical)
 		if _, duplicate := seen[key]; duplicate {
-			continue
+			return results, safeOptimizationFailure(validationError("solver returned a duplicate alternative"))
 		}
-		if err := solutionSatisfiesModel(canonical, model); err != nil {
-			return results, safeOptimizationFailure(err)
-		}
+
 		seen[key] = struct{}{}
-		results = append(results, canonical)
+		previous = append(previous, canonical)
+		results = append(results, validatedAlternative{solution: canonical, alternative: alternative})
 	}
 	return results, nil
+}
+
+// solveObjectivePolicy performs a true lexicographic solve. The second solve
+// cannot trade any primary calories for diversity because the first optimum is
+// added as an equality constraint rather than a weighted sum.
+// Implements DESIGN-004 ObjectiveFunction and DiversityPenalizer.
+func solveObjectivePolicy(ctx context.Context, model LPModel, policy ObjectivePolicy, solve AlternativeSolveFunc) (LPSolution, error) {
+	primary, err := solve(ctx, model, policy.Primary)
+	if err != nil {
+		return nil, err
+	}
+	primary, _, err = canonicalSolution(primary, model)
+	if err != nil {
+		return nil, err
+	}
+	if err := solutionSatisfiesModel(primary, model); err != nil {
+		return nil, err
+	}
+	if !hasPositiveCoefficient(policy.Secondary) {
+		return primary, nil
+	}
+
+	optimum, err := objectiveValueForSolution(policy.Primary, primary)
+	if err != nil {
+		return nil, err
+	}
+	secondaryModel := model
+	secondaryModel.Constraints = append(append([]LPConstraint(nil), model.Constraints...), LPConstraint{
+		Name:         "primary_calorie_optimum",
+		LowerBound:   optimum,
+		UpperBound:   optimum,
+		Coefficients: policy.Primary.Coefficients,
+	})
+	secondary, err := solve(ctx, secondaryModel, policy.Secondary)
+	if err != nil {
+		return nil, err
+	}
+	secondary, _, err = canonicalSolution(secondary, secondaryModel)
+	if err != nil {
+		return nil, err
+	}
+	if err := solutionSatisfiesModel(secondary, secondaryModel); err != nil {
+		return nil, err
+	}
+	return secondary, nil
+}
+
+// hasPositiveCoefficient reports whether an objective can affect a solve.
+// Implements DESIGN-004 ObjectiveFunction validation.
+func hasPositiveCoefficient(objective ObjectiveFunction) bool {
+	for _, coefficient := range objective.Coefficients {
+		if coefficient > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// objectiveValueForSolution evaluates a validated sparse assignment.
+// Implements DESIGN-004 ObjectiveFunction validation.
+func objectiveValueForSolution(objective ObjectiveFunction, solution LPSolution) (float64, error) {
+	value := 0.0
+	for _, itemID := range sortedCoefficientIDs(objective.Coefficients) {
+		coefficient := objective.Coefficients[itemID]
+		quantity := solution[itemID]
+		if !finite(coefficient) || !finite(quantity) {
+			return 0, validationError("objective value inputs must be finite")
+		}
+		value += coefficient * quantity
+	}
+	if !finite(value) {
+		return 0, validationError("objective value must be finite")
+	}
+	return value, nil
 }
 
 // canonicalSolution normalizes one sparse solver assignment and identifies its
@@ -146,17 +239,30 @@ func GenerateAlternatives(ctx context.Context, req DietOptimizationRequest, meal
 func canonicalSolution(solution LPSolution, model LPModel) (LPSolution, string, error) {
 	known := make(map[string]struct{}, len(model.Variables))
 	for _, variable := range model.Variables {
+		if variable.ItemID == "" {
+			return nil, "", validationError("model variable item ID is required")
+		}
+		if _, duplicate := known[variable.ItemID]; duplicate {
+			return nil, "", validationError("model contains duplicate variable: " + variable.ItemID)
+		}
 		known[variable.ItemID] = struct{}{}
 	}
+	return canonicalQuantities(solution, known)
+}
+
+// canonicalQuantities removes signed solver residue using the shared
+// scale-aware tolerance and returns a deterministic selected-meal-set key.
+// Implements DESIGN-004 DiversityPenalizer and SolutionValidator.
+func canonicalQuantities[T any](solution LPSolution, known map[string]T) (LPSolution, string, error) {
 	canonical := make(LPSolution, len(solution))
 	for itemID, quantity := range solution {
 		if _, ok := known[itemID]; !ok {
 			return nil, "", validationError("solution contains unknown meal: " + itemID)
 		}
-		if !finite(quantity) || quantity < 0 {
+		if !finite(quantity) || quantity < -quantityTolerance(quantity) {
 			return nil, "", validationError("solution quantities must be finite and non-negative")
 		}
-		if quantity > 0 {
+		if math.Abs(quantity) > quantityTolerance(quantity) {
 			canonical[itemID] = quantity
 		}
 	}
@@ -172,21 +278,41 @@ func solutionSatisfiesModel(solution LPSolution, model LPModel) error {
 	quantities := make(map[string]float64, len(model.Variables))
 	for _, variable := range model.Variables {
 		quantity := solution[variable.ItemID]
-		if quantity < variable.LowerBound-diversityValidationEpsilon || quantity > variable.UpperBound+diversityValidationEpsilon {
+		if !finite(variable.LowerBound) || !finite(variable.UpperBound) || variable.LowerBound > variable.UpperBound {
+			return validationError("model variable bounds are invalid")
+		}
+		tolerance := quantityTolerance(quantity, variable.LowerBound, variable.UpperBound)
+		if quantity < variable.LowerBound-tolerance || quantity > variable.UpperBound+tolerance {
 			return validationError("solution violates meal quantity bounds")
 		}
 		quantities[variable.ItemID] = quantity
 	}
 	for _, constraint := range model.Constraints {
 		value := 0.0
-		for itemID, coefficient := range constraint.Coefficients {
+		for _, itemID := range sortedCoefficientIDs(constraint.Coefficients) {
+			coefficient := constraint.Coefficients[itemID]
+			if _, ok := quantities[itemID]; !ok || !finite(coefficient) {
+				return validationError("model constraint coefficients are invalid")
+			}
 			value += coefficient * quantities[itemID]
 		}
-		if !finite(value) || value < constraint.LowerBound-diversityValidationEpsilon || value > constraint.UpperBound+diversityValidationEpsilon {
+		tolerance := quantityTolerance(value, constraint.LowerBound, constraint.UpperBound)
+		if !finite(constraint.LowerBound) || !finite(constraint.UpperBound) || constraint.LowerBound > constraint.UpperBound || !finite(value) || value < constraint.LowerBound-tolerance || value > constraint.UpperBound+tolerance {
 			return validationError("solution violates " + constraint.Name)
 		}
 	}
 	return nil
+}
+
+// sortedCoefficientIDs returns deterministic objective/constraint order.
+// Implements DESIGN-004 DiversityPenalizer and SolutionValidator.
+func sortedCoefficientIDs(coefficients map[string]float64) []string {
+	ids := make([]string, 0, len(coefficients))
+	for itemID := range coefficients {
+		ids = append(ids, itemID)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // selectedMealSetKey gives equivalent sparse assignments a deterministic key.
@@ -211,4 +337,12 @@ func cloneSolutions(solutions []map[string]float64) []map[string]float64 {
 		}
 	}
 	return result
+}
+
+// cloneOptimizationRequest detaches caller-owned slices for one generation.
+// Implements DESIGN-004 DiversityPenalizer.
+func cloneOptimizationRequest(req DietOptimizationRequest) DietOptimizationRequest {
+	req.OriginalDiet.Entries = append([]repository.SavedDietMealEntry(nil), req.OriginalDiet.Entries...)
+	req.ExcludedMealIDs = append([]uuid.UUID(nil), req.ExcludedMealIDs...)
+	return req
 }

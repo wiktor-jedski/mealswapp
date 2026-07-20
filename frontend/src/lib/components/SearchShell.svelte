@@ -43,6 +43,7 @@
   import { preferencesStore } from "../stores/preferences";
   import { resolveSearchEntitlement } from "../search-entitlement";
   import { displayUnitForBasis } from "../units";
+  import { clearDailyDietState } from "../stores/daily-diet";
 
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, entitlement gate, autocomplete search bar, mode-specific controls, results, offline status, and DESIGN-018 login auth surface.
 
@@ -62,6 +63,9 @@
   let dailyDietSelectionError = $state<string | null>(null);
   let dailyDietSelectionKey = 0;
   let dailyDietSelectionsUserId = $state<string | null>(null);
+  let dailyDietStateUserId = $state<string | null>(null);
+  let dailyDietSelectionGeneration = 0;
+  const dailyDietHydrationControllers = new Set<AbortController>();
 
   /** True while an explicit submitted search request is fetching results. */
   let searchInFlight = $state(false);
@@ -78,18 +82,22 @@
   let activeMode = $derived($searchStore.mode);
 
   $effect(() => {
-    if (activeMode !== "daily_diet" && dailyDietSelections.length > 0) {
+    if (activeMode !== "daily_diet" && (dailyDietSelections.length > 0 || dailyDietSelectionError !== null || dailyDietHydrationControllers.size > 0)) {
       clearIdentityOwnedDailyDietSelections();
     }
   });
 
-  $effect(() => {
+  $effect.pre(() => {
     const authenticatedUserId = $authSessionStore.status === "authenticated"
       ? $authSessionStore.userId ?? null
       : null;
     if (dailyDietSelectionsUserId !== authenticatedUserId) {
       clearIdentityOwnedDailyDietSelections();
       dailyDietSelectionsUserId = authenticatedUserId;
+    }
+    if (dailyDietStateUserId !== authenticatedUserId) {
+      clearDailyDietState();
+      dailyDietStateUserId = authenticatedUserId;
     }
   });
 
@@ -188,18 +196,42 @@
 
   /** Hydrates one autocomplete-selected meal before it enters the server-owned Daily Diet request. */
   async function hydrateDailyDietMeal(item: RankedAutocomplete): Promise<void> {
+    const initiatingUserId = $authSessionStore.status === "authenticated"
+      ? $authSessionStore.userId ?? null
+      : null;
+    if (initiatingUserId === null) return;
+
+    const initiatingGeneration = dailyDietSelectionGeneration;
+    const controller = new AbortController();
+    dailyDietHydrationControllers.add(controller);
     dailyDietSelectionError = null;
     try {
-      const meal: FoodObject = await fetchFoodObject(item.itemId, new AbortController().signal);
+      const meal: FoodObject = await fetchFoodObject(item.itemId, controller.signal);
+      if (!dailyDietHydrationIsCurrent(initiatingUserId, initiatingGeneration, controller)) return;
       dailyDietSelections = [...dailyDietSelections, { key: ++dailyDietSelectionKey, item: meal }];
       setQuery("");
     } catch {
+      if (!dailyDietHydrationIsCurrent(initiatingUserId, initiatingGeneration, controller)) return;
       dailyDietSelectionError = "That meal could not be added. Please try again.";
+    } finally {
+      dailyDietHydrationControllers.delete(controller);
     }
+  }
+
+  /** Rejects hydration continuations no longer owned by their initiating identity and mode. */
+  function dailyDietHydrationIsCurrent(userId: string, generation: number, controller: AbortController): boolean {
+    return !controller.signal.aborted
+      && generation === dailyDietSelectionGeneration
+      && activeMode === "daily_diet"
+      && $authSessionStore.status === "authenticated"
+      && $authSessionStore.userId === userId;
   }
 
   /** Clears hydrated Daily Diet selections owned by a previous authenticated identity. */
   function clearIdentityOwnedDailyDietSelections(): void {
+    dailyDietSelectionGeneration += 1;
+    for (const controller of dailyDietHydrationControllers) controller.abort();
+    dailyDietHydrationControllers.clear();
     dailyDietSelections = [];
     dailyDietSelectionError = null;
   }

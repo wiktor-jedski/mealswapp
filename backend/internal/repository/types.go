@@ -335,6 +335,55 @@ type DailyDiet = SavedDiet
 // Implements DESIGN-008 SavedDataRepository.
 type DailyDietMealEntry = SavedDietMealEntry
 
+// DailyDietCreateResponse is the immutable successful create projection stored for exact replay.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+type DailyDietCreateResponse struct {
+	ID              uuid.UUID                      `json:"id"`
+	Name            string                         `json:"name"`
+	Entries         []DailyDietCreateResponseEntry `json:"entries"`
+	AggregateMacros DailyDietCreateResponseMacros  `json:"aggregateMacros"`
+	CreatedAt       time.Time                      `json:"createdAt"`
+	UpdatedAt       time.Time                      `json:"updatedAt"`
+}
+
+// DailyDietCreateResponseEntry is one immutable entry in a create response.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+type DailyDietCreateResponseEntry struct {
+	ID       uuid.UUID `json:"id"`
+	MealID   uuid.UUID `json:"mealId"`
+	Quantity float64   `json:"quantity"`
+	Unit     string    `json:"unit"`
+	Position int       `json:"position"`
+}
+
+// DailyDietCreateResponseMacros is the immutable aggregate returned by create.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+type DailyDietCreateResponseMacros struct {
+	Protein       float64 `json:"protein"`
+	Carbohydrates float64 `json:"carbohydrates"`
+	Fat           float64 `json:"fat"`
+	Calories      float64 `json:"calories"`
+}
+
+// DailyDietCreateClaim is one typed, user-scoped create mutation claim.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+type DailyDietCreateClaim struct {
+	UserID     uuid.UUID
+	Key        string
+	BodyHash   string
+	Diet       SavedDiet
+	Response   DailyDietCreateResponse
+	StatusCode int
+}
+
+// DailyDietCreateClaimResult returns either the newly persisted or original immutable response.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+type DailyDietCreateClaimResult struct {
+	Response   DailyDietCreateResponse
+	StatusCode int
+	Replayed   bool
+}
+
 // SearchHistoryEntry stores one user-owned search history record.
 // Implements DESIGN-008 SearchHistoryRepository.
 type SearchHistoryEntry struct {
@@ -563,25 +612,14 @@ type DailyDietRepository interface {
 	Delete(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) error
 }
 
-// AtomicDailyDietMutationResult describes one durable idempotency claim.
-// Implements DESIGN-008 SavedDataRepository and ProfileController.
-type AtomicDailyDietMutationResult struct {
-	DietID      uuid.UUID
-	Idempotency CheckoutIdempotencyRecord
-	Replayed    bool
-}
-
 // DailyDietMutationRepository adds atomic create/idempotency and ownership-aware delete behavior.
 // Implements DESIGN-008 SavedDataRepository and ProfileController.
 type DailyDietMutationRepository interface {
 	DailyDietRepository
-	CreateWithIdempotency(ctx context.Context, userID uuid.UUID, diet SavedDiet, record CheckoutIdempotencyRecord) (AtomicDailyDietMutationResult, error)
+	GetDailyDietCreateClaim(ctx context.Context, userID uuid.UUID, key string, bodyHash string) (DailyDietCreateClaimResult, error)
+	ClaimDailyDietCreate(ctx context.Context, claim DailyDietCreateClaim) (DailyDietCreateClaimResult, error)
 	DeleteIfOwned(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) (deleted bool, exists bool, err error)
 }
-
-// SavedDietRepository is the repository name used by optimization services.
-// Implements DESIGN-008 SavedDataRepository.
-type SavedDietRepository = DailyDietRepository
 
 // SearchHistoryRepository defines search-history persistence behavior.
 // Implements DESIGN-008 SearchHistoryRepository.

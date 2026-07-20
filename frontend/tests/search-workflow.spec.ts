@@ -148,9 +148,9 @@ const authSessionEnvelope: AuthSessionEnvelope = {
 };
 
 const savedDailyDiet: DailyDiet = {
-  id: "diet-search-workflow",
+  id: "00000000-0000-0000-0000-000000000021",
   name: "Training day",
-  entries: [{ id: "diet-entry-1", mealId: "food-apple", quantity: 100, unit: "g", position: 0 }],
+  entries: [{ id: "00000000-0000-0000-0000-000000000022", mealId: "00000000-0000-0000-0000-000000000023", quantity: 100, unit: "g", position: 0 }],
   aggregateMacros: { protein: 1, carbohydrates: 14, fat: 0.2, calories: 62 },
   createdAt: "2026-07-05T00:00:00Z",
   updatedAt: "2026-07-05T00:00:00Z"

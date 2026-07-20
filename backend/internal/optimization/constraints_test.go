@@ -4,6 +4,8 @@ package optimization
 import (
 	"context"
 	"math"
+	"os"
+	"os/exec"
 	"reflect"
 	"testing"
 
@@ -12,89 +14,69 @@ import (
 )
 
 var (
-	constraintMealA = uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	constraintMealB = uuid.MustParse("00000000-0000-0000-0000-000000000002")
-	constraintMealC = uuid.MustParse("00000000-0000-0000-0000-000000000003")
+	constraintUser  = uuid.MustParse("00000000-0000-4000-8000-000000000010")
+	constraintDiet  = uuid.MustParse("00000000-0000-4000-8000-000000000011")
+	constraintMealA = uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	constraintMealB = uuid.MustParse("00000000-0000-4000-8000-000000000002")
+	constraintMealC = uuid.MustParse("00000000-0000-4000-8000-000000000003")
 )
 
-func TestBuildConstraintsUsesScaledRepositoryMacrosAndToleranceBands(t *testing.T) {
-	model, err := BuildConstraints(DietOptimizationRequest{
-		TargetMacros:     MacroTarget{Protein: 100, Carbohydrates: 200, Fat: 50},
-		TolerancePercent: 10,
-		MaxQuantity:      1000,
-	}, []repository.MealEntity{
-		{ID: constraintMealB, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 40, Fat: 5}},
-		{ID: constraintMealA, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 30, Fat: 2}},
-	})
-	if err != nil {
-		t.Fatalf("BuildConstraints() error = %v", err)
+func TestConstraintDomainUsesOneProductionVocabulary(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  any
+		fields []string
+	}{
+		{name: "macro target", value: MacroTarget{}, fields: []string{"Protein", "Carbohydrates", "Fat"}},
+		{name: "saved diet request", value: DietOptimizationRequest{}, fields: []string{"OriginalDiet", "TolerancePercent", "ExcludedMealIDs"}},
+		{name: "LP variable", value: LPVariable{}, fields: []string{"ItemID", "LowerBound", "UpperBound", "CaloriesPerUnit", "DiversityPenalty", "ProteinPerUnit", "CarbohydratesPerUnit", "FatPerUnit"}},
 	}
 
-	if got, want := []string{model.Variables[0].ItemID, model.Variables[1].ItemID}, []string{constraintMealA.String(), constraintMealB.String()}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("variable order = %v, want %v", got, want)
-	}
-	if got, want := model.Variables[0].ProteinPerUnit, 0.1; got != want {
-		t.Fatalf("protein coefficient = %v, want %v", got, want)
-	}
-	if got, want := model.Variables[1].CarbohydratesPerUnit, 0.4; got != want {
-		t.Fatalf("carbohydrate coefficient = %v, want %v", got, want)
-	}
-
-	assertConstraintBounds(t, model.Constraints[0], 90, 110)
-	assertConstraintBounds(t, model.Constraints[1], 180, 220)
-	assertConstraintBounds(t, model.Constraints[2], 45, 55)
-	if got := model.Constraints[0].Coefficients[constraintMealA.String()]; got != 0.1 {
-		t.Fatalf("protein matrix coefficient = %v, want 0.1", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			typeOf := reflect.TypeOf(tt.value)
+			fields := make([]string, typeOf.NumField())
+			for index := range typeOf.NumField() {
+				fields[index] = typeOf.Field(index).Name
+			}
+			if !reflect.DeepEqual(fields, tt.fields) {
+				t.Fatalf("%s fields = %v, want exactly %v", typeOf.Name(), fields, tt.fields)
+			}
+		})
 	}
 }
 
-func TestBuildConstraintsExcludesMealsWithZeroEligibility(t *testing.T) {
-	model, err := BuildConstraints(DietOptimizationRequest{
-		TargetMacros:     MacroTarget{Protein: 10, Carbohydrates: 10, Fat: 10},
-		TolerancePercent: 5,
-		ExcludedMealIDs:  []uuid.UUID{constraintMealB},
-		MaxQuantity:      500,
-	}, []repository.MealEntity{
-		{ID: constraintMealA, MacrosPer100: repository.MacroValues{Protein: 1, Carbohydrates: 1, Fat: 1}},
-		{ID: constraintMealB, MacrosPer100: repository.MacroValues{Protein: 2, Carbohydrates: 2, Fat: 2}},
-	})
+func TestBuildConstraintsUsesAuthoritativeSavedDietAndCanonicalDomain(t *testing.T) {
+	mealA := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10, Carbohydrates: 30, Fat: 2})
+	mealB := eligibleConstraintMeal(constraintMealB, repository.PhysicalStateLiquid, MacroTarget{Protein: 20, Carbohydrates: 40, Fat: 5})
+	req := savedDietConstraintRequest(mealA, 100, "g", 10)
+	req.ExcludedMealIDs = []uuid.UUID{constraintMealB}
+
+	model, err := BuildConstraints(req, []repository.MealEntity{mealB, mealA}, nil)
 	if err != nil {
 		t.Fatalf("BuildConstraints() error = %v", err)
 	}
-
-	variable := model.Variables[1]
-	if variable.ItemID != constraintMealB.String() || variable.UpperBound != 0 {
-		t.Fatalf("excluded variable = %+v, want zero upper bound", variable)
+	if got, want := len(model.Variables), 1; got != want {
+		t.Fatalf("variable count = %d, want %d; excluded meals must be omitted", got, want)
 	}
-	constraint := findConstraint(t, model, "exclude_"+constraintMealB.String())
-	assertConstraintBounds(t, constraint, 0, 0)
-	if got := constraint.Coefficients[constraintMealB.String()]; got != 1 {
-		t.Fatalf("exclusion coefficient = %v, want 1", got)
+	variable := model.Variables[0]
+	if variable.ItemID != constraintMealA.String() || variable.UpperBound != MaximumMealQuantity || variable.CarbohydratesPerUnit != 0.3 {
+		t.Fatalf("variable = %+v", variable)
+	}
+	if got, want := len(model.Constraints), 3; got != want {
+		t.Fatalf("constraint count = %d, want macro rows only (%d)", got, want)
+	}
+	assertConstraintBounds(t, model.Constraints[0], 9, 11)
+	assertConstraintBounds(t, model.Constraints[1], 27, 33)
+	assertConstraintBounds(t, model.Constraints[2], 1.8, 2.2)
+	for _, constraint := range model.Constraints {
+		if len(constraint.Name) >= 9 && (constraint.Name[:9] == "quantity_" || constraint.Name[:8] == "exclude_") {
+			t.Fatalf("redundant bound row remains: %s", constraint.Name)
+		}
 	}
 }
 
-func TestBuildConstraintsDerivesTargetFromPersistedOriginalDiet(t *testing.T) {
-	model, err := BuildConstraints(DietOptimizationRequest{
-		OriginalDiet: repository.SavedDiet{Entries: []repository.SavedDietMealEntry{
-			{MealID: constraintMealA, Quantity: 150, Unit: "g", Position: 0},
-			{MealID: constraintMealB, Quantity: 50, Unit: "g", Position: 1},
-		}},
-		TolerancePercent: 0,
-		MaxQuantity:      1000,
-	}, []repository.MealEntity{
-		{ID: constraintMealA, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 10, Fat: 2}},
-		{ID: constraintMealB, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 40, Fat: 8}},
-	})
-	if err != nil {
-		t.Fatalf("BuildConstraints() error = %v", err)
-	}
-
-	assertConstraintBounds(t, model.Constraints[0], 35, 35)
-	assertConstraintBounds(t, model.Constraints[1], 35, 35)
-	assertConstraintBounds(t, model.Constraints[2], 7, 7)
-}
-
-func TestBuildConstraintsNormalizesImperialOriginalDietQuantities(t *testing.T) {
+func TestBuildConstraintsNormalizesSupportedOriginalDietBases(t *testing.T) {
 	tests := []struct {
 		name           string
 		state          repository.PhysicalState
@@ -108,236 +90,243 @@ func TestBuildConstraintsNormalizesImperialOriginalDietQuantities(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			meal := repository.MealEntity{
-				ID:            constraintMealA,
-				PhysicalState: tt.state,
-				MacrosPer100:  repository.MacroValues{Protein: 20, Carbohydrates: 10, Fat: 2},
-			}
-			request := func(quantity float64, unit string) DietOptimizationRequest {
-				return DietOptimizationRequest{
-					OriginalDiet: repository.SavedDiet{Entries: []repository.SavedDietMealEntry{{
-						MealID: constraintMealA, Quantity: quantity, Unit: unit, Position: 0,
-					}}},
-					TolerancePercent: 0,
-					MaxQuantity:      1000,
-				}
-			}
-
-			metricModel, err := BuildConstraints(request(tt.metricQuantity, tt.metricUnit), []repository.MealEntity{meal})
+			meal := eligibleConstraintMeal(constraintMealA, tt.state, MacroTarget{Protein: 20, Carbohydrates: 10, Fat: 2})
+			metric, err := BuildConstraints(savedDietConstraintRequest(meal, tt.metricQuantity, tt.metricUnit, 0), []repository.MealEntity{meal}, nil)
 			if err != nil {
 				t.Fatalf("BuildConstraints(metric) error = %v", err)
 			}
-			imperialModel, err := BuildConstraints(request(1, tt.imperialUnit), []repository.MealEntity{meal})
+			imperial, err := BuildConstraints(savedDietConstraintRequest(meal, 1, tt.imperialUnit, 0), []repository.MealEntity{meal}, nil)
 			if err != nil {
 				t.Fatalf("BuildConstraints(imperial) error = %v", err)
 			}
-			if !reflect.DeepEqual(imperialModel, metricModel) {
-				t.Fatalf("imperial model differs from equivalent metric model:\nimperial=%+v\nmetric=%+v", imperialModel, metricModel)
+			if !reflect.DeepEqual(imperial, metric) {
+				t.Fatalf("imperial model differs from metric model:\nimperial=%+v\nmetric=%+v", imperial, metric)
 			}
 		})
 	}
 }
 
-func TestBuildConstraintsRejectsOriginalDietUnitsForWrongPhysicalState(t *testing.T) {
-	tests := []struct {
-		name string
-		meal repository.MealEntity
-		unit string
-	}{
-		{
-			name: "solid fluid ounces",
-			meal: repository.MealEntity{ID: constraintMealA, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}},
-			unit: "fl_oz",
-		},
-		{
-			name: "liquid ounces",
-			meal: repository.MealEntity{ID: constraintMealA, PhysicalState: repository.PhysicalStateLiquid, MacrosPer100: repository.MacroValues{Protein: 10}},
-			unit: "oz",
-		},
+func TestBuildConstraintsEligibilityPolicy(t *testing.T) {
+	original := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10})
+	ineligibleState := eligibleConstraintMeal(constraintMealB, "", MacroTarget{Protein: 10})
+	unavailable := eligibleConstraintMeal(constraintMealC, repository.PhysicalStateSolid, MacroTarget{Protein: 10})
+	unavailable.NormalizedMacrosAvailable = false
+	invalidBasis := eligibleConstraintMeal(uuid.MustParse("00000000-0000-4000-8000-000000000004"), repository.PhysicalStateSolid, MacroTarget{Protein: -1})
+	zeroInformation := eligibleConstraintMeal(uuid.MustParse("00000000-0000-4000-8000-000000000005"), repository.PhysicalStateSolid, MacroTarget{})
+
+	model, err := BuildConstraints(savedDietConstraintRequest(original, 100, "g", 0), []repository.MealEntity{unavailable, zeroInformation, invalidBasis, original, ineligibleState}, nil)
+	if err != nil {
+		t.Fatalf("BuildConstraints() error = %v", err)
+	}
+	if len(model.Variables) != 1 || model.Variables[0].ItemID != original.ID.String() {
+		t.Fatalf("eligible variables = %+v, want only original", model.Variables)
 	}
 
+	for _, mutation := range []func(*repository.MealEntity){
+		func(meal *repository.MealEntity) { meal.PhysicalState = "" },
+		func(meal *repository.MealEntity) { meal.PhysicalState = "gas" },
+		func(meal *repository.MealEntity) { meal.NormalizedMacrosAvailable = false },
+		func(meal *repository.MealEntity) { meal.MacrosPer100.Protein = -1 },
+	} {
+		bad := original
+		mutation(&bad)
+		if _, err := BuildConstraints(savedDietConstraintRequest(bad, 100, "g", 0), []repository.MealEntity{bad}, nil); err == nil {
+			t.Fatal("BuildConstraints() accepted an unusable authoritative original meal")
+		}
+	}
+
+	req := savedDietConstraintRequest(original, 100, "g", 0)
+	req.OriginalDiet.Entries = append(req.OriginalDiet.Entries, repository.SavedDietMealEntry{MealID: zeroInformation.ID, Quantity: 100, Unit: "g"})
+	if _, err := BuildConstraints(req, []repository.MealEntity{original, zeroInformation}, nil); err == nil {
+		t.Fatal("BuildConstraints() filtered a zero-information original meal instead of failing safely")
+	}
+}
+
+func TestBuildConstraintsRejectsAllZeroAuthoritativeTargetAndInvalidIdentity(t *testing.T) {
+	zero := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{})
+	if _, err := BuildConstraints(savedDietConstraintRequest(zero, 100, "g", 0), []repository.MealEntity{zero}, nil); err == nil {
+		t.Fatal("BuildConstraints() accepted an all-zero target")
+	}
+
+	valid := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 1})
+	for _, req := range []DietOptimizationRequest{
+		{},
+		{OriginalDiet: repository.SavedDiet{ID: constraintDiet, Entries: []repository.SavedDietMealEntry{{MealID: valid.ID, Quantity: 100, Unit: "g"}}}},
+		{OriginalDiet: repository.SavedDiet{ID: constraintDiet, UserID: constraintUser}},
+	} {
+		if _, err := BuildConstraints(req, []repository.MealEntity{valid}, nil); err == nil {
+			t.Fatal("BuildConstraints() accepted incomplete saved-diet identity")
+		}
+	}
+}
+
+func TestBuildConstraintsMealSetDistinctnessCannotUseQuantityDrift(t *testing.T) {
+	mealA := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10})
+	mealB := eligibleConstraintMeal(constraintMealB, repository.PhysicalStateSolid, MacroTarget{Protein: 10})
+	previous := LPSolution{mealA.ID.String(): 25, mealB.ID.String(): 100}
+	req := savedDietConstraintRequest(mealA, 100, "g", 5)
+
+	first, err := BuildConstraints(req, []repository.MealEntity{mealB, mealA}, []LPSolution{previous})
+	if err != nil {
+		t.Fatalf("BuildConstraints() error = %v", err)
+	}
+	reversed, err := BuildConstraints(req, []repository.MealEntity{mealA, mealB}, []LPSolution{previous})
+	if err != nil {
+		t.Fatalf("BuildConstraints(reversed) error = %v", err)
+	}
+	if !reflect.DeepEqual(first, reversed) {
+		t.Fatalf("matrix changes with candidate order:\nfirst=%+v\nreversed=%+v", first, reversed)
+	}
+	alternative := findConstraint(t, first, "alternative_1")
+	assertConstraintBounds(t, alternative, 0, 0)
+	if !reflect.DeepEqual(alternative.Coefficients, map[string]float64{mealB.ID.String(): 1}) {
+		t.Fatalf("alternative coefficients = %v, want deterministic highest-quantity exclusion", alternative.Coefficients)
+	}
+	if got := constraintValue(alternative, map[string]float64{mealA.ID.String(): 23.75, mealB.ID.String(): 99}); got <= alternative.UpperBound {
+		t.Fatalf("same-set quantity drift value = %v, want rejected", got)
+	}
+	if got := constraintValue(alternative, map[string]float64{mealA.ID.String(): 100}); got > alternative.UpperBound {
+		t.Fatalf("changed meal set value = %v, want accepted", got)
+	}
+}
+
+func TestBuildConstraintsDeterministicFeasibleAndInfeasibleFixtures(t *testing.T) {
+	meal := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10, Carbohydrates: 20, Fat: 5})
+	tests := []struct {
+		name       string
+		quantity   float64
+		assignment LPSolution
+		feasible   bool
+	}{
+		{name: "feasible", quantity: 100, assignment: LPSolution{meal.ID.String(): 100}, feasible: true},
+		{name: "bounded infeasible", quantity: MaximumMealQuantity + 1, feasible: false},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := BuildConstraints(DietOptimizationRequest{
-				OriginalDiet: repository.SavedDiet{Entries: []repository.SavedDietMealEntry{{
-					MealID: constraintMealA, Quantity: 1, Unit: tt.unit,
-				}}},
-			}, []repository.MealEntity{tt.meal})
-			if err == nil {
-				t.Fatal("BuildConstraints() accepted a unit incompatible with the meal physical state")
+			model, err := BuildConstraints(savedDietConstraintRequest(meal, tt.quantity, "g", 0), []repository.MealEntity{meal}, nil)
+			if err != nil {
+				t.Fatalf("BuildConstraints() error = %v", err)
+			}
+			got := modelAccepts(model, tt.assignment)
+			if tt.assignment == nil {
+				got = matrixCanReachLowerBounds(model)
+			}
+			if got != tt.feasible {
+				t.Fatalf("fixture feasibility = %v, want %v", got, tt.feasible)
 			}
 		})
 	}
 }
 
-func TestConstraintBuilderLoadsLargeCatalogInBoundedPages(t *testing.T) {
-	userID, dietID := uuid.New(), uuid.New()
+func TestConstraintBuilderLoadsEligibleCatalogInBoundedPages(t *testing.T) {
 	meals := make([]repository.MealEntity, 201)
 	for index := range meals {
-		meals[index] = repository.MealEntity{ID: uuid.New(), MacrosPer100: repository.MacroValues{Protein: 1}}
+		meals[index] = eligibleConstraintMeal(uuid.New(), repository.PhysicalStateSolid, MacroTarget{Protein: 1})
 	}
+	ineligible := eligibleConstraintMeal(uuid.New(), repository.PhysicalStateSolid, MacroTarget{Protein: 1})
+	ineligible.NormalizedMacrosAvailable = false
+	meals = append(meals, ineligible)
 	mealRepo := &pagedConstraintMealRepository{meals: meals}
 	dietRepo := &constraintDietRepository{diet: repository.SavedDiet{
-		ID: dietID, UserID: userID,
+		ID: constraintDiet, UserID: constraintUser,
 		Entries: []repository.SavedDietMealEntry{{MealID: meals[0].ID, Quantity: 100, Unit: "g"}},
 	}}
 
-	inputs, err := NewConstraintBuilder(mealRepo, dietRepo).LoadFromSavedDiet(context.Background(), userID, dietID, DietOptimizationRequest{})
+	inputs, err := NewConstraintBuilder(mealRepo, dietRepo).LoadFromSavedDiet(context.Background(), constraintUser, constraintDiet, DietOptimizationRequest{})
 	if err != nil {
 		t.Fatalf("LoadFromSavedDiet() error = %v", err)
 	}
 	if len(inputs.Meals) != 201 || mealRepo.searchCalls != 3 || mealRepo.getCalls != 1 {
 		t.Fatalf("loaded=%d searchCalls=%d getCalls=%d, want 201, 3, 1", len(inputs.Meals), mealRepo.searchCalls, mealRepo.getCalls)
 	}
+	if !mealRepo.sawSupportedStates {
+		t.Fatal("repository query did not restrict candidates to supported physical states")
+	}
+	if inputs.Request.OriginalDiet.ID != constraintDiet || inputs.Request.OriginalDiet.UserID != constraintUser {
+		t.Fatalf("loaded request diet = %+v", inputs.Request.OriginalDiet)
+	}
 }
 
-func TestBuildConstraintsAddsDeterministicAlternativeConstraint(t *testing.T) {
-	req := DietOptimizationRequest{
-		TargetMacros:     MacroTarget{Protein: 10, Carbohydrates: 10, Fat: 10},
-		TolerancePercent: 5,
-		MaxQuantity:      500,
-		PreviousSolutions: []map[string]float64{{
-			constraintMealB.String(): 100,
-			constraintMealA.String(): 25,
-		}},
+func TestConstraintBuilderRequiresExactRepositoryDietIdentity(t *testing.T) {
+	meal := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 1})
+	for _, diet := range []repository.SavedDiet{
+		{ID: uuid.Nil, UserID: constraintUser, Entries: []repository.SavedDietMealEntry{{MealID: meal.ID, Quantity: 100, Unit: "g"}}},
+		{ID: constraintDiet, UserID: uuid.Nil, Entries: []repository.SavedDietMealEntry{{MealID: meal.ID, Quantity: 100, Unit: "g"}}},
+		{ID: constraintDiet, UserID: uuid.New(), Entries: []repository.SavedDietMealEntry{{MealID: meal.ID, Quantity: 100, Unit: "g"}}},
+	} {
+		builder := NewConstraintBuilder(&pagedConstraintMealRepository{meals: []repository.MealEntity{meal}}, &constraintDietRepository{diet: diet})
+		if _, err := builder.LoadFromSavedDiet(context.Background(), constraintUser, constraintDiet, DietOptimizationRequest{}); err == nil {
+			t.Fatalf("LoadFromSavedDiet() accepted diet identity %+v", diet)
+		}
 	}
-	meals := []repository.MealEntity{
-		{ID: constraintMealB, MacrosPer100: repository.MacroValues{Protein: 2, Carbohydrates: 2, Fat: 2}},
-		{ID: constraintMealA, MacrosPer100: repository.MacroValues{Protein: 1, Carbohydrates: 1, Fat: 1}},
-	}
+}
 
-	first, err := BuildConstraints(req, meals)
+func TestBuildConstraintsRejectsInvalidNumericAndTypedExclusionInputs(t *testing.T) {
+	meal := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10})
+	base := savedDietConstraintRequest(meal, 100, "g", 0)
+	tests := []DietOptimizationRequest{base, base, base, base}
+	tests[0].TolerancePercent = math.Inf(1)
+	tests[1].TolerancePercent = -1
+	tests[2].ExcludedMealIDs = []uuid.UUID{uuid.Nil}
+	tests[3].ExcludedMealIDs = []uuid.UUID{constraintMealB, constraintMealB}
+	for _, req := range tests {
+		if _, err := BuildConstraints(req, []repository.MealEntity{meal}, nil); err == nil {
+			t.Fatal("BuildConstraints() accepted invalid request input")
+		}
+	}
+	if _, err := BuildConstraints(base, []repository.MealEntity{meal}, []LPSolution{{meal.ID.String(): math.Inf(1)}}); err == nil {
+		t.Fatal("BuildConstraints() accepted non-finite prior quantity")
+	}
+}
+
+func TestTask218PackagedCLPConstraintFixture(t *testing.T) {
+	executable := os.Getenv("MEALSWAPP_CLP_PATH")
+	if executable == "" {
+		executable, _ = exec.LookPath(DefaultCLPExecutable)
+	}
+	if executable == "" {
+		t.Skip("native CLP executable is not installed; packaged worker CI supplies it")
+	}
+	meal := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10, Carbohydrates: 20, Fat: 5})
+	model, err := BuildConstraints(savedDietConstraintRequest(meal, 100, "g", 0), []repository.MealEntity{meal}, nil)
 	if err != nil {
-		t.Fatalf("first BuildConstraints() error = %v", err)
+		t.Fatalf("BuildConstraints() error = %v", err)
 	}
-	reversed, err := BuildConstraints(req, []repository.MealEntity{meals[1], meals[0]})
+	policy, err := BuildObjective(model.Variables)
 	if err != nil {
-		t.Fatalf("reversed BuildConstraints() error = %v", err)
+		t.Fatalf("BuildObjective() error = %v", err)
 	}
-	if !reflect.DeepEqual(first, reversed) {
-		t.Fatalf("constraint matrix changes with candidate order:\nfirst=%+v\nreversed=%+v", first, reversed)
+	solver := NewLPSolverWrapper(CLPConfig{Executable: executable})
+	solution, err := solver.Solve(context.Background(), model, policy.Primary)
+	if err != nil {
+		t.Fatalf("packaged CLP solve: %v", err)
 	}
-
-	alternative := findConstraint(t, first, "alternative_1")
-	assertConstraintBounds(t, alternative, 0, 1.95)
-	if len(alternative.Coefficients) != 2 {
-		t.Fatalf("alternative coefficients = %v, want both selected meals", alternative.Coefficients)
-	}
-	if got, want := alternative.Coefficients[constraintMealA.String()], 1.0/25; got != want {
-		t.Fatalf("alternative coefficient for A = %v, want %v", got, want)
-	}
-	if got, want := alternative.Coefficients[constraintMealB.String()], 1.0/100; got != want {
-		t.Fatalf("alternative coefficient for B = %v, want %v", got, want)
-	}
-
-	nearDuplicate := map[string]float64{constraintMealA.String(): 24.999, constraintMealB.String(): 100}
-	if got := constraintValue(alternative, nearDuplicate); got <= alternative.UpperBound {
-		t.Fatalf("near-duplicate previous solution value = %v, want > %v", got, alternative.UpperBound)
-	}
-	differentMealSet := map[string]float64{constraintMealA.String(): 0, constraintMealB.String(): 100}
-	if got := constraintValue(alternative, differentMealSet); got > alternative.UpperBound {
-		t.Fatalf("distinct solution value = %v, want <= %v", got, alternative.UpperBound)
+	if quantity := solution[meal.ID.String()]; math.Abs(quantity-100) > SolutionValidationEpsilon {
+		t.Fatalf("packaged CLP quantity = %v, want 100", quantity)
 	}
 }
 
-func TestBuildConstraintsMatrixFixturesAreDeterministicAndClassifiable(t *testing.T) {
-	fixtures := []struct {
-		name       string
-		req        DietOptimizationRequest
-		meals      []repository.MealEntity
-		assignment map[string]float64
-		feasible   bool
-	}{
-		{
-			name: "feasible intersection",
-			req: DietOptimizationRequest{
-				TargetMacros:     MacroTarget{Protein: 10, Carbohydrates: 20, Fat: 5},
-				TolerancePercent: 0,
-				MaxQuantity:      100,
-			},
-			meals: []repository.MealEntity{
-				{ID: constraintMealB, MacrosPer100: repository.MacroValues{Protein: 5, Carbohydrates: 10, Fat: 2.5}},
-				{ID: constraintMealA, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
-			},
-			assignment: map[string]float64{constraintMealA.String(): 100},
-			feasible:   true,
+func eligibleConstraintMeal(id uuid.UUID, state repository.PhysicalState, macros MacroTarget) repository.MealEntity {
+	return repository.MealEntity{
+		ID: id, Type: repository.MealTypeSingle, Name: id.String(), PhysicalState: state,
+		MacrosPer100:              repository.MacroValues{Protein: macros.Protein, Carbohydrates: macros.Carbohydrates, Fat: macros.Fat},
+		NormalizedMacrosAvailable: true,
+	}
+}
+
+func savedDietConstraintRequest(original repository.MealEntity, quantity float64, unit string, tolerance float64) DietOptimizationRequest {
+	return DietOptimizationRequest{
+		OriginalDiet: repository.SavedDiet{
+			ID: constraintDiet, UserID: constraintUser,
+			Entries: []repository.SavedDietMealEntry{{MealID: original.ID, Quantity: quantity, Unit: unit}},
 		},
-		{
-			name: "bounded infeasible intersection",
-			req: DietOptimizationRequest{
-				TargetMacros:     MacroTarget{Protein: 2, Carbohydrates: 2, Fat: 2},
-				TolerancePercent: 0,
-				MaxQuantity:      10,
-			},
-			meals: []repository.MealEntity{
-				{ID: constraintMealC, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 10, Fat: 10}},
-			},
-			feasible: false,
-		},
+		TolerancePercent: tolerance,
 	}
-
-	for _, fixture := range fixtures {
-		t.Run(fixture.name, func(t *testing.T) {
-			model, err := BuildConstraints(fixture.req, fixture.meals)
-			if err != nil {
-				t.Fatalf("BuildConstraints() error = %v", err)
-			}
-			reversed := append([]repository.MealEntity(nil), fixture.meals...)
-			for left, right := 0, len(reversed)-1; left < right; left, right = left+1, right-1 {
-				reversed[left], reversed[right] = reversed[right], reversed[left]
-			}
-			reversedModel, err := BuildConstraints(fixture.req, reversed)
-			if err != nil {
-				t.Fatalf("BuildConstraints(reversed) error = %v", err)
-			}
-			if !reflect.DeepEqual(model, reversedModel) {
-				t.Fatalf("matrix is not deterministic:\nmodel=%+v\nreversed=%+v", model, reversedModel)
-			}
-
-			gotFeasible := false
-			if fixture.assignment != nil {
-				gotFeasible = modelAccepts(model, fixture.assignment)
-			} else {
-				gotFeasible = matrixCanReachLowerBounds(model)
-			}
-			if gotFeasible != fixture.feasible {
-				t.Fatalf("fixture feasibility = %v, want %v", gotFeasible, fixture.feasible)
-			}
-		})
-	}
-}
-
-func TestBuildConstraintsRejectsInvalidOrNonFiniteInputs(t *testing.T) {
-	tests := []struct {
-		name string
-		req  DietOptimizationRequest
-		meal repository.MealEntity
-	}{
-		{name: "non finite target", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: math.NaN()}}, meal: validConstraintMeal()},
-		{name: "negative target", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: -1}}, meal: validConstraintMeal()},
-		{name: "non finite tolerance", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: 1}, TolerancePercent: math.Inf(1)}, meal: validConstraintMeal()},
-		{name: "negative tolerance", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: 1}, TolerancePercent: -1}, meal: validConstraintMeal()},
-		{name: "non finite meal macro", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: 1}}, meal: repository.MealEntity{ID: constraintMealA, MacrosPer100: repository.MacroValues{Protein: math.Inf(1)}}},
-		{name: "non finite quantity bound", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: 1}, MaxQuantity: math.Inf(1)}, meal: validConstraintMeal()},
-		{name: "non finite prior quantity", req: DietOptimizationRequest{TargetMacros: MacroTarget{Protein: 1}, PreviousSolutions: []map[string]float64{{constraintMealA.String(): math.Inf(1)}}}, meal: validConstraintMeal()},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := BuildConstraints(tt.req, []repository.MealEntity{tt.meal}); err == nil {
-				t.Fatal("BuildConstraints() accepted invalid input")
-			}
-		})
-	}
-}
-
-func validConstraintMeal() repository.MealEntity {
-	return repository.MealEntity{ID: constraintMealA, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 10, Fat: 1}}
 }
 
 func assertConstraintBounds(t *testing.T, constraint LPConstraint, lower, upper float64) {
 	t.Helper()
-	if constraint.LowerBound != lower || constraint.UpperBound != upper {
+	if math.Abs(constraint.LowerBound-lower) > 1e-12 || math.Abs(constraint.UpperBound-upper) > 1e-12 {
 		t.Fatalf("%s bounds = [%v, %v], want [%v, %v]", constraint.Name, constraint.LowerBound, constraint.UpperBound, lower, upper)
 	}
 }
@@ -396,6 +385,7 @@ func matrixCanReachLowerBounds(model LPModel) bool {
 type pagedConstraintMealRepository struct {
 	meals                 []repository.MealEntity
 	searchCalls, getCalls int
+	sawSupportedStates    bool
 }
 
 func (r *pagedConstraintMealRepository) GetByID(_ context.Context, id uuid.UUID, _ repository.RepositoryContext) (repository.MealEntity, error) {
@@ -410,13 +400,11 @@ func (r *pagedConstraintMealRepository) GetByID(_ context.Context, id uuid.UUID,
 
 func (r *pagedConstraintMealRepository) Search(_ context.Context, query repository.RepositoryQuery) ([]repository.MealEntity, int, error) {
 	r.searchCalls++
+	r.sawSupportedStates = reflect.DeepEqual(query.FoodObjectTypes, []repository.PhysicalState{repository.PhysicalStateSolid, repository.PhysicalStateLiquid})
 	if query.Offset >= len(r.meals) {
 		return []repository.MealEntity{}, len(r.meals), nil
 	}
-	end := query.Offset + query.Limit
-	if end > len(r.meals) {
-		end = len(r.meals)
-	}
+	end := min(query.Offset+query.Limit, len(r.meals))
 	return append([]repository.MealEntity(nil), r.meals[query.Offset:end]...), len(r.meals), nil
 }
 

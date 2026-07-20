@@ -29,9 +29,11 @@ import type {
 	SearchState,
 	SubstitutionSearchState
 } from "./search";
+import { selectedDailyDietId } from "./selected-daily-diet";
 
 afterEach(() => {
 	resetSearch();
+	selectedDailyDietId.set(null);
 });
 
 function foodObject(id = "food-1", name = "Apple"): FoodObject {
@@ -114,7 +116,7 @@ test("setMode clears substitution inputs when leaving substitution mode and rese
 });
 
 // Implements DESIGN-001 SearchView daily-diet mode transition verification.
-test("setMode clears dailyDietId when leaving daily_diet_alternative and resets page", () => {
+test("setMode preserves authoritative selection when leaving daily_diet_alternative and resets page", () => {
 	setMode("daily_diet_alternative");
 	setDailyDietId("diet-42");
 	setPage(4);
@@ -124,6 +126,7 @@ test("setMode clears dailyDietId when leaving daily_diet_alternative and resets 
 	const state = get(searchStore);
 	expect(state.mode).toBe("catalog");
 	expect(state).not.toHaveProperty("dailyDietId");
+	expect(get(selectedDailyDietId)).toBe("diet-42");
 	expect(state.page).toBe(1);
 });
 
@@ -137,7 +140,7 @@ test("setMode creates only the valid Daily Diet and Daily Diet Alternative field
 
 	setMode("daily_diet_alternative");
 	const alternative = currentDailyDietAlternativeState();
-	expect(alternative.dailyDietId).toBeUndefined();
+	expect(alternative).not.toHaveProperty("dailyDietId");
 	expect(alternative).not.toHaveProperty("substitutionInputs");
 	expect(alternative).not.toHaveProperty("dailyDietCollections");
 });
@@ -326,7 +329,7 @@ test("setDailyDietId resets page to 1", () => {
 	setPage(5);
 	setDailyDietId("diet-9");
 	expect(get(searchStore).page).toBe(1);
-	expect(currentDailyDietAlternativeState().dailyDietId).toBe("diet-9");
+	expect(get(selectedDailyDietId)).toBe("diet-9");
 });
 
 // Implements DESIGN-001 SearchView page index verification.

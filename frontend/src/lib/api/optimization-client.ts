@@ -1,26 +1,28 @@
 import { fetchCsrfToken } from "./auth-client";
+import { mapErrorMessage } from "./error-message-mapper";
 import {
 	OPTIMIZATION_JOBS_ENDPOINT,
 	buildOptimizationJobRequestInit,
 	buildOptimizationJobUrl,
 	buildOptimizationSubmissionRequestInit,
 	type AppError,
+	type CanonicalQuantityUnit,
+	type CompletedOptimizationAlternativeList,
 	type DietOptimizationRequest,
-	type Envelope,
 	type IdempotencyKey,
 	type OptimizationAlternative,
-	type OptimizationJobAcknowledgementEnvelope,
+	type OptimizationFailureCode,
 	type OptimizationJobAcknowledgementData,
 	type OptimizationJobData,
-	type OptimizationJobStatusEnvelope
+	type OptimizationJobFailed
 } from "./generated";
 
 // Implements DESIGN-001 SearchView OptimizationWorkflow over the generated DESIGN-004 contract.
 // Implements DESIGN-017 ErrorMessageMapper safe optimization error projection.
 
-export interface OptimizationRequestOptions {
+export interface OptimizationSubmissionOptions {
 	csrfToken?: string;
-	idempotencyKey?: IdempotencyKey;
+	idempotencyKey: IdempotencyKey;
 	signal?: AbortSignal;
 }
 
@@ -39,29 +41,28 @@ export class OptimizationClientError extends Error {
 /** Submits one server-owned saved diet and returns only the accepted job acknowledgement. */
 export async function submitOptimization(
 	request: DietOptimizationRequest,
-	options: OptimizationRequestOptions = {}
+	options: OptimizationSubmissionOptions
 ): Promise<OptimizationJobAcknowledgementData> {
+	if (!validIdempotencyKey(options?.idempotencyKey)) {
+		throw new OptimizationClientError(
+			{ category: "security", code: "optimization_idempotency_key_required", message: "A secure optimization request could not be created. Please try again.", retryable: false },
+			0
+		);
+	}
 	const csrfToken = await resolveCsrfToken(options);
-	const idempotencyKey = options.idempotencyKey ?? generateOptimizationIdempotencyKey();
 	const response = await requestJson(
 		OPTIMIZATION_JOBS_ENDPOINT,
-		buildOptimizationSubmissionRequestInit(request, idempotencyKey, { csrfToken, signal: options.signal })
+		buildOptimizationSubmissionRequestInit(request, options.idempotencyKey, { csrfToken, signal: options.signal })
 	);
-	const envelope = await readEnvelope<OptimizationJobAcknowledgementEnvelope>(response);
-	if (!isObject(envelope.data) || envelope.status !== "accepted" || envelope.data.status !== "queued") {
-		throw malformedResponse(response.status, envelope.requestId);
-	}
-	return envelope.data;
+	if (response.status !== 202) throw malformedResponse(response.status);
+	return decodeAcknowledgement(await readJson(response), response.status);
 }
 
 /** Polls one user-scoped optimization job through the generated credentialed GET contract. */
 export async function getOptimizationJob(jobId: string, signal?: AbortSignal): Promise<OptimizationJobData> {
 	const response = await requestJson(buildOptimizationJobUrl(jobId), buildOptimizationJobRequestInit({ signal }));
-	const envelope = await readEnvelope<OptimizationJobStatusEnvelope>(response);
-	if (!isObject(envelope.data)) {
-		throw malformedResponse(response.status, envelope.requestId);
-	}
-	return normalizeJob(envelope.data, response.status, envelope.requestId);
+	if (response.status !== 200) throw malformedResponse(response.status);
+	return decodeJobEnvelope(await readJson(response), response.status);
 }
 
 export interface OptimizationApi {
@@ -71,13 +72,27 @@ export interface OptimizationApi {
 
 export const optimizationApi: OptimizationApi = { submitOptimization, getOptimizationJob };
 
+const TERMINAL_FAILURE_MESSAGES: Record<OptimizationFailureCode, string> = {
+	failed_validation: "The optimization request could not be validated.",
+	solver_timeout: "Optimization took too long. Please try again.",
+	solver_infeasible: "No meal combination matches the requested targets.",
+	worker_crash: "Optimization could not be completed. Please try again."
+};
+
 /** Generates an in-memory key for one intentional optimization submission. */
 export function generateOptimizationIdempotencyKey(): IdempotencyKey {
 	const cryptoValue = globalThis.crypto;
-	if (cryptoValue && typeof cryptoValue.randomUUID === "function") {
-		return `optimization-${cryptoValue.randomUUID()}`;
+	if (!cryptoValue || typeof cryptoValue.randomUUID !== "function") {
+		throw secureRandomUnavailable();
 	}
-	return `optimization-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+	let value: unknown;
+	try {
+		value = cryptoValue.randomUUID();
+	} catch {
+		throw secureRandomUnavailable();
+	}
+	if (!uuidV4(value)) throw secureRandomUnavailable();
+	return `optimization-${value}`;
 }
 
 async function requestJson(url: string, init: RequestInit): Promise<Response> {
@@ -93,7 +108,7 @@ async function requestJson(url: string, init: RequestInit): Promise<Response> {
 	return response;
 }
 
-async function resolveCsrfToken(options: Pick<OptimizationRequestOptions, "csrfToken" | "signal">): Promise<string> {
+async function resolveCsrfToken(options: Pick<OptimizationSubmissionOptions, "csrfToken" | "signal">): Promise<string> {
 	if (options.csrfToken) return options.csrfToken;
 	try {
 		return (await fetchCsrfToken(options.signal)).csrfToken;
@@ -101,19 +116,15 @@ async function resolveCsrfToken(options: Pick<OptimizationRequestOptions, "csrfT
 		if (error instanceof OptimizationClientError) throw error;
 		const source = error as { appError?: AppError; status?: number };
 		throw new OptimizationClientError(
-			safeErrorFromSource(source.appError, source.status ?? 503),
+			mapErrorMessage("optimization", source.status ?? 503, { error: source.appError }),
 			source.status ?? 503
 		);
 	}
 }
 
-async function readEnvelope<TEnvelope extends Envelope>(response: Response): Promise<TEnvelope> {
+async function readJson(response: Response): Promise<unknown> {
 	try {
-		const body: unknown = await response.json();
-		if (!isObject(body) || typeof body.requestId !== "string") {
-			throw malformedResponse(response.status);
-		}
-		return body as TEnvelope;
+		return await response.json();
 	} catch (error) {
 		if (error instanceof OptimizationClientError) throw error;
 		throw malformedResponse(response.status);
@@ -121,62 +132,93 @@ async function readEnvelope<TEnvelope extends Envelope>(response: Response): Pro
 }
 
 async function responseError(response: Response): Promise<OptimizationClientError> {
-	let envelope: Envelope | null = null;
+	let envelope: unknown;
 	try {
-		const body: unknown = await response.json();
-		if (isObject(body)) envelope = body as unknown as Envelope;
+		envelope = await response.json();
 	} catch {
 		// Status-derived text is the safe fallback for empty or malformed error bodies.
 	}
-	const appError = safeErrorFromSource(envelope?.error ?? undefined, response.status);
-	if (!appError.requestId && typeof envelope?.requestId === "string" && envelope.requestId.length > 0) {
-		appError.requestId = envelope.requestId;
-	}
-	return new OptimizationClientError(appError, response.status);
+	return new OptimizationClientError(mapErrorMessage("optimization", response.status, envelope), response.status);
 }
 
-function normalizeJob(job: OptimizationJobData, status: number, requestId: string): OptimizationJobData {
-	if (job.status === "completed") {
-		const alternatives = normalizeAlternatives(job.alternatives, status, requestId);
-		if (alternatives.length < 1) throw malformedResponse(status, requestId);
-		return { ...job, alternatives: alternatives as typeof job.alternatives };
-	}
-	if (job.status === "failed" && job.alternatives) {
-		return { ...job, alternatives: normalizeAlternatives(job.alternatives, status, requestId) as typeof job.alternatives };
-	}
-	if (job.status !== "queued" && job.status !== "processing" && job.status !== "failed" && job.status !== "cancelled") {
+function decodeAcknowledgement(value: unknown, status: number): OptimizationJobAcknowledgementData {
+	const { requestId, data } = decodeEnvelope(value, status, "accepted");
+	if (!exactObject(data, ["jobId", "status", "pollUrl"]) || !uuid(data.jobId) || data.status !== "queued" || !canonicalPollUrl(data.pollUrl, data.jobId)) {
 		throw malformedResponse(status, requestId);
 	}
-	return job;
+	return { jobId: data.jobId, status: "queued", pollUrl: data.pollUrl };
 }
 
-function normalizeAlternatives(value: unknown, status: number, requestId: string): OptimizationAlternative[] {
-	if (!Array.isArray(value) || value.length > 3) throw malformedResponse(status, requestId);
-	return value.map((raw) => {
-		if (!isObject(raw) || !Array.isArray(raw.meals) || !isObject(raw.macros)) {
+function decodeJobEnvelope(value: unknown, status: number): OptimizationJobData {
+	const { requestId, data: job } = decodeEnvelope(value, status, "ok");
+	if (!isObject(job) || typeof job.status !== "string") throw malformedResponse(status, requestId);
+	const common = decodeJobCommon(job, status, requestId);
+	switch (job.status) {
+		case "queued":
+			assertKeys(job, ["jobId", "dailyDietId", "status", "pollUrl", "createdAt"], status, requestId);
+			return { ...common, status: "queued" };
+		case "processing":
+			assertKeys(job, ["jobId", "dailyDietId", "status", "pollUrl", "createdAt", "startedAt"], status, requestId);
+			if (!dateTime(job.startedAt)) throw malformedResponse(status, requestId);
+			return { ...common, status: "processing", startedAt: job.startedAt };
+		case "completed": {
+			assertKeys(job, ["jobId", "dailyDietId", "status", "pollUrl", "createdAt", "startedAt", "finishedAt", "alternatives"], status, requestId);
+			if (!dateTime(job.startedAt) || !dateTime(job.finishedAt)) throw malformedResponse(status, requestId);
+			const alternatives = decodeAlternatives(job.alternatives, status, requestId, 1);
+			return { ...common, status: "completed", startedAt: job.startedAt, finishedAt: job.finishedAt, alternatives: alternatives as CompletedOptimizationAlternativeList };
+		}
+		case "failed":
+			return decodeFailedJob(job, common, status, requestId);
+		case "cancelled":
+			assertKeys(job, ["jobId", "dailyDietId", "status", "pollUrl", "createdAt", "finishedAt"], status, requestId);
+			if (!dateTime(job.finishedAt)) throw malformedResponse(status, requestId);
+			return { ...common, status: "cancelled", finishedAt: job.finishedAt };
+		default:
+			throw malformedResponse(status, requestId);
+	}
+}
+
+function decodeJobCommon(job: Record<string, unknown>, status: number, requestId: string) {
+	if (!uuid(job.jobId) || !uuid(job.dailyDietId) || !canonicalPollUrl(job.pollUrl, job.jobId) || !dateTime(job.createdAt)) {
+		throw malformedResponse(status, requestId);
+	}
+	return { jobId: job.jobId, dailyDietId: job.dailyDietId, pollUrl: job.pollUrl, createdAt: job.createdAt };
+}
+
+function decodeFailedJob(job: Record<string, unknown>, common: ReturnType<typeof decodeJobCommon>, status: number, requestId: string): OptimizationJobFailed {
+	const optional = ["startedAt", "finishedAt", "alternatives"].filter((key) => key in job);
+	assertKeys(job, ["jobId", "dailyDietId", "status", "pollUrl", "createdAt", "failure", ...optional], status, requestId);
+	if (("startedAt" in job && job.startedAt !== null && !dateTime(job.startedAt)) || ("finishedAt" in job && job.finishedAt !== null && !dateTime(job.finishedAt))) {
+		throw malformedResponse(status, requestId);
+	}
+	if (!exactObject(job.failure, ["code", "message"]) || !isOptimizationFailureCode(job.failure.code) || job.failure.message !== TERMINAL_FAILURE_MESSAGES[job.failure.code]) {
+		throw malformedResponse(status, requestId);
+	}
+	const result: OptimizationJobFailed = { ...common, status: "failed", failure: { code: job.failure.code, message: job.failure.message } };
+	if ("startedAt" in job) result.startedAt = job.startedAt as string | null;
+	if ("finishedAt" in job) result.finishedAt = job.finishedAt as string | null;
+	if ("alternatives" in job) result.alternatives = decodeAlternatives(job.alternatives, status, requestId) as OptimizationJobFailed["alternatives"];
+	return result;
+}
+
+function decodeAlternatives(value: unknown, status: number, requestId: string, minimum = 0): OptimizationAlternative[] {
+	if (!Array.isArray(value) || value.length < minimum || value.length > 3) throw malformedResponse(status, requestId);
+	return value.map((raw) => decodeAlternative(raw, status, requestId));
+}
+
+function decodeAlternative(raw: unknown, status: number, requestId: string): OptimizationAlternative {
+	if (!exactObject(raw, ["meals", "macros", "similarityScore"]) || !Array.isArray(raw.meals) || raw.meals.length < 1 || raw.meals.length > 100 || !exactObject(raw.macros, ["protein", "carbohydrates", "fat", "calories"]) || !validSimilarityScore(raw.similarityScore)) {
+		throw malformedResponse(status, requestId);
+	}
+	const macros = raw.macros;
+	if (!boundedMacro(macros.protein) || !boundedMacro(macros.carbohydrates) || !boundedMacro(macros.fat) || !boundedMacro(macros.calories)) throw malformedResponse(status, requestId);
+	const meals = raw.meals.map((meal) => {
+		if (!exactObject(meal, ["mealId", "quantity", "unit", "position"]) || !uuid(meal.mealId) || !boundedQuantity(meal.quantity) || !canonicalUnit(meal.unit) || !boundedPosition(meal.position)) {
 			throw malformedResponse(status, requestId);
 		}
-		const macros = raw.macros;
-		if (
-			!finiteNumber(macros.calories) ||
-			!finiteNumber(macros.protein) ||
-			!finiteNumber(macros.carbohydrates) ||
-			!finiteNumber(macros.fat) ||
-			!finiteNumber(raw.similarityScore)
-		) {
-			throw malformedResponse(status, requestId);
-		}
-		return {
-			meals: raw.meals as OptimizationAlternative["meals"],
-			macros: {
-				protein: macros.protein,
-				carbohydrates: macros.carbohydrates,
-				fat: macros.fat,
-				calories: macros.calories
-			},
-			similarityScore: raw.similarityScore
-		};
+		return { mealId: meal.mealId, quantity: meal.quantity, unit: meal.unit, position: meal.position };
 	});
+	return { meals, macros: { protein: macros.protein, carbohydrates: macros.carbohydrates, fat: macros.fat, calories: macros.calories }, similarityScore: raw.similarityScore };
 }
 
 function malformedResponse(status: number, requestId?: string): OptimizationClientError {
@@ -204,49 +246,93 @@ function networkError(error: unknown): OptimizationClientError {
 	);
 }
 
-function safeErrorFromSource(source: AppError | undefined, status: number): AppError {
-	const fallback = safeErrorForStatus(status);
-	const appError: AppError = {
-		category: isErrorCategory(source?.category) ? source.category : fallback.category,
-		code: isSafeCode(source?.code) ? source.code : fallback.code,
-		message: isSafeMessage(source?.message) ? source.message : fallback.message,
-		retryable: source?.retryable ?? fallback.retryable
-	};
-	if (isSafeRequestId(source?.requestId)) appError.requestId = source.requestId;
-	return appError;
-}
-
-function safeErrorForStatus(status: number): AppError {
-	if (status === 401) return { category: "auth", code: "session_expired", message: "Your session expired. Please sign in and try again.", retryable: false };
-	if (status === 403) return { category: "entitlement", code: "entitlement_denied", message: "An active trial or paid subscription is required for optimization.", retryable: false };
-	if (status === 410) return { category: "validation", code: "result_expired", message: "This optimization result has expired. Submit again for a fresh result.", retryable: true };
-	if (status === 503) return { category: "dependency", code: "queue_unavailable", message: "The optimization queue is temporarily unavailable. Please try again.", retryable: true };
-	if (status === 422) return { category: "validation", code: "solver_infeasible", message: "No meal combination matched these macro targets. Try a wider tolerance.", retryable: false };
-	if (status === 404) return { category: "validation", code: "optimization_not_found", message: "This optimization is no longer available. Please submit again.", retryable: true };
-	if (status === 400 || status === 409) return { category: "validation", code: "optimization_invalid_request", message: "Optimization request could not be processed. Please review it and try again.", retryable: false };
-	return { category: "unknown", code: "optimization_request_failed", message: "Optimization could not be completed. Please try again.", retryable: true };
+function secureRandomUnavailable(): OptimizationClientError {
+	return new OptimizationClientError(
+		{ category: "security", code: "secure_random_unavailable", message: "A secure optimization request could not be created. Please try again.", retryable: true },
+		0
+	);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function exactObject(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+	if (!isObject(value)) return false;
+	const actual = Object.keys(value).sort();
+	const expected = [...keys].sort();
+	return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function assertKeys(value: Record<string, unknown>, keys: readonly string[], status: number, requestId: string): void {
+	if (!exactObject(value, keys)) throw malformedResponse(status, requestId);
+}
+
+function decodeEnvelope(value: unknown, status: number, expectedStatus: "accepted" | "ok"): { requestId: string; data: unknown } {
+	if (!exactObject(value, ["status", "requestId", "data"]) || value.status !== expectedStatus || !safeRequestId(value.requestId)) {
+		throw malformedResponse(status);
+	}
+	return { requestId: value.requestId, data: value.data };
+}
+
+function safeRequestId(value: unknown): value is string {
+	return typeof value === "string" && /^[A-Za-z0-9._:-]{1,120}$/.test(value);
+}
+
+function validIdempotencyKey(value: unknown): value is IdempotencyKey {
+	return typeof value === "string" && /^optimization-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+}
+
+function uuid(value: unknown): value is string {
+	return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+}
+
+function uuidV4(value: unknown): value is `${string}-${string}-${string}-${string}-${string}` {
+	return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value);
+}
+
+function canonicalPollUrl(value: unknown, jobId: string): value is string {
+	return typeof value === "string" && value.length <= 128 && value === `${OPTIMIZATION_JOBS_ENDPOINT}/${jobId}`;
+}
+
+function dateTime(value: unknown): value is string {
+	if (typeof value !== "string") return false;
+	const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(value);
+	if (!match) return false;
+	const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+	const calendar = new Date(Date.UTC(year!, month! - 1, day!));
+	const offsetValid = !match[7] || (Number(match[7]) <= 23 && Number(match[8]) <= 59);
+	return calendar.getUTCFullYear() === year && calendar.getUTCMonth() === month! - 1 && calendar.getUTCDate() === day && hour! <= 23 && minute! <= 59 && second! <= 59 && offsetValid && Number.isFinite(Date.parse(value));
+}
+
 function finiteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
 }
 
-function isErrorCategory(value: unknown): value is AppError["category"] {
-	return value === "validation" || value === "auth" || value === "entitlement" || value === "security" || value === "network" || value === "timeout" || value === "server" || value === "dependency" || value === "unknown";
+function boundedMacro(value: unknown): value is number {
+	return finiteNumber(value) && value >= 0 && value <= 1_000_000_000;
 }
 
-function isSafeMessage(value: unknown): value is string {
-	return typeof value === "string" && value.length > 0 && value.length <= 240 && !value.includes("\n") && !value.includes(" at ") && !/https?:\/\//i.test(value);
+function boundedQuantity(value: unknown): value is number {
+	return finiteNumber(value) && value > 0 && value <= 1_000_000 && multipleOf(value, 0.001);
 }
 
-function isSafeCode(value: unknown): value is string {
-	return typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value);
+function boundedPosition(value: unknown): value is number {
+	return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 99;
 }
 
-function isSafeRequestId(value: unknown): value is string {
-	return typeof value === "string" && value.length > 0 && value.length <= 120 && !/[\s\n]/.test(value);
+function canonicalUnit(value: unknown): value is CanonicalQuantityUnit {
+	return value === "g" || value === "ml" || value === "oz" || value === "fl_oz";
+}
+
+function multipleOf(value: number, step: number): boolean {
+	return Math.abs(value / step - Math.round(value / step)) <= 1e-9;
+}
+
+function validSimilarityScore(value: unknown): value is number {
+	return finiteNumber(value) && value >= 0 && value <= 1 && multipleOf(value, 0.0001);
+}
+
+function isOptimizationFailureCode(value: unknown): value is OptimizationFailureCode {
+	return value === "failed_validation" || value === "solver_timeout" || value === "solver_infeasible" || value === "worker_crash";
 }

@@ -27,6 +27,8 @@ test("renders saved-diet macro targets as read-only server-derived values", () =
 	expect(source).not.toContain('id="optimization-protein"');
 	expect(source).not.toContain('id="optimization-carbohydrates"');
 	expect(source).not.toContain('id="optimization-fat"');
+	expect(source).toContain("grid-cols-2 gap-3");
+	expect(source).toContain("sm:grid-cols-3");
 });
 
 test("renders bounded progress skeletons and every API terminal state", () => {
@@ -49,14 +51,27 @@ test("renders at most the controller's three alternatives with labelled macros a
 	expect(source).toContain("alternative.macros.fat");
 	expect(source).toContain("alternative.macros.calories");
 	expect(source).toContain("alternative.meals");
+	expect(source).toContain("Math.round(alternative.similarityScore * 100)");
+	expect(source).toContain("Similarity");
 });
 
 test("keeps retry keyboard-operable, uses visible focus styles, and resets on diet changes", () => {
+	expect(source).toContain("controller.setIdentity(identityId)");
 	expect(source).toContain("controller.setDiet(selectedDietId)");
+	expect(source).toContain("controller.resume()");
 	expect(source).toContain("controller.dispose()");
+	expect(source).toContain("controller.retry(activeRequest ?? undefined)");
 	expect(source).toContain("data-optimization-retry");
 	expect(source).toContain('type="submit"');
 	expect(source).toContain("focus:outline-none focus:ring-2");
 	expect(source).toContain('role="alert"');
 	expect(source).toContain('role="status"');
+});
+
+test("shows retry only for policy-approved non-completed outcomes and sends current form input", () => {
+	expect(source).toContain('optimizationState.retryMode !== "none" && optimizationState.phase !== "completed"');
+	expect(source).toContain("controller.retry(activeRequest ?? undefined)");
+	expect(source).toContain("data-optimization-retry");
+	expect(source).toContain('optimizationState.phase === "completed"');
+	expect(source).toContain("data-optimization-new");
 });

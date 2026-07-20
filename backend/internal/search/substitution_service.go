@@ -205,12 +205,12 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 // sourceBaseQuantity converts an input quantity into the food item's macro storage basis.
 // Implements DESIGN-002 SearchController.
 func sourceBaseQuantity(input SubstitutionInput, food repository.FoodItemEntity) (float64, string, error) {
+	if err := repository.ValidateQuantityUnit(input.Unit); err != nil {
+		return 0, "", err
+	}
 	baseUnit := "g"
 	if food.PhysicalState == repository.PhysicalStateLiquid {
 		baseUnit = "ml"
-	}
-	if input.Unit == "serving" {
-		return repository.ConvertServingToBase(input.Quantity, food.AverageUnitWeightGrams, food.AverageServingVolumeMilliliters, food.PhysicalState)
 	}
 	quantity, err := repository.ConvertUnit(input.Quantity, input.Unit, baseUnit)
 	return quantity, baseUnit, err

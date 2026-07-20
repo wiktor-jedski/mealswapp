@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -32,8 +33,8 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
 )
 
-// TestTask206BackendIntegrationGate verifies IT-ARCH-004-001 and
-// IT-ARCH-004-004, ARCH-004, DESIGN-004, and
+// TestTask206BackendIntegrationGate verifies IT-ARCH-004-001, IT-ARCH-004-002,
+// and IT-ARCH-004-004, ARCH-004, DESIGN-004, and
 // SW-REQ-006/SW-REQ-021/SW-REQ-022/SW-REQ-023/SW-REQ-030 across the saved-diet,
 // API, Redis, worker, and native solver boundaries.
 func TestTask206BackendIntegrationGate(t *testing.T) {
@@ -101,10 +102,10 @@ func TestTask206BackendIntegrationGate(t *testing.T) {
 	}
 	store := worker.NewRedisOptimizationJobStore(redisClient)
 	duplicateProcessorCalled := false
-	if err := manager.Process(context.Background(), duplicateDelivery, func(ctx context.Context, delivery queue.Job) error {
+	if err := manager.Process(context.Background(), duplicateDelivery, func(ctx context.Context, delivery queue.Job) (queue.TerminalPublication, error) {
 		duplicateProcessorCalled = true
 		_, loadErr := store.Load(ctx, uuid.MustParse(delivery.ID))
-		return loadErr
+		return queue.PublishedCompleted, loadErr
 	}); err != nil {
 		t.Fatalf("process duplicate delivery: %v", err)
 	}
@@ -127,11 +128,11 @@ func TestTask206BackendIntegrationGate(t *testing.T) {
 		assertTask206Alternatives(t, result.Envelope, mealIDs, 20, 30, 10, nil)
 	}
 
-	// Excluding every feasible meal produces a solver-reported infeasible job,
-	// surfaced as a stable safe failure instead of an API panic or hang.
+	// Excluding every eligible meal leaves no valid constraint domain and fails
+	// validation before invoking CLP.
 	infeasibleJobID := submitTask206Job(t, server, task206OptimizationBody(dietID, optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, mealIDs), userCookies, csrfToken, "task-206-infeasible-"+uuid.NewString())
 	infeasible := waitTask206Job(t, server, infeasibleJobID, userCookies, workerDone)
-	assertTask206Failure(t, infeasible, optimization.FailureCodeSolverInfeasible)
+	assertTask206Failure(t, infeasible, optimization.FailureCodeValidation)
 
 	// Redis failure is reported before any synchronous solver fallback.
 	outageRedis := redis.NewClient(&redis.Options{
@@ -195,23 +196,17 @@ func TestTask206TimeoutAndOwnershipGate(t *testing.T) {
 	mealRepository := repository.NewPostgresMealRepository(db)
 	dietRepository := repository.NewPostgresSavedDataRepository(db)
 	inputs := worker.NewRepositoryOptimizationInputLoader(optimization.NewConstraintBuilder(mealRepository, dietRepository))
-	solver := optimization.NewLPSolverWrapper(optimization.CLPConfig{
-		Executable: "clp", ExpectedVersion: optimization.SupportedCLPVersion, Timeout: 10 * time.Millisecond,
-		Runner: task206TimeoutRunner,
-	})
+	fixture := filepath.Join(t.TempDir(), "clp-timeout-fixture")
+	if err := os.WriteFile(fixture, []byte("#!/bin/sh\nexec sleep 30\n"), 0o700); err != nil {
+		t.Fatalf("write timeout CLP fixture: %v", err)
+	}
+	solver := optimization.NewLPSolverWrapper(optimization.CLPConfig{Executable: fixture, Timeout: 10 * time.Millisecond})
 	processor := worker.NewOptimizationProcessor(worker.NewRedisOptimizationJobStore(redisClient), inputs, solver)
 	if err := manager.Process(context.Background(), delivery, processor.Process); err != nil {
 		t.Fatalf("process timeout delivery: %v", err)
 	}
 	failed := pollTask206Job(t, server, jobID, cookies)
 	assertTask206Failure(t, failed, optimization.FailureCodeSolverTimeout)
-}
-
-// task206TimeoutRunner waits for the wrapper's bounded context rather than
-// sleeping for the production 30-second deadline.
-func task206TimeoutRunner(ctx context.Context, _ string, _ []string, _ io.Writer, _ io.Writer) error {
-	<-ctx.Done()
-	return ctx.Err()
 }
 
 func task206CLP(t *testing.T) (string, string) {
@@ -229,7 +224,7 @@ func task206CLP(t *testing.T) (string, string) {
 	if version == "" {
 		version = optimization.SupportedCLPVersion
 	}
-	if err := optimization.NewLPSolverWrapper(optimization.CLPConfig{Executable: path, ExpectedVersion: version}).StartupCheck(context.Background()); err != nil {
+	if err := optimization.NewLPSolverWrapper(optimization.CLPConfig{Executable: path, ExpectedVersion: version}).CheckVersion(context.Background()); err != nil {
 		t.Fatalf("Task 206 setup failure: required CLP executable %q (expected version %s) failed startup check: %v", path, version, err)
 	}
 	return path, version
@@ -513,7 +508,7 @@ func assertTask206Failure(t *testing.T, result task206PollResult, code optimizat
 		t.Fatalf("failure poll = %d %+v", result.StatusCode, result.Envelope.Data)
 	}
 	failure, ok := result.Envelope.Data["failure"].(map[string]any)
-	if !ok || failure["code"] != string(code) {
+	if !ok || failure["code"] != code.String() {
 		t.Fatalf("failure = %#v, want %q", result.Envelope.Data["failure"], code)
 	}
 }

@@ -3,6 +3,8 @@
 # Implements DESIGN-017 ErrorMessageMapper frontend contract generation.
 
 import argparse
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -83,6 +85,385 @@ REQUIRED_MARKERS = (
 	"/api/v1/billing/stripe/webhook:",
 	"/api/v1/disclaimers:",
 )
+
+# Implements DESIGN-004 JobStatusTracker and DESIGN-008 SavedDataRepository
+# operation-response drift enforcement.
+REQUIRED_OPERATION_RESPONSES = {
+	("/api/v1/daily-diets", "get"): {"200", "401", "403", "404", "500", "503", "504"},
+	("/api/v1/daily-diets", "post"): {"201", "400", "401", "403", "404", "409", "500", "503", "504"},
+	("/api/v1/daily-diets/{dietId}", "get"): {"200", "400", "401", "403", "404", "500", "503", "504"},
+	("/api/v1/daily-diets/{dietId}", "put"): {"200", "400", "401", "403", "404", "409", "500", "503", "504"},
+	("/api/v1/daily-diets/{dietId}", "delete"): {"204", "400", "401", "403", "404", "500", "503", "504"},
+	("/api/v1/optimization/jobs", "post"): {"202", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
+	("/api/v1/optimization/jobs/{jobId}", "get"): {"200", "400", "401", "403", "404", "410", "500", "503", "504"},
+}
+
+AUDITED_OPERATION_PREFIXES = ("/api/v1/daily-diets", "/api/v1/optimization/jobs")
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+APP_ERROR_CATEGORIES = (
+	"validation", "auth", "entitlement", "security", "network", "timeout",
+	"server", "dependency", "rate_limit", "unknown",
+)
+
+DAILY_DIET_SCHEMA_RULES = {
+	"IdempotencyKey": (
+		"      name: Idempotency-Key\n",
+		"      in: header\n",
+		"      required: true\n",
+		"      schema:\n        type: string\n        minLength: 8\n        maxLength: 255\n",
+	),
+	"CanonicalQuantityUnit": ("      type: string\n      enum: [g, ml, oz, fl_oz]\n",),
+	"DailyDietMealEntry": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [id, mealId, quantity, unit, position]\n",
+		"        id:\n          type: string\n          format: uuid\n",
+		"        mealId:\n          type: string\n          format: uuid\n",
+		"        quantity:\n          type: number\n          exclusiveMinimum: 0\n          maximum: 1000000\n          multipleOf: 0.001\n",
+		"        unit:\n          $ref: \"#/components/schemas/CanonicalQuantityUnit\"\n",
+		"        position:\n          type: integer\n          minimum: 0\n          maximum: 99\n",
+	),
+	"MacroProjection": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [protein, carbohydrates, fat, calories]\n",
+		"        protein:\n          type: number\n          minimum: 0\n          maximum: 1000000000\n",
+		"        carbohydrates:\n          type: number\n          minimum: 0\n          maximum: 1000000000\n",
+		"        fat:\n          type: number\n          minimum: 0\n          maximum: 1000000000\n",
+		"        calories:\n          type: number\n          minimum: 0\n          maximum: 1000000000\n",
+	),
+	"DailyDiet": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [id, name, entries, aggregateMacros, createdAt, updatedAt]\n",
+		"        id:\n          type: string\n          format: uuid\n",
+		"        name:\n          type: string\n          minLength: 1\n          maxLength: 120\n",
+		"        entries:\n          type: array\n          minItems: 1\n          maxItems: 100\n          items:\n            $ref: \"#/components/schemas/DailyDietMealEntry\"\n",
+		"        aggregateMacros:\n          $ref: \"#/components/schemas/MacroProjection\"\n",
+		"        createdAt:\n          type: string\n          format: date-time\n",
+		"        updatedAt:\n          type: string\n          format: date-time\n",
+	),
+	"DailyDietEnvelope": (
+		"      type: object\n",
+		"      required: [status, requestId, data]\n",
+		"        status:\n          type: string\n          enum: [ok]\n",
+		"        requestId:\n          type: string\n",
+		"        data:\n          $ref: \"#/components/schemas/DailyDiet\"\n",
+	),
+	"DailyDietCollectionEnvelope": (
+		"      type: object\n",
+		"      required: [status, requestId, data]\n",
+		"        status:\n          type: string\n          enum: [ok]\n",
+		"        requestId:\n          type: string\n",
+		"        data:\n          type: object\n          additionalProperties: false\n          required: [diets]\n",
+		"            diets:\n              type: array\n              items:\n                $ref: \"#/components/schemas/DailyDiet\"\n",
+	),
+}
+
+DAILY_DIET_SCHEMA_RULE_COUNTS = {
+	"DailyDietMealEntry": {
+		"          format: uuid\n": 2,
+	},
+	"MacroProjection": {
+		"          minimum: 0\n": 4,
+		"          maximum: 1000000000\n": 4,
+	},
+	"DailyDiet": {
+		"          format: uuid\n": 1,
+		"          format: date-time\n": 2,
+	},
+}
+
+DAILY_DIET_PROPERTY_NAMES = {
+	"DailyDietMealEntry": {"id", "mealId", "quantity", "unit", "position"},
+	"MacroProjection": {"protein", "carbohydrates", "fat", "calories"},
+	"DailyDiet": {"id", "name", "entries", "aggregateMacros", "createdAt", "updatedAt"},
+	"DailyDietEnvelope": {"status", "requestId", "data"},
+	"DailyDietCollectionEnvelope": {"status", "requestId", "data"},
+}
+
+# Implements DESIGN-001 SearchView strict optimization response decoding.
+OPTIMIZATION_REQUEST_ID_RULE = (
+	"          type: string\n"
+	"          minLength: 1\n"
+	"          maxLength: 120\n"
+	"          pattern: '^[A-Za-z0-9._:-]+$'\n"
+)
+
+OPTIMIZATION_SCHEMA_RULES = {
+	"MealQuantity": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [mealId, quantity, unit, position]\n",
+		"        mealId:\n          type: string\n          format: uuid\n",
+		"        quantity:\n          type: number\n          exclusiveMinimum: 0\n          maximum: 1000000\n          multipleOf: 0.001\n",
+		"        unit:\n          $ref: \"#/components/schemas/CanonicalQuantityUnit\"\n",
+		"        position:\n          type: integer\n          minimum: 0\n          maximum: 99\n",
+	),
+	"MacroProjection": DAILY_DIET_SCHEMA_RULES["MacroProjection"],
+	"OptimizationStatus": ("      type: string\n      enum: [queued, processing, completed, failed, cancelled]\n",),
+	"OptimizationFailureCode": ("      type: string\n      enum: [failed_validation, solver_timeout, solver_infeasible, worker_crash]\n",),
+	"OptimizationAlternative": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [meals, macros, similarityScore]\n",
+		"        meals:\n          type: array\n          minItems: 1\n          maxItems: 100\n          items:\n            $ref: \"#/components/schemas/MealQuantity\"\n",
+		"        macros:\n          $ref: \"#/components/schemas/MacroProjection\"\n",
+		"        similarityScore:\n          type: number\n          minimum: 0\n          maximum: 1\n          multipleOf: 0.0001\n",
+	),
+	"OptimizationFailure": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [code, message]\n",
+		"        code:\n          $ref: \"#/components/schemas/OptimizationFailureCode\"\n",
+		"        message:\n          type: string\n          minLength: 1\n          maxLength: 240\n",
+	),
+	"OptimizationJobAcknowledgementData": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [jobId, status, pollUrl]\n",
+		"        jobId:\n          type: string\n          format: uuid\n",
+		"        status:\n          type: string\n          enum: [queued]\n",
+		"        pollUrl:\n          type: string\n          format: uri-reference\n          minLength: 1\n",
+	),
+	"OptimizationJobAcknowledgementEnvelope": (
+		"      type: object\n",
+		"      required: [status, requestId, data]\n",
+		"        status:\n          type: string\n          enum: [accepted]\n",
+		"        data:\n          $ref: \"#/components/schemas/OptimizationJobAcknowledgementData\"\n",
+	),
+	"OptimizationJobData": (
+		"      oneOf:\n        - $ref: \"#/components/schemas/OptimizationJobQueued\"\n        - $ref: \"#/components/schemas/OptimizationJobProcessing\"\n        - $ref: \"#/components/schemas/OptimizationJobCompleted\"\n        - $ref: \"#/components/schemas/OptimizationJobFailed\"\n        - $ref: \"#/components/schemas/OptimizationJobCancelled\"\n",
+		"      discriminator:\n        propertyName: status\n",
+	),
+	"OptimizationJobQueued": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [jobId, dailyDietId, status, pollUrl, createdAt]\n",
+		"        status:\n          allOf:\n            - $ref: \"#/components/schemas/OptimizationStatus\"\n            - const: queued\n",
+	),
+	"OptimizationJobProcessing": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [jobId, dailyDietId, status, pollUrl, createdAt, startedAt]\n",
+		"        status:\n          allOf:\n            - $ref: \"#/components/schemas/OptimizationStatus\"\n            - const: processing\n",
+		"        startedAt:\n          type: string\n          format: date-time\n",
+	),
+	"OptimizationJobCompleted": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [jobId, dailyDietId, status, pollUrl, createdAt, startedAt, finishedAt, alternatives]\n",
+		"        status:\n          allOf:\n            - $ref: \"#/components/schemas/OptimizationStatus\"\n            - const: completed\n",
+		"        startedAt:\n          type: string\n          format: date-time\n",
+		"        finishedAt:\n          type: string\n          format: date-time\n",
+		"        alternatives:\n          type: array\n          minItems: 1\n          maxItems: 3\n          items:\n            $ref: \"#/components/schemas/OptimizationAlternative\"\n",
+	),
+	"OptimizationJobFailed": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [jobId, dailyDietId, status, pollUrl, createdAt, failure]\n",
+		"        status:\n          allOf:\n            - $ref: \"#/components/schemas/OptimizationStatus\"\n            - const: failed\n",
+		"        startedAt:\n          type:\n            - string\n            - \"null\"\n          format: date-time\n",
+		"        finishedAt:\n          type:\n            - string\n            - \"null\"\n          format: date-time\n",
+		"        alternatives:\n          type: array\n          maxItems: 3\n          items:\n            $ref: \"#/components/schemas/OptimizationAlternative\"\n",
+		"        failure:\n          $ref: \"#/components/schemas/OptimizationFailure\"\n",
+	),
+	"OptimizationJobCancelled": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [jobId, dailyDietId, status, pollUrl, createdAt, finishedAt]\n",
+		"        status:\n          allOf:\n            - $ref: \"#/components/schemas/OptimizationStatus\"\n            - const: cancelled\n",
+		"        finishedAt:\n          type: string\n          format: date-time\n",
+	),
+	"OptimizationJobStatusEnvelope": (
+		"      type: object\n",
+		"      required: [status, requestId, data]\n",
+		"        status:\n          type: string\n          enum: [ok]\n",
+		"        data:\n          $ref: \"#/components/schemas/OptimizationJobData\"\n",
+	),
+}
+
+OPTIMIZATION_PROPERTY_NAMES = {
+	"MealQuantity": {"mealId", "quantity", "unit", "position"},
+	"MacroProjection": {"protein", "carbohydrates", "fat", "calories"},
+	"OptimizationAlternative": {"meals", "macros", "similarityScore"},
+	"OptimizationFailure": {"code", "message"},
+	"OptimizationJobAcknowledgementData": {"jobId", "status", "pollUrl"},
+	"OptimizationJobAcknowledgementEnvelope": {"status", "requestId", "data"},
+	"OptimizationJobQueued": {"jobId", "dailyDietId", "status", "pollUrl", "createdAt"},
+	"OptimizationJobProcessing": {"jobId", "dailyDietId", "status", "pollUrl", "createdAt", "startedAt"},
+	"OptimizationJobCompleted": {"jobId", "dailyDietId", "status", "pollUrl", "createdAt", "startedAt", "finishedAt", "alternatives"},
+	"OptimizationJobFailed": {"jobId", "dailyDietId", "status", "pollUrl", "createdAt", "startedAt", "finishedAt", "alternatives", "failure"},
+	"OptimizationJobCancelled": {"jobId", "dailyDietId", "status", "pollUrl", "createdAt", "finishedAt"},
+	"OptimizationJobStatusEnvelope": {"status", "requestId", "data"},
+}
+
+
+def schema_block(source: str, name: str) -> str | None:
+	"""Return one top-level component parameter or schema block."""
+	matches = list(re.finditer(rf"(?ms)^    {re.escape(name)}:\n(.*?)(?=^    [A-Za-z][A-Za-z0-9]*:\n|\Z)", source))
+	return matches[-1].group(1) if matches else None
+
+
+def daily_diet_contract_mismatches(source: str) -> list[str]:
+	"""Describe OpenAPI drift from assumptions enforced by the strict Daily Diet decoder."""
+	mismatches = []
+	for name, rules in DAILY_DIET_SCHEMA_RULES.items():
+		block = schema_block(source, name)
+		if block is None:
+			mismatches.append(f"{name} is missing")
+			continue
+		for rule in rules:
+			if rule not in block:
+				mismatches.append(f"{name} drifted: missing {rule.strip()}")
+		for rule, expected_count in DAILY_DIET_SCHEMA_RULE_COUNTS.get(name, {}).items():
+			actual_count = block.count(rule)
+			if actual_count != expected_count:
+				mismatches.append(
+					f"{name} drifted: expected {expected_count} occurrences of {rule.strip()}, found {actual_count}"
+				)
+		if expected_properties := DAILY_DIET_PROPERTY_NAMES.get(name):
+			actual_properties = set(re.findall(r"(?m)^        ([A-Za-z][A-Za-z0-9]*):$", block))
+			if actual_properties != expected_properties:
+				mismatches.append(
+					f"{name} properties drifted: expected {sorted(expected_properties)}, found {sorted(actual_properties)}"
+				)
+	create_operation = operation_block(source, "/api/v1/daily-diets", "post")
+	parameter_ref = '        - $ref: "#/components/parameters/IdempotencyKey"\n'
+	if create_operation is None or create_operation.count(parameter_ref) != 1:
+		mismatches.append("Daily Diet create IdempotencyKey parameter reference drifted")
+	return mismatches
+
+
+def optimization_contract_mismatches(source: str) -> list[str]:
+	"""Describe OpenAPI drift from assumptions enforced by the strict optimization decoder."""
+	mismatches = []
+	for name, rules in OPTIMIZATION_SCHEMA_RULES.items():
+		block = schema_block(source, name)
+		if block is None:
+			mismatches.append(f"{name} is missing")
+			continue
+		for rule in rules:
+			if rule not in block:
+				mismatches.append(f"{name} drifted: missing {rule.strip()}")
+		if expected_properties := OPTIMIZATION_PROPERTY_NAMES.get(name):
+			actual_properties = set(re.findall(r"(?m)^        ([A-Za-z][A-Za-z0-9]*):$", block))
+			if actual_properties != expected_properties:
+				mismatches.append(
+					f"{name} properties drifted: expected {sorted(expected_properties)}, found {sorted(actual_properties)}"
+				)
+	for name in ("OptimizationJobQueued", "OptimizationJobProcessing", "OptimizationJobCompleted", "OptimizationJobFailed", "OptimizationJobCancelled"):
+		block = schema_block(source, name) or ""
+		for field, fmt in (("jobId", "uuid"), ("dailyDietId", "uuid"), ("pollUrl", "uri-reference"), ("createdAt", "date-time")):
+			rule = f"        {field}:\n          type: string\n          format: {fmt}\n"
+			if rule not in block:
+				mismatches.append(f"{name} drifted: missing {field} {fmt}")
+	for name in ("OptimizationJobAcknowledgementEnvelope", "OptimizationJobStatusEnvelope"):
+		block = schema_block(source, name) or ""
+		match = re.search(r"(?m)^        requestId:\n((?:          [^\n]*\n)+)", block)
+		if match is None or match.group(1) != OPTIMIZATION_REQUEST_ID_RULE:
+			mismatches.append(f"{name} requestId bounds or safe-character policy drifted")
+	post = operation_block(source, "/api/v1/optimization/jobs", "post") or ""
+	if post.count('        - $ref: "#/components/parameters/IdempotencyKey"\n') != 1:
+		mismatches.append("optimization submission IdempotencyKey parameter reference drifted")
+	return mismatches
+
+
+def operation_block(source: str, path: str, method: str) -> str | None:
+	"""Return one OpenAPI operation block with original line endings."""
+	lines = source.splitlines(keepends=True)
+	try:
+		path_start = lines.index(f"  {path}:\n")
+	except ValueError:
+		return None
+	path_end = next((index for index in range(path_start + 1, len(lines)) if re.match(r"^  \S", lines[index])), len(lines))
+	try:
+		method_start = lines.index(f"    {method}:\n", path_start + 1, path_end)
+	except ValueError:
+		return None
+	method_end = next((index for index in range(method_start + 1, path_end) if re.match(r"^    \S", lines[index])), path_end)
+	return "".join(lines[method_start:method_end])
+
+
+def app_error_contract_mismatches(source: str) -> list[str]:
+	"""Describe OpenAPI AppError drift that would weaken runtime-safe mapping."""
+	match = re.search(r"(?ms)^    AppError:\n(.*?)(?=^    Envelope:)", source)
+	if match is None:
+		return ["AppError schema is missing"]
+	block = match.group(1)
+	mismatches = []
+	if "      required: [category, code, message, retryable]\n" not in block:
+		mismatches.append("AppError required fields drifted")
+	category_match = re.search(r"(?m)^          enum: \[([^]]+)]$", block)
+	categories = tuple(value.strip() for value in category_match.group(1).split(",")) if category_match else ()
+	if categories != APP_ERROR_CATEGORIES:
+		mismatches.append(f"AppError category enum drifted: {categories}")
+	if not re.search(r"(?m)^        retryable:\n          type: boolean$", block):
+		mismatches.append("AppError retryable must remain boolean")
+	if not re.search(r"(?m)^        requestId:\n          type: string$", block):
+		mismatches.append("AppError requestId must remain string")
+	return mismatches
+
+
+def audited_operation_keys(source: str) -> set[tuple[str, str]]:
+	"""Return every Daily Diet and optimization operation declared by OpenAPI."""
+	operations = set()
+	path = ""
+	for line in source.splitlines():
+		if match := re.match(r"^  (/[^:]+):$", line):
+			path = match.group(1)
+			continue
+		if path and any(path == prefix or path.startswith(prefix + "/") for prefix in AUDITED_OPERATION_PREFIXES):
+			if match := re.match(r"^    ([a-z]+):$", line):
+				method = match.group(1)
+				if method in HTTP_METHODS:
+					operations.add((path, method))
+	return operations
+
+
+def operation_response_statuses(source: str, path: str, method: str) -> set[str]:
+	"""Return explicitly declared response statuses for one OpenAPI operation."""
+	lines = source.splitlines()
+	path_line = f"  {path}:"
+	method_line = f"    {method}:"
+	try:
+		path_start = lines.index(path_line)
+	except ValueError:
+		return set()
+	path_end = next((index for index in range(path_start + 1, len(lines)) if re.match(r"^  \S", lines[index])), len(lines))
+	try:
+		method_start = lines.index(method_line, path_start + 1, path_end)
+	except ValueError:
+		return set()
+	method_end = next((index for index in range(method_start + 1, path_end) if re.match(r"^    \S", lines[index])), path_end)
+	try:
+		responses_start = lines.index("      responses:", method_start + 1, method_end)
+	except ValueError:
+		return set()
+	responses_end = next((index for index in range(responses_start + 1, method_end) if re.match(r"^      \S", lines[index])), method_end)
+	return {
+		match.group(1)
+		for line in lines[responses_start + 1:responses_end]
+		if (match := re.match(r'^        ["\']?([1-5](?:[0-9]{2}|XX)|default)["\']?:', line))
+	}
+
+
+def operation_response_mismatches(source: str) -> list[str]:
+	"""Describe audited operation responses that differ from the route policy."""
+	mismatches = []
+	expected_operations = set(REQUIRED_OPERATION_RESPONSES)
+	actual_operations = audited_operation_keys(source)
+	for path, method in sorted(expected_operations - actual_operations):
+		mismatches.append(f"missing audited operation: {method.upper()} {path}")
+	for path, method in sorted(actual_operations - expected_operations):
+		mismatches.append(f"unexpected audited operation: {method.upper()} {path}")
+	for path, method in sorted(expected_operations & actual_operations):
+		expected = REQUIRED_OPERATION_RESPONSES[(path, method)]
+		actual = operation_response_statuses(source, path, method)
+		if actual != expected:
+			mismatches.append(f"{method.upper()} {path}: expected {sorted(expected)}, found {sorted(actual)}")
+	return mismatches
+
 GENERATED = """// Generated from api/openapi.yaml by scripts/generate-api-types.py.
 // Implements DESIGN-017 ErrorMessageMapper shared frontend contracts.
 
@@ -95,6 +476,7 @@ export type ErrorCategory =
 \t| "timeout"
 \t| "server"
 \t| "dependency"
+\t| "rate_limit"
 \t| "unknown";
 
 // Implements DESIGN-017 ErrorMessageMapper AppError contract.
@@ -616,9 +998,7 @@ export type OptimizationFailureCode =
 	| "failed_validation"
 	| "solver_timeout"
 	| "solver_infeasible"
-	| "queue_unavailable"
-	| "worker_crash"
-	| "result_expired";
+	| "worker_crash";
 
 // Implements DESIGN-004 JobStatusTracker frontend completed-alternative contract.
 export interface OptimizationAlternative {
@@ -1117,7 +1497,7 @@ export interface SearchFilter {
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
 /** Canonical units accepted by substitution search inputs. */
-export type SubstitutionUnit = "g" | "ml" | "oz" | "fl_oz";
+export type SubstitutionUnit = CanonicalQuantityUnit;
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
 /** Quantity-bearing food input for substitution searches. */
@@ -1261,6 +1641,20 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 """
 
 
+def generated_contract(source: str) -> str:
+	"""Render shared quantity enums from the OpenAPI source of truth."""
+	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 3:
+		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
+	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
+	if match is None:
+		raise ValueError("OpenAPI CanonicalQuantityUnit enum is missing")
+	units = [unit.strip() for unit in match.group(1).split(",")]
+	if units != ["g", "ml", "oz", "fl_oz"]:
+		raise ValueError(f"unexpected canonical quantity units: {units}")
+	quantity_type = " | ".join(json.dumps(unit) for unit in units)
+	return GENERATED.replace('export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";', f"export type CanonicalQuantityUnit = {quantity_type};")
+
+
 def main() -> int:
 	parser = argparse.ArgumentParser(description="Generate shared frontend API types from the OpenAPI contract.")
 	parser.add_argument("--check", action="store_true", help="Fail if generated frontend types have drifted.")
@@ -1270,14 +1664,35 @@ def main() -> int:
 	if missing:
 		print(f"OpenAPI contract missing required markers: {missing}")
 		return 1
+	response_mismatches = operation_response_mismatches(source)
+	if response_mismatches:
+		print("OpenAPI audited operation response drift:\n" + "\n".join(response_mismatches))
+		return 1
+	error_contract_mismatches = app_error_contract_mismatches(source)
+	if error_contract_mismatches:
+		print("OpenAPI AppError contract drift:\n" + "\n".join(error_contract_mismatches))
+		return 1
+	daily_diet_mismatches = daily_diet_contract_mismatches(source)
+	if daily_diet_mismatches:
+		print("OpenAPI Daily Diet decoder contract drift:\n" + "\n".join(daily_diet_mismatches))
+		return 1
+	optimization_mismatches = optimization_contract_mismatches(source)
+	if optimization_mismatches:
+		print("OpenAPI optimization decoder contract drift:\n" + "\n".join(optimization_mismatches))
+		return 1
+	try:
+		generated = generated_contract(source)
+	except ValueError as error:
+		print(error)
+		return 1
 	if args.check:
-		if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != GENERATED:
+		if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:
 			print(f"Generated API types are stale: run `python3 {Path(__file__).name}`")
 			return 1
 		print("Generated API types are current.")
 		return 0
 	OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-	OUTPUT.write_text(GENERATED, encoding="utf-8")
+	OUTPUT.write_text(generated, encoding="utf-8")
 	print(f"Generated {OUTPUT.relative_to(ROOT)}")
 	return 0
 

@@ -221,23 +221,37 @@ func TestOptimizationHTTPIdempotencyAndQueueFailure(t *testing.T) {
 		t.Fatalf("ordered submit status = %d, want 202", ordered.StatusCode)
 	}
 	reordered := optimizationHTTPSubmit(t, app, optimizationHTTPBodyWithExcluded(dietID, 22, []uuid.UUID{secondExcluded, firstExcluded}), cookies, csrf, "ordered-key-1")
-	if reordered.StatusCode != fiber.StatusConflict || queue.calls != 2 {
-		t.Fatalf("reordered-body status=%d queueCalls=%d, want 409 and no replay publication", reordered.StatusCode, queue.calls)
+	if reordered.StatusCode != fiber.StatusAccepted || optimizationHTTPJobID(t, reordered) != optimizationHTTPJobID(t, ordered) || queue.calls != 2 {
+		t.Fatalf("reordered-body status=%d queueCalls=%d, want exact replay and no publication", reordered.StatusCode, queue.calls)
 	}
 	syntacticallyChanged := `{"excludedMealIds":["` + firstExcluded.String() + `","` + secondExcluded.String() + `"],"dailyDietId":"` + dietID.String() + `","tolerancePercent":22}`
-	if changed := optimizationHTTPSubmit(t, app, syntacticallyChanged, cookies, csrf, "ordered-key-1"); changed.StatusCode != fiber.StatusConflict || queue.calls != 2 {
-		t.Fatalf("syntactically changed body status=%d queueCalls=%d, want 409 and no replay publication", changed.StatusCode, queue.calls)
+	if changed := optimizationHTTPSubmit(t, app, syntacticallyChanged, cookies, csrf, "ordered-key-1"); changed.StatusCode != fiber.StatusAccepted || optimizationHTTPJobID(t, changed) != optimizationHTTPJobID(t, ordered) || queue.calls != 2 {
+		t.Fatalf("syntactically changed body status=%d queueCalls=%d, want canonical replay and no publication", changed.StatusCode, queue.calls)
+	}
+	uppercaseUUIDs := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(syntacticallyChanged, dietID.String(), strings.ToUpper(dietID.String())), firstExcluded.String(), strings.ToUpper(firstExcluded.String())), secondExcluded.String(), strings.ToUpper(secondExcluded.String()))
+	if changed := optimizationHTTPSubmit(t, app, uppercaseUUIDs, cookies, csrf, "ordered-key-1"); changed.StatusCode != fiber.StatusAccepted || optimizationHTTPJobID(t, changed) != optimizationHTTPJobID(t, ordered) || queue.calls != 2 {
+		t.Fatalf("UUID-case changed body status=%d queueCalls=%d, want canonical replay and no publication", changed.StatusCode, queue.calls)
+	}
+	numericSpelling := strings.Replace(syntacticallyChanged, `"tolerancePercent":22`, `"tolerancePercent":2.2e1`, 1)
+	if changed := optimizationHTTPSubmit(t, app, numericSpelling, cookies, csrf, "ordered-key-1"); changed.StatusCode != fiber.StatusAccepted || optimizationHTTPJobID(t, changed) != optimizationHTTPJobID(t, ordered) || queue.calls != 2 {
+		t.Fatalf("numeric-spelling changed body status=%d queueCalls=%d, want canonical replay and no publication", changed.StatusCode, queue.calls)
+	}
+
+	zero := optimizationHTTPSubmit(t, app, optimizationHTTPBody(dietID, 0), cookies, csrf, "zero-tolerance-key")
+	negativeZero := strings.Replace(optimizationHTTPBody(dietID, 0), `"tolerancePercent":0`, `"tolerancePercent":-0.0`, 1)
+	if changed := optimizationHTTPSubmit(t, app, negativeZero, cookies, csrf, "zero-tolerance-key"); changed.StatusCode != fiber.StatusAccepted || optimizationHTTPJobID(t, changed) != optimizationHTTPJobID(t, zero) || queue.calls != 3 {
+		t.Fatalf("negative-zero body status=%d queueCalls=%d, want canonical replay and no publication", changed.StatusCode, queue.calls)
 	}
 
 	queue.err = errors.New("redis down")
 	failed := optimizationHTTPSubmit(t, app, optimizationHTTPBody(dietID, 30), cookies, csrf, "queue-failure-key")
-	if failed.StatusCode != fiber.StatusServiceUnavailable || queue.calls != 3 || len(store.jobs) != 3 {
+	if failed.StatusCode != fiber.StatusServiceUnavailable || queue.calls != 4 || len(store.jobs) != 4 {
 		t.Fatalf("queue failure status=%d queueCalls=%d jobs=%d, want 503 and recoverable queued state", failed.StatusCode, queue.calls, len(store.jobs))
 	}
 	queue.err = nil
 	recovered := optimizationHTTPSubmit(t, app, optimizationHTTPBody(dietID, 30), cookies, csrf, "queue-failure-key")
-	if recovered.StatusCode != fiber.StatusAccepted || queue.calls != 4 || len(store.jobs) != 3 {
-		t.Fatalf("queue recovery status=%d queueCalls=%d jobs=%d, want replayed 202 and one repaired publication", recovered.StatusCode, queue.calls, len(store.jobs))
+	if recovered.StatusCode != fiber.StatusAccepted || queue.calls != 5 || len(store.jobs) != 4 {
+		t.Fatalf("queue recovery status=%d error=%+v queueCalls=%d jobs=%d, want replayed 202 and one repaired publication", recovered.StatusCode, recovered.Error, queue.calls, len(store.jobs))
 	}
 }
 
@@ -318,6 +332,8 @@ func TestOptimizationHTTPFailedPollingUsesSafeSolverMessages(t *testing.T) {
 	}{
 		{name: "infeasible", code: optimization.FailureCodeSolverInfeasible, message: "No meal combination matches the requested targets."},
 		{name: "timeout", code: optimization.FailureCodeSolverTimeout, message: "Optimization took too long. Please try again."},
+		{name: "validation", code: optimization.FailureCodeValidation, message: "The optimization request could not be validated."},
+		{name: "worker crash", code: optimization.FailureCodeWorkerCrash, message: "Optimization could not be completed. Please try again."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -333,11 +349,137 @@ func TestOptimizationHTTPFailedPollingUsesSafeSolverMessages(t *testing.T) {
 
 			poll := optimizationHTTPPoll(t, app, jobID, cookies)
 			failure, ok := poll.Data["failure"].(map[string]any)
-			if poll.StatusCode != fiber.StatusOK || poll.Data["status"] != string(worker.OptimizationJobFailed) || !ok || failure["code"] != string(tt.code) || failure["message"] != tt.message {
+			if poll.StatusCode != fiber.StatusOK || poll.Data["status"] != string(worker.OptimizationJobFailed) || !ok || failure["code"] != tt.code.String() || failure["message"] != tt.message {
 				t.Fatalf("safe failure poll = %d %+v, want code=%q message=%q", poll.StatusCode, poll.Data, tt.code, tt.message)
 			}
 		})
 	}
+}
+
+func TestOptimizationHTTPRejectsInvalidPersistedFailureBeforeProjection(t *testing.T) {
+	userID, jobID := uuid.New(), uuid.New()
+	store := newOptimizationHTTPJobStore()
+	store.setJob(worker.OptimizationJob{
+		JobID: jobID, UserID: userID, DailyDietID: uuid.New(), Status: worker.OptimizationJobFailed,
+		CreatedAt: time.Now().UTC(), Failure: &worker.OptimizationJobFailure{Message: "postgres://internal"},
+	})
+	controller := NewOptimizationController(store, nil, nil, nil, nil, nil)
+	authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
+	app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, Routes: controller.Routes()})
+
+	poll := optimizationHTTPPoll(t, app, jobID, cookies)
+	if poll.StatusCode != fiber.StatusServiceUnavailable || poll.Data != nil {
+		t.Fatalf("invalid persisted failure poll = %d %+v, want bounded dependency error", poll.StatusCode, poll.Data)
+	}
+}
+
+// Implements DESIGN-004 JobStatusTracker authoritative similarity projection boundary.
+func TestOptimizationHTTPRejectsInvalidPersistedSimilarityBeforeProjection(t *testing.T) {
+	tests := []struct {
+		name       string
+		score      float64
+		wantStatus int
+	}{
+		{name: "negative", score: -0.0001, wantStatus: fiber.StatusServiceUnavailable},
+		{name: "above one", score: 1.0001, wantStatus: fiber.StatusServiceUnavailable},
+		{name: "unrounded", score: 0.12345, wantStatus: fiber.StatusServiceUnavailable},
+		{name: "rounded", score: 0.1234, wantStatus: fiber.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userID, jobID := uuid.New(), uuid.New()
+			store := newOptimizationHTTPJobStore()
+			store.setJob(worker.OptimizationJob{
+				JobID: jobID, UserID: userID, DailyDietID: uuid.New(), Status: worker.OptimizationJobCompleted,
+				CreatedAt: time.Now().UTC(), Alternatives: []optimization.DietAlternative{{
+					Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}},
+					Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290, SimilarityScore: tt.score,
+				}},
+			})
+			controller := NewOptimizationController(store, nil, nil, nil, nil, nil)
+			authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
+			app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, Routes: controller.Routes()})
+
+			poll := optimizationHTTPPoll(t, app, jobID, cookies)
+			if poll.StatusCode != tt.wantStatus {
+				t.Fatalf("poll status = %d, want %d; data=%+v", poll.StatusCode, tt.wantStatus, poll.Data)
+			}
+			if tt.wantStatus != fiber.StatusOK && poll.Data != nil {
+				t.Fatalf("invalid persisted result projected: %+v", poll.Data)
+			}
+		})
+	}
+}
+
+// Implements DESIGN-004 JobStatusTracker raw persisted result decoding before HTTP projection.
+func TestOptimizationHTTPRejectsMalformedRawSimilarityScore(t *testing.T) {
+	userID, jobID := uuid.New(), uuid.New()
+	tests := []struct {
+		name       string
+		score      any
+		omitScore  bool
+		wantStatus int
+	}{
+		{name: "omitted", omitScore: true, wantStatus: fiber.StatusServiceUnavailable},
+		{name: "null", score: nil, wantStatus: fiber.StatusServiceUnavailable},
+		{name: "string", score: "0", wantStatus: fiber.StatusServiceUnavailable},
+		{name: "zero", score: float64(0), wantStatus: fiber.StatusOK},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := optimizationHTTPRawCompletedJob(t, jobID, userID, tt.score, tt.omitScore)
+			controller := NewOptimizationController(&optimizationHTTPRawJobStore{payload: payload}, nil, nil, nil, nil, nil)
+			authenticator, cookies := testJWTAuth(t, testConfig(), userID, nil)
+			app := mustNewRouter(t, Dependencies{Config: testConfig(), Auth: authenticator, Routes: controller.Routes()})
+
+			poll := optimizationHTTPPoll(t, app, jobID, cookies)
+			if poll.StatusCode != tt.wantStatus {
+				t.Fatalf("poll status = %d, want %d; data=%+v", poll.StatusCode, tt.wantStatus, poll.Data)
+			}
+			if tt.wantStatus != fiber.StatusOK && poll.Data != nil {
+				t.Fatalf("malformed persisted result projected: %+v", poll.Data)
+			}
+		})
+	}
+}
+
+type optimizationHTTPRawJobStore struct{ payload []byte }
+
+func (s *optimizationHTTPRawJobStore) Load(context.Context, uuid.UUID) (worker.OptimizationJob, error) {
+	var job worker.OptimizationJob
+	return job, json.Unmarshal(s.payload, &job)
+}
+
+func (*optimizationHTTPRawJobStore) Save(context.Context, worker.OptimizationJob) error { return nil }
+func (*optimizationHTTPRawJobStore) Delete(context.Context, uuid.UUID) error            { return nil }
+
+func optimizationHTTPRawCompletedJob(t *testing.T, jobID, userID uuid.UUID, score any, omitScore bool) []byte {
+	t.Helper()
+	payload, err := json.Marshal(worker.OptimizationJob{
+		JobID: jobID, UserID: userID, DailyDietID: uuid.New(), Status: worker.OptimizationJobCompleted,
+		CreatedAt: time.Now().UTC(), Alternatives: []optimization.DietAlternative{{
+			Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}},
+			Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(payload, &raw); err != nil {
+		t.Fatalf("decode raw fixture: %v", err)
+	}
+	alternative := raw["alternatives"].([]any)[0].(map[string]any)
+	if omitScore {
+		delete(alternative, "similarityScore")
+	} else {
+		alternative["similarityScore"] = score
+	}
+	payload, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("encode raw fixture: %v", err)
+	}
+	return payload
 }
 
 type optimizationHTTPEnvelope struct {
@@ -423,17 +565,45 @@ func optimizationHTTPJobID(t *testing.T, response *optimizationHTTPEnvelopeRespo
 type optimizationHTTPDiets struct {
 	mu              sync.Mutex
 	dietID, ownerID uuid.UUID
+	err             error
 	getCalls        int
+	blockUser       uuid.UUID
+	blockOnce       bool
+	blockedCalls    int
+	entered         chan struct{}
+	release         chan struct{}
 }
 
 func (d *optimizationHTTPDiets) Create(context.Context, uuid.UUID, repository.SavedDiet) (uuid.UUID, error) {
 	return uuid.New(), nil
 }
-func (d *optimizationHTTPDiets) Get(_ context.Context, userID, dietID uuid.UUID) (repository.SavedDiet, error) {
+func (d *optimizationHTTPDiets) Get(ctx context.Context, userID, dietID uuid.UUID) (repository.SavedDiet, error) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	d.getCalls++
-	if d.dietID != dietID || (d.ownerID != uuid.Nil && d.ownerID != userID) {
+	block := d.blockUser == userID && d.release != nil && (!d.blockOnce || d.blockedCalls == 0)
+	if block {
+		d.blockedCalls++
+	}
+	entered, release, dependencyErr := d.entered, d.release, d.err
+	configuredDietID, ownerID := d.dietID, d.ownerID
+	d.mu.Unlock()
+	if block {
+		if entered != nil {
+			select {
+			case entered <- struct{}{}:
+			default:
+			}
+		}
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return repository.SavedDiet{}, ctx.Err()
+		}
+	}
+	if dependencyErr != nil {
+		return repository.SavedDiet{}, dependencyErr
+	}
+	if configuredDietID != dietID || (ownerID != uuid.Nil && ownerID != userID) {
 		return repository.SavedDiet{}, repository.NewError(repository.ErrorKindNotFound, "diet not found", nil)
 	}
 	return repository.SavedDiet{ID: dietID, UserID: userID}, nil
@@ -446,10 +616,18 @@ func (d *optimizationHTTPDiets) Replace(context.Context, uuid.UUID, repository.S
 }
 func (d *optimizationHTTPDiets) Delete(context.Context, uuid.UUID, uuid.UUID) error { return nil }
 
-type optimizationHTTPEntitlements struct{ allowed bool }
+type optimizationHTTPEntitlements struct {
+	mu      sync.Mutex
+	allowed bool
+	err     error
+	calls   int
+}
 
 func (e *optimizationHTTPEntitlements) CheckEntitlement(context.Context, uuid.UUID, entitlement.Feature) (entitlement.Decision, error) {
-	return entitlement.Decision{Allowed: e.allowed, Feature: entitlement.FeatureDailyDietAlternative}, nil
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls++
+	return entitlement.Decision{Allowed: e.allowed, Feature: entitlement.FeatureDailyDietAlternative}, e.err
 }
 
 type optimizationHTTPQueue struct {
@@ -460,6 +638,7 @@ type optimizationHTTPQueue struct {
 }
 
 type optimizationHTTPAdmission struct {
+	mu       sync.Mutex
 	decision worker.OptimizationAdmissionDecision
 	err      error
 	acquires int
@@ -467,6 +646,8 @@ type optimizationHTTPAdmission struct {
 }
 
 func (a *optimizationHTTPAdmission) Acquire(_ context.Context, req worker.OptimizationAdmissionRequest) (worker.OptimizationAdmissionDecision, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.acquires++
 	if a.err != nil {
 		return worker.OptimizationAdmissionDecision{}, a.err
@@ -478,6 +659,8 @@ func (a *optimizationHTTPAdmission) Acquire(_ context.Context, req worker.Optimi
 }
 
 func (a *optimizationHTTPAdmission) Release(context.Context, uuid.UUID, uuid.UUID) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.releases++
 	return nil
 }
@@ -502,6 +685,7 @@ func (q *optimizationHTTPQueue) Enqueue(_ context.Context, jobID string) (string
 type optimizationHTTPIdempotencyStore struct {
 	mu           sync.Mutex
 	records      map[string]repository.CheckoutIdempotencyRecord
+	updateErr    error
 	storeBarrier chan struct{}
 	storeReady   chan struct{}
 	storeCount   int
@@ -543,6 +727,23 @@ func (s *optimizationHTTPIdempotencyStore) StoreCheckoutIdempotency(_ context.Co
 	return nil
 }
 
+func (s *optimizationHTTPIdempotencyStore) UpdateCheckoutIdempotencyResponse(_ context.Context, record repository.CheckoutIdempotencyRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.updateErr != nil {
+		return s.updateErr
+	}
+	key := record.UserID.String() + record.Method + record.Route + record.Key
+	current, exists := s.records[key]
+	if !exists {
+		return repository.NewError(repository.ErrorKindConflict, "claim changed", nil)
+	}
+	current.StatusCode = record.StatusCode
+	current.ResponseBody = append([]byte(nil), record.ResponseBody...)
+	s.records[key] = current
+	return nil
+}
+
 type optimizationHTTPJobStore struct {
 	mu      sync.Mutex
 	jobs    map[uuid.UUID]worker.OptimizationJob
@@ -555,6 +756,9 @@ func newOptimizationHTTPJobStore() *optimizationHTTPJobStore {
 func (s *optimizationHTTPJobStore) Save(_ context.Context, job worker.OptimizationJob) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if current, exists := s.jobs[job.JobID]; exists && (current.Status == worker.OptimizationJobCompleted || current.Status == worker.OptimizationJobFailed || current.Status == worker.OptimizationJobCancelled) {
+		return nil
+	}
 	s.jobs[job.JobID] = job
 	return nil
 }

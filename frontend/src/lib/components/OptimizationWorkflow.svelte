@@ -8,14 +8,17 @@
 
   let {
     selectedDietId = null,
+    identityId = null,
     executionAllowed = true
   }: {
     selectedDietId?: string | null;
+    identityId?: string | null;
     executionAllowed?: boolean;
   } = $props();
 
   const controller = createOptimizationController();
   const optimizationStore = controller.store;
+  let configuredIdentityId = $state<string | null | undefined>(undefined);
   let configuredDietId = $state<string | null>(null);
   let tolerancePercent = $state(10);
   let formError = $state<string | null>(null);
@@ -26,13 +29,16 @@
   let optimizationState = $derived<OptimizationState>($optimizationStore);
   let activeRequest = $derived(selectedDietId ? buildRequest(selectedDietId, tolerancePercent) : null);
   let busy = $derived(optimizationState.phase === "submitting" || optimizationState.phase === "queued" || optimizationState.phase === "processing");
-  let canSubmit = $derived(Boolean(selectedDiet && executionAllowed && activeRequest && !busy));
+  let canSubmit = $derived(Boolean(selectedDiet && executionAllowed && activeRequest && !busy && $dailyDietStore.mutation === "idle"));
 
   $effect(() => {
-    if (configuredDietId === selectedDietId) return;
+    if (configuredIdentityId === identityId && configuredDietId === selectedDietId) return;
+    configuredIdentityId = identityId;
     configuredDietId = selectedDietId;
+    controller.setIdentity(identityId);
     controller.setDiet(selectedDietId);
     formError = null;
+    void controller.resume();
   });
 
   $effect(() => () => controller.dispose());
@@ -71,7 +77,7 @@
 
   async function retryOptimization(): Promise<void> {
     formError = null;
-    await controller.retry();
+    await controller.retry(activeRequest ?? undefined);
   }
 
   function formatNumber(value: number): string {
@@ -98,7 +104,7 @@
     <form class="grid gap-4" aria-label="Daily Diet optimization form" onsubmit={submitOptimization}>
       <fieldset class="grid gap-3">
         <legend class="font-data text-xs uppercase text-[var(--color-muted)]">Server-derived target macros</legend>
-        <dl class="grid grid-cols-3 gap-3 rounded border border-[var(--color-border)] p-3 font-data text-sm">
+        <dl class="grid grid-cols-2 gap-3 rounded border border-[var(--color-border)] p-3 font-data text-sm sm:grid-cols-3">
           <div><dt class="text-[var(--color-muted)]">Protein</dt><dd data-optimization-target-protein>{formatNumber(selectedDiet.aggregateMacros.protein)}g</dd></div>
           <div><dt class="text-[var(--color-muted)]">Carbohydrates</dt><dd data-optimization-target-carbohydrates>{formatNumber(selectedDiet.aggregateMacros.carbohydrates)}g</dd></div>
           <div><dt class="text-[var(--color-muted)]">Fat</dt><dd data-optimization-target-fat>{formatNumber(selectedDiet.aggregateMacros.fat)}g</dd></div>
@@ -124,7 +130,7 @@
       <div class="flex flex-wrap items-center gap-2">
         <button
           type="submit"
-          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+          class="rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed"
           disabled={!canSubmit}
           data-optimization-submit
         >

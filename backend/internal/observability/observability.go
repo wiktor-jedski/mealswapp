@@ -97,6 +97,17 @@ func (s *MemorySink) RecordMetric(_ context.Context, point MetricPoint) error {
 	return nil
 }
 
+// Snapshot returns race-safe copies of the locally captured telemetry.
+// Implements DESIGN-014 MetricsCollector and LogAggregator.
+func (s *MemorySink) Snapshot() ([]MetricPoint, []LogEvent) {
+	if s == nil {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]MetricPoint(nil), s.Metrics...), append([]LogEvent(nil), s.Logs...)
+}
+
 // AlertRule configures local and deployed monitoring thresholds.
 // Implements DESIGN-014 AlertManager.
 type AlertRule struct {

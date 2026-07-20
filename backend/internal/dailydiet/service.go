@@ -9,7 +9,6 @@ import (
 	"errors"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,8 +20,6 @@ const (
 	maxEntries       = 100
 	maxNameLength    = 120
 	maxQuantity      = 1_000_000
-	dailyDietMethod  = "POST"
-	dailyDietRoute   = "/daily-diets"
 	minimumKeyLength = 8
 )
 
@@ -99,16 +96,14 @@ type CreateResult struct {
 // Service coordinates saved-diet persistence, meal validation, and aggregation.
 // Implements DESIGN-008 ProfileController and SavedDataRepository.
 type Service struct {
-	diets       repository.DailyDietMutationRepository
-	meals       repository.MealRepository
-	idempotency repository.CheckoutIdempotencyRepository
-	createMu    sync.Mutex
+	diets repository.DailyDietMutationRepository
+	meals repository.MealRepository
 }
 
 // NewService creates authenticated saved-diet behavior.
 // Implements DESIGN-008 ProfileController and SavedDataRepository.
-func NewService(diets repository.DailyDietMutationRepository, meals repository.MealRepository, idempotency repository.CheckoutIdempotencyRepository) *Service {
-	return &Service{diets: diets, meals: meals, idempotency: idempotency}
+func NewService(diets repository.DailyDietMutationRepository, meals repository.MealRepository) *Service {
+	return &Service{diets: diets, meals: meals}
 }
 
 // Create persists a user-owned daily diet and replays exact idempotent retries.
@@ -125,33 +120,29 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, req CreateReques
 	if err != nil {
 		return CreateResult{}, err
 	}
-	if s == nil || s.diets == nil || s.meals == nil || s.idempotency == nil {
+	if s == nil || s.diets == nil || s.meals == nil {
 		return CreateResult{}, repository.NewError(repository.ErrorKindConnection, "daily diet service is unavailable", nil)
 	}
-
-	s.createMu.Lock()
-	defer s.createMu.Unlock()
-
 	entries := req.Entries
 	bodyHash, err := requestHash(name, entries)
 	if err != nil {
 		return CreateResult{}, err
 	}
-	if result, found, err := s.replay(ctx, userID, key, bodyHash); err != nil || found {
-		return result, err
-	}
-	if err := s.validateMeals(ctx, entries); err != nil {
+	if result, err := s.diets.GetDailyDietCreateClaim(ctx, userID, key, bodyHash); err == nil {
+		return createResultFromClaim(result), nil
+	} else if !repository.IsKind(err, repository.ErrorKindNotFound) {
+		if repository.IsKind(err, repository.ErrorKindConflict) {
+			return CreateResult{}, ErrIdempotencyConflict
+		}
 		return CreateResult{}, err
 	}
 
-	dietID := uuid.New()
-	payload, err := json.Marshal(dailyDietIdempotencyResponse{DailyDietID: dietID})
+	diet, response, err := s.prepareCreate(ctx, userID, name, entries)
 	if err != nil {
 		return CreateResult{}, err
 	}
-	atomicResult, err := s.diets.CreateWithIdempotency(ctx, userID, repository.SavedDiet{ID: dietID, Name: name, Entries: toRepositoryEntries(entries)}, repository.CheckoutIdempotencyRecord{
-		UserID: userID, Method: dailyDietMethod, Route: dailyDietRoute, Key: key,
-		BodyHash: bodyHash, StatusCode: 201, ResponseBody: payload,
+	claimResult, err := s.diets.ClaimDailyDietCreate(ctx, repository.DailyDietCreateClaim{
+		UserID: userID, Key: key, BodyHash: bodyHash, Diet: diet, Response: response, StatusCode: 201,
 	})
 	if err != nil {
 		if repository.IsKind(err, repository.ErrorKindConflict) {
@@ -159,14 +150,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, req CreateReques
 		}
 		return CreateResult{}, err
 	}
-	if atomicResult.Replayed {
-		return s.replayRecord(ctx, atomicResult.Idempotency)
-	}
-	diet, err := s.load(ctx, userID, atomicResult.DietID)
-	if err != nil {
-		return CreateResult{}, err
-	}
-	return CreateResult{Diet: diet, Status: 201}, nil
+	return createResultFromClaim(claimResult), nil
 }
 
 // Get loads one user-owned daily diet and recalculates its aggregate totals.
@@ -247,41 +231,6 @@ func (s *Service) Delete(ctx context.Context, userID, dietID uuid.UUID) error {
 	return nil
 }
 
-// replay loads a stored response for an exact create retry.
-// Implements DESIGN-008 ProfileController daily-diet idempotency.
-func (s *Service) replay(ctx context.Context, userID uuid.UUID, key, bodyHash string) (CreateResult, bool, error) {
-	record, err := s.idempotency.GetCheckoutIdempotency(ctx, userID, dailyDietMethod, dailyDietRoute, key)
-	if err != nil {
-		if repository.IsKind(err, repository.ErrorKindNotFound) {
-			return CreateResult{}, false, nil
-		}
-		return CreateResult{}, false, err
-	}
-	if record.BodyHash != bodyHash {
-		return CreateResult{}, true, ErrIdempotencyConflict
-	}
-	result, err := s.replayRecord(ctx, record)
-	return result, true, err
-}
-
-// replayRecord reloads the resource referenced by a durable idempotency row.
-// Implements DESIGN-008 ProfileController daily-diet idempotency.
-func (s *Service) replayRecord(ctx context.Context, record repository.CheckoutIdempotencyRecord) (CreateResult, error) {
-	dietID, err := dailyDietIDFromIdempotencyResponse(record.ResponseBody)
-	if err != nil {
-		var diet DailyDiet
-		if unmarshalErr := json.Unmarshal(record.ResponseBody, &diet); unmarshalErr != nil || diet.ID == uuid.Nil {
-			return CreateResult{}, err
-		}
-		return CreateResult{Diet: diet, Status: record.StatusCode, Replayed: true}, nil
-	}
-	diet, err := s.load(ctx, record.UserID, dietID)
-	if err != nil {
-		return CreateResult{}, err
-	}
-	return CreateResult{Diet: diet, Status: record.StatusCode, Replayed: true}, nil
-}
-
 // load reads a saved diet and projects current server-owned meal totals.
 // Implements DESIGN-008 SavedDataRepository.
 func (s *Service) load(ctx context.Context, userID, dietID uuid.UUID) (DailyDiet, error) {
@@ -311,6 +260,54 @@ func (s *Service) validateMeals(ctx context.Context, entries []MealQuantity) err
 		}
 	}
 	return nil
+}
+
+// prepareCreate validates each distinct meal once and builds the immutable persisted projection.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func (s *Service) prepareCreate(ctx context.Context, userID uuid.UUID, name string, entries []MealQuantity) (repository.SavedDiet, repository.DailyDietCreateResponse, error) {
+	now := time.Now().UTC()
+	dietID := uuid.New()
+	diet := repository.SavedDiet{ID: dietID, UserID: userID, Name: name, CreatedAt: now, UpdatedAt: now, Entries: make([]repository.SavedDietMealEntry, 0, len(entries))}
+	response := repository.DailyDietCreateResponse{ID: dietID, Name: name, CreatedAt: now, UpdatedAt: now, Entries: make([]repository.DailyDietCreateResponseEntry, 0, len(entries))}
+	meals := make(map[uuid.UUID]repository.MealEntity, len(entries))
+	for _, entry := range entries {
+		meal, ok := meals[entry.MealID]
+		if !ok {
+			var err error
+			meal, err = s.meals.GetByID(ctx, entry.MealID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+			if err != nil {
+				return repository.SavedDiet{}, repository.DailyDietCreateResponse{}, err
+			}
+			meals[entry.MealID] = meal
+		}
+		baseQuantity, err := quantityInMealBase(entry.Quantity, entry.Unit, meal.PhysicalState)
+		if err != nil {
+			return repository.SavedDiet{}, repository.DailyDietCreateResponse{}, err
+		}
+		macros := repository.ScaleMacros(meal.MacrosPer100, baseQuantity, 100)
+		response.AggregateMacros.Protein += macros.Protein
+		response.AggregateMacros.Carbohydrates += macros.Carbohydrates
+		response.AggregateMacros.Fat += macros.Fat
+		entryID := uuid.New()
+		diet.Entries = append(diet.Entries, repository.SavedDietMealEntry{ID: entryID, SavedDietID: dietID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position, CreatedAt: now})
+		response.Entries = append(response.Entries, repository.DailyDietCreateResponseEntry{ID: entryID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
+	}
+	response.AggregateMacros.Protein = round4(response.AggregateMacros.Protein)
+	response.AggregateMacros.Carbohydrates = round4(response.AggregateMacros.Carbohydrates)
+	response.AggregateMacros.Fat = round4(response.AggregateMacros.Fat)
+	response.AggregateMacros.Calories = round4(response.AggregateMacros.Protein*4 + response.AggregateMacros.Carbohydrates*4 + response.AggregateMacros.Fat*9)
+	return diet, response, nil
+}
+
+// createResultFromClaim maps the repository's exact persisted response without mutable reloads.
+// Implements DESIGN-008 SavedDataRepository durable create idempotency.
+func createResultFromClaim(result repository.DailyDietCreateClaimResult) CreateResult {
+	entries := make([]DailyDietEntry, len(result.Response.Entries))
+	for index, entry := range result.Response.Entries {
+		entries[index] = DailyDietEntry{ID: entry.ID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position}
+	}
+	macros := result.Response.AggregateMacros
+	return CreateResult{Diet: DailyDiet{ID: result.Response.ID, Name: result.Response.Name, Entries: entries, AggregateMacros: MacroProjection{Protein: macros.Protein, Carbohydrates: macros.Carbohydrates, Fat: macros.Fat, Calories: macros.Calories}, CreatedAt: result.Response.CreatedAt, UpdatedAt: result.Response.UpdatedAt}, Status: result.StatusCode, Replayed: result.Replayed}
 }
 
 // project maps persistence rows to the API projection and recalculates totals.
@@ -358,7 +355,7 @@ func normalizeRequest(name string, entries []MealQuantity) (string, error) {
 		if entry.Quantity <= 0 || entry.Quantity > maxQuantity || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) {
 			return "", validationError("saved diet meal quantity must be finite and positive")
 		}
-		if !validUnit(entry.Unit) {
+		if repository.ValidateQuantityUnit(entry.Unit) != nil {
 			return "", validationError("saved diet meal unit is invalid")
 		}
 		if entry.Position < 0 || entry.Position >= maxEntries {
@@ -443,12 +440,6 @@ func requestHash(name string, entries []MealQuantity) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// validUnit reports whether a canonical saved-diet unit is supported.
-// Implements DESIGN-008 SavedDataRepository.
-func validUnit(unit string) bool {
-	return unit == "g" || unit == "ml" || unit == "oz" || unit == "fl_oz"
-}
-
 // validationError creates a stable repository validation error.
 // Implements DESIGN-008 SavedDataRepository.
 func validationError(message string) error {
@@ -459,23 +450,4 @@ func validationError(message string) error {
 // Implements DESIGN-008 SavedDataRepository.
 func round4(value float64) float64 {
 	return math.Round(value*10_000) / 10_000
-}
-
-// dailyDietIdempotencyResponse stores only the server-generated resource reference.
-// Implements DESIGN-008 ProfileController daily-diet idempotency.
-type dailyDietIdempotencyResponse struct {
-	DailyDietID uuid.UUID `json:"dailyDietId"`
-}
-
-// dailyDietIDFromIdempotencyResponse extracts the server-generated resource reference.
-// Implements DESIGN-008 ProfileController daily-diet idempotency.
-func dailyDietIDFromIdempotencyResponse(payload []byte) (uuid.UUID, error) {
-	var response dailyDietIdempotencyResponse
-	if err := json.Unmarshal(payload, &response); err != nil {
-		return uuid.Nil, repository.NewError(repository.ErrorKindInternal, "daily diet idempotency response is invalid", err)
-	}
-	if response.DailyDietID == uuid.Nil {
-		return uuid.Nil, repository.NewError(repository.ErrorKindInternal, "daily diet idempotency response has no diet id", errors.New("missing daily diet id"))
-	}
-	return response.DailyDietID, nil
 }

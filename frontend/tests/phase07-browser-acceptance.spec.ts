@@ -46,6 +46,9 @@ interface FixtureRuntime {
 const USER_ID = "task-207-user";
 const DIET_ID = "00000000-0000-0000-0000-000000000207";
 const JOB_ID = "00000000-0000-0000-0000-000000000207";
+const APPLE_ID = "00000000-0000-0000-0000-000000000208";
+const OATS_ID = "00000000-0000-0000-0000-000000000209";
+const ENTRY_IDS = ["00000000-0000-0000-0000-000000000210", "00000000-0000-0000-0000-000000000211"] as const;
 
 async function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
 	await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -103,8 +106,8 @@ function entitlementEnvelope(tier: Exclude<AuthFixture, "anonymous">): Entitleme
 	};
 }
 
-function meal(id: "meal-apple" | "meal-oats"): FoodObjectEnvelope {
-	const apple = id === "meal-apple";
+function meal(id: typeof APPLE_ID | typeof OATS_ID): FoodObjectEnvelope {
+	const apple = id === APPLE_ID;
 	return {
 		status: "ok",
 		requestId: `task-207-${id}`,
@@ -125,8 +128,8 @@ function meal(id: "meal-apple" | "meal-oats"): FoodObjectEnvelope {
 function autocompleteEnvelope(query: string): AutocompleteEnvelope {
 	const normalized = query.toLowerCase();
 	const items = [
-		{ itemId: "meal-apple", label: "Apple", exactMatch: normalized === "apple", levenshteinDistance: 0, length: 5, rank: 1 },
-		{ itemId: "meal-oats", label: "Oats", exactMatch: normalized === "oats", levenshteinDistance: 0, length: 4, rank: 2 }
+		{ itemId: APPLE_ID, label: "Apple", exactMatch: normalized === "apple", levenshteinDistance: 0, length: 5, rank: 1 },
+		{ itemId: OATS_ID, label: "Oats", exactMatch: normalized === "oats", levenshteinDistance: 0, length: 4, rank: 2 }
 	].filter((item) => item.label.toLowerCase().includes(normalized));
 	return { status: "ok", requestId: "task-207-autocomplete", data: { items } };
 }
@@ -144,8 +147,8 @@ function savedDiet(name = "Training day"): DailyDiet {
 		id: DIET_ID,
 		name,
 		entries: [
-			{ id: "task-207-entry-1", mealId: "meal-apple", quantity: 150, unit: "g", position: 0 },
-			{ id: "task-207-entry-2", mealId: "meal-oats", quantity: 100, unit: "g", position: 1 }
+			{ id: ENTRY_IDS[0], mealId: APPLE_ID, quantity: 150, unit: "g", position: 0 },
+			{ id: ENTRY_IDS[1], mealId: OATS_ID, quantity: 100, unit: "g", position: 1 }
 		],
 		aggregateMacros: { protein: 31, carbohydrates: 82, fat: 7.2, calories: 500 },
 		createdAt: "2026-07-11T00:00:00Z",
@@ -156,7 +159,7 @@ function savedDiet(name = "Training day"): DailyDiet {
 function dietFromRequest(request: DailyDietCreateRequest): DailyDiet {
 	return {
 		...savedDiet(request.name),
-		entries: request.entries.map((entry, index) => ({ id: `task-207-entry-${index + 1}`, ...entry }))
+		entries: request.entries.map((entry, index) => ({ id: ENTRY_IDS[index]!, ...entry }))
 	};
 }
 
@@ -192,9 +195,9 @@ function completedJob(): OptimizationJobStatusEnvelope {
 		startedAt: "2026-07-11T00:00:01Z",
 		finishedAt: "2026-07-11T00:00:02Z",
 		alternatives: [
-			alternative("meal-apple", 460, 0.91),
-			alternative("meal-oats", 480, 0.82),
-			alternative("meal-balanced", 500, 0.73)
+			alternative(APPLE_ID, 460, 0.91),
+			alternative(OATS_ID, 480, 0.82),
+			alternative("00000000-0000-0000-0000-000000000212", 500, 0.73)
 		]
 	};
 	return { status: "ok", requestId: "task-207-completed", data };
@@ -206,7 +209,7 @@ function failedJob(code: "solver_infeasible" | "solver_timeout"): OptimizationJo
 		startedAt: "2026-07-11T00:00:01Z",
 		finishedAt: "2026-07-11T00:00:02Z",
 		alternatives: [],
-		failure: { code, message: code === "solver_timeout" ? "The optimization solver exceeded its deadline." : "No feasible diet matched the requested macro targets." }
+		failure: { code, message: code === "solver_timeout" ? "Optimization took too long. Please try again." : "No meal combination matches the requested targets." }
 	};
 	return { status: "ok", requestId: `task-207-${code}`, data };
 }
@@ -240,8 +243,8 @@ async function installFixture(page: Page, fixture: BrowserFixture): Promise<Fixt
 		const query = new URL(route.request().url()).searchParams.get("query") ?? "";
 		return fulfillJson(route, 200, autocompleteEnvelope(query));
 	});
-	await page.route(/\/api\/v1\/food-objects\/(meal-apple|meal-oats)$/, (route) => {
-		const id = route.request().url().split("/").pop() as "meal-apple" | "meal-oats";
+	await page.route(new RegExp(`/api/v1/food-objects/(${APPLE_ID}|${OATS_ID})$`), (route) => {
+		const id = route.request().url().split("/").pop() as typeof APPLE_ID | typeof OATS_ID;
 		return fulfillJson(route, 200, meal(id));
 	});
 	await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
@@ -444,6 +447,8 @@ test("timeout fixture supports a keyboard retry with a new safe submission", asy
 	await assertAxe(page);
 });
 
+// Verifies IT-ARCH-004-008, ARCH-004, DESIGN-001 SearchView,
+// DESIGN-004 JobStatusTracker, DESIGN-017 RetryManager, and SW-REQ-006/SW-REQ-043/SW-REQ-080.
 test("expired-result fixture presents the retryable expired state and no stale result", async ({ page }) => {
 	await installFixture(page, { auth: "paid", outcome: "expired", initialDiet: savedDiet() });
 	await page.goto("/");

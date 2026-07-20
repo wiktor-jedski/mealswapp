@@ -32,7 +32,6 @@ func TestRunPublishesAlternativeBeforeAcknowledgingQueuedJob(t *testing.T) {
 	jobStore := NewRedisOptimizationJobStore(client)
 	if err := jobStore.Save(context.Background(), OptimizationJob{
 		JobID: jobUUID(t, jobID), UserID: userID, DailyDietID: dietID,
-		TargetMacros:     optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10},
 		TolerancePercent: 0, Status: OptimizationJobQueued,
 	}); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -49,8 +48,8 @@ func TestRunPublishesAlternativeBeforeAcknowledgingQueuedJob(t *testing.T) {
 	cfg := config.Config{Environment: "test", CLPExecutable: clpPath, CLPVersion: "1.17.11"}
 	inputs := &integrationInputLoader{inputs: optimization.SavedDietOptimizationInputs{
 		Request: optimization.DietOptimizationRequest{
-			OriginalDiet: repository.SavedDiet{ID: dietID, UserID: userID, Entries: []repository.SavedDietMealEntry{{MealID: mealIDs[0], Quantity: 100, Unit: "g", Position: 0}}},
-			TargetMacros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, TolerancePercent: 0,
+			OriginalDiet:     repository.SavedDiet{ID: dietID, UserID: userID, Entries: []repository.SavedDietMealEntry{{MealID: mealIDs[0], Quantity: 100, Unit: "g", Position: 0}}},
+			TolerancePercent: 0,
 		},
 		Meals: []repository.MealEntity{
 			{ID: mealIDs[0], Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
@@ -150,11 +149,17 @@ func TestRedisOptimizationJobStoreTerminalTransitionsAreAtomic(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("terminal transition loads did not reach barrier")
 	}
-	if err := <-results; err != nil {
-		t.Fatalf("PublishCompleted/PublishFailed first error = %v", err)
+	publicationErrors := []error{<-results, <-results}
+	var successful, rejected int
+	for _, err := range publicationErrors {
+		if err == nil {
+			successful++
+		} else {
+			rejected++
+		}
 	}
-	if err := <-results; err != nil {
-		t.Fatalf("PublishCompleted/PublishFailed second error = %v", err)
+	if successful != 1 || rejected != 1 {
+		t.Fatalf("PublishCompleted/PublishFailed errors = %v, want one durable winner and one conflict", publicationErrors)
 	}
 	final, err := NewRedisOptimizationJobStore(base).Load(context.Background(), jobID)
 	if err != nil {
@@ -165,6 +170,9 @@ func TestRedisOptimizationJobStoreTerminalTransitionsAreAtomic(t *testing.T) {
 	}
 }
 
+// TestOptimizationWorkerHeartbeatIsRefreshableAndRemovedOnStop verifies
+// IT-ARCH-004-007, ARCH-004, DESIGN-004 JobStatusTracker,
+// DESIGN-014 MetricsCollector, and SW-REQ-080/SW-REQ-082.
 func TestOptimizationWorkerHeartbeatIsRefreshableAndRemovedOnStop(t *testing.T) {
 	client := openWorkerIntegrationRedis(t)
 	consumer := "task-208-heartbeat-" + uuid.NewString()
@@ -255,7 +263,7 @@ type integrationSolver struct {
 
 // Implements DESIGN-004 LPSolverWrapper worker integration fixture.
 func (s *integrationSolver) Solve(_ context.Context, _ optimization.LPModel, _ optimization.ObjectiveFunction) (optimization.LPSolution, error) {
-	index := int(s.calls.Add(1)-1) % len(s.mealIDs)
+	index := int(s.calls.Add(1)-1) / 2 % len(s.mealIDs)
 	return optimization.LPSolution{s.mealIDs[index].String(): 100}, nil
 }
 

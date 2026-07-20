@@ -16,6 +16,11 @@ import type {
 // Implements DESIGN-001 SearchView authenticated Daily Diet Collection UI browser workflow.
 // Implements DESIGN-008 SavedDataRepository server-derived collection and macro projection coverage.
 
+const DIET_ID = "00000000-0000-0000-0000-000000000031";
+const APPLE_ID = "00000000-0000-0000-0000-000000000032";
+const OATS_ID = "00000000-0000-0000-0000-000000000033";
+const ENTRY_IDS = ["00000000-0000-0000-0000-000000000034", "00000000-0000-0000-0000-000000000035"] as const;
+
 function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
   return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
@@ -67,8 +72,8 @@ function entitlementEnvelope(tier: "free" | "paid" = "paid"): EntitlementStatusE
   };
 }
 
-function meal(id: "meal-apple" | "meal-oats"): FoodObjectEnvelope {
-  const apple = id === "meal-apple";
+function meal(id: typeof APPLE_ID | typeof OATS_ID): FoodObjectEnvelope {
+  const apple = id === APPLE_ID;
   return {
     status: "ok",
     requestId: `daily-diet-${id}`,
@@ -92,8 +97,8 @@ function autocompleteEnvelope(): AutocompleteEnvelope {
     requestId: "daily-diet-autocomplete",
     data: {
       items: [
-        { itemId: "meal-apple", label: "Apple", exactMatch: true, levenshteinDistance: 0, length: 5, rank: 1 },
-        { itemId: "meal-oats", label: "Oats", exactMatch: true, levenshteinDistance: 0, length: 4, rank: 1 }
+        { itemId: APPLE_ID, label: "Apple", exactMatch: true, levenshteinDistance: 0, length: 5, rank: 1 },
+        { itemId: OATS_ID, label: "Oats", exactMatch: true, levenshteinDistance: 0, length: 4, rank: 1 }
       ]
     }
   };
@@ -105,9 +110,9 @@ function emptyDailyDiets(): DailyDietCollectionEnvelope {
 
 function savedDailyDiet(): DailyDiet {
   return {
-    id: "diet-1",
+    id: DIET_ID,
     name: "Saved breakfast",
-    entries: [{ id: "entry-1", mealId: "meal-apple", quantity: 100, unit: "g", position: 0 }],
+    entries: [{ id: ENTRY_IDS[0], mealId: APPLE_ID, quantity: 100, unit: "g", position: 0 }],
     aggregateMacros: { protein: 1, carbohydrates: 14, fat: 0.2, calories: 52 },
     createdAt: "2026-07-11T00:00:00Z",
     updatedAt: "2026-07-11T00:00:00Z"
@@ -136,19 +141,19 @@ async function stubAuthenticatedDailyDiet(
   await page.route(/\/api\/v1\/search-history$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-history", data: { history: [] } }));
   await page.route(/\/api\/v1\/saved-items\?kind=favorite$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-favorites", data: { items: [] } }));
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope()));
-  await page.route(/\/api\/v1\/food-objects\/meal-apple$/, (route) => fulfillJson(route, 200, meal("meal-apple")));
-  await page.route(/\/api\/v1\/food-objects\/meal-oats$/, (route) => fulfillJson(route, 200, meal("meal-oats")));
+  await page.route(`**/api/v1/food-objects/${APPLE_ID}`, (route) => fulfillJson(route, 200, meal(APPLE_ID)));
+  await page.route(`**/api/v1/food-objects/${OATS_ID}`, (route) => fulfillJson(route, 200, meal(OATS_ID)));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
   await page.route(/\/api\/v1\/daily-diets$/, async (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON() as Record<string, unknown>;
       createBodies.push(body);
       const entries = (body.entries as Array<Record<string, unknown>>).map((entry, index) => ({
-        id: `entry-${index + 1}`,
+        id: ENTRY_IDS[index]!,
         ...entry
       }));
       const saved: DailyDiet = {
-        id: "diet-1",
+        id: DIET_ID,
         name: String(body.name),
         entries: entries as DailyDiet["entries"],
         aggregateMacros: { protein: 31, carbohydrates: 82, fat: 7.2, calories: 500 },
@@ -161,7 +166,7 @@ async function stubAuthenticatedDailyDiet(
     if (listBehavior) return listBehavior(route);
     return fulfillJson(route, 200, savedDiet ? { status: "ok", requestId: "daily-diet-list", data: { diets: [savedDiet] } } satisfies DailyDietCollectionEnvelope : emptyDailyDiets());
   });
-  await page.route(/\/api\/v1\/daily-diets\/diet-1$/, (route) => fulfillJson(route, 200, emptyDailyDiets()));
+  await page.route(`**/api/v1/daily-diets/${DIET_ID}`, (route) => fulfillJson(route, 200, emptyDailyDiets()));
   return { createBodies: () => createBodies };
 }
 
@@ -198,8 +203,8 @@ test("authenticated user builds, edits, saves, and selects a two-meal Daily Diet
   expect(api.createBodies()[0]).toMatchObject({
     name: "Training day",
     entries: [
-      { mealId: "meal-apple", quantity: 150, position: 0 },
-      { mealId: "meal-oats", quantity: 100, position: 1 }
+      { mealId: APPLE_ID, quantity: 150, position: 0 },
+      { mealId: OATS_ID, quantity: 100, position: 1 }
     ]
   });
 
@@ -292,7 +297,7 @@ test("recovers from a real collection-list error through the retry action", asyn
   await page.getByRole("button", { name: "Daily Diet", exact: true }).click();
   await expect(page.locator("[data-saved-daily-diets-error]")).toContainText("temporarily unavailable");
   await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.locator("[data-saved-daily-diet=diet-1]")).toContainText("Saved breakfast");
+  await expect(page.locator(`[data-saved-daily-diet="${DIET_ID}"]`)).toContainText("Saved breakfast");
   expect(listAttempts).toBe(2);
 });
 

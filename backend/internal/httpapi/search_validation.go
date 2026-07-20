@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
@@ -390,10 +391,8 @@ func validateSubstitutionUnit(unit string) error {
 	if _, err := security.NormalizeInput(security.InputFieldSubstitutionUnit, unit); err != nil {
 		return err
 	}
-	switch unit {
-	case "g", "ml", "oz", "fl_oz":
-		return nil
-	default:
+	if err := repository.ValidateQuantityUnit(unit); err != nil {
 		return errors.New("substitution unit is invalid")
 	}
+	return nil
 }

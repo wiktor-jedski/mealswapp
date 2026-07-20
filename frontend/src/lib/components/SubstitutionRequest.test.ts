@@ -9,6 +9,7 @@ import {
 	setDailyDietId,
 	setMode
 } from "../stores/search";
+import { selectedDailyDietId } from "../stores/selected-daily-diet";
 
 // Implements DESIGN-001 SearchView Substitution Input canonical unit and quantity round-trip verification.
 //
@@ -18,6 +19,7 @@ import {
 
 afterEach(() => {
 	resetSearch();
+	selectedDailyDietId.set(null);
 });
 
 // Implements DESIGN-001 SearchView canonical unit round-trip verification.

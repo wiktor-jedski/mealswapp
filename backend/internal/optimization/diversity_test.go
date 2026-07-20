@@ -4,6 +4,9 @@ package optimization
 
 import (
 	"context"
+	"math"
+	"os"
+	"os/exec"
 	"reflect"
 	"testing"
 
@@ -19,11 +22,8 @@ var (
 )
 
 func TestBuildConstraintsPenalizesOriginalMealsWithoutForbiddingThem(t *testing.T) {
-	model, err := BuildConstraints(DietOptimizationRequest{
-		OriginalMeals:    []MealQuantity{{MealID: diversityMealA, Quantity: 100, Unit: "g"}},
-		TolerancePercent: 0,
-		MaxQuantity:      100,
-	}, diversityMeals(diversityMealA, diversityMealB))
+	meals := diversityMeals(diversityMealA, diversityMealB)
+	model, err := BuildConstraints(diversityRequest(meals[0], nil), meals, nil)
 	if err != nil {
 		t.Fatalf("BuildConstraints() error = %v", err)
 	}
@@ -40,14 +40,14 @@ func TestBuildConstraintsPenalizesOriginalMealsWithoutForbiddingThem(t *testing.
 		t.Fatalf("non-original meal penalty = %v, want 0", other.DiversityPenalty)
 	}
 
-	objective, err := BuildObjective(model.Variables)
+	policy, err := BuildObjective(model.Variables)
 	if err != nil {
 		t.Fatalf("BuildObjective() error = %v", err)
 	}
-	if objective.Coefficients[original.ItemID] <= objective.Coefficients[other.ItemID] {
-		t.Fatalf("original objective coefficient = %v, other = %v; want original higher", objective.Coefficients[original.ItemID], objective.Coefficients[other.ItemID])
+	if policy.Primary.Coefficients[original.ItemID] != policy.Primary.Coefficients[other.ItemID] {
+		t.Fatalf("primary calories differ: original %v, other %v", policy.Primary.Coefficients[original.ItemID], policy.Primary.Coefficients[other.ItemID])
 	}
-	if got := objective.DiversityPenalties[original.ItemID]; got != DefaultDiversityPenalty {
+	if got := policy.Secondary.Coefficients[original.ItemID]; got != DefaultDiversityPenalty {
 		t.Fatalf("objective diversity penalty = %v, want %v", got, DefaultDiversityPenalty)
 	}
 }
@@ -66,26 +66,24 @@ func TestGenerateAlternativesReturnsDeterministicOneOrTwoResults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			call := 0
 			solve := func(_ context.Context, _ LPModel, _ ObjectiveFunction) (LPSolution, error) {
-				if call >= len(tt.selectedIDs) {
-					t.Fatalf("solver called %d times, want at most %d", call+1, len(tt.selectedIDs))
+				attempt := call / 2
+				if attempt >= len(tt.selectedIDs) {
+					t.Fatalf("solver called %d times, want at most %d", call+1, len(tt.selectedIDs)*2)
 				}
-				mealID := tt.selectedIDs[call].String()
+				mealID := tt.selectedIDs[attempt].String()
 				call++
 				return LPSolution{mealID: 100}, nil
 			}
-			results, err := GenerateAlternatives(context.Background(), DietOptimizationRequest{
-				OriginalMeals:    []MealQuantity{{MealID: diversityMealA, Quantity: 100, Unit: "g"}},
-				TolerancePercent: 0,
-				MaxQuantity:      100,
-			}, diversityMeals(diversityMealA, diversityMealB, diversityMealC), tt.limit, solve)
+			meals := diversityMeals(diversityMealA, diversityMealB, diversityMealC)
+			results, err := GenerateAlternatives(context.Background(), diversityRequest(meals[0], nil), meals, tt.limit, solve)
 			if err != nil {
 				t.Fatalf("GenerateAlternatives() error = %v", err)
 			}
 			if got := len(results); got != tt.limit {
 				t.Fatalf("alternative count = %d, want %d", got, tt.limit)
 			}
-			if got := call; got != tt.limit {
-				t.Fatalf("solver calls = %d, want %d", got, tt.limit)
+			if got := call; got != tt.limit*2 {
+				t.Fatalf("solver calls = %d, want %d lexicographic passes", got, tt.limit*2)
 			}
 			for index, result := range results {
 				want := LPSolution{tt.selectedIDs[index].String(): 100}
@@ -97,35 +95,38 @@ func TestGenerateAlternativesReturnsDeterministicOneOrTwoResults(t *testing.T) {
 	}
 }
 
-func TestGenerateAlternativesDeduplicatesAndCapsResults(t *testing.T) {
+func TestGenerateAlternativesUsesLexicographicPassesAndCapsResults(t *testing.T) {
 	meals := diversityMeals(diversityMealA, diversityMealB, diversityMealC, diversityMealD)
-	req := DietOptimizationRequest{
-		OriginalMeals:    []MealQuantity{{MealID: diversityMealA, Quantity: 100, Unit: "g"}},
-		TolerancePercent: 0,
-		MaxQuantity:      100,
-	}
+	req := diversityRequest(meals[0], nil)
 	call := 0
 	solve := func(_ context.Context, model LPModel, objective ObjectiveFunction) (LPSolution, error) {
 		call++
-		if got := objective.DiversityPenalties[diversityMealA.String()]; got != DefaultDiversityPenalty {
-			t.Fatalf("solve %d original penalty = %v, want %v", call, got, DefaultDiversityPenalty)
+		attempt := (call - 1) / 2
+		secondary := call%2 == 0
+		if secondary {
+			if got := objective.Coefficients[diversityMealA.String()]; got != DefaultDiversityPenalty {
+				t.Fatalf("solve %d original diversity coefficient = %v, want %v", call, got, DefaultDiversityPenalty)
+			}
+			_ = findConstraint(t, model, "primary_calorie_optimum")
+		} else if got := objective.Coefficients[diversityMealA.String()]; got == DefaultDiversityPenalty {
+			t.Fatalf("solve %d used diversity as the primary objective", call)
 		}
-		if call > 1 {
+		if attempt > 0 {
 			constraint := findConstraint(t, model, "alternative_1")
 			if got := constraintValue(constraint, map[string]float64{diversityMealA.String(): 100}); got <= constraint.UpperBound {
 				t.Fatalf("solve %d did not constrain repeated high-weight selection: value %v <= %v", call, got, constraint.UpperBound)
 			}
 		}
-		if call > 2 {
+		if attempt > 1 {
 			constraint := findConstraint(t, model, "alternative_2")
-			if got := constraintValue(constraint, map[string]float64{diversityMealB.String(): 100}); got > constraint.UpperBound {
-				t.Fatalf("solve %d unexpectedly rejects a new meal set: value %v > %v", call, got, constraint.UpperBound)
+			if got := constraintValue(constraint, map[string]float64{diversityMealB.String(): 100}); got <= constraint.UpperBound {
+				t.Fatalf("solve %d did not constrain the second accepted meal: value %v <= %v", call, got, constraint.UpperBound)
 			}
 		}
-		switch call {
-		case 1, 2:
+		switch attempt {
+		case 0:
 			return LPSolution{diversityMealA.String(): 100}, nil
-		case 3:
+		case 1:
 			return LPSolution{diversityMealB.String(): 100}, nil
 		default:
 			return LPSolution{diversityMealC.String(): 100}, nil
@@ -136,8 +137,8 @@ func TestGenerateAlternativesDeduplicatesAndCapsResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAlternatives() error = %v", err)
 	}
-	if got, want := call, 4; got != want {
-		t.Fatalf("solver calls = %d, want duplicate retry then three accepted results (%d)", got, want)
+	if got, want := call, 6; got != want {
+		t.Fatalf("solver calls = %d, want two passes for three results (%d)", got, want)
 	}
 	if got, want := len(results), 3; got != want {
 		t.Fatalf("alternative count = %d, want %d", got, want)
@@ -152,13 +153,9 @@ func TestGenerateAlternativesDeduplicatesAndCapsResults(t *testing.T) {
 }
 
 func TestGenerateAlternativesRejectsSolverOutputThatViolatesHardExclusion(t *testing.T) {
-	req := DietOptimizationRequest{
-		TargetMacros:     MacroTarget{Protein: 10, Carbohydrates: 10, Fat: 1},
-		TolerancePercent: 0,
-		MaxQuantity:      100,
-		ExcludedMealIDs:  []uuid.UUID{diversityMealB},
-	}
-	results, err := GenerateAlternatives(context.Background(), req, diversityMeals(diversityMealA, diversityMealB), 1, func(_ context.Context, _ LPModel, _ ObjectiveFunction) (LPSolution, error) {
+	meals := diversityMeals(diversityMealA, diversityMealB)
+	req := diversityRequest(meals[0], []uuid.UUID{diversityMealB})
+	results, err := GenerateAlternatives(context.Background(), req, meals, 1, func(_ context.Context, _ LPModel, _ ObjectiveFunction) (LPSolution, error) {
 		return LPSolution{diversityMealB.String(): 100}, nil
 	})
 	if err == nil {
@@ -169,15 +166,90 @@ func TestGenerateAlternativesRejectsSolverOutputThatViolatesHardExclusion(t *tes
 	}
 }
 
+func TestSolveObjectivePolicyRejectsDiversityThatOverturnsCalorieOrdering(t *testing.T) {
+	model := lexicographicFixtureModel(1.000001)
+	policy, err := BuildObjective(model.Variables)
+	if err != nil {
+		t.Fatalf("BuildObjective() error = %v", err)
+	}
+	call := 0
+	_, err = solveObjectivePolicy(context.Background(), model, policy, func(_ context.Context, _ LPModel, _ ObjectiveFunction) (LPSolution, error) {
+		call++
+		if call == 1 {
+			return LPSolution{diversityMealA.String(): 1}, nil
+		}
+		return LPSolution{diversityMealB.String(): 1}, nil
+	})
+	if err == nil {
+		t.Fatal("lexicographic policy accepted a more diverse but higher-calorie secondary solution")
+	}
+}
+
+func TestTask219PackagedCLPLexicographicObjective(t *testing.T) {
+	executable := os.Getenv("MEALSWAPP_CLP_PATH")
+	if executable == "" {
+		executable, _ = exec.LookPath(DefaultCLPExecutable)
+	}
+	if executable == "" {
+		t.Skip("native CLP executable is not installed; packaged worker CI supplies it")
+	}
+	solver := NewLPSolverWrapper(CLPConfig{Executable: executable})
+	for _, tt := range []struct {
+		name            string
+		diverseCalories float64
+		want            uuid.UUID
+	}{
+		{name: "calories remain primary", diverseCalories: 1.000001, want: diversityMealA},
+		{name: "diversity breaks calorie tie", diverseCalories: 1, want: diversityMealB},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			model := lexicographicFixtureModel(tt.diverseCalories)
+			policy, err := BuildObjective(model.Variables)
+			if err != nil {
+				t.Fatalf("BuildObjective() error = %v", err)
+			}
+			solution, err := solveObjectivePolicy(context.Background(), model, policy, solver.Solve)
+			if err != nil {
+				t.Fatalf("packaged CLP lexicographic solve: %v", err)
+			}
+			if math.Abs(solution[tt.want.String()]-1) > quantityTolerance(1) || len(solution) != 1 {
+				t.Fatalf("solution = %#v, want only %s", solution, tt.want)
+			}
+		})
+	}
+}
+
+func lexicographicFixtureModel(diverseCalories float64) LPModel {
+	return LPModel{
+		Variables: []LPVariable{
+			{ItemID: diversityMealA.String(), LowerBound: 0, UpperBound: 1, CaloriesPerUnit: 1, DiversityPenalty: 1},
+			{ItemID: diversityMealB.String(), LowerBound: 0, UpperBound: 1, CaloriesPerUnit: diverseCalories},
+		},
+		Constraints: []LPConstraint{{Name: "quantity", LowerBound: 1, UpperBound: 1, Coefficients: map[string]float64{diversityMealA.String(): 1, diversityMealB.String(): 1}}},
+	}
+}
+
 func diversityMeals(ids ...uuid.UUID) []repository.MealEntity {
 	meals := make([]repository.MealEntity, len(ids))
 	for index, id := range ids {
 		meals[index] = repository.MealEntity{
-			ID:           id,
-			MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 10, Fat: 1},
+			ID: id, Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
+			MacrosPer100:              repository.MacroValues{Protein: 10, Carbohydrates: 10, Fat: 1},
+			NormalizedMacrosAvailable: true,
 		}
 	}
 	return meals
+}
+
+func diversityRequest(original repository.MealEntity, excluded []uuid.UUID) DietOptimizationRequest {
+	return DietOptimizationRequest{
+		OriginalDiet: repository.SavedDiet{
+			ID:      uuid.MustParse("00000000-0000-4000-8000-000000000020"),
+			UserID:  uuid.MustParse("00000000-0000-4000-8000-000000000025"),
+			Entries: []repository.SavedDietMealEntry{{MealID: original.ID, Quantity: 100, Unit: "g"}},
+		},
+		ExcludedMealIDs: excluded,
+	}
 }
 
 func findVariable(t *testing.T, model LPModel, itemID string) LPVariable {

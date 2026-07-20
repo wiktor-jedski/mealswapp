@@ -499,6 +499,16 @@ paths:
           $ref: "#/components/responses/DailyDietCollection"
         "401":
           $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
     post:
       operationId: postApiV1DailyDiet
       summary: Create an authenticated user's saved daily diet
@@ -523,7 +533,15 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
         "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
   # Implements DESIGN-008 SavedDataRepository daily-diet item contract.
   /api/v1/daily-diets/{dietId}:
@@ -537,9 +555,19 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/DailyDiet"
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
     put:
       operationId: putApiV1DailyDiet
@@ -565,6 +593,14 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
     delete:
       operationId: deleteApiV1DailyDiet
       summary: Delete an authenticated user's saved daily diet
@@ -574,11 +610,19 @@ paths:
       responses:
         "204":
           description: Saved daily diet deleted.
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
         "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
   # Implements DESIGN-004 JobStatusTracker optimization submission contract.
   /api/v1/optimization/jobs:
@@ -606,13 +650,17 @@ paths:
           $ref: "#/components/responses/Error"
         "403":
           $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
-        "422":
-          $ref: "#/components/responses/Error"
         "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
           $ref: "#/components/responses/Error"
         "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
   # Implements DESIGN-004 JobStatusTracker polling contract.
   /api/v1/optimization/jobs/{jobId}:
@@ -627,11 +675,21 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/OptimizationJobStatus"
+        "400":
+          $ref: "#/components/responses/Error"
         "401":
+          $ref: "#/components/responses/Error"
+        "403":
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
         "410":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
           $ref: "#/components/responses/Error"
   /api/v1/billing/entitlement:
     get:
@@ -819,11 +877,25 @@ components:
           schema:
             $ref: "#/components/schemas/AuthSessionEnvelope"
     Error:
-      description: User-safe gateway error. Includes 400, 401, 402, 403, 409, 422, 429, 500, 503, and 504 responses.
+      description: User-safe gateway error envelope reused by operation-level error responses.
       headers:
         Retry-After:
           schema:
             type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    # Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter shared admission contract.
+    TooManyRequests:
+      description: Retryable rate or admission rejection with a positive whole-second delay.
+      headers:
+        Retry-After:
+          required: true
+          description: Positive whole seconds before the caller should retry.
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/json:
           schema:
@@ -943,7 +1015,7 @@ components:
       properties:
         category:
           type: string
-          enum: [validation, auth, entitlement, security, network, timeout, server, dependency, unknown]
+          enum: [validation, auth, entitlement, security, network, timeout, server, dependency, rate_limit, unknown]
         code:
           type: string
         message:
@@ -1337,8 +1409,8 @@ components:
       enum: [queued, processing, completed, failed, cancelled]
     OptimizationFailureCode:
       type: string
-      enum: [failed_validation, solver_timeout, solver_infeasible, queue_unavailable, worker_crash, result_expired]
-      description: Stable safe failure code; internal exception text and infrastructure details are never returned.
+      enum: [failed_validation, solver_timeout, solver_infeasible, worker_crash]
+      description: Stable terminal job-failure code. Queue outages are retryable submission errors, expiry is a 410 polling error, and internal diagnostics are never returned.
     DietOptimizationRequest:
       type: object
       additionalProperties: false
@@ -1379,6 +1451,8 @@ components:
           type: number
           minimum: 0
           maximum: 1
+          multipleOf: 0.0001
+          description: Quantity-weighted Jaccard similarity between original and alternative meal quantities after conversion to canonical g/ml, rounded to four decimal places.
     OptimizationFailure:
       type: object
       additionalProperties: false
@@ -1415,6 +1489,9 @@ components:
           enum: [accepted]
         requestId:
           type: string
+          minLength: 1
+          maxLength: 120
+          pattern: '^[A-Za-z0-9._:-]+$'
         data:
           $ref: "#/components/schemas/OptimizationJobAcknowledgementData"
     OptimizationJobData:
@@ -1587,6 +1664,9 @@ components:
           enum: [ok]
         requestId:
           type: string
+          minLength: 1
+          maxLength: 120
+          pattern: '^[A-Za-z0-9._:-]+$'
         data:
           $ref: "#/components/schemas/OptimizationJobData"
     SearchHistoryEntry:
@@ -1649,8 +1729,7 @@ components:
           type: number
           exclusiveMinimum: 0
         unit:
-          type: string
-          enum: [g, ml, oz, fl_oz]
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
     SearchRequest:
       type: object
       additionalProperties: false

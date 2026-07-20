@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -143,6 +144,18 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 	assertLiveDailyDietStatus(t, resp, fiber.StatusNoContent)
 	if got := countLiveSavedDiets(t, db, userID); got != 0 {
 		t.Fatalf("delete count = %d, want 0", got)
+	}
+	if _, err := db.Exec(ctx, `UPDATE meals SET protein_per_100 = 999, carbohydrates_per_100 = 999, fat_per_100 = 999 WHERE id = $1`, mealA); err != nil {
+		t.Fatalf("change meal macros before replay: %v", err)
+	}
+	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, userCookies, "live-create-key", csrfToken)
+	afterDeletionReplay := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusCreated || !reflect.DeepEqual(afterDeletionReplay.Data, created.Data) {
+		t.Fatalf("immutable replay status=%d body=%+v want=%+v", resp.StatusCode, afterDeletionReplay, created)
+	}
+	if got := countLiveSavedDiets(t, db, userID); got != 0 {
+		t.Fatalf("replay after deletion recreated %d diets", got)
 	}
 
 	serverTwo, err := NewProduction(cfg, db, nil, observability.JSONSink{Writer: io.Discard})

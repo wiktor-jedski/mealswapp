@@ -151,6 +151,19 @@ test("clears parent-owned Daily Diet selections when authenticated identity chan
 	expect(source).toContain("dailyDietSelections = []");
 	expect(source).toContain("dailyDietSelectionError = null");
 	expect(source).toContain("dailyDietSelectionsUserId !== authenticatedUserId");
+	expect(source).toContain("$effect.pre(() => {");
+	expect(source).toContain("dailyDietStateUserId !== authenticatedUserId");
+	expect(source).toContain("clearDailyDietState()");
+});
+
+// Implements DESIGN-001 SearchView identity- and mode-owned selected-meal hydration verification.
+test("cancels and generation-guards delayed Daily Diet hydration", () => {
+	expect(source).toContain("const dailyDietHydrationControllers = new Set<AbortController>()");
+	expect(source).toContain("dailyDietSelectionGeneration += 1");
+	expect(source).toContain("controller.abort()");
+	expect(source).toContain("dailyDietHydrationIsCurrent(initiatingUserId, initiatingGeneration, controller)");
+	expect(source).toContain('activeMode === "daily_diet"');
+	expect(source).toContain("$authSessionStore.userId === userId");
 });
 
 // Implements DESIGN-001 SearchView mode-specific placeholder guidance verification.

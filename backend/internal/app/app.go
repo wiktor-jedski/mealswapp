@@ -70,7 +70,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	idempotencyRepo := repository.NewPostgresCheckoutIdempotencyRepository(pg)
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
 	mealRepo := repository.NewPostgresMealRepository(pg)
-	dailyDietService := dailydiet.NewService(savedRepo, mealRepo, idempotencyRepo)
+	dailyDietService := dailydiet.NewService(savedRepo, mealRepo)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
 	var searchResponseCache search.SearchResponseCache
 	var similarityCache search.SimilarityCalculationCache

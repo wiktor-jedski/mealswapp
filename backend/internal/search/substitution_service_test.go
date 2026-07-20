@@ -300,8 +300,8 @@ func TestSubstitutionServiceCachesRejectionsAndSkippedSources(t *testing.T) {
 		Mode:  SearchModeSubstitution,
 		Page:  1,
 		SubstitutionInputs: []SubstitutionInput{
-			{FoodObjectID: uuid.MustParse("50000000-0000-4000-8000-000000000099"), Quantity: 1, Unit: "serving"},
-			{FoodObjectID: sourceID, Quantity: 1, Unit: "serving"},
+			{FoodObjectID: uuid.MustParse("50000000-0000-4000-8000-000000000099"), Quantity: 250, Unit: "ml"},
+			{FoodObjectID: sourceID, Quantity: 250, Unit: "ml"},
 		},
 	})
 	if err != nil {
@@ -490,6 +490,14 @@ func TestSubstitutionServiceFailureAndDegradationPaths(t *testing.T) {
 	response, err = NewSubstitutionService(repo, nil).Search(context.Background(), conversionFailure)
 	if err != nil || response.Rejection == nil {
 		t.Fatalf("conversion response=%+v err=%v", response, err)
+	}
+	assertWarningContains(t, response.Warnings, "conversion_failed")
+
+	unsupportedUnit := validRequest
+	unsupportedUnit.SubstitutionInputs = []SubstitutionInput{{FoodObjectID: validSourceID, Quantity: 1, Unit: "serving"}}
+	response, err = NewSubstitutionService(repo, nil).Search(context.Background(), unsupportedUnit)
+	if err != nil || response.Rejection == nil {
+		t.Fatalf("unsupported-unit response=%+v err=%v", response, err)
 	}
 	assertWarningContains(t, response.Warnings, "conversion_failed")
 

@@ -65,12 +65,14 @@ python3 scripts/verify-optimization-capacity.py \
   --output logs/optimization-capacity.json
 ```
 
-The check submits distinct idempotency keys concurrently, polls every accepted
-job while the worker is solving, probes `/ready` in parallel, and reports only
-submission/poll P95 latency, HTTP status counts, terminal status counts, and
-the observed Redis/worker/queue readiness tuple. It exits non-zero when all
-submissions are not accepted, either submission/poll P95 reaches 2 seconds,
-poll samples are absent, the readiness monitor fails, any readiness sample is
-degraded/malformed, or queue/worker evidence is absent. A valid readiness
-sample requires HTTP 200, `redis: ok`, `worker: ok`,
+The check submits distinct idempotency keys concurrently, exact-replays every
+accepted key and body, polls every accepted job while the worker is solving,
+probes `/ready` in parallel, and reports only original/replay/poll P95 latency,
+HTTP status counts, acknowledgement-match counts, terminal status counts, and
+the observed Redis/worker/queue readiness tuple. It exits non-zero when any
+original or replay is not accepted, a replay acknowledgement differs, any
+original/replay/poll P95 reaches 2 seconds, poll samples are absent, the
+readiness monitor fails, any readiness sample is degraded/malformed, or
+queue/worker evidence is absent. A valid readiness sample requires HTTP 200,
+`redis: ok`, `worker: ok`,
 `optimization_queue: ok`, and non-negative queue depth/age values.

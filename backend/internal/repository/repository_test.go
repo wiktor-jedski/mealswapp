@@ -429,7 +429,6 @@ func TestConvertUnit(t *testing.T) {
 		{name: "milliliters to fluid ounces", in: 29.5735295625, from: "ml", to: "fl_oz", want: 1},
 		{name: "fluid ounces to milliliters", in: 1, from: "fl_oz", to: "ml", want: 29.5735},
 		{name: "same unit", in: 2.12345, from: "g", to: "g", want: 2.12345},
-		{name: "same serving unit", in: 1, from: "serving", to: "serving", want: 1},
 	}
 
 	for _, tt := range tests {
@@ -452,32 +451,95 @@ func TestConvertUnitRejectsUnsupportedAndNegativeValues(t *testing.T) {
 	if _, err := ConvertUnit(-1, "g", "oz"); !IsKind(err, ErrorKindUnitConversion) {
 		t.Fatalf("ConvertUnit() negative error = %v, want unit conversion kind", err)
 	}
-	for _, unit := range []string{"grams", "fl oz", "servings", "cup"} {
+	for _, unit := range []string{"serving", "grams", "fl oz", "servings", "cup"} {
 		if _, err := ConvertUnit(1, unit, unit); !IsKind(err, ErrorKindUnitConversion) {
 			t.Fatalf("ConvertUnit(%q) error = %v, want unit conversion kind", unit, err)
 		}
 	}
+	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		if _, err := ConvertUnit(value, "g", "oz"); !IsKind(err, ErrorKindUnitConversion) {
+			t.Fatalf("ConvertUnit(%v) error = %v, want unit conversion kind", value, err)
+		}
+	}
+	if _, err := ConvertUnit(math.MaxFloat64, "oz", "g"); !IsKind(err, ErrorKindUnitConversion) {
+		t.Fatalf("ConvertUnit() overflow error = %v, want unit conversion kind", err)
+	}
 }
 
-func TestConvertServingToBase(t *testing.T) {
-	quantity, unit, err := ConvertServingToBase(2, 125, 0, PhysicalStateSolid)
+func TestValidateQuantityUnit(t *testing.T) {
+	for _, unit := range []string{"g", "ml", "oz", "fl_oz"} {
+		if err := ValidateQuantityUnit(unit); err != nil {
+			t.Fatalf("ValidateQuantityUnit(%q) error = %v", unit, err)
+		}
+	}
+	for _, unit := range []string{"serving", "cup", ""} {
+		if err := ValidateQuantityUnit(unit); !IsKind(err, ErrorKindUnitConversion) {
+			t.Fatalf("ValidateQuantityUnit(%q) error = %v, want unit conversion", unit, err)
+		}
+	}
+}
+
+func TestValidateRecipeIngredientUnit(t *testing.T) {
+	tests := []struct {
+		unit  string
+		state PhysicalState
+		valid bool
+	}{
+		{unit: "g", state: PhysicalStateSolid, valid: true},
+		{unit: "oz", state: PhysicalStateSolid, valid: true},
+		{unit: "ml", state: PhysicalStateLiquid, valid: true},
+		{unit: "fl_oz", state: PhysicalStateLiquid, valid: true},
+		{unit: "serving", state: PhysicalStateSolid, valid: true},
+		{unit: "serving", state: PhysicalStateLiquid, valid: true},
+		{unit: "ml", state: PhysicalStateSolid},
+		{unit: "g", state: PhysicalStateLiquid},
+		{unit: "cup", state: PhysicalStateLiquid},
+	}
+	for _, tt := range tests {
+		err := ValidateRecipeIngredientUnit(tt.unit, tt.state)
+		if (err == nil) != tt.valid {
+			t.Fatalf("ValidateRecipeIngredientUnit(%q, %q) error = %v, valid = %t", tt.unit, tt.state, err, tt.valid)
+		}
+	}
+}
+
+func TestConvertRecipeServingToBase(t *testing.T) {
+	quantity, unit, err := ConvertRecipeServingToBase(2, 125, 0, PhysicalStateSolid)
 	if err != nil {
-		t.Fatalf("ConvertServingToBase() error = %v", err)
+		t.Fatalf("ConvertRecipeServingToBase() error = %v", err)
 	}
 	if quantity != 250 || unit != "g" {
-		t.Fatalf("ConvertServingToBase() = %v %s, want 250 g", quantity, unit)
+		t.Fatalf("ConvertRecipeServingToBase() = %v %s, want 250 g", quantity, unit)
 	}
 
-	quantity, unit, err = ConvertServingToBase(1.5, 0, 200, PhysicalStateLiquid)
+	quantity, unit, err = ConvertRecipeServingToBase(1.5, 0, 200, PhysicalStateLiquid)
 	if err != nil {
-		t.Fatalf("ConvertServingToBase() liquid error = %v", err)
+		t.Fatalf("ConvertRecipeServingToBase() liquid error = %v", err)
 	}
 	if quantity != 300 || unit != "ml" {
-		t.Fatalf("ConvertServingToBase() liquid = %v %s, want 300 ml", quantity, unit)
+		t.Fatalf("ConvertRecipeServingToBase() liquid = %v %s, want 300 ml", quantity, unit)
+	}
+
+	for _, tt := range []struct {
+		name   string
+		weight float64
+		volume float64
+		state  PhysicalState
+		unit   string
+	}{
+		{name: "zero solid servings", weight: 125, state: PhysicalStateSolid, unit: "g"},
+		{name: "zero liquid servings", volume: 200, state: PhysicalStateLiquid, unit: "ml"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			quantity, unit, err := ConvertRecipeServingToBase(0, tt.weight, tt.volume, tt.state)
+			if err != nil || quantity != 0 || unit != tt.unit {
+				t.Fatalf("ConvertRecipeServingToBase() = %v %s, %v; want 0 %s, nil", quantity, unit, err, tt.unit)
+			}
+		})
 	}
 }
 
-func TestConvertServingToBaseRejectsInvalidInput(t *testing.T) {
+func TestConvertRecipeServingToBaseRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
 		name     string
 		servings float64
@@ -489,15 +551,41 @@ func TestConvertServingToBaseRejectsInvalidInput(t *testing.T) {
 		{name: "negative servings", servings: -1, weight: 1, state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
 		{name: "missing weight", servings: 1, weight: 0, state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
 		{name: "missing liquid volume", servings: 1, volume: 0, state: PhysicalStateLiquid, kind: ErrorKindUnitConversion},
+		{name: "NaN servings", servings: math.NaN(), weight: 1, state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "positive infinite servings", servings: math.Inf(1), weight: 1, state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "negative infinite servings", servings: math.Inf(-1), weight: 1, state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "NaN weight", servings: 1, weight: math.NaN(), state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "positive infinite weight", servings: 1, weight: math.Inf(1), state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "negative infinite weight", servings: 1, weight: math.Inf(-1), state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "NaN volume", servings: 1, volume: math.NaN(), state: PhysicalStateLiquid, kind: ErrorKindUnitConversion},
+		{name: "positive infinite volume", servings: 1, volume: math.Inf(1), state: PhysicalStateLiquid, kind: ErrorKindUnitConversion},
+		{name: "negative infinite volume", servings: 1, volume: math.Inf(-1), state: PhysicalStateLiquid, kind: ErrorKindUnitConversion},
+		{name: "NaN unused solid volume", servings: 1, weight: 1, volume: math.NaN(), state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "infinite unused liquid weight", servings: 1, weight: math.Inf(1), volume: 1, state: PhysicalStateLiquid, kind: ErrorKindUnitConversion},
+		{name: "solid conversion overflow", servings: math.MaxFloat64, weight: 2, state: PhysicalStateSolid, kind: ErrorKindUnitConversion},
+		{name: "liquid conversion overflow", servings: math.MaxFloat64, volume: 2, state: PhysicalStateLiquid, kind: ErrorKindUnitConversion},
 		{name: "bad state", servings: 1, weight: 1, state: "powder", kind: ErrorKindValidation},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := ConvertServingToBase(tt.servings, tt.weight, tt.volume, tt.state)
+			_, _, err := ConvertRecipeServingToBase(tt.servings, tt.weight, tt.volume, tt.state)
 			if !IsKind(err, tt.kind) {
-				t.Fatalf("ConvertServingToBase() error = %v, want %s", err, tt.kind)
+				t.Fatalf("ConvertRecipeServingToBase() error = %v, want %s", err, tt.kind)
 			}
 		})
+	}
+}
+
+func TestPostgresMealRepositoryRejectsNonFiniteRecipeQuantities(t *testing.T) {
+	repo := NewPostgresMealRepository(&fakeSQLExecutor{})
+	for _, quantity := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		err := repo.validateIngredients(context.Background(), uuid.Nil, []RecipeIngredientEntity{{FoodItemID: uuid.New(), Quantity: quantity, Unit: "g"}})
+		if !IsKind(err, ErrorKindValidation) {
+			t.Fatalf("validateIngredients() quantity %v error = %v, want validation kind", quantity, err)
+		}
+		if _, err := ingredientBasisQuantity(RecipeIngredientEntity{Quantity: quantity, Unit: "g"}, FoodItemEntity{PhysicalState: PhysicalStateSolid}); !IsKind(err, ErrorKindValidation) {
+			t.Fatalf("ingredientBasisQuantity() quantity %v error = %v, want validation kind", quantity, err)
+		}
 	}
 }
 
@@ -599,7 +687,7 @@ func TestMealSearchAppliesPaginationInSQL(t *testing.T) {
 		t.Fatalf("page query calls = %d args=%v, want one", db.queryCalls, db.queryArgs)
 	}
 	args := db.queryArgs[0]
-	if len(args) != 7 || args[5] != 100 || args[6] != 100 {
+	if len(args) != 8 || args[6] != 100 || args[7] != 100 {
 		t.Fatalf("page query args = %#v, want limit=100 offset=100", args)
 	}
 }

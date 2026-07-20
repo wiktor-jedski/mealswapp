@@ -56,7 +56,7 @@ func main() {
 	processor.WithAdmissionGate(worker.NewRedisOptimizationAdmissionGate(redisClient, worker.OptimizationAdmissionConfig{}))
 	// Compose the complete processor at the dedicated worker boundary; the API
 	// process never runs optimization synchronously.
-	if err := worker.RunWithProcessor(ctx, cfg, redisClient, processor.ProcessOptimizationJob, processor.Terminal); err != nil {
+	if err := worker.RunWithProcessorAndTelemetry(ctx, cfg, redisClient, processor.ProcessOptimizationJob, telemetry, processor.Terminal); err != nil {
 		log.Fatalf("worker stopped: %v", err)
 	}
 }

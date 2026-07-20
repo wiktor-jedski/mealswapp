@@ -1,21 +1,23 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"math"
-	"strconv"
+	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/optimization"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/queue"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
@@ -23,13 +25,18 @@ import (
 
 // Implements DESIGN-004 JobStatusTracker submission and polling boundary.
 const (
-	optimizationJobsRoute = "/optimization/jobs"
-	optimizationPollPath  = "/api/v1/optimization/jobs/"
-	optimizationMethod    = "POST"
-	minimumIdempotencyKey = 8
-	maximumIdempotencyKey = 255
-	maximumExcludedMeals  = 100
+	optimizationJobsRoute               = "/optimization/jobs"
+	optimizationPollPath                = "/api/v1/optimization/jobs/"
+	optimizationMethod                  = "POST"
+	minimumIdempotencyKey               = 8
+	maximumIdempotencyKey               = 255
+	maximumExcludedMeals                = 100
+	optimizationAdmissionCleanupTimeout = 100 * time.Millisecond
+	optimizationAdmissionCleanupLimit   = 1
 )
+
+// Implements DESIGN-004 JobStatusTracker persisted acknowledgement validation.
+var errInvalidOptimizationAcknowledgement = errors.New("persisted optimization acknowledgement is invalid")
 
 // OptimizationJobStateStore persists server-owned optimization jobs.
 // Implements DESIGN-004 JobStatusTracker.
@@ -50,17 +57,25 @@ type OptimizationEntitlementChecker interface {
 	CheckEntitlement(context.Context, uuid.UUID, entitlement.Feature) (entitlement.Decision, error)
 }
 
+// OptimizationIdempotencyRepository persists and completes one typed
+// optimization acknowledgement for each user-scoped request key.
+// Implements DESIGN-004 JobStatusTracker.
+type OptimizationIdempotencyRepository interface {
+	repository.CheckoutIdempotencyRepository
+	UpdateCheckoutIdempotencyResponse(context.Context, repository.CheckoutIdempotencyRecord) error
+}
+
 // OptimizationController owns authenticated submission and user-scoped polling.
 // Implements DESIGN-004 JobStatusTracker and DESIGN-010 RouteHandler.
 type OptimizationController struct {
-	jobs         OptimizationJobStateStore
-	queue        OptimizationJobEnqueuer
-	diets        repository.DailyDietRepository
-	entitlements OptimizationEntitlementChecker
-	idempotency  repository.CheckoutIdempotencyRepository
-	admission    worker.OptimizationAdmissionGate
-	telemetry    *observability.OptimizationTelemetry
-	mu           sync.Mutex
+	jobs             OptimizationJobStateStore
+	queue            OptimizationJobEnqueuer
+	diets            repository.DailyDietRepository
+	entitlements     OptimizationEntitlementChecker
+	idempotency      OptimizationIdempotencyRepository
+	admission        worker.OptimizationAdmissionGate
+	telemetry        *observability.OptimizationTelemetry
+	admissionCleanup chan struct{}
 }
 
 // Implements DESIGN-004 JobStatusTracker compile-time route controller contract.
@@ -68,8 +83,8 @@ var _ Controller = (*OptimizationController)(nil)
 
 // NewOptimizationController constructs the asynchronous optimization API boundary.
 // Implements DESIGN-004 JobStatusTracker.
-func NewOptimizationController(jobs OptimizationJobStateStore, enqueuer OptimizationJobEnqueuer, diets repository.DailyDietRepository, entitlements OptimizationEntitlementChecker, idempotency repository.CheckoutIdempotencyRepository, admission worker.OptimizationAdmissionGate) *OptimizationController {
-	return &OptimizationController{jobs: jobs, queue: enqueuer, diets: diets, entitlements: entitlements, idempotency: idempotency, admission: admission}
+func NewOptimizationController(jobs OptimizationJobStateStore, enqueuer OptimizationJobEnqueuer, diets repository.DailyDietRepository, entitlements OptimizationEntitlementChecker, idempotency OptimizationIdempotencyRepository, admission worker.OptimizationAdmissionGate) *OptimizationController {
+	return &OptimizationController{jobs: jobs, queue: enqueuer, diets: diets, entitlements: entitlements, idempotency: idempotency, admission: admission, admissionCleanup: make(chan struct{}, optimizationAdmissionCleanupLimit)}
 }
 
 // WithTelemetry attaches bounded submission metrics and logs to the API
@@ -88,83 +103,103 @@ func (c *OptimizationController) WithTelemetry(telemetry *observability.Optimiza
 func (c *OptimizationController) Routes() []RouteDefinition {
 	return []RouteDefinition{
 		{Method: fiber.MethodPost, Path: optimizationJobsRoute, RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(validateOptimizationSubmissionBody), Handler: c.Submit},
-		{Method: fiber.MethodGet, Path: optimizationJobsRoute + "/:jobId", RequiresAuth: true, Validate: ValidatePath("jobId", validateOptimizationJobID), Handler: c.GetJob},
+		{Method: fiber.MethodGet, Path: optimizationJobsRoute + "/:jobId", RequiresAuth: true, Validate: ValidatePath("jobId", validateUUIDValue), Handler: c.GetJob},
 	}
 }
 
 // Submit accepts a validated request, reloads the saved diet under session ownership,
 // stores a queued job, and enqueues only its server-created ID. It never invokes a solver.
 // Implements DESIGN-004 JobStatusTracker and SW-REQ-006.
-func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
-	outcome := "error"
+func (c *OptimizationController) Submit(ctx *fiber.Ctx) (resultErr error) {
+	outcome := observability.OptimizationSubmissionError
 	defer func() {
+		if resultErr != nil {
+			outcome = optimizationSubmissionFailure(resultErr)
+		}
 		if c != nil && c.telemetry != nil {
 			c.telemetry.Submission(ctx.UserContext(), outcome)
 		}
 	}()
 	user, ok := authenticatedUser(ctx)
 	if !ok {
-		outcome = "rejected"
+		outcome = observability.OptimizationSubmissionRejected
 		return unauthorizedError()
 	}
 	req, err := parseOptimizationSubmission(ctx)
 	if err != nil {
-		outcome = "rejected"
+		outcome = observability.OptimizationSubmissionRejected
 		return err
 	}
 	key, err := validateOptimizationIdempotencyKey(ctx.Get("Idempotency-Key"))
 	if err != nil {
-		outcome = "rejected"
+		outcome = observability.OptimizationSubmissionRejected
 		return err
 	}
-	bodyHash := optimizationRequestHash(ctx.Body())
+	bodyHash, err := optimizationRequestHash(req)
+	if err != nil {
+		outcome = observability.OptimizationSubmissionDependencyError
+		return optimizationDependencyError()
+	}
 
-	// Serialize same-controller retries so a lost response cannot create two jobs.
-	// The durable idempotency row remains the cross-process authority.
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if c.idempotency == nil {
+		outcome = observability.OptimizationSubmissionDependencyError
+		return optimizationDependencyError()
+	}
+	existing, acknowledgement, found, err := c.lookupOptimizationIdempotency(ctx.UserContext(), user.UserID, key, bodyHash)
+	if err != nil {
+		resultErr = optimizationError(err)
+		outcome = optimizationSubmissionFailure(resultErr)
+		return resultErr
+	}
+	if found && acknowledgement.PublicationState == optimizationPublicationPublished {
+		resultErr = writeOptimizationAcknowledgement(ctx, existing, acknowledgement)
+		if resultErr == nil {
+			outcome = observability.OptimizationSubmissionReplayed
+		}
+		return resultErr
+	}
+	if found {
+		outcome, resultErr = c.repairOptimizationPublication(ctx, user.UserID, req, key, bodyHash, existing, acknowledgement)
+		return resultErr
+	}
 
-	if c.entitlements == nil || c.idempotency == nil || c.admission == nil {
-		outcome = "dependency_error"
+	if c.entitlements == nil || c.admission == nil {
+		outcome = observability.OptimizationSubmissionDependencyError
 		return optimizationDependencyError()
 	}
 	decision, err := c.entitlements.CheckEntitlement(ctx.UserContext(), user.UserID, entitlement.FeatureDailyDietAlternative)
 	if err != nil {
-		outcome = "dependency_error"
+		outcome = observability.OptimizationSubmissionDependencyError
 		return optimizationDependencyError()
 	}
 	if !decision.Allowed {
-		outcome = "rejected"
+		outcome = observability.OptimizationSubmissionRejected
 		return optimizationEntitlementDenied()
 	}
 
 	if c.jobs == nil || c.queue == nil || c.diets == nil {
-		outcome = "dependency_error"
+		outcome = observability.OptimizationSubmissionDependencyError
 		return optimizationDependencyError()
 	}
 	if _, err := c.diets.Get(ctx.UserContext(), user.UserID, req.DailyDietID); err != nil {
-		return optimizationError(err)
+		resultErr = optimizationError(err)
+		outcome = optimizationSubmissionFailure(resultErr)
+		return resultErr
 	}
-	if existing, found, lookupErr := c.lookupOptimizationIdempotency(ctx.UserContext(), user.UserID, key, bodyHash); lookupErr != nil {
-		return optimizationError(lookupErr)
-	} else if found {
-		return c.repairOptimizationPublication(ctx, user.UserID, req, key, bodyHash, existing)
-	}
-
 	jobID := uuid.New()
 	acquiredJobID := jobID
 	admissionDecision, err := c.admission.Acquire(ctx.UserContext(), worker.OptimizationAdmissionRequest{
 		UserID: user.UserID, JobID: jobID, IdempotencyKey: key, BodyHash: bodyHash, CountRate: true,
 	})
 	if err != nil {
-		outcome = "dependency_error"
+		outcome = observability.OptimizationSubmissionDependencyError
 		return optimizationError(err)
 	}
 	ownedSlot := admissionDecision.Status == worker.OptimizationAdmissionAcquired
 	if ownedSlot {
 		defer func() {
 			if ownedSlot {
-				_ = c.admission.Release(context.WithoutCancel(ctx.UserContext()), user.UserID, acquiredJobID)
+				c.releaseAdmission(ctx.UserContext(), user.UserID, acquiredJobID)
 			}
 		}()
 	}
@@ -173,17 +208,16 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 	case worker.OptimizationAdmissionReplay:
 		jobID = admissionDecision.JobID
 	case worker.OptimizationAdmissionConflict:
-		outcome = "rejected"
+		outcome = observability.OptimizationSubmissionRejected
 		return optimizationIdempotencyConflict()
 	case worker.OptimizationAdmissionActive:
-		outcome = "rejected"
-		setOptimizationRetryAfter(ctx, admissionDecision.RetryAfter)
-		return optimizationAdmissionError("optimization_in_progress", "An optimization is already in progress.")
+		outcome = observability.OptimizationSubmissionRejected
+		return retryableTooManyRequests(ctx, admissionDecision.RetryAfter, "rate_limit", "optimization_in_progress", "An optimization is already in progress.")
 	case worker.OptimizationAdmissionRateLimited:
-		outcome = "rejected"
-		setOptimizationRetryAfter(ctx, admissionDecision.RetryAfter)
-		return optimizationAdmissionError("optimization_rate_limited", "Too many optimization jobs were requested. Please try again later.")
+		outcome = observability.OptimizationSubmissionRejected
+		return retryableTooManyRequests(ctx, admissionDecision.RetryAfter, "rate_limit", "optimization_rate_limited", "Too many optimization jobs were requested. Please try again later.")
 	default:
+		outcome = observability.OptimizationSubmissionDependencyError
 		return optimizationDependencyError()
 	}
 	job := worker.OptimizationJob{
@@ -195,9 +229,13 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 		Status:           worker.OptimizationJobQueued,
 		CreatedAt:        time.Now().UTC(),
 	}
-	ack := optimizationAcknowledgementData(jobID)
-	payload, err := json.Marshal(ack)
+	acknowledgement = optimizationPersistedAcknowledgement{
+		JobID: jobID, Status: worker.OptimizationJobQueued,
+		PollURL: optimizationPollPath + jobID.String(), PublicationState: optimizationPublicationPending,
+	}
+	payload, err := json.Marshal(acknowledgement)
 	if err != nil {
+		outcome = observability.OptimizationSubmissionDependencyError
 		return optimizationDependencyError()
 	}
 	record := repository.CheckoutIdempotencyRecord{
@@ -206,69 +244,130 @@ func (c *OptimizationController) Submit(ctx *fiber.Ctx) error {
 	}
 	if err := c.idempotency.StoreCheckoutIdempotency(ctx.UserContext(), record); err != nil {
 		if !repository.IsKind(err, repository.ErrorKindConflict) {
-			return optimizationError(err)
+			resultErr = optimizationError(err)
+			outcome = optimizationSubmissionFailure(resultErr)
+			return resultErr
 		}
-		original, found, lookupErr := c.lookupOptimizationIdempotency(ctx.UserContext(), user.UserID, key, bodyHash)
+		original, originalAcknowledgement, found, lookupErr := c.lookupOptimizationIdempotency(ctx.UserContext(), user.UserID, key, bodyHash)
 		if lookupErr != nil {
-			return optimizationError(lookupErr)
+			resultErr = optimizationError(lookupErr)
+			outcome = optimizationSubmissionFailure(resultErr)
+			return resultErr
 		}
 		if !found {
+			outcome = observability.OptimizationSubmissionRejected
 			return optimizationError(err)
 		}
 		if ownedSlot {
-			if err := c.admission.Release(ctx.UserContext(), user.UserID, acquiredJobID); err != nil {
-				return optimizationError(err)
-			}
+			c.releaseAdmission(ctx.UserContext(), user.UserID, acquiredJobID)
 			ownedSlot = false
 		}
-		outcome = "replayed"
-		return c.repairOptimizationPublication(ctx, user.UserID, req, key, bodyHash, original)
+		if originalAcknowledgement.PublicationState == optimizationPublicationPublished {
+			resultErr = writeOptimizationAcknowledgement(ctx, original, originalAcknowledgement)
+			if resultErr == nil {
+				outcome = observability.OptimizationSubmissionReplayed
+			}
+			return resultErr
+		}
+		outcome, resultErr = c.repairOptimizationPublication(ctx, user.UserID, req, key, bodyHash, original, originalAcknowledgement)
+		return resultErr
 	}
 	// The durable claim is made before publication. Replays repair a crash or
 	// queue outage by repeating this idempotent save/enqueue pair for the same
 	// server-created job ID.
 	if err := c.jobs.Save(ctx.UserContext(), job); err != nil {
-		return optimizationError(err)
+		resultErr = optimizationError(err)
+		outcome = optimizationSubmissionFailure(resultErr)
+		return resultErr
 	}
 	if _, err := c.queue.Enqueue(ctx.UserContext(), jobID.String()); err != nil {
-		outcome = "queue_error"
+		outcome = observability.OptimizationSubmissionQueueError
 		return optimizationQueueError()
 	}
+	// Queue publication transfers the active slot to the worker. A later
+	// acknowledgement-update failure remains repairable and must not admit a
+	// second job while this published job is queued or processing.
 	ownedSlot = false
-	outcome = "accepted"
-	return c.writeAcknowledgement(ctx, record, false)
+	record, acknowledgement, err = c.completeOptimizationPublication(ctx.UserContext(), record, acknowledgement)
+	if err != nil {
+		resultErr = optimizationError(err)
+		outcome = optimizationSubmissionFailure(resultErr)
+		return resultErr
+	}
+	resultErr = writeOptimizationAcknowledgement(ctx, record, acknowledgement)
+	if resultErr == nil {
+		outcome = observability.OptimizationSubmissionAccepted
+	}
+	return resultErr
 }
 
-// repairOptimizationPublication reacquires capacity without recounting an exact retry.
+// repairOptimizationPublication revalidates an unpublished durable claim and
+// reacquires capacity without recounting an exact retry.
 // Implements DESIGN-004 JobStatusTracker.
-func (c *OptimizationController) repairOptimizationPublication(ctx *fiber.Ctx, userID uuid.UUID, req optimizationSubmissionRequest, key, bodyHash string, record repository.CheckoutIdempotencyRecord) error {
-	jobID, err := optimizationJobIDFromAcknowledgement(record)
-	if err != nil {
-		return optimizationDependencyError()
+func (c *OptimizationController) repairOptimizationPublication(ctx *fiber.Ctx, userID uuid.UUID, req optimizationSubmissionRequest, key, bodyHash string, record repository.CheckoutIdempotencyRecord, acknowledgement optimizationPersistedAcknowledgement) (outcome observability.OptimizationSubmissionOutcome, resultErr error) {
+	outcome = observability.OptimizationSubmissionError
+	if acknowledgement.PublicationState != optimizationPublicationPending || c.entitlements == nil || c.admission == nil || c.jobs == nil || c.queue == nil || c.diets == nil {
+		return observability.OptimizationSubmissionDependencyError, optimizationDependencyError()
 	}
-	decision, err := c.admission.Acquire(ctx.UserContext(), worker.OptimizationAdmissionRequest{
+	decision, err := c.entitlements.CheckEntitlement(ctx.UserContext(), userID, entitlement.FeatureDailyDietAlternative)
+	if err != nil {
+		return observability.OptimizationSubmissionDependencyError, optimizationDependencyError()
+	}
+	if !decision.Allowed {
+		return observability.OptimizationSubmissionRejected, optimizationEntitlementDenied()
+	}
+	if _, err := c.diets.Get(ctx.UserContext(), userID, req.DailyDietID); err != nil {
+		resultErr = optimizationError(err)
+		return optimizationSubmissionFailure(resultErr), resultErr
+	}
+	jobID := acknowledgement.JobID
+	admissionDecision, err := c.admission.Acquire(ctx.UserContext(), worker.OptimizationAdmissionRequest{
 		UserID: userID, JobID: jobID, IdempotencyKey: key, BodyHash: bodyHash, CountRate: false,
 	})
 	if err != nil {
-		return optimizationError(err)
+		resultErr = optimizationError(err)
+		return optimizationSubmissionFailure(resultErr), resultErr
 	}
-	ownedSlot := decision.Status == worker.OptimizationAdmissionAcquired
+	ownedSlot := admissionDecision.Status == worker.OptimizationAdmissionAcquired
 	if ownedSlot {
 		defer func() {
 			if ownedSlot {
-				_ = c.admission.Release(context.WithoutCancel(ctx.UserContext()), userID, jobID)
+				c.releaseAdmission(ctx.UserContext(), userID, jobID)
 			}
 		}()
 	}
-	switch decision.Status {
+	switch admissionDecision.Status {
 	case worker.OptimizationAdmissionAcquired, worker.OptimizationAdmissionReplay:
 	case worker.OptimizationAdmissionConflict:
-		return optimizationIdempotencyConflict()
+		return observability.OptimizationSubmissionRejected, optimizationIdempotencyConflict()
 	case worker.OptimizationAdmissionActive:
-		setOptimizationRetryAfter(ctx, decision.RetryAfter)
-		return optimizationAdmissionError("optimization_in_progress", "An optimization is already in progress.")
+		return observability.OptimizationSubmissionRejected, retryableTooManyRequests(ctx, admissionDecision.RetryAfter, "rate_limit", "optimization_in_progress", "An optimization is already in progress.")
+	case worker.OptimizationAdmissionRateLimited:
+		return observability.OptimizationSubmissionRejected, retryableTooManyRequests(ctx, admissionDecision.RetryAfter, "rate_limit", "optimization_rate_limited", "Too many optimization jobs were requested. Please try again later.")
 	default:
-		return optimizationDependencyError()
+		return observability.OptimizationSubmissionDependencyError, optimizationDependencyError()
+	}
+	if ownedSlot {
+		// A pending acknowledgement read before admission can become stale while
+		// another controller publishes and its worker releases this same job. Re-read
+		// the durable authority before a fresh reservation performs repair effects.
+		// Implements DESIGN-004 JobStatusTracker pending-repair linearization.
+		currentRecord, currentAcknowledgement, found, err := c.lookupOptimizationIdempotency(ctx.UserContext(), userID, key, bodyHash)
+		if err != nil {
+			resultErr = optimizationError(err)
+			return optimizationSubmissionFailure(resultErr), resultErr
+		}
+		if !found || currentAcknowledgement.JobID != jobID {
+			return observability.OptimizationSubmissionDependencyError, optimizationDependencyError()
+		}
+		record, acknowledgement = currentRecord, currentAcknowledgement
+		if acknowledgement.PublicationState == optimizationPublicationPublished {
+			resultErr = writeOptimizationAcknowledgement(ctx, record, acknowledgement)
+			if resultErr != nil {
+				return observability.OptimizationSubmissionError, resultErr
+			}
+			return observability.OptimizationSubmissionReplayed, nil
+		}
 	}
 	job := worker.OptimizationJob{
 		JobID: jobID, UserID: userID, DailyDietID: req.DailyDietID,
@@ -276,16 +375,91 @@ func (c *OptimizationController) repairOptimizationPublication(ctx *fiber.Ctx, u
 		Status: worker.OptimizationJobQueued, CreatedAt: time.Now().UTC(),
 	}
 	if err := c.jobs.Save(ctx.UserContext(), job); err != nil {
-		if errors.Is(err, worker.ErrOptimizationJobNotFound) {
-			return c.writeAcknowledgement(ctx, record, true)
-		}
-		return optimizationError(err)
+		resultErr = optimizationError(err)
+		return optimizationSubmissionFailure(resultErr), resultErr
 	}
 	if _, err := c.queue.Enqueue(ctx.UserContext(), jobID.String()); err != nil {
-		return optimizationQueueError()
+		return observability.OptimizationSubmissionQueueError, optimizationQueueError()
 	}
-	ownedSlot = false
-	return c.writeAcknowledgement(ctx, record, true)
+	if ownedSlot {
+		// An idempotent queue marker does not prove that a worker still owns this
+		// newly acquired reservation. Redis job transitions preserve terminal state,
+		// so only a queued/processing job can accept the handoff. If it turns terminal
+		// after this read, the worker's owner-scoped release removes the same slot.
+		// Implements DESIGN-004 JobStatusTracker worker-delivery ownership.
+		currentJob, err := c.jobs.Load(ctx.UserContext(), jobID)
+		if err != nil {
+			resultErr = optimizationError(err)
+			return optimizationSubmissionFailure(resultErr), resultErr
+		}
+		switch currentJob.Status {
+		case worker.OptimizationJobQueued, worker.OptimizationJobProcessing:
+			ownedSlot = false
+		case worker.OptimizationJobCompleted, worker.OptimizationJobFailed, worker.OptimizationJobCancelled:
+		default:
+			return observability.OptimizationSubmissionDependencyError, optimizationDependencyError()
+		}
+	}
+	record, acknowledgement, err = c.completeOptimizationPublication(ctx.UserContext(), record, acknowledgement)
+	if err != nil {
+		resultErr = optimizationError(err)
+		return optimizationSubmissionFailure(resultErr), resultErr
+	}
+	resultErr = writeOptimizationAcknowledgement(ctx, record, acknowledgement)
+	if resultErr != nil {
+		return observability.OptimizationSubmissionError, resultErr
+	}
+	return observability.OptimizationSubmissionReplayed, nil
+}
+
+// optimizationSubmissionFailure maps the final public response to one bounded outcome.
+// Implements DESIGN-014 MetricsCollector.
+func optimizationSubmissionFailure(err error) observability.OptimizationSubmissionOutcome {
+	classified := ClassifyServerError(err)
+	switch {
+	case classified.Code == "queue_unavailable":
+		return observability.OptimizationSubmissionQueueError
+	case classified.Category == "dependency" || classified.Category == "timeout":
+		return observability.OptimizationSubmissionDependencyError
+	case classified.HTTPStatus >= fiber.StatusBadRequest && classified.HTTPStatus < fiber.StatusInternalServerError:
+		return observability.OptimizationSubmissionRejected
+	default:
+		return observability.OptimizationSubmissionError
+	}
+}
+
+// releaseAdmission bounds best-effort controller cleanup and reports only a fixed failure event.
+// A release failure never replaces the submission's authoritative HTTP result.
+// Implements DESIGN-004 JobStatusTracker and DESIGN-014 MetricsCollector.
+func (c *OptimizationController) releaseAdmission(ctx context.Context, userID, jobID uuid.UUID) {
+	if c == nil || c.admission == nil {
+		return
+	}
+	failed := false
+	select {
+	case c.admissionCleanup <- struct{}{}:
+		detachedCtx := context.WithoutCancel(ctx)
+		cleanupCtx, cancel := context.WithTimeout(detachedCtx, optimizationAdmissionCleanupTimeout)
+		defer cancel()
+		done := make(chan error, 1)
+		go func() {
+			defer func() { <-c.admissionCleanup }()
+			done <- c.admission.Release(cleanupCtx, userID, jobID)
+		}()
+		select {
+		case err := <-done:
+			failed = err != nil
+		case <-cleanupCtx.Done():
+			failed = true
+		}
+	default:
+		// A noncooperative release may retain the sole cleanup lane, but cannot
+		// create unbounded goroutines or replace the authoritative response.
+		failed = true
+	}
+	if failed && c.telemetry != nil {
+		c.telemetry.AdmissionCleanupFailed(ctx)
+	}
 }
 
 // GetJob returns a job only when its owner matches the authenticated session.
@@ -311,12 +485,49 @@ func (c *OptimizationController) GetJob(ctx *fiber.Ctx) error {
 			}
 			return optimizationExpiredError()
 		}
-		return optimizationError(err)
+		mapped := optimizationError(err)
+		var appErr AppError
+		if errors.As(mapped, &appErr) {
+			return mapped
+		}
+		return optimizationDependencyError()
 	}
 	if job.UserID != user.UserID {
 		return optimizationNotFoundError()
 	}
+	if (job.Status == worker.OptimizationJobFailed && (job.Failure == nil || !job.Failure.Valid())) || (job.Status != worker.OptimizationJobFailed && job.Failure != nil) {
+		return optimizationDependencyError()
+	}
+	if err := validateOptimizationJobAlternatives(job); err != nil {
+		return optimizationDependencyError()
+	}
 	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: optimizationJobData(job)})
+}
+
+// validateOptimizationJobAlternatives prevents alternate stores from
+// bypassing the authoritative persistence validator before HTTP projection.
+// Implements DESIGN-004 JobStatusTracker authoritative result projection.
+func validateOptimizationJobAlternatives(job worker.OptimizationJob) error {
+	switch job.Status {
+	case worker.OptimizationJobCompleted:
+		if len(job.Alternatives) == 0 || len(job.Alternatives) > optimization.MaxAlternativeCount {
+			return errors.New("completed optimization job alternatives are invalid")
+		}
+	case worker.OptimizationJobFailed:
+		if len(job.Alternatives) > optimization.MaxAlternativeCount {
+			return errors.New("failed optimization job alternatives are invalid")
+		}
+	default:
+		if len(job.Alternatives) != 0 {
+			return errors.New("non-result optimization job alternatives are invalid")
+		}
+	}
+	for _, alternative := range job.Alternatives {
+		if err := optimization.ValidateDietAlternative(alternative); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validateOptimizationSubmissionBody validates the JSON shape before any service dispatch.
@@ -326,7 +537,8 @@ func validateOptimizationSubmissionBody(body map[string]any) error {
 		return errors.New("optimization request contains unsupported fields")
 	}
 	dailyDietID, ok := body["dailyDietId"].(string)
-	if !ok || !validUUIDString(dailyDietID) {
+	parsedDailyDietID, parseErr := uuid.Parse(dailyDietID)
+	if !ok || parseErr != nil || parsedDailyDietID == uuid.Nil {
 		return errors.New("daily diet id is invalid")
 	}
 	tolerance, ok := body["tolerancePercent"].(float64)
@@ -355,9 +567,9 @@ func validateOptimizationSubmissionBody(body map[string]any) error {
 // optimizationSubmissionRequest is the server-normalized optimization input.
 // Implements DESIGN-004 JobStatusTracker.
 type optimizationSubmissionRequest struct {
-	DailyDietID      uuid.UUID
-	TolerancePercent float64
-	ExcludedMealIDs  []uuid.UUID
+	DailyDietID      uuid.UUID   `json:"dailyDietId"`
+	TolerancePercent float64     `json:"tolerancePercent"`
+	ExcludedMealIDs  []uuid.UUID `json:"excludedMealIds"`
 }
 
 // parseOptimizationSubmission parses the validated optimization request.
@@ -391,63 +603,101 @@ func parseOptimizationSubmission(ctx *fiber.Ctx) (optimizationSubmissionRequest,
 		seen[id] = struct{}{}
 		excluded = append(excluded, id)
 	}
-	return optimizationSubmissionRequest{DailyDietID: dailyDietID, TolerancePercent: raw.TolerancePercent, ExcludedMealIDs: excluded}, nil
+	sort.Slice(excluded, func(i, j int) bool { return excluded[i].String() < excluded[j].String() })
+	tolerance := math.Round(raw.TolerancePercent*10) / 10
+	if tolerance == 0 {
+		tolerance = 0 // Normalize negative zero before hashing and persistence.
+	}
+	return optimizationSubmissionRequest{DailyDietID: dailyDietID, TolerancePercent: tolerance, ExcludedMealIDs: excluded}, nil
 }
 
-// optimizationRequestHash creates the digest of the validated request bytes.
+// optimizationRequestHash creates the digest of canonical parsed values. UUID
+// exclusions are an explicitly sorted, duplicate-free set.
 // Implements DESIGN-004 JobStatusTracker.
-func optimizationRequestHash(body []byte) string {
-	sum := sha256.Sum256(body)
-	return hex.EncodeToString(sum[:])
+func optimizationRequestHash(request optimizationSubmissionRequest) (string, error) {
+	payload, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // lookupOptimizationIdempotency returns an exact replay or a body conflict.
 // Implements DESIGN-004 JobStatusTracker.
-func (c *OptimizationController) lookupOptimizationIdempotency(ctx context.Context, userID uuid.UUID, key, bodyHash string) (repository.CheckoutIdempotencyRecord, bool, error) {
+func (c *OptimizationController) lookupOptimizationIdempotency(ctx context.Context, userID uuid.UUID, key, bodyHash string) (repository.CheckoutIdempotencyRecord, optimizationPersistedAcknowledgement, bool, error) {
 	record, err := c.idempotency.GetCheckoutIdempotency(ctx, userID, optimizationMethod, optimizationJobsRoute, key)
 	if err != nil {
 		if repository.IsKind(err, repository.ErrorKindNotFound) {
-			return repository.CheckoutIdempotencyRecord{}, false, nil
+			return repository.CheckoutIdempotencyRecord{}, optimizationPersistedAcknowledgement{}, false, nil
 		}
-		return repository.CheckoutIdempotencyRecord{}, false, err
+		return repository.CheckoutIdempotencyRecord{}, optimizationPersistedAcknowledgement{}, false, err
 	}
 	if record.BodyHash != bodyHash {
-		return repository.CheckoutIdempotencyRecord{}, false, repository.NewError(repository.ErrorKindConflict, "idempotency key reused with different body", nil)
+		return repository.CheckoutIdempotencyRecord{}, optimizationPersistedAcknowledgement{}, false, repository.NewError(repository.ErrorKindConflict, "idempotency key reused with different body", nil)
 	}
-	return record, true, nil
+	acknowledgement, err := decodeOptimizationAcknowledgement(record)
+	if err != nil {
+		return repository.CheckoutIdempotencyRecord{}, optimizationPersistedAcknowledgement{}, false, err
+	}
+	return record, acknowledgement, true, nil
 }
 
-// writeAcknowledgement returns the persisted 202 response for a submission.
+// optimizationPublicationState distinguishes side-effect-free replay from
+// repair of a durable claim whose queue publication was not confirmed.
 // Implements DESIGN-004 JobStatusTracker.
-func (c *OptimizationController) writeAcknowledgement(ctx *fiber.Ctx, record repository.CheckoutIdempotencyRecord, replayed bool) error {
-	var ack map[string]any
-	if err := json.Unmarshal(record.ResponseBody, &ack); err != nil {
-		return optimizationDependencyError()
-	}
-	ctx.Set(fiber.HeaderLocation, stringValue(ack["pollUrl"]))
-	return ctx.Status(record.StatusCode).JSON(Envelope{Status: "accepted", RequestID: requestID(ctx), Data: ack})
+type optimizationPublicationState string
+
+// Implements DESIGN-004 JobStatusTracker.
+const (
+	optimizationPublicationPending   optimizationPublicationState = "pending"
+	optimizationPublicationPublished optimizationPublicationState = "published"
+)
+
+// optimizationPersistedAcknowledgement is the sole durable acknowledgement
+// shape. PublicationState is internal and is never projected into API data.
+// Implements DESIGN-004 JobStatusTracker.
+type optimizationPersistedAcknowledgement struct {
+	JobID            uuid.UUID                    `json:"jobId"`
+	Status           worker.OptimizationJobStatus `json:"status"`
+	PollURL          string                       `json:"pollUrl"`
+	PublicationState optimizationPublicationState `json:"publicationState"`
 }
 
-// optimizationJobIDFromAcknowledgement extracts the durable job identity from a claim.
+// decodeOptimizationAcknowledgement rejects malformed or aliased persisted responses.
 // Implements DESIGN-004 JobStatusTracker.
-func optimizationJobIDFromAcknowledgement(record repository.CheckoutIdempotencyRecord) (uuid.UUID, error) {
-	var acknowledgement struct {
-		JobID string `json:"jobId"`
+func decodeOptimizationAcknowledgement(record repository.CheckoutIdempotencyRecord) (optimizationPersistedAcknowledgement, error) {
+	var acknowledgement optimizationPersistedAcknowledgement
+	decoder := json.NewDecoder(bytes.NewReader(record.ResponseBody))
+	decoder.DisallowUnknownFields()
+	if record.StatusCode != fiber.StatusAccepted || decoder.Decode(&acknowledgement) != nil || decoder.Decode(&struct{}{}) != io.EOF || acknowledgement.JobID == uuid.Nil || acknowledgement.Status != worker.OptimizationJobQueued || acknowledgement.PollURL != optimizationPollPath+acknowledgement.JobID.String() || (acknowledgement.PublicationState != optimizationPublicationPending && acknowledgement.PublicationState != optimizationPublicationPublished) {
+		return optimizationPersistedAcknowledgement{}, errInvalidOptimizationAcknowledgement
 	}
-	if err := json.Unmarshal(record.ResponseBody, &acknowledgement); err != nil {
-		return uuid.Nil, err
-	}
-	jobID, err := uuid.Parse(acknowledgement.JobID)
-	if err != nil || jobID == uuid.Nil {
-		return uuid.Nil, errors.New("optimization acknowledgement job ID is invalid")
-	}
-	return jobID, nil
+	return acknowledgement, nil
 }
 
-// optimizationAcknowledgementData builds the public queued response.
+// completeOptimizationPublication persists confirmation after idempotent queue publication.
 // Implements DESIGN-004 JobStatusTracker.
-func optimizationAcknowledgementData(jobID uuid.UUID) map[string]any {
-	return map[string]any{"jobId": jobID.String(), "status": string(worker.OptimizationJobQueued), "pollUrl": optimizationPollPath + jobID.String()}
+func (c *OptimizationController) completeOptimizationPublication(ctx context.Context, record repository.CheckoutIdempotencyRecord, acknowledgement optimizationPersistedAcknowledgement) (repository.CheckoutIdempotencyRecord, optimizationPersistedAcknowledgement, error) {
+	acknowledgement.PublicationState = optimizationPublicationPublished
+	payload, err := json.Marshal(acknowledgement)
+	if err != nil {
+		return record, acknowledgement, err
+	}
+	record.ResponseBody = payload
+	if err := c.idempotency.UpdateCheckoutIdempotencyResponse(ctx, record); err != nil {
+		return record, acknowledgement, err
+	}
+	return record, acknowledgement, nil
+}
+
+// writeOptimizationAcknowledgement projects only the exact public 202 fields.
+// Implements DESIGN-004 JobStatusTracker.
+func writeOptimizationAcknowledgement(ctx *fiber.Ctx, record repository.CheckoutIdempotencyRecord, acknowledgement optimizationPersistedAcknowledgement) error {
+	ctx.Set(fiber.HeaderLocation, acknowledgement.PollURL)
+	return ctx.Status(record.StatusCode).JSON(Envelope{Status: "accepted", RequestID: requestID(ctx), Data: map[string]any{
+		"jobId": acknowledgement.JobID.String(), "status": string(acknowledgement.Status), "pollUrl": acknowledgement.PollURL,
+	}})
 }
 
 // optimizationJobData builds the user-scoped polling response.
@@ -482,7 +732,7 @@ func optimizationJobData(job worker.OptimizationJob) map[string]any {
 		data["alternatives"] = alternatives
 	}
 	if job.Failure != nil {
-		data["failure"] = map[string]any{"code": string(job.Failure.Code), "message": job.Failure.Message}
+		data["failure"] = map[string]any{"code": job.Failure.Code.String(), "message": job.Failure.Message}
 	}
 	return data
 }
@@ -494,24 +744,14 @@ func validateOptimizationIdempotencyKey(value string) (string, error) {
 	if len(value) < minimumIdempotencyKey || len(value) > maximumIdempotencyKey {
 		return "", AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "idempotency_key_required", Message: "Idempotency-Key header is required"}
 	}
-	return value, nil
+	// Fiber header strings may alias request buffers that are reused after the
+	// handler returns; durable identity must own its bytes.
+	return strings.Clone(value), nil
 }
 
-// validateOptimizationJobID validates the polling path identifier.
+// validateUUIDValue validates a non-nil UUID path value.
 // Implements DESIGN-004 JobStatusTracker and DESIGN-010 RequestValidator.
-func validateOptimizationJobID(value string) error {
-	return validateUUIDValue(value, "optimization job id")
-}
-
-// validUUIDString reports whether a request UUID is valid and non-zero.
-// Implements DESIGN-004 JobStatusTracker and DESIGN-010 RequestValidator.
-func validUUIDString(value string) bool {
-	return validateUUIDValue(value, "uuid") == nil
-}
-
-// validateUUIDValue validates a non-zero UUID string.
-// Implements DESIGN-004 JobStatusTracker and DESIGN-010 RequestValidator.
-func validateUUIDValue(value, _ string) error {
+func validateUUIDValue(value string) error {
 	id, err := uuid.Parse(value)
 	if err != nil || id == uuid.Nil {
 		return errors.New("uuid is invalid")
@@ -523,13 +763,6 @@ func validateUUIDValue(value, _ string) error {
 // Implements DESIGN-004 JobStatusTracker and DESIGN-010 RequestValidator.
 func finiteOptimizationNumber(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0)
-}
-
-// stringValue reads a string field from an acknowledgement map.
-// Implements DESIGN-004 JobStatusTracker.
-func stringValue(value any) string {
-	valueString, _ := value.(string)
-	return valueString
 }
 
 // optimizationValidationError returns the stable request validation error.
@@ -548,22 +781,6 @@ func optimizationEntitlementDenied() AppError {
 // Implements DESIGN-004 JobStatusTracker.
 func optimizationIdempotencyConflict() AppError {
 	return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "idempotency_key_conflict", Message: "Idempotency-Key was already used with a different request body"}
-}
-
-// optimizationAdmissionError returns a safe retryable per-user capacity error.
-// Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter.
-func optimizationAdmissionError(code, message string) AppError {
-	return AppError{HTTPStatus: fiber.StatusTooManyRequests, Category: "rate_limit", Code: code, Message: message, Retryable: true}
-}
-
-// setOptimizationRetryAfter writes a positive whole-second retry delay.
-// Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter.
-func setOptimizationRetryAfter(ctx *fiber.Ctx, retryAfter time.Duration) {
-	seconds := int64(math.Ceil(retryAfter.Seconds()))
-	if seconds < 1 {
-		seconds = 1
-	}
-	ctx.Set(fiber.HeaderRetryAfter, strconv.FormatInt(seconds, 10))
 }
 
 // optimizationDependencyError returns the generic unavailable response.
@@ -601,6 +818,8 @@ func optimizationError(err error) error {
 		return optimizationNotFoundError()
 	case errors.Is(err, queue.ErrQueueUnavailable):
 		return optimizationQueueError()
+	case errors.Is(err, errInvalidOptimizationAcknowledgement):
+		return optimizationDependencyError()
 	case repository.IsKind(err, repository.ErrorKindValidation):
 		return optimizationValidationError()
 	case repository.IsKind(err, repository.ErrorKindConflict):

@@ -49,7 +49,7 @@ function savedDiet(id = "00000000-0000-0000-0000-000000000001", name = "Training
 	return {
 		id,
 		name,
-		entries: [{ id: `${id}-entry`, mealId: "00000000-0000-0000-0000-000000000010", quantity: 100, unit: "g", position: 0 }],
+		entries: [{ id: "00000000-0000-0000-0000-000000000011", mealId: "00000000-0000-0000-0000-000000000010", quantity: 100, unit: "g", position: 0 }],
 		aggregateMacros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 },
 		createdAt: "2026-07-11T00:00:00Z",
 		updatedAt: "2026-07-11T00:00:00Z"
@@ -95,9 +95,9 @@ function job(jobId: string, status: "queued" | "processing" | "completed"): Reco
 			startedAt: "2026-07-11T00:00:01Z",
 			finishedAt: "2026-07-11T00:00:02Z",
 			alternatives: [
-				{ meals: [{ mealId: "meal-a", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 620 }, similarityScore: 0.91 },
-				{ meals: [{ mealId: "meal-b", quantity: 120, unit: "g", position: 0 }], macros: { protein: 41, carbohydrates: 79, fat: 20, calories: 630 }, similarityScore: 0.82 },
-				{ meals: [{ mealId: "meal-c", quantity: 90, unit: "g", position: 0 }], macros: { protein: 39, carbohydrates: 81, fat: 21, calories: 640 }, similarityScore: 0.73 }
+				{ meals: [{ mealId: "00000000-0000-0000-0000-000000000012", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 620 }, similarityScore: 0.91 },
+				{ meals: [{ mealId: "00000000-0000-0000-0000-000000000013", quantity: 120, unit: "g", position: 0 }], macros: { protein: 41, carbohydrates: 79, fat: 20, calories: 630 }, similarityScore: 0.82 },
+				{ meals: [{ mealId: "00000000-0000-0000-0000-000000000014", quantity: 90, unit: "g", position: 0 }], macros: { protein: 39, carbohydrates: 81, fat: 21, calories: 640 }, similarityScore: 0.73 }
 			]
 		}
 	};

@@ -426,36 +426,6 @@ func (r *PostgresSavedDataRepository) Delete(ctx context.Context, userID uuid.UU
 	return nil
 }
 
-// CreateSavedDiet is a descriptive alias for Create.
-// Implements DESIGN-008 SavedDataRepository.
-func (r *PostgresSavedDataRepository) CreateSavedDiet(ctx context.Context, userID uuid.UUID, diet SavedDiet) (uuid.UUID, error) {
-	return r.Create(ctx, userID, diet)
-}
-
-// GetSavedDiet is a descriptive alias for Get.
-// Implements DESIGN-008 SavedDataRepository.
-func (r *PostgresSavedDataRepository) GetSavedDiet(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) (SavedDiet, error) {
-	return r.Get(ctx, userID, dietID)
-}
-
-// ListSavedDiets is a descriptive alias for List.
-// Implements DESIGN-008 SavedDataRepository.
-func (r *PostgresSavedDataRepository) ListSavedDiets(ctx context.Context, userID uuid.UUID) ([]SavedDiet, error) {
-	return r.List(ctx, userID)
-}
-
-// ReplaceSavedDiet is a descriptive alias for Replace.
-// Implements DESIGN-008 SavedDataRepository.
-func (r *PostgresSavedDataRepository) ReplaceSavedDiet(ctx context.Context, userID uuid.UUID, diet SavedDiet) error {
-	return r.Replace(ctx, userID, diet)
-}
-
-// DeleteSavedDiet is a descriptive alias for Delete.
-// Implements DESIGN-008 SavedDataRepository.
-func (r *PostgresSavedDataRepository) DeleteSavedDiet(ctx context.Context, userID uuid.UUID, dietID uuid.UUID) error {
-	return r.Delete(ctx, userID, dietID)
-}
-
 // validateSavedItemTarget verifies that a saved-item target exists for its kind.
 // Implements DESIGN-008 SavedDataRepository.
 func (r *PostgresSavedDataRepository) validateSavedItemTarget(ctx context.Context, itemID uuid.UUID, kind SavedItemKind) error {
@@ -579,7 +549,7 @@ func validateSavedDietInput(userID uuid.UUID, diet SavedDiet, replacing bool) er
 		if entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) {
 			return validationError("saved diet meal quantity must be finite and positive")
 		}
-		if !validSavedDietUnit(entry.Unit) {
+		if ValidateQuantityUnit(entry.Unit) != nil {
 			return validationError("saved diet meal unit is invalid")
 		}
 	}
@@ -624,12 +594,6 @@ func normalizeSavedDietName(name string) string {
 		return "Daily Diet"
 	}
 	return strings.TrimSpace(name)
-}
-
-// validSavedDietUnit reports the canonical storage units allowed for saved-diet entries.
-// Implements DESIGN-008 SavedDataRepository.
-func validSavedDietUnit(unit string) bool {
-	return unit == "g" || unit == "ml" || unit == "oz" || unit == "fl_oz"
 }
 
 // scanUserProfile reads a user profile from a PostgreSQL row.

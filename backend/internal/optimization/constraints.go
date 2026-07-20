@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sort"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -15,13 +14,10 @@ import (
 
 // Implements DESIGN-004 ConstraintBuilder.
 const (
-	// DefaultMaxQuantity bounds an unconstrained meal variable in its repository
-	// base unit (g for solids and ml for liquids).
-	DefaultMaxQuantity = 1_000_000
-	// alternativeOverlapLoss requires each repeated solution to lose a material
-	// amount of normalized overlap with its previously selected meals.
-	alternativeOverlapLoss = 0.05
-	mealSearchPageSize     = 100
+	// MaximumMealQuantity bounds each recommendation in its repository nutrition
+	// basis: grams for solids and millilitres for liquids.
+	MaximumMealQuantity = 10_000
+	mealSearchPageSize  = 100
 )
 
 // MacroTarget identifies the daily protein, carbohydrate, and fat targets.
@@ -30,9 +26,6 @@ type MacroTarget struct {
 	Protein       float64
 	Carbohydrates float64
 	Fat           float64
-	// Carbs is accepted as the short form used by DESIGN-004's language model
-	// contract. Carbohydrates remains the canonical Go field.
-	Carbs float64
 }
 
 // MealQuantity identifies one persisted meal quantity in a Daily Diet.
@@ -44,24 +37,13 @@ type MealQuantity struct {
 	Position int
 }
 
-// DietOptimizationRequest carries the validated inputs needed to build a
-// constraint matrix. When OriginalDiet or OriginalMeals is present, its
-// server-side meal data derives the macro target and takes precedence over
-// TargetMacros.
+// DietOptimizationRequest carries only the server-owned saved-diet inputs
+// needed to build a constraint matrix.
 // Implements DESIGN-004 ConstraintBuilder.
 type DietOptimizationRequest struct {
-	OriginalDiet  repository.SavedDiet
-	OriginalMeals []MealQuantity
-	// RepositoryMeals is an optional dependency-injection field for direct
-	// package-level solution validation. Production generation passes meals
-	// explicitly to the validator.
-	RepositoryMeals   []repository.MealEntity
-	TargetMacros      MacroTarget
-	TolerancePercent  float64
-	ExcludedMealIDs   []uuid.UUID
-	ExcludedIDs       []string
-	MaxQuantity       float64
-	PreviousSolutions []map[string]float64
+	OriginalDiet     repository.SavedDiet
+	TolerancePercent float64
+	ExcludedMealIDs  []uuid.UUID
 }
 
 // LPVariable is one nonnegative meal quantity and its server-derived macro,
@@ -69,7 +51,6 @@ type DietOptimizationRequest struct {
 // Implements DESIGN-004 ConstraintBuilder.
 type LPVariable struct {
 	ItemID               string
-	MealID               uuid.UUID
 	LowerBound           float64
 	UpperBound           float64
 	CaloriesPerUnit      float64
@@ -119,25 +100,20 @@ func NewConstraintBuilder(meals repository.MealRepository, diets repository.Dail
 // BuildConstraints constructs variables and hard constraints in stable meal-ID
 // order. It performs all numeric validation before returning a model.
 // Implements DESIGN-004 ConstraintBuilder.
-func BuildConstraints(req DietOptimizationRequest, meals []repository.MealEntity) (LPModel, error) {
-	maxQuantity, err := validateRequest(req)
+func BuildConstraints(req DietOptimizationRequest, meals []repository.MealEntity, previousSolutions []LPSolution) (LPModel, error) {
+	byID, ids, err := immutableMealSnapshot(meals, nil)
 	if err != nil {
-		return LPModel{}, err
+		return LPModel{}, validationError(err.Error())
 	}
+	return buildConstraintsFromIndex(req, byID, ids, previousSolutions)
+}
 
-	byID := make(map[string]repository.MealEntity, len(meals))
-	for _, meal := range meals {
-		if meal.ID == uuid.Nil {
-			return LPModel{}, validationError("meal id is required")
-		}
-		itemID := meal.ID.String()
-		if _, exists := byID[itemID]; exists {
-			return LPModel{}, validationError("duplicate meal id: " + itemID)
-		}
-		if err := validateMeal(meal); err != nil {
-			return LPModel{}, err
-		}
-		byID[itemID] = meal
+// buildConstraintsFromIndex builds a model from the generation call's single
+// detached meal index and deterministic ID order.
+// Implements DESIGN-004 ConstraintBuilder and SolutionValidator.
+func buildConstraintsFromIndex(req DietOptimizationRequest, byID map[string]repository.MealEntity, ids []string, previousSolutions []LPSolution) (LPModel, error) {
+	if err := validateRequest(req); err != nil {
+		return LPModel{}, err
 	}
 	if len(byID) == 0 {
 		return LPModel{}, validationError("at least one repository meal is required")
@@ -148,34 +124,49 @@ func BuildConstraints(req DietOptimizationRequest, meals []repository.MealEntity
 		return LPModel{}, err
 	}
 
-	excluded := excludedMealIDs(req)
-	variables := make([]LPVariable, 0, len(byID))
-	ids := make([]string, 0, len(byID))
-	for itemID := range byID {
-		ids = append(ids, itemID)
+	excluded, err := excludedMealIDs(req)
+	if err != nil {
+		return LPModel{}, err
 	}
-	sort.Strings(ids)
+	original := originalMealIDs(req.OriginalDiet)
+	variables := make([]LPVariable, 0, len(byID))
 	for _, itemID := range ids {
-		meal := byID[itemID]
-		macros := meal.MacrosPer100
-		upper := maxQuantity
-		if excluded[itemID] {
-			upper = 0
+		meal, ok := byID[itemID]
+		if !ok {
+			return LPModel{}, validationError("meal index order is invalid")
 		}
+		if _, isExcluded := excluded[meal.ID]; isExcluded {
+			continue
+		}
+		if err := validateMeal(meal); err != nil {
+			if _, isOriginal := original[meal.ID]; isOriginal {
+				return LPModel{}, validationError("original diet meal has no usable nutrition basis")
+			}
+			continue
+		}
+		macros := meal.MacrosPer100
 		caloriesPerUnit := search.CalculateCalories(macros) / 100
 		if !finite(caloriesPerUnit) || caloriesPerUnit < 0 {
 			return LPModel{}, validationError("meal calorie coefficient must be finite and non-negative")
 		}
+		if caloriesPerUnit == 0 {
+			if _, isOriginal := original[meal.ID]; isOriginal {
+				return LPModel{}, validationError("original diet meal has no objective information")
+			}
+			continue
+		}
 		variables = append(variables, LPVariable{
 			ItemID:               itemID,
-			MealID:               meal.ID,
 			LowerBound:           0,
-			UpperBound:           upper,
+			UpperBound:           MaximumMealQuantity,
 			CaloriesPerUnit:      caloriesPerUnit,
 			ProteinPerUnit:       macros.Protein / 100,
 			CarbohydratesPerUnit: macros.Carbohydrates / 100,
 			FatPerUnit:           macros.Fat / 100,
 		})
+	}
+	if len(variables) == 0 {
+		return LPModel{}, validationError("no eligible repository meals are available")
 	}
 	variables, err = NewDiversityPenalizer(req).Apply(variables)
 	if err != nil {
@@ -192,27 +183,7 @@ func BuildConstraints(req DietOptimizationRequest, meals []repository.MealEntity
 			return LPModel{}, validationError("macro constraint bounds must be finite")
 		}
 	}
-	for _, variable := range variables {
-		constraints = append(constraints, LPConstraint{
-			Name:         "quantity_" + variable.ItemID,
-			LowerBound:   variable.LowerBound,
-			UpperBound:   variable.UpperBound,
-			Coefficients: map[string]float64{variable.ItemID: 1},
-		})
-	}
-	for _, itemID := range ids {
-		if !excluded[itemID] {
-			continue
-		}
-		constraints = append(constraints, LPConstraint{
-			Name:         "exclude_" + itemID,
-			LowerBound:   0,
-			UpperBound:   0,
-			Coefficients: map[string]float64{itemID: 1},
-		})
-	}
-
-	alternativeConstraints, err := buildAlternativeConstraints(req.PreviousSolutions, byID, excluded)
+	alternativeConstraints, err := buildAlternativeConstraints(previousSolutions, byID, excluded)
 	if err != nil {
 		return LPModel{}, err
 	}
@@ -230,7 +201,7 @@ func (b *ConstraintBuilder) BuildFromSavedDiet(ctx context.Context, userID, diet
 	if err != nil {
 		return LPModel{}, err
 	}
-	return BuildConstraints(inputs.Request, inputs.Meals)
+	return BuildConstraints(inputs.Request, inputs.Meals, nil)
 }
 
 // LoadFromSavedDiet reloads one owned saved diet and all repository meals for
@@ -252,8 +223,14 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 	if err != nil {
 		return SavedDietOptimizationInputs{}, err
 	}
-	if diet.ID != uuid.Nil && diet.ID != dietID {
+	if diet.ID != dietID {
 		return SavedDietOptimizationInputs{}, validationError("saved diet id does not match requested id")
+	}
+	if diet.UserID != userID {
+		return SavedDietOptimizationInputs{}, validationError("saved diet owner does not match authenticated owner")
+	}
+	if len(diet.Entries) == 0 {
+		return SavedDietOptimizationInputs{}, validationError("persisted original diet must contain at least one meal")
 	}
 
 	unitSystem := repository.UnitSystemMetric
@@ -269,6 +246,9 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 		if err != nil {
 			return SavedDietOptimizationInputs{}, err
 		}
+		if err := validateMeal(meal); err != nil {
+			return SavedDietOptimizationInputs{}, validationError("original diet meal has no usable nutrition basis")
+		}
 		meals = append(meals, meal)
 		seen[entry.MealID] = struct{}{}
 	}
@@ -276,6 +256,7 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 	for offset := 0; ; offset += mealSearchPageSize {
 		matches, total, err := b.meals.Search(ctx, repository.RepositoryQuery{
 			RepositoryContext: context,
+			FoodObjectTypes:   []repository.PhysicalState{repository.PhysicalStateSolid, repository.PhysicalStateLiquid},
 			Limit:             mealSearchPageSize,
 			Offset:            offset,
 		})
@@ -284,6 +265,9 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 		}
 		for _, meal := range matches {
 			if _, ok := seen[meal.ID]; ok {
+				continue
+			}
+			if err := validateMeal(meal); err != nil {
 				continue
 			}
 			meals = append(meals, meal)
@@ -300,52 +284,39 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 
 // validateRequest validates request-wide numeric bounds before matrix assembly.
 // Implements DESIGN-004 ConstraintBuilder.
-func validateRequest(req DietOptimizationRequest) (float64, error) {
-	if err := validateMacroTarget(req.TargetMacros); err != nil {
-		return 0, err
+func validateRequest(req DietOptimizationRequest) error {
+	if req.OriginalDiet.ID == uuid.Nil {
+		return validationError("saved diet id is required")
+	}
+	if req.OriginalDiet.UserID == uuid.Nil {
+		return validationError("saved diet owner is required")
+	}
+	if len(req.OriginalDiet.Entries) == 0 {
+		return validationError("persisted original diet must contain at least one meal")
 	}
 	if !finite(req.TolerancePercent) || req.TolerancePercent < 0 || req.TolerancePercent > 100 {
-		return 0, validationError("tolerance percent must be finite and between 0 and 100")
+		return validationError("tolerance percent must be finite and between 0 and 100")
 	}
-	if req.MaxQuantity < 0 || !finite(req.MaxQuantity) {
-		return 0, validationError("maximum meal quantity must be finite and non-negative")
-	}
-	if req.MaxQuantity == 0 {
-		return DefaultMaxQuantity, nil
-	}
-	return req.MaxQuantity, nil
+	_, err := excludedMealIDs(req)
+	return err
 }
 
 // validateMeal validates the repository macro basis used by one variable.
 // Implements DESIGN-004 ConstraintBuilder.
 func validateMeal(meal repository.MealEntity) error {
-	if meal.PhysicalState != "" {
-		if err := repository.ValidatePhysicalState(meal.PhysicalState); err != nil {
-			return err
-		}
-		if err := repository.ValidateMacrosPer100(meal.MacrosPer100, meal.PhysicalState); err != nil {
-			return err
-		}
-	} else if err := repository.ValidateMacros(meal.MacrosPer100); err != nil {
-		return err
+	if meal.PhysicalState != repository.PhysicalStateSolid && meal.PhysicalState != repository.PhysicalStateLiquid {
+		return validationError("meal physical state is not supported")
 	}
-	return nil
+	if !meal.NormalizedMacrosAvailable {
+		return validationError("meal normalized macro basis is unavailable")
+	}
+	return repository.ValidateMacrosPer100(meal.MacrosPer100, meal.PhysicalState)
 }
 
 // targetForRequest derives authoritative macro targets from original meals.
 // Implements DESIGN-004 ConstraintBuilder.
 func targetForRequest(req DietOptimizationRequest, meals map[string]repository.MealEntity) (MacroTarget, error) {
 	entries := req.OriginalDiet.Entries
-	if req.OriginalDiet.ID != uuid.Nil && len(entries) == 0 {
-		return MacroTarget{}, validationError("persisted original diet must contain at least one meal")
-	}
-	if len(entries) == 0 {
-		entries = originalMealsToEntries(req.OriginalMeals)
-	}
-	if len(entries) == 0 {
-		return canonicalTarget(req.TargetMacros)
-	}
-
 	target := MacroTarget{}
 	for _, entry := range entries {
 		if entry.MealID == uuid.Nil {
@@ -354,6 +325,9 @@ func targetForRequest(req DietOptimizationRequest, meals map[string]repository.M
 		meal, ok := meals[entry.MealID.String()]
 		if !ok {
 			return MacroTarget{}, validationError("original diet meal is not available: " + entry.MealID.String())
+		}
+		if err := validateMeal(meal); err != nil {
+			return MacroTarget{}, validationError("original diet meal has no usable nutrition basis")
 		}
 		baseQuantity, err := quantityInNutritionBasis(entry, meal)
 		if err != nil {
@@ -367,17 +341,10 @@ func targetForRequest(req DietOptimizationRequest, meals map[string]repository.M
 	if err := validateMacroTarget(target); err != nil {
 		return MacroTarget{}, err
 	}
-	return target, nil
-}
-
-// originalMealsToEntries converts the optimization request's meal shape.
-// Implements DESIGN-004 ConstraintBuilder.
-func originalMealsToEntries(meals []MealQuantity) []repository.SavedDietMealEntry {
-	entries := make([]repository.SavedDietMealEntry, len(meals))
-	for index, meal := range meals {
-		entries[index] = repository.SavedDietMealEntry{MealID: meal.MealID, Quantity: meal.Quantity, Unit: meal.Unit, Position: index}
+	if target == (MacroTarget{}) {
+		return MacroTarget{}, validationError("saved diet macro target cannot be all zero")
 	}
-	return entries
+	return target, nil
 }
 
 // quantityInNutritionBasis converts a persisted original-diet quantity to the
@@ -400,15 +367,6 @@ func quantityInNutritionBasis(entry repository.SavedDietMealEntry, meal reposito
 			return 0, validationError("liquid meal quantities must use ml or fl_oz")
 		}
 		baseUnit = "ml"
-	case "":
-		switch entry.Unit {
-		case "g", "oz":
-			baseUnit = "g"
-		case "ml", "fl_oz":
-			baseUnit = "ml"
-		default:
-			return 0, validationError("original diet quantity unit is invalid")
-		}
 	default:
 		return 0, validationError("original diet meal physical state is invalid")
 	}
@@ -423,32 +381,16 @@ func quantityInNutritionBasis(entry repository.SavedDietMealEntry, meal reposito
 	return quantity, nil
 }
 
-// validateMacroTarget validates all macro target aliases and values.
+// validateMacroTarget validates the canonical macro target values.
 // Implements DESIGN-004 ConstraintBuilder.
 func validateMacroTarget(target MacroTarget) error {
-	if !finite(target.Protein) || !finite(target.Carbohydrates) || !finite(target.Carbs) || !finite(target.Fat) {
+	if !finite(target.Protein) || !finite(target.Carbohydrates) || !finite(target.Fat) {
 		return validationError("macro targets must be finite")
 	}
-	if target.Protein < 0 || target.Carbohydrates < 0 || target.Carbs < 0 || target.Fat < 0 {
+	if target.Protein < 0 || target.Carbohydrates < 0 || target.Fat < 0 {
 		return validationError("macro targets cannot be negative")
 	}
-	if target.Carbohydrates != 0 && target.Carbs != 0 && target.Carbohydrates != target.Carbs {
-		return validationError("carbohydrate target fields disagree")
-	}
 	return nil
-}
-
-// canonicalTarget resolves the Carbs alias into the canonical field.
-// Implements DESIGN-004 ConstraintBuilder.
-func canonicalTarget(target MacroTarget) (MacroTarget, error) {
-	if err := validateMacroTarget(target); err != nil {
-		return MacroTarget{}, err
-	}
-	if target.Carbohydrates == 0 {
-		target.Carbohydrates = target.Carbs
-	}
-	target.Carbs = target.Carbohydrates
-	return target, nil
 }
 
 // macroConstraint creates one bounded macro expression over LP variables.
@@ -467,68 +409,71 @@ func macroConstraint(name string, target, tolerance float64, variables []LPVaria
 	}
 }
 
-// excludedMealIDs combines UUID and string exclusion inputs.
+// excludedMealIDs validates and indexes the one typed exclusion representation.
 // Implements DESIGN-004 ConstraintBuilder.
-func excludedMealIDs(req DietOptimizationRequest) map[string]bool {
-	excluded := make(map[string]bool, len(req.ExcludedMealIDs)+len(req.ExcludedIDs))
+func excludedMealIDs(req DietOptimizationRequest) (map[uuid.UUID]struct{}, error) {
+	excluded := make(map[uuid.UUID]struct{}, len(req.ExcludedMealIDs))
 	for _, id := range req.ExcludedMealIDs {
-		if id != uuid.Nil {
-			excluded[id.String()] = true
+		if id == uuid.Nil {
+			return nil, validationError("excluded meal id is required")
 		}
-	}
-	for _, id := range req.ExcludedIDs {
-		if id != "" {
-			excluded[id] = true
+		if _, duplicate := excluded[id]; duplicate {
+			return nil, validationError("excluded meal ids must be unique")
 		}
+		excluded[id] = struct{}{}
 	}
-	return excluded
+	return excluded, nil
 }
 
-// buildAlternativeConstraints rejects high-overlap assignments from prior solves.
+// originalMealIDs indexes the authoritative saved-diet meal set.
+// Implements DESIGN-004 ConstraintBuilder.
+func originalMealIDs(diet repository.SavedDiet) map[uuid.UUID]struct{} {
+	result := make(map[uuid.UUID]struct{}, len(diet.Entries))
+	for _, entry := range diet.Entries {
+		result[entry.MealID] = struct{}{}
+	}
+	return result
+}
+
+// buildAlternativeConstraints excludes the highest-quantity selected meal
+// from each prior solution. This deterministic bounded heuristic guarantees a
+// changed meal-ID set; quantity drift alone can never satisfy it.
 // Implements DESIGN-004 ConstraintBuilder and DiversityPenalizer.
-func buildAlternativeConstraints(solutions []map[string]float64, meals map[string]repository.MealEntity, excluded map[string]bool) ([]LPConstraint, error) {
+func buildAlternativeConstraints(solutions []LPSolution, meals map[string]repository.MealEntity, excluded map[uuid.UUID]struct{}) ([]LPConstraint, error) {
 	constraints := make([]LPConstraint, 0, len(solutions))
 	for index, solution := range solutions {
-		ids := make([]string, 0, len(solution))
+		selectedID := ""
+		selectedQuantity := 0.0
 		for itemID, quantity := range solution {
-			if _, ok := meals[itemID]; !ok {
+			meal, ok := meals[itemID]
+			if !ok {
 				return nil, validationError("alternative solution contains unknown meal: " + itemID)
 			}
 			if !finite(quantity) || quantity < 0 {
 				return nil, validationError("alternative solution quantities must be finite and non-negative")
 			}
-			if excluded[itemID] && quantity > 0 {
+			if _, isExcluded := excluded[meal.ID]; isExcluded && quantity > 0 {
 				return nil, validationError("alternative solution selects an excluded meal: " + itemID)
 			}
 			if quantity == 0 {
 				continue
 			}
-			ids = append(ids, itemID)
+			if quantity > selectedQuantity || quantity == selectedQuantity && (selectedID == "" || itemID < selectedID) {
+				selectedID = itemID
+				selectedQuantity = quantity
+			}
 		}
-		if len(solution) > 0 && len(ids) == 0 {
+		if len(solution) > 0 && selectedID == "" {
 			return nil, validationError("alternative solution must select a positive finite quantity")
 		}
-		if len(ids) == 0 {
+		if selectedID == "" {
 			continue
-		}
-		sort.Strings(ids)
-		coefficients := make(map[string]float64, len(ids))
-		for _, itemID := range ids {
-			coefficient := 1 / solution[itemID]
-			if !finite(coefficient) {
-				return nil, validationError("alternative solution coefficients must be finite")
-			}
-			coefficients[itemID] = coefficient
-		}
-		upper := float64(len(ids)) - alternativeOverlapLoss
-		if upper < 0 || !finite(upper) {
-			return nil, validationError("alternative solution bound is invalid")
 		}
 		constraints = append(constraints, LPConstraint{
 			Name:         fmt.Sprintf("alternative_%d", index+1),
 			LowerBound:   0,
-			UpperBound:   upper,
-			Coefficients: coefficients,
+			UpperBound:   0,
+			Coefficients: map[string]float64{selectedID: 1},
 		})
 	}
 	return constraints, nil

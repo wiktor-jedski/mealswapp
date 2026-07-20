@@ -19,6 +19,11 @@ var checkoutIdempotencyGetSQL string
 //go:embed sql/checkout_idempotency_store.sql
 var checkoutIdempotencyStoreSQL string
 
+// Implements DESIGN-004 JobStatusTracker publication acknowledgement update.
+//
+//go:embed sql/checkout_idempotency_update_response.sql
+var checkoutIdempotencyUpdateResponseSQL string
+
 // PostgresCheckoutIdempotencyRepository persists checkout idempotency responses.
 // Implements DESIGN-007 SubscriptionController checkout idempotency.
 type PostgresCheckoutIdempotencyRepository struct {
@@ -67,6 +72,23 @@ func (r *PostgresCheckoutIdempotencyRepository) StoreCheckoutIdempotency(ctx con
 	_, err := r.db.Exec(ctx, checkoutIdempotencyStoreSQL, record.UserID, record.Method, record.Route, record.Key, record.BodyHash, record.StatusCode, record.ResponseBody)
 	if err != nil {
 		return mapPostgresError(err, "store checkout idempotency")
+	}
+	return nil
+}
+
+// UpdateCheckoutIdempotencyResponse replaces only the response attached to an
+// existing, body-matched durable claim.
+// Implements DESIGN-004 JobStatusTracker publication acknowledgement persistence.
+func (r *PostgresCheckoutIdempotencyRepository) UpdateCheckoutIdempotencyResponse(ctx context.Context, record CheckoutIdempotencyRecord) error {
+	if err := validateCheckoutIdempotencyRecord(record); err != nil {
+		return err
+	}
+	tag, err := r.db.Exec(ctx, checkoutIdempotencyUpdateResponseSQL, record.UserID, record.Method, record.Route, record.Key, record.BodyHash, record.StatusCode, record.ResponseBody)
+	if err != nil {
+		return mapPostgresError(err, "update checkout idempotency response")
+	}
+	if tag.RowsAffected() != 1 {
+		return NewError(ErrorKindInternal, "idempotency claim changed before response update", nil)
 	}
 	return nil
 }

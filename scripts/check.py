@@ -185,16 +185,34 @@ PHASE07_GO_PACKAGES = {
 }
 PHASE07_FRONTEND_SOURCES = {
 	"src/lib/api/daily-diet-client.ts",
+	"src/lib/api/error-message-mapper.ts",
 	"src/lib/api/generated.ts",
 	"src/lib/api/optimization-client.ts",
+	"src/lib/api/search-client.ts",
 	"src/lib/stores/daily-diet.ts",
 	"src/lib/stores/optimization.ts",
 	"src/lib/stores/search.ts",
+	"src/lib/stores/selected-daily-diet.ts",
+	"src/lib/units.ts",
 }
 
 
 def validate_phase07_go_coverage(coverage_output: str) -> None:
 	# Implements DESIGN-014 MetricsCollector Phase 07 coverage-deviation gate.
+	open_points = OPEN_POINTS.read_text(encoding="utf-8")
+	below_functions = []
+	for line in coverage_output.splitlines():
+		match = re.match(r"^.+?/backend/(internal/(?:dailydiet|optimization|queue|worker)/[^:]+):(\d+):\s+(\S+)\s+([0-9.]+%)$", line)
+		if match and match.group(4) != "100.0%":
+			path, declaration_line, function, coverage = match.groups()
+			marker = f"`{path}:{declaration_line} {function}` | `{coverage}`"
+			if marker not in open_points:
+				below_functions.append(marker)
+	if below_functions:
+		raise SystemExit(
+			"Phase 07 Go coverage has below-100% functions without exact file/line/function evidence: "
+			+ ", ".join(below_functions)
+		)
 	package_totals: dict[str, str] = {}
 	for package in sorted(PHASE07_GO_PACKAGES):
 		extra_env = {}
@@ -213,7 +231,6 @@ def validate_phase07_go_coverage(coverage_output: str) -> None:
 		raise SystemExit("Phase 07 Go coverage is missing package totals: " + ", ".join(missing))
 	below = {package: total for package, total in package_totals.items() if total != "100.0%"}
 	if below:
-		open_points = OPEN_POINTS.read_text(encoding="utf-8")
 		undocumented = [
 			f"{package} ({total})"
 			for package, total in sorted(below.items())

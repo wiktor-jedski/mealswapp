@@ -187,7 +187,7 @@ func validateDailyDietBodyMap(body map[string]any) error {
 			return errors.New("quantity is invalid")
 		}
 		unit, ok := entry["unit"].(string)
-		if !ok || (unit != "g" && unit != "ml" && unit != "oz" && unit != "fl_oz") {
+		if !ok || repository.ValidateQuantityUnit(unit) != nil {
 			return errors.New("unit is invalid")
 		}
 		positionValue, ok := entry["position"].(float64)

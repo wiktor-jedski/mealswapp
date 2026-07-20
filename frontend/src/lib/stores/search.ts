@@ -1,4 +1,4 @@
-import { derived, writable } from "svelte/store";
+import { derived, get, writable } from "svelte/store";
 import type {
 	SearchFilter,
 	SearchMode,
@@ -6,6 +6,7 @@ import type {
 	SubstitutionInput,
 	FoodObject
 } from "../api/generated";
+import { selectedDailyDietId } from "./selected-daily-diet";
 
 // Implements DESIGN-001 SearchView typed search state, mode transitions, and SearchRequest construction.
 
@@ -45,10 +46,9 @@ export type DailyDietSearchState = CommonSearchState & {
 	dailyDietCollections: DailyDietCollectionViewModel[];
 };
 
-/** Daily Diet Alternative mode owns the selected saved-diet identifier. */
+/** Daily Diet Alternative mode consumes the shared authoritative saved-diet selection. */
 export type DailyDietAlternativeSearchState = CommonSearchState & {
 	mode: "daily_diet_alternative";
-	dailyDietId: string | undefined;
 };
 
 /**
@@ -152,7 +152,7 @@ export function setMode(mode: SearchMode): void {
 			case "daily_diet":
 				return { ...common, mode, dailyDietCollections: [] };
 			case "daily_diet_alternative":
-				return { ...common, mode, dailyDietId: undefined };
+				return { ...common, mode };
 		}
 	});
 }
@@ -374,8 +374,9 @@ export function updateSubstitutionInput(
  * @remarks Implements DESIGN-001 SearchView Daily Diet Alternative selection.
  */
 export function setDailyDietId(dailyDietId: string | undefined): void {
+	selectedDailyDietId.set(dailyDietId ?? null);
 	searchStore.update((state) =>
-		state.mode === "daily_diet_alternative" ? { ...state, dailyDietId, page: 1 } : state
+		state.mode === "daily_diet_alternative" ? { ...state, page: 1 } : state
 	);
 }
 
@@ -417,7 +418,7 @@ export function resetSearch(): void {
  *
  * @remarks Implements DESIGN-001 SearchView buildSearchRequest.
  */
-export function buildSearchRequest(state: SearchState): SearchRequest {
+export function buildSearchRequest(state: SearchState, selectedId: string | null = get(selectedDailyDietId)): SearchRequest {
 	const request: SearchRequest = {
 		query: state.query,
 		mode: state.mode,
@@ -430,8 +431,8 @@ export function buildSearchRequest(state: SearchState): SearchRequest {
 
 	if (state.mode === "substitution") {
 		request.substitutionInputs = state.substitutionInputs;
-	} else if (state.mode === "daily_diet_alternative" && state.dailyDietId !== undefined) {
-		request.dailyDietId = state.dailyDietId;
+	} else if (state.mode === "daily_diet_alternative" && selectedId !== null) {
+		request.dailyDietId = selectedId;
 	}
 
 	return request;
@@ -442,9 +443,9 @@ export function buildSearchRequest(state: SearchState): SearchRequest {
  *
  * @remarks Implements DESIGN-001 SearchView query-key derivation (step 6).
  */
-export function searchRequestKey(state: SearchState): string {
+export function searchRequestKey(state: SearchState, selectedId: string | null = get(selectedDailyDietId)): string {
 	const inputs = state.mode === "substitution" ? state.substitutionInputs : [];
-	const dailyDietId = state.mode === "daily_diet_alternative" ? state.dailyDietId : undefined;
+	const dailyDietId = state.mode === "daily_diet_alternative" ? selectedId : null;
 	const normalized = {
 		mode: state.mode,
 		query: state.query.trim(),

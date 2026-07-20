@@ -271,3 +271,41 @@ func TestProfileControllerDailyDietRejectsClientOwnershipInvalidBodyAndStableErr
 		t.Fatalf("missing-key response = %d %+v", resp.StatusCode, body)
 	}
 }
+
+func TestProfileControllerDailyDietListMapsUnavailableMealToNotFound(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	service := &fakeDailyDietService{listErr: repository.NewError(repository.ErrorKindNotFound, "meal not found", nil)}
+	controller := NewProfileController(&fakeProfileService{}, service)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: controller.Routes()})
+	request := httptest.NewRequest(fiber.MethodGet, "/api/v1/daily-diets", nil)
+	addCookies(request, authCookies)
+
+	resp, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusNotFound || body.Error == nil || body.Error.Code != "not_found" {
+		t.Fatalf("list unavailable-meal response = %d %+v", resp.StatusCode, body)
+	}
+}
+
+// TestValidateDailyDietBodyMapUsesCanonicalQuantityUnits verifies DESIGN-005 UnitConverter HTTP validation.
+func TestValidateDailyDietBodyMapUsesCanonicalQuantityUnits(t *testing.T) {
+	mealID := uuid.NewString()
+	for _, unit := range []string{"g", "ml", "oz", "fl_oz"} {
+		body := map[string]any{"name": "Diet", "entries": []any{map[string]any{"mealId": mealID, "quantity": 1.0, "unit": unit, "position": 0.0}}}
+		if err := validateDailyDietBodyMap(body); err != nil {
+			t.Fatalf("validateDailyDietBodyMap(%q) error = %v", unit, err)
+		}
+	}
+	for _, unit := range []string{"serving", "cup"} {
+		body := map[string]any{"name": "Diet", "entries": []any{map[string]any{"mealId": mealID, "quantity": 1.0, "unit": unit, "position": 0.0}}}
+		if err := validateDailyDietBodyMap(body); err == nil {
+			t.Fatalf("validateDailyDietBodyMap(%q) error = nil, want rejection", unit)
+		}
+	}
+}

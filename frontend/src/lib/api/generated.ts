@@ -10,6 +10,7 @@ export type ErrorCategory =
 	| "timeout"
 	| "server"
 	| "dependency"
+	| "rate_limit"
 	| "unknown";
 
 // Implements DESIGN-017 ErrorMessageMapper AppError contract.
@@ -531,9 +532,7 @@ export type OptimizationFailureCode =
 	| "failed_validation"
 	| "solver_timeout"
 	| "solver_infeasible"
-	| "queue_unavailable"
-	| "worker_crash"
-	| "result_expired";
+	| "worker_crash";
 
 // Implements DESIGN-004 JobStatusTracker frontend completed-alternative contract.
 export interface OptimizationAlternative {
@@ -1032,7 +1031,7 @@ export interface SearchFilter {
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
 /** Canonical units accepted by substitution search inputs. */
-export type SubstitutionUnit = "g" | "ml" | "oz" | "fl_oz";
+export type SubstitutionUnit = CanonicalQuantityUnit;
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
 /** Quantity-bearing food input for substitution searches. */
