@@ -9,12 +9,29 @@ on:
 
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24.x"
+      # Implements DESIGN-004 LPSolverWrapper pinned native solver readiness in CI.
+      - name: Install pinned CLP
+        shell: bash
+        run: |
+          set -euo pipefail
+          clp_root="$RUNNER_TEMP/mealswapp-clp"
+          clp_archive="$RUNNER_TEMP/Clp-releases.1.17.11-x86_64-ubuntu24-gcc1330-static.tar.gz"
+          curl --fail --location --show-error --silent \
+            "https://github.com/coin-or/Clp/releases/download/releases/1.17.11/Clp-releases.1.17.11-x86_64-ubuntu24-gcc1330-static.tar.gz" \
+            --output "$clp_archive"
+          echo "105ce8684ae95412259b24743895f3be6fb642248052e424cf00939dbd57631c  $clp_archive" | sha256sum --check --strict
+          mkdir -p "$clp_root"
+          tar --extract --gzip --file "$clp_archive" --directory "$clp_root" ./bin/clp
+          chmod 0755 "$clp_root/bin/clp"
+          "$clp_root/bin/clp" -version 2>&1 | grep --fixed-strings "Coin LP version 1.17.11"
+          echo "MEALSWAPP_CLP_EXECUTABLE=$clp_root/bin/clp" >> "$GITHUB_ENV"
+          echo "MEALSWAPP_CLP_VERSION=1.17.11" >> "$GITHUB_ENV"
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.11"

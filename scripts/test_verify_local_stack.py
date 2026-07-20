@@ -3,6 +3,7 @@
 # Implements DESIGN-005 RepositoryInterfaces isolated local-stack verification.
 
 import importlib.util
+import io
 import unittest
 from subprocess import CompletedProcess
 from unittest.mock import patch
@@ -45,6 +46,27 @@ class LocalStackDatabaseIsolationTests(unittest.TestCase):
             local_stack.ensure_test_database()
 
         run.assert_called_once()
+
+    def test_readiness_fails_immediately_with_exited_worker_output(self):
+        class ExitedProcess:
+            stdout = io.StringIO("worker stopped: CLP executable is unavailable\n")
+
+            @staticmethod
+            def poll():
+                return 1
+
+        with self.assertRaisesRegex(RuntimeError, "worker.*CLP executable is unavailable"):
+            local_stack.wait_for_http(
+                "http://127.0.0.1:12345/ready",
+                timeout=0.1,
+                processes={"worker": ExitedProcess()},
+            )
+
+    def test_ci_provisions_the_pinned_clp_executable(self):
+        workflow = (local_stack.ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("Clp-releases.1.17.11-x86_64-ubuntu24-gcc1330-static.tar.gz", workflow)
+        self.assertIn("105ce8684ae95412259b24743895f3be6fb642248052e424cf00939dbd57631c", workflow)
+        self.assertIn("MEALSWAPP_CLP_EXECUTABLE", workflow)
 
 
 if __name__ == "__main__":

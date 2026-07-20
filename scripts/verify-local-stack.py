@@ -175,10 +175,25 @@ def stop_process(process: subprocess.Popen[str]) -> None:
 		process.wait(timeout=5)
 
 
-def wait_for_http(url: str, timeout: float = 30.0) -> None:
+def raise_if_process_exited(processes: dict[str, subprocess.Popen[str]]) -> None:
+	# Implements DESIGN-014 UptimeMonitor startup failure diagnostics.
+	for name, process in processes.items():
+		exit_code = process.poll()
+		if exit_code is None:
+			continue
+		output = ""
+		if process.stdout is not None:
+			output = process.stdout.read().strip()[-2000:]
+		detail = f": {output}" if output else ""
+		raise RuntimeError(f"{name} exited with status {exit_code} before readiness{detail}")
+
+
+def wait_for_http(url: str, timeout: float = 30.0, processes: dict[str, subprocess.Popen[str]] | None = None) -> None:
 	deadline = time.monotonic() + timeout
 	last_error: Exception | None = None
 	while time.monotonic() < deadline:
+		if processes:
+			raise_if_process_exited(processes)
 		try:
 			with urllib.request.urlopen(url, timeout=2) as response:
 				if 200 <= response.status < 300:
@@ -190,6 +205,8 @@ def wait_for_http(url: str, timeout: float = 30.0) -> None:
 		except OSError as exc:
 			last_error = exc
 		time.sleep(0.5)
+	if processes:
+		raise_if_process_exited(processes)
 	raise TimeoutError(f"{url} did not respond within {timeout:.0f}s: {last_error}")
 
 
@@ -229,8 +246,9 @@ def main() -> int:
 		api_process = start_api(port)
 		worker_process = start_worker()
 		base_url = f"http://127.0.0.1:{port}"
-		wait_for_http(f"{base_url}/health")
-		wait_for_http(f"{base_url}/ready")
+		processes = {"api": api_process, "worker": worker_process}
+		wait_for_http(f"{base_url}/health", processes=processes)
+		wait_for_http(f"{base_url}/ready", processes=processes)
 		for endpoint in HEALTH_ENDPOINTS:
 			assert_endpoint(base_url, endpoint)
 
