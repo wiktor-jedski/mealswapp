@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 # Destructive migration verification must never target the development database.
 # Implements DESIGN-005 RepositoryInterfaces isolated integration-test persistence.
-DATABASE_URL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp_test?sslmode=disable"
+TEST_DATABASE_NAME = "mealswapp_test"
+DATABASE_URL = f"postgres://mealswapp:mealswapp@localhost:5432/{TEST_DATABASE_NAME}?sslmode=disable"
 REDIS_URL = "redis://localhost:6379/0"
 COMPOSE_SERVICES = ("postgres", "redis")
 HEALTH_ENDPOINTS = ("/health", "/ready", "/api/v1/health", "/api/v1/ready")
@@ -105,6 +106,21 @@ def run_migrations() -> None:
 	run(["go", "run", "./cmd/migrate", "up"], BACKEND, backend_env())
 	run(["go", "run", "./cmd/migrate", "down"], BACKEND, backend_env())
 	run(["go", "run", "./cmd/migrate", "up"], BACKEND, backend_env())
+
+
+def ensure_test_database() -> None:
+	# Implements DESIGN-005 RepositoryInterfaces fresh-stack test database bootstrap.
+	query = f"SELECT 1 FROM pg_database WHERE datname = '{TEST_DATABASE_NAME}'"
+	result = run([
+		"docker", "compose", "exec", "-T", "postgres",
+		"psql", "-U", "mealswapp", "-d", "postgres", "-tAc", query,
+	], capture=True)
+	if result.stdout.strip() == "1":
+		return
+	run([
+		"docker", "compose", "exec", "-T", "postgres",
+		"createdb", "-U", "mealswapp", TEST_DATABASE_NAME,
+	])
 
 
 def ensure_local_dependencies() -> set[str]:
@@ -206,6 +222,7 @@ def main() -> int:
 	worker_process: subprocess.Popen[str] | None = None
 	try:
 		started_services = ensure_local_dependencies()
+		ensure_test_database()
 		run_migrations()
 
 		port = free_port()
