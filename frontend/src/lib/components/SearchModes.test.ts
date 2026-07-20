@@ -35,11 +35,12 @@ test("declares Catalog, Substitution, Daily Diet, and Daily Diet Alternative mod
 });
 
 // Implements DESIGN-001 SearchView mode selection binding verification.
-test("mode buttons call setMode and reflect active state via aria-pressed and $searchStore.mode", () => {
+test("mode buttons call the routed mode callback and reflect active state via aria-pressed and $searchStore.mode", () => {
 	expect(source).toContain("setMode");
+	expect(source).toContain("onModeChange");
 	expect(source).toContain("$searchStore.mode");
 	expect(source).toContain("aria-pressed");
-	expect(source).toContain("onclick={() => setMode(option.value)}");
+	expect(source).toContain("onclick={() => onModeChange(option.value)}");
 });
 
 // Implements DESIGN-001 SearchView mode controls landmark and traceability verification.

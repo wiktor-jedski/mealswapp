@@ -22,6 +22,18 @@ func TestRunReturnsPingError(t *testing.T) {
 	}
 }
 
+// TestRunWithProcessorRejectsNilProcessor verifies DESIGN-004 JobQueueManager
+// worker startup cannot silently become a bootstrap-only wait loop.
+func TestRunWithProcessorRejectsNilProcessor(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"})
+	defer client.Close()
+
+	err := RunWithProcessor(context.Background(), config.Config{Environment: "test"}, client, nil)
+	if err == nil || err.Error() != "worker processor is required" {
+		t.Fatalf("RunWithProcessor() error = %v, want nil-processor error", err)
+	}
+}
+
 // TestRunAfterPingStopsWhenContextIsCanceled verifies DESIGN-004 JobQueueManager graceful shutdown behavior.
 func TestRunAfterPingStopsWhenContextIsCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

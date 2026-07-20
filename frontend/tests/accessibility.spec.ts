@@ -266,7 +266,7 @@ test("keyboard-only Substitution workflow switches mode, adds an input, and sear
   await page.keyboard.press("Enter");
 
   // Results render only after the explicit substitution search action.
-  await expect(page.locator("[data-result-card]")).toHaveCount(10);
+  await expect(page.locator("[data-result-card]")).toHaveCount(3);
 
   // Focus is visible on the keyboard-focused Find substitutions button after activation.
   await expectFocusIndicatorVisible(page);

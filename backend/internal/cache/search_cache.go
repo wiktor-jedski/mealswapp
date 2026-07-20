@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 )
 
@@ -19,10 +20,10 @@ import (
 const (
 	// SearchSchemaVersion isolates Redis entries when search response shape changes.
 	// Implements DESIGN-011 RedisCache schema-version isolation.
-	SearchSchemaVersion = "search-response-v2"
+	SearchSchemaVersion = "search-response-v3"
 	// AutocompleteSchemaVersion isolates Redis entries when autocomplete response shape changes.
 	// Implements DESIGN-011 RedisCache schema-version isolation.
-	AutocompleteSchemaVersion = "autocomplete-response-v1"
+	AutocompleteSchemaVersion = "autocomplete-response-v2"
 	// SimilaritySchemaVersion isolates Redis entries when similarity calculation shape changes.
 	// Implements DESIGN-011 RedisCache schema-version isolation.
 	SimilaritySchemaVersion = "similarity-calculation-v1"
@@ -328,9 +329,10 @@ type canonicalFilter struct {
 // canonicalSubstitution is the stable hash payload for one substitution input.
 // Implements DESIGN-011 RedisCache stable key hashing.
 type canonicalSubstitution struct {
-	FoodObjectID uuid.UUID `json:"foodObjectId"`
-	Quantity     float64   `json:"quantity"`
-	Unit         string    `json:"unit"`
+	FoodObjectID   uuid.UUID                 `json:"foodObjectId"`
+	FoodObjectType repository.FoodObjectType `json:"foodObjectType"`
+	Quantity       float64                   `json:"quantity"`
+	Unit           string                    `json:"unit"`
 }
 
 // canonicalSearchRequest normalizes search request fields for key hashing.
@@ -378,15 +380,23 @@ func canonicalFilters(filters []search.SearchFilter) []canonicalFilter {
 func canonicalSubstitutionInputs(inputs []search.SubstitutionInput) []canonicalSubstitution {
 	canonical := make([]canonicalSubstitution, 0, len(inputs))
 	for _, input := range inputs {
+		objectType := input.FoodObjectType
+		if objectType == "" {
+			objectType = repository.FoodObjectTypeFoodItem
+		}
 		canonical = append(canonical, canonicalSubstitution{
-			FoodObjectID: input.FoodObjectID,
-			Quantity:     input.Quantity,
-			Unit:         strings.ToLower(strings.TrimSpace(input.Unit)),
+			FoodObjectID:   input.FoodObjectID,
+			FoodObjectType: objectType,
+			Quantity:       input.Quantity,
+			Unit:           strings.ToLower(strings.TrimSpace(input.Unit)),
 		})
 	}
 	sort.Slice(canonical, func(i, j int) bool {
 		if canonical[i].FoodObjectID != canonical[j].FoodObjectID {
 			return canonical[i].FoodObjectID.String() < canonical[j].FoodObjectID.String()
+		}
+		if canonical[i].FoodObjectType != canonical[j].FoodObjectType {
+			return canonical[i].FoodObjectType < canonical[j].FoodObjectType
 		}
 		if canonical[i].Unit != canonical[j].Unit {
 			return canonical[i].Unit < canonical[j].Unit

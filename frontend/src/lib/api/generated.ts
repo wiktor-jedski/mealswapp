@@ -10,6 +10,7 @@ export type ErrorCategory =
 	| "timeout"
 	| "server"
 	| "dependency"
+	| "rate_limit"
 	| "unknown";
 
 // Implements DESIGN-017 ErrorMessageMapper AppError contract.
@@ -346,6 +347,371 @@ export interface SavedItemsData {
 /** Saved item collection response envelope. */
 export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** Canonical quantity units accepted by saved daily-diet entries. */
+export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
+
+/** Distinguishes Food Items from Meals in Daily Diet entries. */
+export type FoodObjectType = "food_item" | "meal";
+
+/** One ordered Food Object quantity supplied to a saved Daily Diet. */
+export interface FoodObjectQuantity {
+	foodObjectId: string;
+	foodObjectType: FoodObjectType;
+	quantity: number;
+	unit: CanonicalQuantityUnit;
+	position: number;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** One ordered meal quantity supplied to or returned from a saved diet. */
+export interface MealQuantity {
+	mealId: string;
+	name: string;
+	quantity: number;
+	unit: CanonicalQuantityUnit;
+	position: number;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** One persisted saved-diet meal entry. */
+export interface DailyDietFoodObjectEntry extends FoodObjectQuantity {
+	id: string;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** Server-derived aggregate macros and calories for one saved diet. */
+export interface MacroProjection {
+	protein: number;
+	carbohydrates: number;
+	fat: number;
+	calories: number;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** User-owned saved daily-diet collection; ownership is never client-supplied. */
+export interface DailyDiet {
+	id: string;
+	name: string;
+	entries: DailyDietFoodObjectEntry[];
+	aggregateMacros: MacroProjection;
+	createdAt: string;
+	updatedAt: string;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** Client-editable saved-diet fields with no authoritative aggregate totals. */
+export interface DailyDietCreateRequest {
+	name: string;
+	entries: FoodObjectQuantity[];
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** Client-editable replacement fields with server-recalculated aggregates. */
+export interface DailyDietReplaceRequest extends DailyDietCreateRequest {}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** One saved-diet response envelope. */
+export type DailyDietEnvelope = Envelope<DailyDiet>;
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** Saved-diet collection response payload. */
+export interface DailyDietCollectionData {
+	diets: DailyDiet[];
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
+/** Saved-diet collection response envelope. */
+export type DailyDietCollectionEnvelope = Envelope<DailyDietCollectionData>;
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet endpoint contract.
+export const DAILY_DIETS_ENDPOINT = "/api/v1/daily-diets" as const;
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet endpoint contract.
+/** Builds one user-scoped saved-diet URL. */
+export function buildDailyDietUrl(dietId: string): string {
+	return `${DAILY_DIETS_ENDPOINT}/${encodeURIComponent(dietId)}`;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+export type DailyDietCreateHeaders = Record<string, string> & {
+	Accept: "application/json";
+	"Content-Type": "application/json";
+	"Idempotency-Key": IdempotencyKey;
+	"X-CSRF-Token"?: string;
+};
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+export interface DailyDietCreateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "POST";
+	credentials: "include";
+	headers: DailyDietCreateHeaders;
+	body: string;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+/** Builds a CSRF- and idempotency-aware saved-diet creation request. */
+export function buildDailyDietCreateRequestInit(
+	request: DailyDietCreateRequest,
+	idempotencyKey: IdempotencyKey,
+	options: { csrfToken?: string; signal?: AbortSignal } = {}
+): DailyDietCreateRequestInit {
+	const headers: DailyDietCreateHeaders = {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		"Idempotency-Key": idempotencyKey
+	};
+	if (options.csrfToken) headers["X-CSRF-Token"] = options.csrfToken;
+	return { method: "POST", credentials: "include", headers, body: JSON.stringify(request), signal: options.signal };
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+/** Credentialed read request for a saved-diet collection or item. */
+export interface DailyDietGetRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" };
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+/** Builds the generated saved-diet collection read request. */
+export function buildDailyDietListRequestInit(options: { signal?: AbortSignal } = {}): DailyDietGetRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: "application/json" }, signal: options.signal };
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+/** Builds the generated saved-diet item read request. */
+export function buildDailyDietGetRequestInit(options: { signal?: AbortSignal } = {}): DailyDietGetRequestInit {
+	return buildDailyDietListRequestInit(options);
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+export type DailyDietMutationHeaders = Record<string, string> & {
+	Accept: "application/json";
+	"Content-Type": "application/json";
+	"X-CSRF-Token"?: string;
+};
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+export interface DailyDietReplaceRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "PUT";
+	credentials: "include";
+	headers: DailyDietMutationHeaders;
+	body: string;
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+/** Builds the generated CSRF-protected saved-diet replacement request. */
+export function buildDailyDietReplaceRequestInit(
+	request: DailyDietReplaceRequest,
+	options: { csrfToken?: string; signal?: AbortSignal } = {}
+): DailyDietReplaceRequestInit {
+	const headers: DailyDietMutationHeaders = {
+		Accept: "application/json",
+		"Content-Type": "application/json"
+	};
+	if (options.csrfToken) headers["X-CSRF-Token"] = options.csrfToken;
+	return { method: "PUT", credentials: "include", headers, body: JSON.stringify(request), signal: options.signal };
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+export interface DailyDietDeleteRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "DELETE";
+	credentials: "include";
+	headers: { Accept: "application/json"; "X-CSRF-Token"?: string };
+}
+
+// Implements DESIGN-008 SavedDataRepository frontend authenticated daily-diet request contract.
+/** Builds the generated CSRF-protected saved-diet deletion request. */
+export function buildDailyDietDeleteRequestInit(options: { csrfToken?: string; signal?: AbortSignal } = {}): DailyDietDeleteRequestInit {
+	const headers: DailyDietDeleteRequestInit["headers"] = { Accept: "application/json" };
+	if (options.csrfToken) headers["X-CSRF-Token"] = options.csrfToken;
+	return { method: "DELETE", credentials: "include", headers, signal: options.signal };
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend optimization contract.
+/** Asynchronous optimization submission for one server-owned saved diet. */
+export interface DietOptimizationRequest {
+	dailyDietId: string;
+	tolerancePercent: number;
+	excludedMealIds: string[];
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend optimization contract.
+export type OptimizationStatus = "queued" | "processing" | "completed" | "failed" | "cancelled";
+
+// Implements DESIGN-004 JobStatusTracker frontend safe failure contract.
+export type OptimizationFailureCode =
+	| "failed_validation"
+	| "solver_timeout"
+	| "solver_infeasible"
+	| "worker_crash";
+
+// Implements DESIGN-004 JobStatusTracker frontend completed-alternative contract.
+export interface OptimizationAlternative {
+	meals: MealQuantity[];
+	macros: MacroProjection;
+	similarityScore: number;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend completed-alternative contract.
+/** Type-level mirror of the OpenAPI maximum-three-alternatives constraint. */
+export type OptimizationAlternativeList =
+	| []
+	| [OptimizationAlternative]
+	| [OptimizationAlternative, OptimizationAlternative]
+	| [OptimizationAlternative, OptimizationAlternative, OptimizationAlternative];
+
+// Implements DESIGN-004 JobStatusTracker frontend completed-alternative contract.
+/** A completed job must contain at least one and at most three alternatives. */
+export type CompletedOptimizationAlternativeList =
+	| [OptimizationAlternative]
+	| [OptimizationAlternative, OptimizationAlternative]
+	| [OptimizationAlternative, OptimizationAlternative, OptimizationAlternative];
+
+// Implements DESIGN-004 JobStatusTracker frontend safe failure contract.
+export interface OptimizationFailure {
+	code: OptimizationFailureCode;
+	message: string;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend 202 acknowledgement contract.
+export interface OptimizationJobAcknowledgementData {
+	jobId: string;
+	status: "queued";
+	pollUrl: string;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend 202 acknowledgement contract.
+export type OptimizationJobAcknowledgementEnvelope = Envelope<OptimizationJobAcknowledgementData> & {
+	status: "accepted";
+};
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Fields shared by every user-scoped optimization polling state. */
+export interface OptimizationJobCommon {
+	jobId: string;
+	dailyDietId: string;
+	pollUrl: string;
+	createdAt: string;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Queued jobs contain acknowledgement metadata only. */
+export interface OptimizationJobQueued extends OptimizationJobCommon {
+	status: "queued";
+	startedAt?: never;
+	finishedAt?: never;
+	alternatives?: never;
+	failure?: never;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Processing jobs expose start metadata but no result or failure payload. */
+export interface OptimizationJobProcessing extends OptimizationJobCommon {
+	status: "processing";
+	startedAt: string;
+	finishedAt?: never;
+	alternatives?: never;
+	failure?: never;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Completed jobs require one to three alternatives and cannot carry a failure. */
+export interface OptimizationJobCompleted extends OptimizationJobCommon {
+	status: "completed";
+	startedAt: string;
+	finishedAt: string;
+	alternatives: CompletedOptimizationAlternativeList;
+	failure?: never;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Failed jobs require a safe failure and may retain validated partial alternatives. */
+export interface OptimizationJobFailed extends OptimizationJobCommon {
+	status: "failed";
+	startedAt?: string | null;
+	finishedAt?: string | null;
+	alternatives?: OptimizationAlternativeList;
+	failure: OptimizationFailure;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Cancelled jobs are terminal without alternatives or failure details. */
+export interface OptimizationJobCancelled extends OptimizationJobCommon {
+	status: "cancelled";
+	finishedAt: string;
+	startedAt?: never;
+	alternatives?: never;
+	failure?: never;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+/** Discriminated polling union; status selects the only valid payload shape. */
+export type OptimizationJobData =
+	| OptimizationJobQueued
+	| OptimizationJobProcessing
+	| OptimizationJobCompleted
+	| OptimizationJobFailed
+	| OptimizationJobCancelled;
+
+// Implements DESIGN-004 JobStatusTracker frontend polling contract.
+export type OptimizationJobStatusEnvelope = Envelope<OptimizationJobData>;
+
+// Implements DESIGN-004 JobStatusTracker frontend endpoint contract.
+export const OPTIMIZATION_JOBS_ENDPOINT = "/api/v1/optimization/jobs" as const;
+
+// Implements DESIGN-004 JobStatusTracker frontend endpoint contract.
+/** Builds one user-scoped optimization polling URL. */
+export function buildOptimizationJobUrl(jobId: string): string {
+	return `${OPTIMIZATION_JOBS_ENDPOINT}/${encodeURIComponent(jobId)}`;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend submission request contract.
+export type OptimizationSubmissionHeaders = Record<string, string> & {
+	Accept: "application/json";
+	"Content-Type": "application/json";
+	"Idempotency-Key": IdempotencyKey;
+	"X-CSRF-Token"?: string;
+};
+
+// Implements DESIGN-004 JobStatusTracker frontend submission request contract.
+export interface OptimizationSubmissionRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "POST";
+	credentials: "include";
+	headers: OptimizationSubmissionHeaders;
+	body: string;
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend submission request contract.
+/** Builds a CSRF- and idempotency-aware asynchronous optimization request. */
+export function buildOptimizationSubmissionRequestInit(
+	request: DietOptimizationRequest,
+	idempotencyKey: IdempotencyKey,
+	options: { csrfToken?: string; signal?: AbortSignal } = {}
+): OptimizationSubmissionRequestInit {
+	const headers: OptimizationSubmissionHeaders = {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		"Idempotency-Key": idempotencyKey
+	};
+	if (options.csrfToken) headers["X-CSRF-Token"] = options.csrfToken;
+	return { method: "POST", credentials: "include", headers, body: JSON.stringify(request), signal: options.signal };
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling request contract.
+export interface OptimizationJobRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" };
+}
+
+// Implements DESIGN-004 JobStatusTracker frontend polling request contract.
+/** Builds a credentialed optimization job polling request. */
+export function buildOptimizationJobRequestInit(options: { signal?: AbortSignal } = {}): OptimizationJobRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: "application/json" }, signal: options.signal };
+}
+
 // Implements DESIGN-008 SearchHistoryRepository frontend history contract.
 /** One decrypted search-history entry at the API boundary. */
 export interface SearchHistoryEntry {
@@ -678,12 +1044,13 @@ export interface SearchFilter {
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
 /** Canonical units accepted by substitution search inputs. */
-export type SubstitutionUnit = "g" | "ml" | "oz" | "fl_oz";
+export type SubstitutionUnit = CanonicalQuantityUnit;
 
 // Implements DESIGN-002 SearchController frontend substitution contract.
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 	foodObjectId: string;
+	foodObjectType?: FoodObjectType;
 	quantity: number;
 	unit: SubstitutionUnit;
 }
@@ -728,6 +1095,7 @@ export interface SourceSummary {
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
 	id: string;
+	objectType: FoodObjectType;
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
@@ -802,6 +1170,7 @@ export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRej
 /** Ranked autocomplete suggestion. */
 export interface RankedAutocomplete {
 	itemId: string;
+	objectType: FoodObjectType;
 	label: string;
 	exactMatch: boolean;
 	levenshteinDistance: number;

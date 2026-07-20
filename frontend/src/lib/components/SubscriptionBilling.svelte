@@ -21,6 +21,7 @@
   } from "../stores/entitlement";
   import { authSessionStore, clearAuthSession } from "../stores/auth-session";
   import { buildAuthGuardDecision, requestProtectedAction } from "../stores/auth-surface";
+  import { parseShellRoute, shellViewRoute } from "../shell-routing";
 
   // Implements DESIGN-007 SubscriptionController hosted checkout controls and billing recovery UI.
   // Implements DESIGN-018 AuthenticatedActionGuard checkout handoff to login.
@@ -85,16 +86,15 @@
   );
 
   $effect(() => {
-    const path = window.location.pathname;
-    if (path === "/billing/success") {
-      returnState = "success";
-    } else if (path === "/billing/cancel") {
-      returnState = "cancel";
+    const route = parseShellRoute(window.location.href);
+    if (route.billingReturn !== null) {
+      returnState = route.billingReturn;
+      window.history.replaceState(null, "", shellViewRoute("subscription"));
     }
-    if (returnState === "success" && !handledReturnRefresh) {
+    if (returnState === "success" && !handledReturnRefresh && entitlementRefreshAllowed()) {
       handledReturnRefresh = true;
       void confirmCheckoutEntitlement();
-    } else if (returnState === "cancel" && !handledReturnRefresh) {
+    } else if (returnState === "cancel" && !handledReturnRefresh && entitlementRefreshAllowed()) {
       handledReturnRefresh = true;
       void refreshEntitlementWhenAllowed();
     }
@@ -147,7 +147,8 @@
 
   /** Builds absolute return URLs accepted by the generated checkout creation request. */
   function buildReturnUrl(state: "success" | "cancel", plan: CheckoutPlan): string {
-    const url = new URL(`/billing/${state}`, window.location.origin);
+    const url = new URL("/subscription", window.location.origin);
+    url.searchParams.set("checkout", state);
     url.searchParams.set("plan", plan);
     return url.toString();
   }
@@ -265,7 +266,7 @@
   {/if}
 
   {#if returnState === "success"}
-    <p class="rounded border border-[var(--color-primary)] bg-[var(--color-secondary)] px-3 py-2 text-sm text-[var(--color-text)]" role="status">
+    <p class="rounded border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text)]" role="status">
       {#if status?.tier === "paid" && status.status === "active"}
         Checkout completed. Billing access is active.
       {:else if checkoutConfirmationPending}

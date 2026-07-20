@@ -12,6 +12,7 @@ Copy `.env.example` into a local `.env` if shell-based loading is preferred. The
 
 - `MEALSWAPP_HTTP_PORT=8080`
 - `MEALSWAPP_DATABASE_URL=postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable`
+- `MEALSWAPP_TEST_DATABASE_URL=postgres://mealswapp:mealswapp@localhost:5432/mealswapp_test?sslmode=disable` for destructive PostgreSQL integration tests; test database names must end in `_test`.
 - `MEALSWAPP_REDIS_URL=redis://localhost:6379/0`
 - `MEALSWAPP_FRONTEND_ORIGIN=http://localhost:5173`
 - `MEALSWAPP_ALLOWED_ORIGINS=http://localhost:5173`

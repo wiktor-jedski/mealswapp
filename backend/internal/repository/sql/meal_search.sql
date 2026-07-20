@@ -25,4 +25,6 @@ WHERE ($1::boolean OR m.deleted_at IS NULL)
           WHERE t.kind = 'culinary_role' AND t.id = ANY($5::uuid[])
       )
   )
-ORDER BY lower(btrim(m.name)), m.id;
+	AND (coalesce(cardinality($6::text[]), 0) = 0 OR m.physical_state = ANY($6::text[]))
+ORDER BY lower(btrim(m.name)), m.id
+LIMIT $7 OFFSET $8;

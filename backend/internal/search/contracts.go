@@ -55,9 +55,10 @@ type SearchFilter struct {
 // SubstitutionInput carries one source food quantity for Substitution Search.
 // Implements DESIGN-002 QueryParser.
 type SubstitutionInput struct {
-	FoodObjectID uuid.UUID
-	Quantity     float64
-	Unit         string
+	FoodObjectID   uuid.UUID
+	FoodObjectType repository.FoodObjectType
+	Quantity       float64
+	Unit           string
 }
 
 // SearchRequest carries normalized backend search input.
@@ -76,6 +77,7 @@ type SearchRequest struct {
 // Implements DESIGN-002 QueryParser.
 type SearchResponse struct {
 	Items              []repository.FoodItemEntity
+	ItemTypes          []repository.FoodObjectType
 	TotalCount         int
 	Page               int
 	SimilarityScores   []float64

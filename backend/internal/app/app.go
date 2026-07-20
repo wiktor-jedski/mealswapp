@@ -15,15 +15,18 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/compliance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/dailydiet"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/queue"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/userdata"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
 )
 
 // New constructs the backend Fiber app from HTTP API dependencies.
@@ -64,8 +67,10 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		Hasher:     auth.NewDefaultPasswordHasher(), Tokens: tokens, Encryption: encryption, Digests: digests,
 	})
 	savedRepo := repository.NewPostgresSavedDataRepository(pg)
+	idempotencyRepo := repository.NewPostgresCheckoutIdempotencyRepository(pg)
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
 	mealRepo := repository.NewPostgresMealRepository(pg)
+	dailyDietService := dailydiet.NewService(savedRepo, mealRepo, foodRepo)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
 	var searchResponseCache search.SearchResponseCache
 	var similarityCache search.SimilarityCalculationCache
@@ -77,25 +82,50 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	}
 	userDataService := userdata.NewService(savedRepo, identities, savedRepo, encryption)
 	oauthGateway := NewGoogleOAuthGateway(cfg.OAuth)
+	optimizationTelemetry := observability.NewOptimizationTelemetry(telemetry, telemetry, 1)
+	var optimizationJobs httpapi.OptimizationJobStateStore
+	var optimizationQueue httpapi.OptimizationJobEnqueuer
+	var optimizationAdmission worker.OptimizationAdmissionGate
+	var workerPing func(context.Context) error
+	var queueStats func(context.Context) (observability.QueueSnapshot, error)
+	if redisClient != nil {
+		optimizationJobs = worker.NewRedisOptimizationJobStore(redisClient).WithTelemetry(optimizationTelemetry)
+		optimizationAdmission = worker.NewRedisOptimizationAdmissionGate(redisClient, worker.OptimizationAdmissionConfig{})
+		queueManager := queue.NewJobQueueManager(redisClient, queue.Config{}).WithTelemetry(optimizationTelemetry)
+		optimizationQueue = queueManager
+		queueStats = func(ctx context.Context) (observability.QueueSnapshot, error) {
+			stats, err := queueManager.Stats(ctx)
+			if err != nil {
+				return observability.QueueSnapshot{}, err
+			}
+			return observability.QueueSnapshot{
+				Depth:                   stats.QueueDepth,
+				OldestQueuedAgeSeconds:  stats.OldestQueuedAge.Seconds(),
+				OldestPendingAgeSeconds: stats.OldestPendingAge.Seconds(),
+			}, nil
+		}
+		workerPing = worker.OptimizationWorkerPing(redisClient)
+	}
 	controllers := []httpapi.Controller{
 		httpapi.NewAuthController(authService, sessionManager).WithLogSink(telemetry),
 		httpapi.NewOAuthController(authService, oauthGateway, sessionManager),
-		httpapi.NewProfileController(profile.NewService(identities, encryption)),
+		httpapi.NewProfileController(profile.NewService(identities, encryption), dailyDietService),
 		httpapi.NewSearchController(search.NewSearchDispatcher(
 			search.NewCatalogService(foodRepo, searchResponseCache),
-			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache),
+			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache).WithMealRepository(mealRepo),
 		)).WithAutocompleteService(searchAutocompleteAdapter{
 			service: search.NewAutocompleteService(foodRepo, mealRepo),
 			cache:   redisStore,
 			ttl:     cache.DefaultAutocompleteTTL,
 		}).WithSearchHistoryAppender(userDataService).WithSearchUsageGate(usageLimiter),
-		httpapi.NewFoodObjectController(foodRepo),
+		httpapi.NewFoodObjectController(foodRepo, mealRepo),
 		httpapi.NewUserDataController(userDataService),
-		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption)),
+		httpapi.NewOptimizationController(optimizationJobs, optimizationQueue, savedRepo, entitlementManager, idempotencyRepo, optimizationAdmission).WithTelemetry(optimizationTelemetry),
+		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption, savedRepo)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
 		httpapi.NewSubscriptionController(
-			subscription.NewCheckoutService(cfg.Billing, repository.NewPostgresCheckoutIdempotencyRepository(pg), subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil)),
+			subscription.NewCheckoutService(cfg.Billing, idempotencyRepo, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil)),
 			entitlement.NewStatusService(entitlements, entitlements),
 		).WithBillingRedirectOrigin(cfg.FrontendOrigin).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
 		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
@@ -115,7 +145,9 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			}
 			return redisClient.Ping(ctx).Err()
 		},
-		Audit: repository.NewPostgresSecurityAuditRepository(pg), Logs: telemetry, Metrics: telemetry,
+		WorkerPing: workerPing,
+		QueueStats: queueStats,
+		Audit:      repository.NewPostgresSecurityAuditRepository(pg), Logs: telemetry, Metrics: telemetry,
 		CSRF: csrf, Auth: httpapi.NewJWTAuthenticator(cfg, tokens, sessions), Routes: routes,
 	}
 	return New(deps)

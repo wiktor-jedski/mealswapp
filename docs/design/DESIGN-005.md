@@ -34,11 +34,12 @@
 6. Use repository methods as the only data access path for domain services.
 7. Apply user scoping in repository queries whenever custom items, saved meals, profile data, or history are requested.
 8. For composite meals, load ingredients, sum each ingredient macro after scaling by ingredient quantity, and normalize the total to the meal's per-100g basis. Convert liquid ingredient volume to mass using required density. Missing persisted liquid density is invalid data and returns an error.
-9. Accept `g`, `oz`, and `serving` for solid recipe ingredients. Accept `ml`, `fl_oz`, and `serving` for liquid recipe ingredients. Reject cross-basis units.
+9. Use `g`, `ml`, `oz`, and `fl_oz` as the canonical physical quantity vocabulary. Retain the internal `serving` token only for recipe ingredients as the persisted implementation of SW-REQ-036's user-facing “per unit” calculation: convert solid servings through `averageUnitWeightGrams` and liquid servings through `averageServingVolumeMilliliters` before macro scaling. Accept `g`, `oz`, and `serving` for solid recipe ingredients; accept `ml`, `fl_oz`, and `serving` for liquid recipe ingredients. Saved-diet and substitution contracts never accept `serving`. Reject cross-basis units at service, repository, HTTP, and database boundaries.
 10. Convert metric values to imperial only at the repository boundary when `RepositoryContext.unitSystem = "imperial"`.
 11. Use raw SQL with parameter binding through `pgx` or `lib/pq`; never concatenate user input into SQL.
 12. Maintain indexes for item name, food_category classifications, culinary_role classifications, micronutrient vocabulary keys, and common filter columns.
 13. Return domain entities with normalized macros, validated micronutrients, and hydrated classification lists for callers.
+14. Apply meal-search `LIMIT` and `OFFSET` in SQL after a filter-equivalent count query; hydrate only IDs in the requested page so iterative consumers never rehydrate earlier pages.
 
 ### 3. State Management & Error Handling
 - `not_found`: repository returns typed not-found errors; controllers map to 404.

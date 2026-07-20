@@ -17,7 +17,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-DATABASE_URL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
+# Destructive migration verification must never target the development database.
+# Implements DESIGN-005 RepositoryInterfaces isolated integration-test persistence.
+TEST_DATABASE_NAME = "mealswapp_test"
+DATABASE_URL = f"postgres://mealswapp:mealswapp@localhost:5432/{TEST_DATABASE_NAME}?sslmode=disable"
 REDIS_URL = "redis://localhost:6379/0"
 COMPOSE_SERVICES = ("postgres", "redis")
 HEALTH_ENDPOINTS = ("/health", "/ready", "/api/v1/health", "/api/v1/ready")
@@ -105,6 +108,21 @@ def run_migrations() -> None:
 	run(["go", "run", "./cmd/migrate", "up"], BACKEND, backend_env())
 
 
+def ensure_test_database() -> None:
+	# Implements DESIGN-005 RepositoryInterfaces fresh-stack test database bootstrap.
+	query = f"SELECT 1 FROM pg_database WHERE datname = '{TEST_DATABASE_NAME}'"
+	result = run([
+		"docker", "compose", "exec", "-T", "postgres",
+		"psql", "-U", "mealswapp", "-d", "postgres", "-tAc", query,
+	], capture=True)
+	if result.stdout.strip() == "1":
+		return
+	run([
+		"docker", "compose", "exec", "-T", "postgres",
+		"createdb", "-U", "mealswapp", TEST_DATABASE_NAME,
+	])
+
+
 def ensure_local_dependencies() -> set[str]:
 	# Implements DESIGN-014 MetricsCollector aggregate gate reuse of local dependencies.
 	if local_dependency_ports_accept_connections():
@@ -133,6 +151,19 @@ def start_api(port: int) -> subprocess.Popen[str]:
 	)
 
 
+def start_worker() -> subprocess.Popen[str]:
+	# Implements DESIGN-014 MetricsCollector worker heartbeat readiness gate.
+	print("+ go run ./cmd/worker")
+	return subprocess.Popen(
+		["go", "run", "./cmd/worker"],
+		cwd=BACKEND,
+		text=True,
+		env={**os.environ, **backend_env()},
+		stdout=subprocess.PIPE,
+		stderr=subprocess.STDOUT,
+	)
+
+
 def stop_process(process: subprocess.Popen[str]) -> None:
 	if process.poll() is not None:
 		return
@@ -144,10 +175,25 @@ def stop_process(process: subprocess.Popen[str]) -> None:
 		process.wait(timeout=5)
 
 
-def wait_for_http(url: str, timeout: float = 30.0) -> None:
+def raise_if_process_exited(processes: dict[str, subprocess.Popen[str]]) -> None:
+	# Implements DESIGN-014 UptimeMonitor startup failure diagnostics.
+	for name, process in processes.items():
+		exit_code = process.poll()
+		if exit_code is None:
+			continue
+		output = ""
+		if process.stdout is not None:
+			output = process.stdout.read().strip()[-2000:]
+		detail = f": {output}" if output else ""
+		raise RuntimeError(f"{name} exited with status {exit_code} before readiness{detail}")
+
+
+def wait_for_http(url: str, timeout: float = 30.0, processes: dict[str, subprocess.Popen[str]] | None = None) -> None:
 	deadline = time.monotonic() + timeout
 	last_error: Exception | None = None
 	while time.monotonic() < deadline:
+		if processes:
+			raise_if_process_exited(processes)
 		try:
 			with urllib.request.urlopen(url, timeout=2) as response:
 				if 200 <= response.status < 300:
@@ -159,6 +205,8 @@ def wait_for_http(url: str, timeout: float = 30.0) -> None:
 		except OSError as exc:
 			last_error = exc
 		time.sleep(0.5)
+	if processes:
+		raise_if_process_exited(processes)
 	raise TimeoutError(f"{url} did not respond within {timeout:.0f}s: {last_error}")
 
 
@@ -188,20 +236,27 @@ def main() -> int:
 
 	started_services: set[str] = set()
 	api_process: subprocess.Popen[str] | None = None
+	worker_process: subprocess.Popen[str] | None = None
 	try:
 		started_services = ensure_local_dependencies()
+		ensure_test_database()
 		run_migrations()
 
 		port = free_port()
 		api_process = start_api(port)
+		worker_process = start_worker()
 		base_url = f"http://127.0.0.1:{port}"
-		wait_for_http(f"{base_url}/health")
+		processes = {"api": api_process, "worker": worker_process}
+		wait_for_http(f"{base_url}/health", processes=processes)
+		wait_for_http(f"{base_url}/ready", processes=processes)
 		for endpoint in HEALTH_ENDPOINTS:
 			assert_endpoint(base_url, endpoint)
 
 		print("Local stack verification passed.")
 		return 0
 	finally:
+		if worker_process is not None:
+			stop_process(worker_process)
 		if api_process is not None:
 			stop_process(api_process)
 		if not args.keep_services:

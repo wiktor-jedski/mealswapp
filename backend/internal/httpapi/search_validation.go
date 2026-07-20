@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
@@ -39,9 +40,10 @@ type validatedSearchFilterDTO struct {
 // validatedSubstitutionInputDTO represents one typed substitution input from the request DTO.
 // Implements DESIGN-010 RequestValidator and DESIGN-002 SearchController.
 type validatedSubstitutionInputDTO struct {
-	FoodObjectID string   `json:"foodObjectId"`
-	Quantity     *float64 `json:"quantity"`
-	Unit         string   `json:"unit"`
+	FoodObjectID   string   `json:"foodObjectId"`
+	FoodObjectType string   `json:"foodObjectType"`
+	Quantity       *float64 `json:"quantity"`
+	Unit           string   `json:"unit"`
 }
 
 // ValidateSearchRequestBody validates the Phase 04 search request before service dispatch.
@@ -307,6 +309,12 @@ func validateSubstitutionInputs(value any) error {
 		if _, err := uuid.Parse(foodObjectID); err != nil {
 			return errors.New("food object id is invalid")
 		}
+		if objectType, present := input["foodObjectType"]; present {
+			value, ok := objectType.(string)
+			if !ok || (value != string(repository.FoodObjectTypeFoodItem) && value != string(repository.FoodObjectTypeMeal)) {
+				return errors.New("food object type is invalid")
+			}
+		}
 		quantity, ok := input["quantity"].(float64)
 		if !ok {
 			return errors.New("substitution quantity is invalid")
@@ -375,10 +383,18 @@ func parseValidatedSubstitutionInputDTOs(items []validatedSubstitutionInputDTO) 
 		if err := validateSubstitutionUnit(input.Unit); err != nil {
 			return nil, errors.New("substitution unit is invalid")
 		}
+		objectType := repository.FoodObjectTypeFoodItem
+		if input.FoodObjectType != "" {
+			objectType = repository.FoodObjectType(input.FoodObjectType)
+			if objectType != repository.FoodObjectTypeFoodItem && objectType != repository.FoodObjectTypeMeal {
+				return nil, errors.New("food object type is invalid")
+			}
+		}
 		inputs = append(inputs, search.SubstitutionInput{
-			FoodObjectID: foodObjectID,
-			Quantity:     *input.Quantity,
-			Unit:         input.Unit,
+			FoodObjectID:   foodObjectID,
+			FoodObjectType: objectType,
+			Quantity:       *input.Quantity,
+			Unit:           input.Unit,
 		})
 	}
 	return inputs, nil
@@ -390,10 +406,8 @@ func validateSubstitutionUnit(unit string) error {
 	if _, err := security.NormalizeInput(security.InputFieldSubstitutionUnit, unit); err != nil {
 		return err
 	}
-	switch unit {
-	case "g", "ml", "oz", "fl_oz":
-		return nil
-	default:
+	if err := repository.ValidateQuantityUnit(unit); err != nil {
 		return errors.New("substitution unit is invalid")
 	}
+	return nil
 }

@@ -18,6 +18,14 @@ const viewports = [
   { key: "mobile", label: "Mobile", width: 390, height: 844 }
 ];
 
+const TASK_233_USER_ID = "00000000-0000-0000-0000-000000000233";
+const TASK_233_DIET_ID = "00000000-0000-0000-0000-000000000235";
+const TASK_233_JOB_ID = "00000000-0000-0000-0000-000000000237";
+const TASK_233_MEAL_ID = "00000000-0000-0000-0000-000000000238";
+const TASK_233_SECOND_MEAL_ID = "00000000-0000-0000-0000-000000000239";
+const TASK_233_ENTRY_ID = "00000000-0000-0000-0000-000000000240";
+const TASK_233_SECOND_ENTRY_ID = "00000000-0000-0000-0000-000000000241";
+
 const scenarios = [
   {
     key: "catalog-autocomplete-mil",
@@ -99,9 +107,36 @@ const scenarios = [
       await page.getByRole("navigation", { name: "Account navigation" }).getByRole("button", { name: "Subscription" }).click();
       await page.locator("[data-subscription-view] [data-subscription-billing]").waitFor({ state: "visible" });
     }
+  },
+  {
+    key: "task-233-daily-diet-light",
+    label: "Task 233 Daily Diet - Light",
+    authState: "authenticated",
+    run: async (page) => {
+      await page.goto(baseUrl);
+      await setTheme(page, "light");
+      await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
+      await page.locator(`[data-saved-daily-diet="${TASK_233_DIET_ID}"]`).waitFor({ state: "visible" });
+      await assertTask233SafeState(page);
+    }
+  },
+  {
+    key: "task-233-optimization-dark",
+    label: "Task 233 Optimization - Dark",
+    authState: "authenticated",
+    run: async (page) => {
+      await page.goto(baseUrl);
+      await setTheme(page, "dark");
+      await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative", exact: true }).click();
+      await page.getByRole("radio", { name: "Use Task 233 training day as Daily Diet Alternative input" }).click();
+      await page.getByRole("button", { name: "Generate alternatives" }).click();
+      await page.locator("[data-optimization-alternative]").waitFor({ state: "visible" });
+      await assertTask233SafeState(page);
+    }
   }
 ];
 
+assertTask233FixtureSafe();
 await mkdir(artifactDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
@@ -164,7 +199,7 @@ async function installRoutes(page, authState) {
       status: "ok",
       requestId: "profile-screenshot-0001",
       data: {
-        userId: "user-screenshot",
+        userId: TASK_233_USER_ID,
         displayName: "Screenshot User",
         unitSystem: "metric",
         themePreference: "system",
@@ -194,6 +229,17 @@ async function installRoutes(page, authState) {
     requestId: "favorites-screenshot-0001",
     data: { items: [] }
   }));
+  await page.route(/\/api\/v1\/daily-diets$/, (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "task-233-screenshot-diets",
+    data: { diets: [task233Diet()] }
+  }));
+  await page.route(/\/api\/v1\/optimization\/jobs$/, (route) => fulfillJson(route, 202, {
+    status: "accepted",
+    requestId: "task-233-screenshot-accepted",
+    data: { jobId: TASK_233_JOB_ID, status: "queued", pollUrl: `/api/v1/optimization/jobs/${TASK_233_JOB_ID}` }
+  }));
+  await page.route(/\/api\/v1\/optimization\/jobs\/[0-9a-f-]+$/, (route) => fulfillJson(route, 200, task233CompletedJob()));
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => {
     const url = new URL(route.request().url());
     const query = url.searchParams.get("query")?.toLowerCase() ?? "";
@@ -228,16 +274,64 @@ async function clickSignIn(page) {
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+async function setTheme(page, theme) {
+  await openMobileSidebarIfNeeded(page);
+  const toggle = page.getByLabel("Theme preference");
+  const dark = await toggle.getAttribute("aria-pressed") === "true";
+  if ((theme === "dark") !== dark) await toggle.click();
+  if (await page.locator("html").getAttribute("data-theme") !== theme) {
+    throw new Error(`Task 233 theme did not resolve to ${theme}`);
+  }
+  const close = page.getByLabel("Close activity sidebar");
+  if (await close.isVisible()) await close.click();
+}
+
+async function assertTask233SafeState(page) {
+  assertTask233FixtureSafe();
+  const text = await page.locator("body").innerText();
+  if (/redis:\/\/|postgres:\/\/|<script>|backendDiagnostic|secret\.internal/i.test(text)) {
+    throw new Error("Task 233 screenshot contains unsafe backend state");
+  }
+  if (await page.locator("[data-optimization-progress], [data-daily-diet-save-error], [data-optimization-error]").count() !== 0) {
+    throw new Error("Task 233 screenshot contains stale loading or error state");
+  }
+  const dietSummary = page.locator(`[data-saved-daily-diet="${TASK_233_DIET_ID}"], [data-daily-diet-choice="${TASK_233_DIET_ID}"]`);
+  if (await dietSummary.count() !== 1 || !/^2 (?:items|meals)\b/m.test(await dietSummary.innerText())) {
+    throw new Error("Task 233 screenshot does not show the required two-item Daily Diet");
+  }
+}
+
+function assertTask233FixtureSafe() {
+  const session = authSessionEnvelope().data;
+  const entitlement = entitlementEnvelope().data;
+  const diet = task233Diet();
+  const now = Date.now();
+  const sessionExpiries = [session.accessExpiresAt, session.refreshExpiresAt].map(Date.parse);
+  const trialExpiry = entitlement.trialExpiresAt === null ? null : Date.parse(entitlement.trialExpiresAt);
+  if (session.userId !== TASK_233_USER_ID || entitlement.userId !== TASK_233_USER_ID) {
+    throw new Error("Task 233 fixture identity is inconsistent");
+  }
+  if (sessionExpiries.some((expiry) => !Number.isFinite(expiry) || expiry <= now)) {
+    throw new Error("Task 233 fixture session is expired or invalid");
+  }
+  if (entitlement.status !== "active" || (entitlement.tier === "trial" && (trialExpiry === null || !Number.isFinite(trialExpiry) || trialExpiry <= now))) {
+    throw new Error("Task 233 fixture entitlement is expired or invalid");
+  }
+  if (diet.entries.length !== 2 || new Set(diet.entries.map((entry) => entry.foodObjectId)).size !== 2) {
+    throw new Error("Task 233 fixture must contain exactly two distinct meals");
+  }
+}
+
 function authSessionEnvelope() {
   return {
     status: "ok",
     requestId: "auth-session-screenshot-0001",
     data: {
-      userId: "user-screenshot",
+      userId: TASK_233_USER_ID,
       role: "user",
       hasVerifiedLoginMethod: true,
-      accessExpiresAt: "2026-07-05T13:00:00Z",
-      refreshExpiresAt: "2026-07-12T13:00:00Z"
+      accessExpiresAt: "2027-07-18T13:00:00Z",
+      refreshExpiresAt: "2027-07-25T13:00:00Z"
     }
   };
 }
@@ -247,16 +341,54 @@ function entitlementEnvelope() {
     status: "ok",
     requestId: "entitlement-screenshot-0001",
     data: {
-      userId: "user-screenshot",
+      userId: TASK_233_USER_ID,
       tier: "trial",
       status: "active",
-      allowedModes: ["catalog", "substitution"],
+      allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"],
       searchLimitPer24h: 25,
       usageUsed: 4,
       usageRemaining: 21,
       usageWindowStartedAt: "2026-07-05T00:00:00Z",
-      trialExpiresAt: "2026-07-12T00:00:00Z",
+      trialExpiresAt: "2027-07-25T00:00:00Z",
       billingRecoveryState: "none"
+    }
+  };
+}
+
+function task233Diet() {
+  return {
+    id: TASK_233_DIET_ID,
+    name: "Task 233 training day",
+    entries: [
+      { id: TASK_233_ENTRY_ID, foodObjectId: TASK_233_MEAL_ID, foodObjectType: "meal", quantity: 150, unit: "g", position: 0 },
+      { id: TASK_233_SECOND_ENTRY_ID, foodObjectId: TASK_233_SECOND_MEAL_ID, foodObjectType: "meal", quantity: 100, unit: "g", position: 1 }
+    ],
+    aggregateMacros: { protein: 45, carbohydrates: 90, fat: 12, calories: 648 },
+    createdAt: "2026-07-18T00:00:00Z",
+    updatedAt: "2026-07-18T00:00:01Z"
+  };
+}
+
+function task233CompletedJob() {
+  return {
+    status: "ok",
+    requestId: "task-233-screenshot-completed",
+    data: {
+      jobId: TASK_233_JOB_ID,
+      dailyDietId: TASK_233_DIET_ID,
+      status: "completed",
+      pollUrl: `/api/v1/optimization/jobs/${TASK_233_JOB_ID}`,
+      createdAt: "2026-07-18T00:00:00Z",
+      startedAt: "2026-07-18T00:00:01Z",
+      finishedAt: "2026-07-18T00:00:02Z",
+      alternatives: [{
+        meals: [
+          { mealId: TASK_233_MEAL_ID, name: "Task 233 protein bowl", quantity: 120, unit: "g", position: 0 },
+          { mealId: TASK_233_SECOND_MEAL_ID, name: "Task 233 oat side", quantity: 100, unit: "g", position: 1 }
+        ],
+        macros: { protein: 45, carbohydrates: 90, fat: 12, calories: 648 },
+        similarityScore: 0.91
+      }]
     }
   };
 }

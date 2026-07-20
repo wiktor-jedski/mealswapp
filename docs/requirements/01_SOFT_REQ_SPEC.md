@@ -79,7 +79,7 @@ This document defines the software-level requirements for the Mealswapp applicat
 ---
 
 ## [SW-REQ-006] Search Mode: Daily Diet
-**Statement:** WHILE in 'Daily Diet' mode, the software shall allow the user to select and aggregate multiple meals into a single collection representing a one-day diet.
+**Statement:** WHILE in 'Daily Diet' mode, the software shall allow the user to select and aggregate multiple Food Items and/or Meals into a single collection representing a one-day diet.
 
 | Attribute | Value |
 | :--- | :--- |

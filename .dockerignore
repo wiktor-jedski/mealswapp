@@ -1,0 +1,16 @@
+# Implements DESIGN-004 packaged worker build hygiene.
+.git
+.idea
+.agents
+**/.go-cache
+**/.go-mod-cache
+**/.bun-tmp
+**/.bun-install
+**/node_modules
+**/dist
+**/coverage.out
+**/*.coverage.out
+logs
+frontend
+*.rdb
+*.log

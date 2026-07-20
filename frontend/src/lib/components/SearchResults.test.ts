@@ -59,6 +59,7 @@ test("suppresses similarity display for Catalog results", () => {
 test("adds full Catalog result items to the Substitution Input list", () => {
 	expect(source).toContain("addCatalogResultToSubstitutions");
 	expect(source).toContain("addSubstitutionInput");
+	expect(source).toContain("foodObjectType: item.objectType");
 	expect(source).toContain("displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)");
 	expect(source).toContain('onAddToSubstitution={state.mode === "catalog" ? addCatalogResultToSubstitutions : null}');
 });
@@ -66,4 +67,9 @@ test("adds full Catalog result items to the Substitution Input list", () => {
 // Implements DESIGN-001 ResultsGrid substitution source summary propagation verification.
 test("passes backend sourceSummary into the results grid", () => {
 	expect(source).toContain("sourceSummary={query.data?.sourceSummary ?? null}");
+});
+
+// Implements DESIGN-002 PaginationHandler mode-specific page size verification.
+test("uses three results per Substitution page while Catalog remains ten", () => {
+	expect(source).toContain('pageSize={state.mode === "substitution" ? 3 : 10}');
 });

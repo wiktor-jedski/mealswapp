@@ -40,7 +40,7 @@ One occurrence of an Ingredient within a Composite Meal, with its own Food Quant
 A user-selected collection of Food Items. An Ingredient List does not imply that the Food Items form a prepared Meal, and it may be used as a source of Substitution Inputs.
 
 **Daily Diet**:
-A collection of Meals representing one day of eating.
+A collection of Food Objects representing one day of eating. Entries may be Food Items or Meals; generated Alternative Daily Diets remain collections of Meals.
 _Avoid_: Diet, meal set, Meal List except when naming the UI search mode
 
 **Substitute**:

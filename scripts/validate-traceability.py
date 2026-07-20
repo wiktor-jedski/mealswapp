@@ -47,8 +47,12 @@ TRACEABLE_FILES = {
 	"scripts/validate-traceability.py",
 	"scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py",
+	"scripts/test_verify_local_stack.py",
 	"scripts/verify-phase02-uat.py",
 	"scripts/verify-phase03-uat.py",
+	"scripts/verify-optimization-capacity.py",
+	"scripts/test_verify_optimization_capacity.py",
+	"scripts/verify-clp-worker-image.sh",
 }
 JSON_ROOTS_REQUIRING_SIDECARS = {
 	"frontend",

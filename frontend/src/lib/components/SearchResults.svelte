@@ -117,6 +117,7 @@
     addSubstitutionInput(
       {
         foodObjectId: item.id,
+        foodObjectType: item.objectType,
         quantity: 100,
         unit: displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)
       },
@@ -139,6 +140,7 @@
     loading={searchInFlight}
     totalCount={query.data?.totalCount ?? 0}
     page={state.page}
+    pageSize={state.mode === "substitution" ? 3 : 10}
     onPageChange={setPage}
   />
 {/if}

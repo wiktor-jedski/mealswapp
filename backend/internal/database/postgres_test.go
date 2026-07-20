@@ -55,7 +55,7 @@ func TestOpenRejectsInvalidURL(t *testing.T) {
 // TestOpenAcceptsValidURL proves that Open creates a pg pool with valid URL.
 // TestOpenAcceptsValidURL verifies DESIGN-005 RepositoryInterfaces valid PostgreSQL URL handling.
 func TestOpenAcceptsValidURL(t *testing.T) {
-	pool, err := Open(context.Background(), "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable")
+	pool, err := Open(context.Background(), "postgres://mealswapp:mealswapp@localhost:5432/mealswapp_test?sslmode=disable")
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

@@ -12,6 +12,7 @@
     onQueryInput = () => {},
     placeholder = "Search foods, meals, or ingredients…",
     focusKey = 0,
+    focusOnMount = true,
     searching = false,
     selectFirstOnEnter = false
   }: {
@@ -33,6 +34,8 @@
     placeholder?: string;
     /** Changes when the parent wants the combobox to receive focus, e.g. initial load or mode switch. */
     focusKey?: string | number;
+    /** False for secondary editor comboboxes that must not steal focus from the page-level search. */
+    focusOnMount?: boolean;
     /** True while an explicit submitted search request is fetching results. */
     searching?: boolean;
     /** When true, fresh suggestions make the first option the default Enter selection. */
@@ -78,7 +81,7 @@
 
   // Implements DESIGN-001 SearchView search-bar focus on initial load and mode changes.
   $effect(() => {
-    void focusSearchInput(focusKey, inputEl);
+    if (focusOnMount) void focusSearchInput(focusKey, inputEl);
   });
 
   async function focusSearchInput(nextFocusKey: string | number, element: HTMLInputElement | undefined): Promise<void> {

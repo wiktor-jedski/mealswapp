@@ -146,7 +146,7 @@ func (c *composedSearchGateCache) GetSearchResponse(_ context.Context, req searc
 	if !ok {
 		return search.SearchResponse{}, false, nil
 	}
-	cached.Cache = &search.CacheMetadata{Status: search.CacheStatusHit, Namespace: "search", SchemaVersion: "search-response-v2", TTLSeconds: 300}
+	cached.Cache = &search.CacheMetadata{Status: search.CacheStatusHit, Namespace: "search", SchemaVersion: "search-response-v3", TTLSeconds: 300}
 	return cached, true, nil
 }
 
@@ -160,7 +160,7 @@ func (c *composedSearchGateCache) SetSearchResponse(_ context.Context, req searc
 }
 
 func (c *composedSearchGateCache) SearchResponseCacheMetadata(search.SearchRequest, search.CacheStatus) *search.CacheMetadata {
-	return &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v2", TTLSeconds: 300}
+	return &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v3", TTLSeconds: 300}
 }
 
 func composedSearchGateCacheKey(req search.SearchRequest) string {
@@ -494,7 +494,7 @@ func TestSearchControllerAutocompleteAllowsAnonymousAndReturnsEnvelopeWithCacheM
 			Length:              5,
 			Rank:                1,
 		}},
-		Cache: &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "autocomplete", SchemaVersion: "autocomplete-response-v1", TTLSeconds: 120},
+		Cache: &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "autocomplete", SchemaVersion: "autocomplete-response-v2", TTLSeconds: 120},
 	}}
 	telemetry := &observability.MemorySink{}
 	app := mustNewRouter(t, Dependencies{Config: testConfig(), Metrics: telemetry, Routes: NewSearchController(&fakeSearchService{}).WithAutocompleteService(autocomplete).Routes()})
@@ -511,7 +511,7 @@ func TestSearchControllerAutocompleteAllowsAnonymousAndReturnsEnvelopeWithCacheM
 	}
 	items := envelope.Data["items"].([]any)
 	cacheData := envelope.Data["cache"].(map[string]any)
-	if len(items) != 1 || items[0].(map[string]any)["label"] != "Apple" || cacheData["status"] != "miss" || cacheData["schemaVersion"] != "autocomplete-response-v1" {
+	if len(items) != 1 || items[0].(map[string]any)["label"] != "Apple" || cacheData["status"] != "miss" || cacheData["schemaVersion"] != "autocomplete-response-v2" {
 		t.Fatalf("autocomplete envelope data = %+v", envelope.Data)
 	}
 	if !hasMetric(telemetry.Metrics, "http_response_total", "/api/v1/search/autocomplete", "200") {
@@ -700,6 +700,20 @@ func TestSearchControllerProductionPathDailyDietMissingIDReturns400WithoutSideEf
 	}
 }
 
+func TestSearchResponseDataPreservesMealCandidateType(t *testing.T) {
+	mealID := uuid.MustParse("22000000-0000-0000-0000-000000000102")
+	data := searchResponseData(search.SearchResponse{
+		Items: []repository.FoodItemEntity{{
+			ID: mealID, Name: "Turkey Breast", PhysicalState: repository.PhysicalStateSolid,
+			MacrosPer100: repository.MacroValues{Protein: 29, Fat: 1},
+		}},
+		ItemTypes: []repository.FoodObjectType{repository.FoodObjectTypeMeal},
+	})
+	if len(data.Items) != 1 || data.Items[0].ObjectType != string(repository.FoodObjectTypeMeal) || data.Items[0].Name != "Turkey Breast" {
+		t.Fatalf("meal result DTO = %+v", data.Items)
+	}
+}
+
 func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing.T) {
 	// Implements DESIGN-002 SearchController composed Phase 04 integration gate.
 	// Verifies IT-ARCH-002-001.
@@ -735,7 +749,7 @@ func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing
 		t.Fatalf("catalog results were not repository-to-route sorted: %+v", items)
 	}
 	cacheData := envelope.Data["cache"].(map[string]any)
-	if cacheData["status"] != "miss" || cacheData["namespace"] != "search" || cacheData["schemaVersion"] != "search-response-v2" || cacheData["ttlSeconds"] != float64(300) {
+	if cacheData["status"] != "miss" || cacheData["namespace"] != "search" || cacheData["schemaVersion"] != "search-response-v3" || cacheData["ttlSeconds"] != float64(300) {
 		t.Fatalf("cache miss metadata = %+v", cacheData)
 	}
 
@@ -750,7 +764,7 @@ func TestSearchWorkflowIntegrationGateCatalogCacheHistoryAndDailyDiet(t *testing
 		t.Fatalf("hit response=%d repo=%d cache=%+v history calls=%d envelope=%+v", resp.StatusCode, repo.searches, cache, history.calls, envelope)
 	}
 	cacheData = envelope.Data["cache"].(map[string]any)
-	if cacheData["status"] != "hit" || cacheData["schemaVersion"] != "search-response-v2" {
+	if cacheData["status"] != "hit" || cacheData["schemaVersion"] != "search-response-v3" {
 		t.Fatalf("cache hit metadata = %+v", cacheData)
 	}
 

@@ -34,6 +34,7 @@ import {
 	mapAppError
 } from "./search-client";
 import type { SearchQueryKey } from "./search-client";
+import { selectedDailyDietId } from "../stores/selected-daily-diet";
 
 // Implements DESIGN-001 SearchView generated search API client verification.
 // Implements DESIGN-017 ErrorMessageMapper 400/422/429/503 mapping verification.
@@ -160,6 +161,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
+	selectedDailyDietId.set(null);
 	if (originalNavigator === undefined) {
 		delete (globalThis as { navigator?: unknown }).navigator;
 	} else {
@@ -447,6 +449,15 @@ test("fetchFoodObject GETs /api/v1/food-objects/{id} with credentials", async ()
 	expect(call.init.method).toBe("GET");
 	expect(call.init.credentials).toBe("include");
 	expect(call.init.body).toBeUndefined();
+});
+
+// Implements DESIGN-001 SearchView typed Food Object hydration request verification.
+test("fetchFoodObject preserves the selected Food Object type", async () => {
+	fetchMock.enqueueResponse(jsonResponse(200, makeFoodObjectEnvelope()));
+
+	await fetchFoodObject("meal 1", new AbortController().signal, "meal");
+
+	expect(lastCall().url).toBe("/api/v1/food-objects/meal%201?objectType=meal");
 });
 
 // Implements DESIGN-001 SearchView selected Substitution Input hydration error mapping verification.
@@ -738,6 +749,52 @@ test("equivalent searchStore states share a query key via searchRequestKey", () 
 	setQuery("apple");
 	const keyB = buildSearchQueryOptions(get(searchStore), new LocalQueryCache({ storage: null })).queryKey;
 	expect(keyA).toEqual(keyB);
+});
+
+// Implements DESIGN-001 SearchView authoritative Daily Diet selection query-option verification.
+test("createSearchQueryOptions reacts to authoritative selection changes", () => {
+	setMode("daily_diet_alternative");
+	const options = createSearchQueryOptions(searchStore, new LocalQueryCache({ storage: null }));
+	let key = "";
+	const unsubscribe = options.subscribe((value) => { key = value.queryKey[1]; });
+	selectedDailyDietId.set("diet-1");
+	expect(key).toContain('"dailyDietId":"diet-1"');
+	selectedDailyDietId.set("diet-2");
+	expect(key).toContain('"dailyDietId":"diet-2"');
+	unsubscribe();
+});
+
+// Implements DESIGN-001 SearchView authoritative Daily Diet execution guard verification.
+test("Daily Diet Alternative performs no query until authoritative selection exists", async () => {
+	setMode("daily_diet_alternative");
+	setQuery("apple");
+	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+	const optionsStore = createSearchQueryOptions(searchStore, new LocalQueryCache({ storage: null }));
+	let latestOptions = get(optionsStore);
+	let observer: QueryObserver<SearchResponse, SearchClientError, SearchResponse, SearchResponse, SearchQueryKey> | undefined;
+	const unsubscribeOptions = optionsStore.subscribe((options) => {
+		latestOptions = options;
+		observer?.setOptions(options);
+	});
+	observer = new QueryObserver(queryClient, latestOptions);
+	const unsubscribeObserver = observer.subscribe(() => {});
+
+	await tick();
+	expect(latestOptions.enabled).toBe(false);
+	expect(fetchMock.calls.length).toBe(0);
+
+	fetchMock.enqueueResponse(jsonResponse(200, makeSearchEnvelope(1, 1, "req-selected-diet")));
+	selectedDailyDietId.set("diet-1");
+	await waitForResult(observer, (result) => result.data !== undefined && !result.isFetching);
+	expect(latestOptions.enabled).toBe(true);
+	expect(fetchMock.calls.length).toBe(1);
+	expect(JSON.parse(String(lastCall().init.body))).toMatchObject({
+		mode: "daily_diet_alternative",
+		dailyDietId: "diet-1"
+	});
+
+	unsubscribeObserver();
+	unsubscribeOptions();
 });
 
 // Implements DESIGN-001 SearchView distinct pages produce distinct query keys verification.

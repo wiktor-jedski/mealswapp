@@ -202,13 +202,13 @@ Container orchestration is not required as managed services handle scaling and a
 | Attribute | Value |
 | :--- | :--- |
 | **Type** | Service (Asynchronous Job Queue) |
-| **Static Aspects** | LPSolverWrapper (go-coinor/clp), ConstraintBuilder, ObjectiveFunction, DiversityPenalizer, SolutionValidator, JobQueueManager, JobStatusTracker |
-| **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), Redis (Job Queue via go-redis/queue or machinery), ARCH-010 (API Gateway) |
+| **Static Aspects** | LPSolverWrapper (pure-Go wrapper around the pinned native COIN-OR CLP child process), ConstraintBuilder, ObjectiveFunction, DiversityPenalizer, SolutionValidator, JobQueueManager, JobStatusTracker |
+| **Dependencies** | ARCH-003 (Similarity Engine), ARCH-005 (Data Repository), Redis Streams via `github.com/redis/go-redis/v9`, ARCH-010 (API Gateway) |
 | **Traceability** | SW-REQ-021, SW-REQ-022, SW-REQ-023, SW-REQ-030, SW-REQ-080, SW-REQ-082 |
 
 **Dynamic Behavior:**
 
-- **Job Submission:** Client submits optimization request. API returns `202 Accepted` with a `jobId` immediately, without blocking. Job is queued in Redis-backed queue (go-redis/queue or machinery).
+- **Job Submission:** Client submits optimization request. API returns `202 Accepted` with a `jobId` immediately, without blocking. The server-created job ID is appended with `XADD` to a Redis Stream.
 - **Asynchronous Processing:** Worker processes pick up jobs from queue. LP solving occurs asynchronously, preventing blocking under concurrent load.
 - **Constraint Setup:** Builds linear constraints for target Protein, Carbohydrate, and Fat values with configurable tolerance bands.
 - **Objective Minimization:** Defines calorie count as primary objective function to minimize.
@@ -226,9 +226,9 @@ Container orchestration is not required as managed services handle scaling and a
 
 **Alternative Analysis (BP6):**
 
-- *Chosen Approach:* Asynchronous Job Queue with Redis-backed go-redis/queue or machinery and worker pool
+- *Chosen Approach:* Asynchronous Job Queue with a dedicated worker pool; each worker invokes the pinned native COIN-OR CLP executable through an injectable pure-Go wrapper
 - *Alternative Considered:* Synchronous LP execution within API request lifecycle
-- *Trade-off:* Synchronous execution would block the Go Fiber event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently.
+- *Trade-off:* Synchronous execution would block the Go Fiber event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently. The pure-Go child-process boundary avoids CGO and library ABI coupling while enforcing a hard deadline and bounded sanitized output.
 
 **Reference Documentation:** 
 - 02_APPENDIX_A.md
@@ -1018,7 +1018,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 ### 2026-01-21 (Rev 1.1)
 
 **Changed (Post-Review Remediation):**
-- **ARCH-004:** Converted from synchronous service to asynchronous job queue pattern (go-redis/queue or machinery/Redis) to prevent CPU blocking under concurrent load. Added job submission, polling, and WebSocket notification interfaces. Addresses performance risk for SW-REQ-080, SW-REQ-082.
+- **ARCH-004:** Converted from synchronous service to asynchronous Redis Streams job queue pattern (`XADD`/`XREADGROUP`/`XAUTOCLAIM`/`XACK`) to prevent CPU blocking under concurrent load. Added job submission, polling, and WebSocket notification interfaces. Addresses performance risk for SW-REQ-080, SW-REQ-082.
 - **ARCH-011:** Replaced localStorage-only approach with Service Worker + Cache API for offline image caching. Added `UserCachePurger` for GDPR-compliant Redis cache invalidation on account deletion (SW-REQ-073).
 - **ARCH-002:** Added `CulinaryRoleWeighter` component and explicit dynamic behavior for relevance boosting based on Culinary Role matches during single-input Substitution Searches (SW-REQ-031).
 - **ARCH-003:** Added `SimilarityAssetResolver` and explicit server-hosted image URLs for similarity tier indicators. Addresses SW-REQ-018 requirement to store emojis as server images.

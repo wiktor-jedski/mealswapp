@@ -6,8 +6,10 @@ import {
 	buildSearchRequest,
 	resetSearch,
 	searchStore,
+	setDailyDietId,
 	setMode
 } from "../stores/search";
+import { selectedDailyDietId } from "../stores/selected-daily-diet";
 
 // Implements DESIGN-001 SearchView Substitution Input canonical unit and quantity round-trip verification.
 //
@@ -17,6 +19,7 @@ import {
 
 afterEach(() => {
 	resetSearch();
+	selectedDailyDietId.set(null);
 });
 
 // Implements DESIGN-001 SearchView canonical unit round-trip verification.
@@ -61,7 +64,7 @@ test("Substitution Input quantities are preserved on SearchRequest.substitutionI
 test("daily_diet_alternative mode exposes dailyDietId on SearchRequest without substitutionInputs", () => {
 	setMode("daily_diet_alternative");
 	const dietId = "11111111-2222-3333-4444-555555555555";
-	searchStore.update((state) => ({ ...state, dailyDietId: dietId }));
+	setDailyDietId(dietId);
 
 	const request = buildSearchRequest(get(searchStore));
 

@@ -282,6 +282,28 @@ func TestHealthAndReadiness(t *testing.T) {
 	}
 }
 
+func TestReadinessReportsWorkerDegradation(t *testing.T) {
+	app := mustNewRouter(t, Dependencies{
+		Config:       testConfig(),
+		PostgresPing: func(context.Context) error { return nil },
+		RedisPing:    func(context.Context) error { return nil },
+		WorkerPing:   func(context.Context) error { return errors.New("worker heartbeat unavailable") },
+		QueueStats: func(context.Context) (observability.QueueSnapshot, error) {
+			return observability.QueueSnapshot{Depth: 3, OldestQueuedAgeSeconds: 1.25}, nil
+		},
+	})
+	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/ready", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body := decodeEnvelope(t, resp.Body)
+	queue, queueOK := body.Data["queue"].(map[string]any)
+	if resp.StatusCode != fiber.StatusServiceUnavailable || body.Status != "not_ready" || body.Data["checks"].(map[string]any)["worker"] != "unavailable" || !queueOK || queue["depth"] != float64(3) {
+		t.Fatalf("readiness = %d %+v, want worker degradation", resp.StatusCode, body)
+	}
+}
+
 func TestObservabilitySinkFailureUsesStderrFallback(t *testing.T) {
 	var fallback bytes.Buffer
 	previous := observabilityFallbackWriter

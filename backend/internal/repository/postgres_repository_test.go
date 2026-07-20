@@ -8,7 +8,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -21,17 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/migrations"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/testdatabase"
 )
-
-const testDatabaseURL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
-
-// Implements DESIGN-005 RepositoryInterfaces integration fixtures.
-//
-//go:embed sql/testdata/advisory_lock.sql
-var testAdvisoryLockSQL string
-
-//go:embed sql/testdata/advisory_unlock.sql
-var testAdvisoryUnlockSQL string
 
 //go:embed sql/testdata/user_create.sql
 var testUserCreateSQL string
@@ -86,45 +76,11 @@ var testInvalidLiquidWithoutDensityKindCreateSQL string
 
 func openRepositoryTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-
-	databaseURL := os.Getenv("MEALSWAPP_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = testDatabaseURL
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if _, err := pool.Exec(ctx, testAdvisoryLockSQL); err != nil {
-		pool.Close()
-		t.Fatalf("acquire repository test database lock: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), testAdvisoryUnlockSQL)
-	})
-
 	migrationDir, err := filepath.Abs("../../../database/migrations")
 	if err != nil {
-		pool.Close()
 		t.Fatalf("resolve migration dir: %v", err)
 	}
-	if err := migrations.Run(ctx, pool, "down", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("reset migrations down: %v", err)
-	}
-	if err := migrations.Run(ctx, pool, "up", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("apply migrations up: %v", err)
-	}
-
-	t.Cleanup(pool.Close)
-	return pool
+	return testdatabase.Reset(t, migrationDir)
 }
 
 func createRepositoryUser(t *testing.T, ctx context.Context, db *pgxpool.Pool, email string) uuid.UUID {
@@ -1120,6 +1076,15 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create berry meal: %v", err)
 	}
+	milkMealID, err := mealRepo.Create(ctx, MealEntity{
+		Type:          MealTypeSingle,
+		Name:          "Milk Bowl",
+		PhysicalState: PhysicalStateLiquid,
+		MacrosPer100:  MacroValues{Protein: 3, Carbohydrates: 5, Fat: 1},
+	})
+	if err != nil {
+		t.Fatalf("create milk meal: %v", err)
+	}
 
 	maxPrep := 5
 	meals, total, err := mealRepo.Search(ctx, RepositoryQuery{
@@ -1140,8 +1105,16 @@ func TestPostgresMealRepositorySearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search() infix meal name error = %v", err)
 	}
+	if total != 3 || len(meals) != 3 || meals[0].ID != berryMealID || meals[1].ID != milkMealID || meals[2].ID != oatMealID {
+		t.Fatalf("Search() infix meal name total=%d meals=%#v, want berry, milk, then oat", total, meals)
+	}
+
+	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "Bowl", FoodObjectTypes: []PhysicalState{PhysicalStateSolid}, Limit: 10})
+	if err != nil {
+		t.Fatalf("Search() physical-state filter error = %v", err)
+	}
 	if total != 2 || len(meals) != 2 || meals[0].ID != berryMealID || meals[1].ID != oatMealID {
-		t.Fatalf("Search() infix meal name total=%d meals=%#v, want berry then oat", total, meals)
+		t.Fatalf("Search() solid filter total=%d meals=%#v, want berry then oat", total, meals)
 	}
 
 	meals, total, err = mealRepo.Search(ctx, RepositoryQuery{Name: "Berry", Limit: 1, Offset: 0})
@@ -1321,6 +1294,182 @@ func TestPostgresUserDataRepositories(t *testing.T) {
 	}
 }
 
+// TestPostgresSavedDietRepository verifies DESIGN-008 saved-diet ownership, ordering,
+// foreign keys, atomic replacement, saved-item integrity, and account cascades.
+func TestPostgresSavedDietRepository(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	savedRepo := NewPostgresSavedDataRepository(db)
+	mealRepo := NewPostgresMealRepository(db)
+	foodRepo := NewPostgresFoodItemRepository(db)
+	userID := createRepositoryUser(t, ctx, db, "saved-diet@example.test")
+	otherUserID := createRepositoryUser(t, ctx, db, "other-saved-diet@example.test")
+
+	mealA, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeSingle, Name: "Diet Meal A", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{Protein: 10}})
+	if err != nil {
+		t.Fatalf("create meal A: %v", err)
+	}
+	mealB, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeSingle, Name: "Diet Meal B", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{Carbohydrates: 20}})
+	if err != nil {
+		t.Fatalf("create meal B: %v", err)
+	}
+	foodItem, err := foodRepo.Create(ctx, FoodItemEntity{Name: "Diet Food Item", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{Carbohydrates: 10}})
+	if err != nil {
+		t.Fatalf("create Food Item: %v", err)
+	}
+
+	dietID, err := savedRepo.Create(ctx, userID, SavedDiet{
+		Name: "  Training Day  ",
+		Entries: []SavedDietMealEntry{
+			{MealID: mealB, Quantity: 2, Unit: "ml", Position: 1},
+			{MealID: mealA, Quantity: 100, Unit: "g", Position: 0},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := savedRepo.Create(ctx, userID, SavedDiet{
+		Name:    "training day",
+		Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 100, Unit: "g", Position: 0}},
+	}); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("duplicate normalized name Create() error = %v, want conflict", err)
+	}
+
+	diet, err := savedRepo.Get(ctx, userID, dietID)
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	if diet.UserID != userID || diet.Name != "Training Day" || len(diet.Entries) != 2 || diet.Entries[0].MealID != mealA || diet.Entries[1].MealID != mealB {
+		t.Fatalf("Get() diet = %#v", diet)
+	}
+	if _, err := savedRepo.Get(ctx, otherUserID, dietID); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("cross-user Get() error = %v, want not found", err)
+	}
+	diets, err := savedRepo.List(ctx, otherUserID)
+	if err != nil || len(diets) != 0 {
+		t.Fatalf("cross-user List() diets=%#v error=%v, want empty", diets, err)
+	}
+	if _, err := savedRepo.Create(ctx, otherUserID, SavedDiet{
+		Name:    "Training Day",
+		Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 100, Unit: "g", Position: 0}},
+	}); err != nil {
+		t.Fatalf("same name for another user Create() error = %v", err)
+	}
+
+	var savedDietItemCount int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM saved_items WHERE user_id = $1 AND item_id = $2 AND kind = 'saved_diet'`, userID, dietID).Scan(&savedDietItemCount); err != nil {
+		t.Fatalf("saved_diet item count: %v", err)
+	}
+	if savedDietItemCount != 1 {
+		t.Fatalf("saved_diet item count = %d, want 1", savedDietItemCount)
+	}
+
+	if err := savedRepo.Replace(ctx, userID, SavedDiet{ID: dietID, Name: "Broken Replacement", Entries: []SavedDietMealEntry{{MealID: uuid.New(), Quantity: 1, Unit: "g", Position: 0}}}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("invalid Replace() error = %v, want validation", err)
+	}
+	diet, err = savedRepo.Get(ctx, userID, dietID)
+	if err != nil || len(diet.Entries) != 2 || diet.Entries[0].MealID != mealA {
+		t.Fatalf("failed Replace() changed diet=%#v error=%v", diet, err)
+	}
+	if err := savedRepo.Replace(ctx, otherUserID, SavedDiet{ID: dietID, Name: "Nope"}); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("cross-user Replace() error = %v, want not found", err)
+	}
+	if err := savedRepo.Replace(ctx, userID, SavedDiet{ID: dietID, Name: "Rest Day", Entries: []SavedDietMealEntry{{FoodObjectID: foodItem, FoodObjectType: FoodObjectTypeFoodItem, Quantity: 50, Unit: "g", Position: 0}, {MealID: mealB, Quantity: 1.5, Unit: "fl_oz", Position: 1}}}); err != nil {
+		t.Fatalf("valid Replace() error = %v", err)
+	}
+	diet, err = savedRepo.Get(ctx, userID, dietID)
+	if err != nil || diet.Name != "Rest Day" || len(diet.Entries) != 2 || diet.Entries[0].FoodObjectID != foodItem || diet.Entries[0].FoodObjectType != FoodObjectTypeFoodItem || diet.Entries[1].Unit != "fl_oz" {
+		t.Fatalf("replaced diet=%#v error=%v", diet, err)
+	}
+
+	for _, entry := range []SavedDietMealEntry{{MealID: mealA, Quantity: 0, Unit: "g"}, {MealID: mealA, Quantity: 1, Unit: "serving"}} {
+		if _, err := savedRepo.Create(ctx, userID, SavedDiet{Entries: []SavedDietMealEntry{entry}}); !IsKind(err, ErrorKindValidation) {
+			t.Fatalf("invalid entry %#v error = %v, want validation", entry, err)
+		}
+	}
+	if _, err := savedRepo.Create(ctx, userID, SavedDiet{Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 1, Unit: "ml"}}}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("cross-basis repository Create() error = %v, want validation", err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO saved_diet_meal_entries (saved_diet_id, meal_id, quantity, unit, position) VALUES ($1, $2, 1, 'ml', 9)`, dietID, mealA); !IsKind(mapPostgresError(err, "cross-basis saved diet test"), ErrorKindValidation) {
+		t.Fatalf("cross-basis database insert error = %v, want validation", err)
+	}
+	if _, err := savedRepo.SaveItem(ctx, otherUserID, dietID, SavedItemKindSavedDiet); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("cross-user saved_diet item error = %v, want validation", err)
+	}
+	if _, err := db.Exec(ctx, `INSERT INTO saved_items (user_id, item_id, kind) VALUES ($1, $2, 'saved_diet')`, userID, uuid.New()); !IsKind(mapPostgresError(err, "orphan test"), ErrorKindValidation) {
+		t.Fatalf("orphan saved_diet insert error = %v, want validation", err)
+	}
+
+	if err := savedRepo.Delete(ctx, otherUserID, dietID); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("cross-user Delete() error = %v, want not found", err)
+	}
+	if err := savedRepo.Delete(ctx, userID, dietID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := savedRepo.Get(ctx, userID, dietID); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("deleted Get() error = %v, want not found", err)
+	}
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM saved_items WHERE item_id = $1 AND kind = 'saved_diet'`, dietID).Scan(&savedDietItemCount); err != nil {
+		t.Fatalf("deleted saved_diet item count: %v", err)
+	}
+	if savedDietItemCount != 0 {
+		t.Fatalf("deleted saved_diet item count = %d, want 0", savedDietItemCount)
+	}
+
+	cascadeDietID, err := savedRepo.Create(ctx, userID, SavedDiet{Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 1, Unit: "oz"}}})
+	if err != nil {
+		t.Fatalf("cascade diet Create() error = %v", err)
+	}
+	if _, err := db.Exec(ctx, testUserDeleteSQL, userID); err != nil {
+		t.Fatalf("delete saved-diet owner: %v", err)
+	}
+	var remaining int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM saved_diets WHERE id = $1`, cascadeDietID).Scan(&remaining); err != nil {
+		t.Fatalf("cascade diet count: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("saved diet after account cascade = %d, want 0", remaining)
+	}
+}
+
+// TestPostgresSavedDietMigrationRestoresMetadata verifies DESIGN-008 migration 19 up/down/up state.
+func TestPostgresSavedDietMigrationRestoresMetadata(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	migrationDir, err := filepath.Abs("../../../database/migrations")
+	if err != nil {
+		t.Fatalf("resolve migration dir: %v", err)
+	}
+
+	assertSavedDietMigrationState(t, ctx, db, true)
+	if err := migrations.Run(ctx, db, "down", migrationDir); err != nil {
+		t.Fatalf("run migrations down: %v", err)
+	}
+	assertSavedDietMigrationState(t, ctx, db, false)
+	if err := migrations.Run(ctx, db, "up", migrationDir); err != nil {
+		t.Fatalf("run migrations up: %v", err)
+	}
+	assertSavedDietMigrationState(t, ctx, db, true)
+}
+
+func assertSavedDietMigrationState(t *testing.T, ctx context.Context, db *pgxpool.Pool, wantApplied bool) {
+	t.Helper()
+	var versionCount int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM schema_migrations WHERE version = 19`).Scan(&versionCount); err != nil {
+		t.Fatalf("read saved-diet migration version: %v", err)
+	}
+	var tableName *string
+	if err := db.QueryRow(ctx, `SELECT to_regclass('public.saved_diets')::text`).Scan(&tableName); err != nil {
+		t.Fatalf("read saved-diets table: %v", err)
+	}
+	if wantApplied && (versionCount != 1 || tableName == nil || *tableName != "saved_diets") {
+		t.Fatalf("saved-diet migration applied state version_count=%d table=%v", versionCount, tableName)
+	}
+	if !wantApplied && (versionCount != 0 || tableName != nil) {
+		t.Fatalf("saved-diet migration rolled-back state version_count=%d table=%v", versionCount, tableName)
+	}
+}
+
 func TestPostgresUserDataRepositoryValidationAndErrors(t *testing.T) {
 	ctx := context.Background()
 	queryErr := errors.New("query failed")
@@ -1387,8 +1536,8 @@ func TestPostgresUserDataRepositoryValidationAndErrors(t *testing.T) {
 		t.Fatalf("SaveItem() missing favorite target error = %v, want not found", err)
 	}
 	savedRepo = NewPostgresSavedDataRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
-	if _, err := savedRepo.SaveItem(ctx, userID, itemID, SavedItemKindSavedDiet); !IsKind(err, ErrorKindValidation) {
-		t.Fatalf("SaveItem() deferred saved diet error = %v, want validation", err)
+	if _, err := savedRepo.SaveItem(ctx, userID, itemID, SavedItemKindSavedDiet); !IsKind(err, ErrorKindConnection) {
+		t.Fatalf("SaveItem() saved diet target error = %v, want connection", err)
 	}
 	if err := NewPostgresSavedDataRepository(&fakeSQLExecutor{execErr: queryErr}).RemoveItem(ctx, userID, itemID, SavedItemKindFavorite); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("RemoveItem() exec error = %v, want connection", err)
@@ -2733,6 +2882,7 @@ func TestPostgresMealRepositoryLiquidRecipeNormalizationAndUnits(t *testing.T) {
 		{FoodItemID: liquidID, Quantity: 1, Unit: "fl_oz"},
 		{FoodItemID: liquidID, Quantity: 1, Unit: "serving"},
 	}
+	var recipeID uuid.UUID
 	for _, ingredient := range valid {
 		id, err := mealRepo.Create(ctx, MealEntity{Type: MealTypeComposite, Name: "Liquid Recipe " + ingredient.Unit, PhysicalState: PhysicalStateSolid, RecipeItems: []RecipeIngredientEntity{ingredient}})
 		if err != nil {
@@ -2748,6 +2898,13 @@ func TestPostgresMealRepositoryLiquidRecipeNormalizationAndUnits(t *testing.T) {
 		}
 		if !meal.NormalizedMacrosAvailable || meal.MacrosPer100 != (MacroValues{Protein: wantProtein}) {
 			t.Fatalf("GetByID() liquid %s meal = %#v", ingredient.Unit, meal)
+		}
+		recipeID = id
+	}
+	for _, unit := range []string{"ml", "cup"} {
+		_, err := db.Exec(ctx, `INSERT INTO recipe_ingredients (meal_id, food_item_id, quantity, unit, position) VALUES ($1, $2, 1, $3, 1)`, recipeID, solidID, unit)
+		if !IsKind(mapPostgresError(err, "recipe unit boundary test"), ErrorKindValidation) {
+			t.Fatalf("database recipe unit %q error = %v, want validation", unit, err)
 		}
 	}
 }
@@ -2838,23 +2995,24 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("GetByID() scan error = %v, want connection", err)
 	}
 
-	repo = NewPostgresMealRepository(&fakeSQLExecutor{queryErr: queryErr})
+	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, queryErr: queryErr})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() query error = %v, want connection", err)
 	}
 
-	repo = NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{next: true, scanErr: scanErr}})
+	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rows: &fakeRows{next: true, scanErr: scanErr}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() scan error = %v, want connection", err)
 	}
 
-	repo = NewPostgresMealRepository(&fakeSQLExecutor{rows: &fakeRows{err: queryErr}})
+	repo = NewPostgresMealRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rows: &fakeRows{err: queryErr}})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() rows error = %v, want connection", err)
 	}
 
 	repo = NewPostgresMealRepository(&fakeSQLExecutor{
 		rowsList:  []pgx.Rows{&fakeRows{next: true, values: []any{mealID}}},
+		rowList:   []fakeRow{{values: []any{1}}, {values: mealValues}},
 		queryErrs: []error{nil, queryErr},
 	})
 	if _, _, err := repo.Search(ctx, RepositoryQuery{}); !IsKind(err, ErrorKindConnection) {
@@ -3273,20 +3431,22 @@ func TestPostgresRepositoryErrorBranches(t *testing.T) {
 }
 
 type fakeSQLExecutor struct {
-	rows      pgx.Rows
-	rowsList  []pgx.Rows
-	row       fakeRow
-	rowList   []fakeRow
-	queryErr  error
-	queryErrs []error
-	queryN    int
-	execErr   error
-	execErrs  []error
-	execTags  []pgconn.CommandTag
-	execN     int
-	rowN      int
-	beginErr  error
-	tx        *fakeTx
+	rows       pgx.Rows
+	rowsList   []pgx.Rows
+	row        fakeRow
+	rowList    []fakeRow
+	queryErr   error
+	queryErrs  []error
+	queryN     int
+	queryCalls int
+	queryArgs  [][]any
+	execErr    error
+	execErrs   []error
+	execTags   []pgconn.CommandTag
+	execN      int
+	rowN       int
+	beginErr   error
+	tx         *fakeTx
 }
 
 func (e *fakeSQLExecutor) Begin(context.Context) (pgx.Tx, error) {
@@ -3319,7 +3479,9 @@ func (e *fakeSQLExecutor) Exec(context.Context, string, ...any) (pgconn.CommandT
 	return pgconn.CommandTag{}, e.execErr
 }
 
-func (e *fakeSQLExecutor) Query(context.Context, string, ...any) (pgx.Rows, error) {
+func (e *fakeSQLExecutor) Query(_ context.Context, _ string, args ...any) (pgx.Rows, error) {
+	e.queryCalls++
+	e.queryArgs = append(e.queryArgs, append([]any(nil), args...))
 	if len(e.queryErrs) > 0 {
 		index := e.queryN
 		if index >= len(e.queryErrs) {

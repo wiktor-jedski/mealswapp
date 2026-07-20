@@ -20,7 +20,8 @@ type ProfileService interface {
 // ProfileController owns profile and preference routes.
 // Implements DESIGN-008 ProfileController.
 type ProfileController struct {
-	service ProfileService
+	service   ProfileService
+	dailyDiet DailyDietService
 }
 
 // Implements DESIGN-008 ProfileController compile-time route controller contract.
@@ -28,8 +29,12 @@ var _ Controller = (*ProfileController)(nil)
 
 // NewProfileController creates authenticated profile handlers.
 // Implements DESIGN-008 ProfileController.
-func NewProfileController(service ProfileService) *ProfileController {
-	return &ProfileController{service: service}
+func NewProfileController(service ProfileService, dailyDietServices ...DailyDietService) *ProfileController {
+	controller := &ProfileController{service: service}
+	if len(dailyDietServices) > 0 {
+		controller.dailyDiet = dailyDietServices[0]
+	}
+	return controller
 }
 
 // Routes returns authenticated profile routes.
@@ -38,6 +43,16 @@ func (c *ProfileController) Routes() []RouteDefinition {
 	return []RouteDefinition{
 		{Method: fiber.MethodGet, Path: "/profile", RequiresAuth: true, Handler: c.GetProfile},
 		{Method: fiber.MethodPut, Path: "/profile", RequiresAuth: true, RequiresCSRF: true, Validate: ValidateJSON(validateProfilePreferenceBody), Handler: c.UpdatePreferences},
+		{Method: fiber.MethodGet, Path: "/daily-diets", RequiresAuth: true, Handler: c.ListDailyDiets},
+		{Method: fiber.MethodPost, Path: "/daily-diets", RequiresAuth: true, RequiresCSRF: true, Validate: validateDailyDietCreate, Handler: c.CreateDailyDiet},
+		{Method: fiber.MethodGet, Path: "/daily-diets/:dietId", RequiresAuth: true, Validate: ValidatePath("dietId", validateDailyDietID), Handler: c.GetDailyDiet},
+		{Method: fiber.MethodPut, Path: "/daily-diets/:dietId", RequiresAuth: true, RequiresCSRF: true, Validate: func(ctx *fiber.Ctx) error {
+			if err := validateDailyDietID(ctx.Params("dietId")); err != nil {
+				return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
+			}
+			return validateDailyDietBody(ctx)
+		}, Handler: c.ReplaceDailyDiet},
+		{Method: fiber.MethodDelete, Path: "/daily-diets/:dietId", RequiresAuth: true, RequiresCSRF: true, Validate: ValidatePath("dietId", validateDailyDietID), Handler: c.DeleteDailyDiet},
 	}
 }
 

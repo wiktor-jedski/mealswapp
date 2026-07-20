@@ -199,6 +199,13 @@ test("does not declare duplicate search-mode buttons in the sidebar", () => {
 	expect(source).not.toContain("searchStore");
 });
 
+// Implements DESIGN-001 SidebarComponent compact account-section heading verification.
+test("history and favorites use the standard compact h3 heading style", () => {
+	expect(source).toContain('<h3 class="text-base font-semibold text-[var(--color-text)]">History</h3>');
+	expect(source).toContain('<h3 class="text-base font-semibold text-[var(--color-text)]">Favorites</h3>');
+	expect(source).not.toContain('class="font-data text-xs uppercase text-[var(--color-muted)]">History');
+});
+
 // Implements DESIGN-001 SidebarComponent unit preference row verification.
 test("declares a compact account-level unit preference row", () => {
 	expect(source).toContain('import { preferencesStore, setUnitSystem } from "../stores/preferences"');

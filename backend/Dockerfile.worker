@@ -1,0 +1,50 @@
+# Implements DESIGN-004 dedicated optimizer container with packaged CLP boundary.
+FROM golang:1.25-bookworm AS go-build
+
+WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/mealswapp-worker ./cmd/worker
+
+FROM ubuntu:24.04 AS clp-fetch
+
+ARG CLP_VERSION=1.17.11
+ARG CLP_ARCHIVE=Clp-releases.1.17.11-x86_64-ubuntu24-gcc1330-static.tar.gz
+ARG CLP_SHA256=105ce8684ae95412259b24743895f3be6fb642248052e424cf00939dbd57631c
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl --fail --location --show-error --silent \
+        "https://github.com/coin-or/Clp/releases/download/releases/${CLP_VERSION}/${CLP_ARCHIVE}" \
+        --output /tmp/clp.tar.gz \
+    && echo "${CLP_SHA256}  /tmp/clp.tar.gz" | sha256sum --check --strict \
+    && mkdir /opt/clp \
+    && tar --extract --gzip --file /tmp/clp.tar.gz --directory /opt/clp ./bin/clp \
+    && chmod 0755 /opt/clp/bin/clp
+
+FROM ubuntu:24.04
+
+ARG TARGETARCH
+RUN test "${TARGETARCH}" = "amd64" \
+    && apt-get update \
+    && apt-get install --no-install-recommends --yes \
+        ca-certificates \
+        libblas3 \
+        libgfortran5 \
+        liblapack3 \
+        libstdc++6 \
+        zlib1g \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system --gid 10001 mealswapp \
+    && useradd --system --no-create-home --uid 10001 --gid mealswapp mealswapp
+
+COPY --from=clp-fetch /opt/clp/bin/clp /usr/local/bin/clp
+COPY --from=go-build /out/mealswapp-worker /usr/local/bin/mealswapp-worker
+RUN /usr/local/bin/clp -version 2>&1 | grep --fixed-strings "Coin LP version 1.17.11" \
+    && test -x /usr/local/bin/mealswapp-worker
+
+ENV MEALSWAPP_CLP_EXECUTABLE=/usr/local/bin/clp \
+    MEALSWAPP_CLP_VERSION=1.17.11
+USER mealswapp
+ENTRYPOINT ["/usr/local/bin/mealswapp-worker"]

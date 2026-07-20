@@ -190,13 +190,13 @@ test("monthly and annual buttons create generated checkout contracts and follow 
   expect(checkout.payloads).toEqual([
     {
       plan: "monthly",
-      successUrl: "http://localhost:4173/billing/success?plan=monthly",
-      cancelUrl: "http://localhost:4173/billing/cancel?plan=monthly"
+      successUrl: "http://localhost:4173/subscription?checkout=success&plan=monthly",
+      cancelUrl: "http://localhost:4173/subscription?checkout=cancel&plan=monthly"
     },
     {
       plan: "annual",
-      successUrl: "http://localhost:4173/billing/success?plan=annual",
-      cancelUrl: "http://localhost:4173/billing/cancel?plan=annual"
+      successUrl: "http://localhost:4173/subscription?checkout=success&plan=annual",
+      cancelUrl: "http://localhost:4173/subscription?checkout=cancel&plan=annual"
     }
   ]);
   expect(checkout.csrfHeaders).toEqual(["csrf-billing-checkout", "csrf-billing-checkout"]);
@@ -287,11 +287,23 @@ test("success and cancel return routes refresh entitlement state", async ({ page
   const entitlement = await stubEntitlement(page, entitlementEnvelope({ tier: "paid" }));
 
   await page.goto("/billing/success?plan=monthly");
-  await expect(page.getByText("Checkout completed. Billing access is active.")).toBeVisible();
+  const successStatus = page.getByText("Checkout completed. Billing access is active.");
+  await expect(successStatus).toBeVisible();
+  await expect(page).toHaveURL("http://localhost:4173/subscription");
+  await expect(successStatus).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(page.getByText("paid · active")).toBeVisible();
+
+  const mobileToggle = page.getByLabel("Open activity sidebar");
+  if (await mobileToggle.isVisible()) await mobileToggle.click();
+  await page.getByRole("navigation", { name: "Account navigation" }).getByRole("button", { name: "Search" }).click();
+  await expect(page).toHaveURL("http://localhost:4173/");
+  await page.reload();
+  await waitForVerifiedAuth(page);
+  await expect(page.getByRole("navigation", { name: "Search modes" })).toBeVisible();
 
   await page.goto("/billing/cancel?plan=annual");
   await expect(page.getByText("Checkout was cancelled. Your current entitlement is unchanged.")).toBeVisible();
+  await expect(page).toHaveURL("http://localhost:4173/subscription");
   await expect(page.getByText("paid · active")).toBeVisible();
   expect(entitlement.requests.length).toBeGreaterThanOrEqual(2);
 });

@@ -1,4 +1,4 @@
-# Implements DESIGN-002 SearchController, DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-007 SubscriptionController, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
+# Implements DESIGN-002 SearchController, DESIGN-004 JobStatusTracker, DESIGN-006 AuthController, DESIGN-006 OAuthHandler, DESIGN-007 SubscriptionController, DESIGN-008 SavedDataRepository, DESIGN-010 RouteHandler and DESIGN-017 ErrorMessageMapper shared gateway contracts.
 openapi: 3.1.0
 info:
   title: Mealswapp API
@@ -487,6 +487,210 @@ paths:
           $ref: "#/components/responses/Error"
         "409":
           $ref: "#/components/responses/Error"
+  # Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
+  /api/v1/daily-diets:
+    get:
+      operationId: getApiV1DailyDiets
+      summary: List the authenticated user's saved daily diets
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/DailyDietCollection"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: postApiV1DailyDiet
+      summary: Create an authenticated user's saved daily diet
+      description: Creates a user-owned collection. Names are unique per user after trimming and case folding. The server derives ownership and aggregate macros from the authenticated session and persisted Food Object data; clients cannot submit user IDs or authoritative totals.
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyDietCreateRequest"
+      responses:
+        "201":
+          $ref: "#/components/responses/DailyDiet"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+  # Implements DESIGN-008 SavedDataRepository daily-diet item contract.
+  /api/v1/daily-diets/{dietId}:
+    parameters:
+      - $ref: "#/components/parameters/DailyDietId"
+    get:
+      operationId: getApiV1DailyDiet
+      summary: Read one authenticated user's saved daily diet
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/DailyDiet"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+    put:
+      operationId: putApiV1DailyDiet
+      summary: Replace an authenticated user's saved daily diet
+      description: Replaces the user-owned collection and returns server-derived aggregate macros. Names are unique per user after trimming and case folding. The request contains Food Object quantities only; it cannot override ownership or totals.
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyDietReplaceRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/DailyDiet"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteApiV1DailyDiet
+      summary: Delete an authenticated user's saved daily diet
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      responses:
+        "204":
+          description: Saved daily diet deleted.
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+  # Implements DESIGN-004 JobStatusTracker optimization submission contract.
+  /api/v1/optimization/jobs:
+    post:
+      operationId: postApiV1OptimizationJob
+      summary: Submit a saved daily diet for asynchronous optimization
+      description: Enqueues a server-owned saved diet for optimization. The server reloads the diet under the authenticated user; the client supplies only target constraints and exclusions, never original meal data, user IDs, or authoritative macro totals.
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DietOptimizationRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/OptimizationJobAcknowledgement"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
+  # Implements DESIGN-004 JobStatusTracker polling contract.
+  /api/v1/optimization/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/OptimizationJobId"
+    get:
+      operationId: getApiV1OptimizationJob
+      summary: Poll an authenticated user's optimization job
+      description: Returns only the current user's job. A job belonging to another user is indistinguishable from a missing job; expired completed results return a stable expired error.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/OptimizationJobStatus"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "410":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
   /api/v1/billing/entitlement:
     get:
       operationId: getApiV1BillingEntitlement
@@ -613,11 +817,27 @@ components:
       name: Idempotency-Key
       in: header
       required: true
-      description: Stable client-generated key for retrying checkout creation. The key is scoped to the authenticated user, HTTP method, route, and normalized request body.
+      description: Stable client-generated key for retrying an authenticated mutation. The key is scoped to the authenticated user, HTTP method, route, and normalized request body; it never carries a user ID.
       schema:
         type: string
         minLength: 8
         maxLength: 255
+    DailyDietId:
+      name: dietId
+      in: path
+      required: true
+      description: User-owned saved daily-diet identifier. Ownership is derived from the authenticated session.
+      schema:
+        type: string
+        format: uuid
+    OptimizationJobId:
+      name: jobId
+      in: path
+      required: true
+      description: User-owned optimization job identifier. Ownership is derived from the authenticated session.
+      schema:
+        type: string
+        format: uuid
     StripeSignature:
       name: Stripe-Signature
       in: header
@@ -657,11 +877,25 @@ components:
           schema:
             $ref: "#/components/schemas/AuthSessionEnvelope"
     Error:
-      description: User-safe gateway error. Includes 400, 401, 402, 403, 409, 422, 429, 500, 503, and 504 responses.
+      description: User-safe gateway error envelope reused by operation-level error responses.
       headers:
         Retry-After:
           schema:
             type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Envelope"
+    # Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter shared admission contract.
+    TooManyRequests:
+      description: Retryable rate or admission rejection with a positive whole-second delay.
+      headers:
+        Retry-After:
+          required: true
+          description: Positive whole seconds before the caller should retry.
+          schema:
+            type: integer
+            minimum: 1
       content:
         application/json:
           schema:
@@ -678,6 +912,36 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/SavedItemsEnvelope"
+    DailyDiet:
+      description: User-owned saved daily-diet collection with server-derived aggregate macros.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DailyDietEnvelope"
+    DailyDietCollection:
+      description: User-owned saved daily-diet collection list.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/DailyDietCollectionEnvelope"
+    OptimizationJobAcknowledgement:
+      description: Asynchronous optimization accepted for processing. No result is available in the acknowledgement.
+      headers:
+        Location:
+          description: Relative polling URL for the accepted optimization job.
+          schema:
+            type: string
+            format: uri-reference
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OptimizationJobAcknowledgementEnvelope"
+    OptimizationJobStatus:
+      description: User-scoped optimization job polling response. Completed results contain at most three server-validated alternatives.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/OptimizationJobStatusEnvelope"
     SearchHistory:
       description: Search history envelope.
       content:
@@ -751,7 +1015,7 @@ components:
       properties:
         category:
           type: string
-          enum: [validation, auth, entitlement, security, network, timeout, server, dependency, unknown]
+          enum: [validation, auth, entitlement, security, network, timeout, server, dependency, rate_limit, unknown]
         code:
           type: string
         message:
@@ -982,6 +1246,462 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/SavedItem"
+    # Implements DESIGN-008 SavedDataRepository daily-diet quantity contract.
+    CanonicalQuantityUnit:
+      type: string
+      enum: [g, ml, oz, fl_oz]
+      description: Canonical mass or volume unit accepted by saved-diet entries.
+    FoodObjectType:
+      type: string
+      enum: [food_item, meal]
+    FoodObjectQuantity:
+      type: object
+      additionalProperties: false
+      required: [foodObjectId, foodObjectType, quantity, unit, position]
+      properties:
+        foodObjectId:
+          type: string
+          format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+          multipleOf: 0.001
+        unit:
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 99
+    MealQuantity:
+      type: object
+      additionalProperties: false
+      required: [mealId, name, quantity, unit, position]
+      properties:
+        mealId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+          multipleOf: 0.001
+          description: Positive finite quantity. The server validates finiteness before persistence or solving.
+        unit:
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 99
+    DailyDietFoodObjectEntry:
+      type: object
+      additionalProperties: false
+      required: [id, foodObjectId, foodObjectType, quantity, unit, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        foodObjectId:
+          type: string
+          format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+          multipleOf: 0.001
+        unit:
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 99
+    MacroProjection:
+      type: object
+      additionalProperties: false
+      required: [protein, carbohydrates, fat, calories]
+      description: Server-derived one-day aggregate macro and calorie projection; clients cannot submit or override these values.
+      properties:
+        protein:
+          type: number
+          minimum: 0
+          maximum: 1000000000
+        carbohydrates:
+          type: number
+          minimum: 0
+          maximum: 1000000000
+        fat:
+          type: number
+          minimum: 0
+          maximum: 1000000000
+        calories:
+          type: number
+          minimum: 0
+          maximum: 1000000000
+    DailyDiet:
+      type: object
+      additionalProperties: false
+      required: [id, name, entries, aggregateMacros, createdAt, updatedAt]
+      description: User-owned saved daily diet. The authenticated session, not a client field, determines ownership.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: User-scoped unique name, compared after trimming and case folding.
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/DailyDietFoodObjectEntry"
+        aggregateMacros:
+          $ref: "#/components/schemas/MacroProjection"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    DailyDietCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, entries]
+      description: Client-editable saved-diet fields. It intentionally has no userId or aggregate macro fields.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: User-scoped unique name, compared after trimming and case folding.
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/FoodObjectQuantity"
+    DailyDietReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [name, entries]
+      description: Client-editable replacement fields. Aggregate macros are recalculated by the server.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: User-scoped unique name, compared after trimming and case folding.
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/FoodObjectQuantity"
+    DailyDietEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/DailyDiet"
+    DailyDietCollectionEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          additionalProperties: false
+          required: [diets]
+          properties:
+            diets:
+              type: array
+              items:
+                $ref: "#/components/schemas/DailyDiet"
+    # Implements DESIGN-004 JobStatusTracker optimization contract.
+    OptimizationStatus:
+      type: string
+      enum: [queued, processing, completed, failed, cancelled]
+    OptimizationFailureCode:
+      type: string
+      enum: [failed_validation, solver_timeout, solver_infeasible, worker_crash]
+      description: Stable terminal job-failure code. Queue outages are retryable submission errors, expiry is a 410 polling error, and internal diagnostics are never returned.
+    DietOptimizationRequest:
+      type: object
+      additionalProperties: false
+      required: [dailyDietId, tolerancePercent, excludedMealIds]
+      description: Optimization constraints for one server-owned saved daily diet. Original meal data and authoritative aggregate targets are loaded and calculated by the server.
+      properties:
+        dailyDietId:
+          type: string
+          format: uuid
+        tolerancePercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          multipleOf: 0.1
+          description: Allowed percentage deviation around each server-derived saved-diet macro target.
+        excludedMealIds:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+    OptimizationAlternative:
+      type: object
+      additionalProperties: false
+      required: [meals, macros, similarityScore]
+      description: Server-validated alternative with recalculated aggregate macros; no client totals are accepted.
+      properties:
+        meals:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/MealQuantity"
+        macros:
+          $ref: "#/components/schemas/MacroProjection"
+        similarityScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          multipleOf: 0.0001
+          description: Cosine similarity between the original saved diet and alternative aggregate protein, carbohydrate, and fat vectors, rounded to four decimal places.
+    OptimizationFailure:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          $ref: "#/components/schemas/OptimizationFailureCode"
+        message:
+          type: string
+          minLength: 1
+          maxLength: 240
+          description: User-safe failure message with no solver, queue, or persistence internals.
+    OptimizationJobAcknowledgementData:
+      type: object
+      additionalProperties: false
+      required: [jobId, status, pollUrl]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued]
+        pollUrl:
+          type: string
+          format: uri-reference
+          minLength: 1
+    OptimizationJobAcknowledgementEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: '^[A-Za-z0-9._:-]+$'
+        data:
+          $ref: "#/components/schemas/OptimizationJobAcknowledgementData"
+    OptimizationJobData:
+      oneOf:
+        - $ref: "#/components/schemas/OptimizationJobQueued"
+        - $ref: "#/components/schemas/OptimizationJobProcessing"
+        - $ref: "#/components/schemas/OptimizationJobCompleted"
+        - $ref: "#/components/schemas/OptimizationJobFailed"
+        - $ref: "#/components/schemas/OptimizationJobCancelled"
+      discriminator:
+        propertyName: status
+        mapping:
+          queued: "#/components/schemas/OptimizationJobQueued"
+          processing: "#/components/schemas/OptimizationJobProcessing"
+          completed: "#/components/schemas/OptimizationJobCompleted"
+          failed: "#/components/schemas/OptimizationJobFailed"
+          cancelled: "#/components/schemas/OptimizationJobCancelled"
+      description: User-scoped job state discriminated by status. Completed results expire after the documented result TTL.
+    OptimizationJobQueued:
+      type: object
+      additionalProperties: false
+      required: [jobId, dailyDietId, status, pollUrl, createdAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        dailyDietId:
+          type: string
+          format: uuid
+        status:
+          allOf:
+            - $ref: "#/components/schemas/OptimizationStatus"
+            - const: queued
+        pollUrl:
+          type: string
+          format: uri-reference
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+    OptimizationJobProcessing:
+      type: object
+      additionalProperties: false
+      required: [jobId, dailyDietId, status, pollUrl, createdAt, startedAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        dailyDietId:
+          type: string
+          format: uuid
+        status:
+          allOf:
+            - $ref: "#/components/schemas/OptimizationStatus"
+            - const: processing
+        pollUrl:
+          type: string
+          format: uri-reference
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+    OptimizationJobCompleted:
+      type: object
+      additionalProperties: false
+      required: [jobId, dailyDietId, status, pollUrl, createdAt, startedAt, finishedAt, alternatives]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        dailyDietId:
+          type: string
+          format: uuid
+        status:
+          allOf:
+            - $ref: "#/components/schemas/OptimizationStatus"
+            - const: completed
+        pollUrl:
+          type: string
+          format: uri-reference
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        alternatives:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/OptimizationAlternative"
+    OptimizationJobFailed:
+      type: object
+      additionalProperties: false
+      required: [jobId, dailyDietId, status, pollUrl, createdAt, failure]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        dailyDietId:
+          type: string
+          format: uuid
+        status:
+          allOf:
+            - $ref: "#/components/schemas/OptimizationStatus"
+            - const: failed
+        pollUrl:
+          type: string
+          format: uri-reference
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        finishedAt:
+          type:
+            - string
+            - "null"
+          format: date-time
+        alternatives:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/OptimizationAlternative"
+        failure:
+          $ref: "#/components/schemas/OptimizationFailure"
+    OptimizationJobCancelled:
+      type: object
+      additionalProperties: false
+      required: [jobId, dailyDietId, status, pollUrl, createdAt, finishedAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        dailyDietId:
+          type: string
+          format: uuid
+        status:
+          allOf:
+            - $ref: "#/components/schemas/OptimizationStatus"
+            - const: cancelled
+        pollUrl:
+          type: string
+          format: uri-reference
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+    OptimizationJobStatusEnvelope:
+      type: object
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: '^[A-Za-z0-9._:-]+$'
+        data:
+          $ref: "#/components/schemas/OptimizationJobData"
     SearchHistoryEntry:
       type: object
       required: [id, query, mode, filtersHash]
@@ -1038,12 +1758,13 @@ components:
         foodObjectId:
           type: string
           format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
         quantity:
           type: number
           exclusiveMinimum: 0
         unit:
-          type: string
-          enum: [g, ml, oz, fl_oz]
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
     SearchRequest:
       type: object
       additionalProperties: false
@@ -1124,11 +1845,13 @@ components:
     FoodObject:
       type: object
       additionalProperties: false
-      required: [id, name, physicalState, classifications, primaryFoodCategory, macros, macroBasis, calories]
+      required: [id, objectType, name, physicalState, classifications, primaryFoodCategory, macros, macroBasis, calories]
       properties:
         id:
           type: string
           format: uuid
+        objectType:
+          $ref: "#/components/schemas/FoodObjectType"
         name:
           type: string
         physicalState:
@@ -1276,11 +1999,13 @@ components:
           $ref: "#/components/schemas/AppError"
     RankedAutocomplete:
       type: object
-      required: [itemId, label, exactMatch, levenshteinDistance, length, rank]
+      required: [itemId, objectType, label, exactMatch, levenshteinDistance, length, rank]
       properties:
         itemId:
           type: string
           format: uuid
+        objectType:
+          $ref: "#/components/schemas/FoodObjectType"
         label:
           type: string
         exactMatch:

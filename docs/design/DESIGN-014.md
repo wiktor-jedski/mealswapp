@@ -21,7 +21,7 @@
 1. Configure Fiber logger middleware to emit structured request logs with request ID, route, status, latency, and user ID when known.
 2. Send application logs and metrics to GCP Cloud Monitoring.
 3. Collect response-time metrics per endpoint and compute P95 latency.
-4. Collect error rates, concurrent connections, Redis health, database health, queue depth, and worker utilization.
+4. Collect error rates, concurrent connections, Redis health, database health, queue depth, and worker utilization. Optimization queue depth is pending plus consumer-group lag. Emit `optimization_queue_age_seconds{kind="oldest_queued"}` from the oldest waiting entry after the group's last-delivered ID and `{kind="oldest_pending"}` from the greatest Redis pending idle duration. Both use unit `seconds`, admit only the two fixed `kind` values, and clamp clock-skewed negative durations to zero.
 5. Run uptime checks against `/health` and `/ready` every 30 seconds.
 6. Define warning alert when P95 latency exceeds 1.5 seconds and critical alert when it exceeds 2 seconds.
 7. Retain logs for at least 90 days.
@@ -40,6 +40,7 @@
 ### 4. Component Interfaces
 - `func Log(ctx context.Context, event LogEvent) error`
 - `func RecordMetric(ctx context.Context, point MetricPoint) error`
+- `func QueueStats(ctx context.Context, depth int64, oldestQueuedAge time.Duration, oldestPendingAge time.Duration)`
 - `func RegisterAlertRule(rule AlertRule) error`
 - `func EvaluateAlertRules(ctx context.Context, now time.Time) ([]AlertRule, error)`
 - `func HealthHandler(ctx *fiber.Ctx) error`

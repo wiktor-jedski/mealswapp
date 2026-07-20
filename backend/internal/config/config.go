@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,6 +29,8 @@ const (
 	defaultStripeWebhookSecret  = "whsec_local_fixture"
 	defaultStripeMonthlyPriceID = "price_local_monthly_fixture"
 	defaultStripeAnnualPriceID  = "price_local_annual_fixture"
+	defaultCLPExecutable        = "clp"
+	defaultCLPVersion           = "1.17.11"
 )
 
 // Config contains the environment-backed settings for the API and worker.
@@ -44,6 +47,8 @@ type Config struct {
 	EnforceTLS     bool
 	HSTSMaxAge     int
 	TLSMinVersion  string
+	CLPExecutable  string
+	CLPVersion     string
 	Account        AccountConfig
 	Billing        BillingConfig
 	OAuth          OAuthConfig
@@ -101,6 +106,14 @@ func Load() (Config, error) {
 		RedisURL:       env("MEALSWAPP_REDIS_URL", defaultRedisURL),
 		Environment:    env("MEALSWAPP_ENV", defaultEnvironment),
 		FrontendOrigin: env("MEALSWAPP_FRONTEND_ORIGIN", defaultFrontendOrigin),
+		CLPExecutable:  env("MEALSWAPP_CLP_EXECUTABLE", defaultCLPExecutable),
+		CLPVersion:     env("MEALSWAPP_CLP_VERSION", defaultCLPVersion),
+	}
+	if strings.TrimSpace(cfg.CLPExecutable) != cfg.CLPExecutable || strings.ContainsAny(cfg.CLPExecutable, "\x00\r\n\t ") || strings.HasPrefix(cfg.CLPExecutable, "-") {
+		return Config{}, errors.New("MEALSWAPP_CLP_EXECUTABLE must be a single executable path")
+	}
+	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(cfg.CLPVersion) {
+		return Config{}, errors.New("MEALSWAPP_CLP_VERSION must be major.minor.patch")
 	}
 	cfg.AllowedOrigins = splitCSV(env("MEALSWAPP_ALLOWED_ORIGINS", cfg.FrontendOrigin))
 	if len(cfg.AllowedOrigins) == 0 {

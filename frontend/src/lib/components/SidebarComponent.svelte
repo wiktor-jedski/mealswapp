@@ -369,7 +369,7 @@
 
         <!-- Implements DESIGN-001 SidebarComponent authenticated search history list loaded from generated Phase 03 contracts. -->
         <section class="grid gap-2" aria-label="Search history" data-sidebar-history>
-          <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">History</h2>
+          <h3 class="text-base font-semibold text-[var(--color-text)]">History</h3>
           {#if historyError}
             <p class="text-sm text-[var(--color-muted)]" data-sidebar-history-error>{historyError}</p>
           {:else if !historyLoading && history.length === 0}
@@ -394,7 +394,7 @@
 
         <!-- Implements DESIGN-001 SidebarComponent authenticated favorites list loaded from generated Phase 03 contracts. -->
         <section class="grid gap-2" aria-label="Favorites" data-sidebar-favorites>
-          <h2 class="font-data text-xs uppercase text-[var(--color-muted)]">Favorites</h2>
+          <h3 class="text-base font-semibold text-[var(--color-text)]">Favorites</h3>
           {#if favoritesError}
             <p class="text-sm text-[var(--color-muted)]" data-sidebar-favorites-error>{favoritesError}</p>
           {:else if !favoritesLoading && favorites.length === 0}

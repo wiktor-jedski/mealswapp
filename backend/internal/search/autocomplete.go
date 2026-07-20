@@ -13,8 +13,9 @@ import (
 // AutocompleteCandidate identifies one food or meal name available for ranking.
 // Implements DESIGN-002 AutocompleteRanker.
 type AutocompleteCandidate struct {
-	ItemID uuid.UUID
-	Label  string
+	ItemID     uuid.UUID
+	Label      string
+	ObjectType repository.FoodObjectType
 }
 
 // RankedAutocomplete carries deterministic autocomplete ranking metadata.
@@ -26,6 +27,7 @@ type RankedAutocomplete struct {
 	LevenshteinDistance int
 	Length              int
 	Rank                int
+	ObjectType          repository.FoodObjectType
 }
 
 // AutocompleteService retrieves food and meal candidates and ranks them.
@@ -79,14 +81,14 @@ func (s AutocompleteService) Autocomplete(ctx context.Context, query string, rc 
 				continue
 			}
 			seen[food.ID] = struct{}{}
-			candidates = append(candidates, AutocompleteCandidate{ItemID: food.ID, Label: food.Name})
+			candidates = append(candidates, AutocompleteCandidate{ItemID: food.ID, Label: food.Name, ObjectType: repository.FoodObjectTypeFoodItem})
 		}
 		for _, meal := range meals {
 			if _, ok := seen[meal.ID]; ok {
 				continue
 			}
 			seen[meal.ID] = struct{}{}
-			candidates = append(candidates, AutocompleteCandidate{ItemID: meal.ID, Label: meal.Name})
+			candidates = append(candidates, AutocompleteCandidate{ItemID: meal.ID, Label: meal.Name, ObjectType: repository.FoodObjectTypeMeal})
 		}
 	}
 	return RankAutocomplete(normalized.Value, candidates, PageSize), nil
@@ -119,6 +121,7 @@ func RankAutocomplete(query string, candidates []AutocompleteCandidate, limit in
 			ExactMatch:          normalizedLabel == normalizedQuery,
 			LevenshteinDistance: levenshteinDistance(normalizedQuery, normalizedLabel),
 			Length:              len([]rune(candidate.Label)),
+			ObjectType:          candidate.ObjectType,
 		})
 	}
 

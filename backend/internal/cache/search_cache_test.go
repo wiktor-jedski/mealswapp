@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 )
 
@@ -94,6 +95,11 @@ func TestAutocompleteAndSimilarityKeysAreDeterministic(t *testing.T) {
 	changed := BuildSimilarityCacheKey([]search.SubstitutionInput{{FoodObjectID: inputB.FoodObjectID, Quantity: 3, Unit: inputB.Unit}, inputA})
 	if changed == simLeft {
 		t.Fatal("changed similarity quantity reused key")
+	}
+	mealInput := inputA
+	mealInput.FoodObjectType = repository.FoodObjectTypeMeal
+	if BuildSimilarityCacheKey([]search.SubstitutionInput{mealInput}) == BuildSimilarityCacheKey([]search.SubstitutionInput{inputA}) {
+		t.Fatal("meal and food-item inputs reused a similarity key")
 	}
 }
 

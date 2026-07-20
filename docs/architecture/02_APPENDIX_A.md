@@ -103,7 +103,7 @@ Go Fiber API Node capacity: ~500 req/s per node
 Required nodes: 1 (with 2x headroom = 2 nodes minimum)
 
 LP jobs: ~5% of requests = 5 jobs/second
-Worker capacity: ~10 jobs/second per worker (Go with go-coinor/clp)
+Worker capacity: ~10 jobs/second per worker (Go wrapper with native COIN-OR CLP child process)
 Required workers: 1 (with headroom = 2 workers)
 ```
 
@@ -165,7 +165,7 @@ When system resources are constrained, features degrade in this order (least cri
 | Component | Failure Scenario | Detection | Response | User Impact |
 |:----------|:-----------------|:----------|:---------|:------------|
 | **ARCH-003** (Similarity) | High latency (>5s) | Timeout monitoring | Return results without similarity scores | Results display without color indicators; "Similarity unavailable" banner |
-| **ARCH-004** (LP Optimizer) | Job timeout (>30s) | go-redis/queue or machinery timeout event | Mark job failed; return partial results if available | "Optimization taking longer than expected. Please try again." |
+| **ARCH-004** (LP Optimizer) | Job timeout (>30s) | Worker `exec.CommandContext` deadline and child-process exit | Terminate CLP, remove the private solver directory, mark job failed, and return partial results if available | "Optimization taking longer than expected. Please try again." |
 | **ARCH-012** (External APIs) | USDA/OpenFoodFacts/Resend down | HTTP 5xx or timeout | Log warning; return empty results to admin | Admin sees "External data source unavailable"; no user impact |
 | **Redis** | Connection refused | github.com/redis/go-redis/v9 connection error | Fall back to direct PostgreSQL queries (lib/pq or pgx) | Slower responses (~500ms vs ~10ms); full functionality maintained |
 | **PostgreSQL Primary** | Connection lost | Connection pool error (lib/pq or pgx) | Automatic failover to replica (if configured) | Brief interruption (<30s); read-only mode during failover |
@@ -193,7 +193,7 @@ Different failure types require different handling strategies:
 | **External API calls** (USDA, OpenFoodFacts, Resend) | Retry 3x with exponential backoff (1s, 2s, 4s), then fail | External services have transient failures; retries often succeed |
 | **Database queries** | Fail fast | DB issues indicate serious problems; retrying wastes resources and delays error reporting |
 | **Stripe webhooks** | Handled by Stripe | Stripe retries automatically for up to 3 days; handler must be idempotent |
-| **LP jobs** | Timeout at 30s, no retry | LP is deterministic using go-coinor/clp; if it fails once, it will fail again. User can manually retry. |
+| **LP jobs** | Timeout at 30s, no retry | LP is deterministic through the pinned native CLP executable; if it fails once, it will fail again. User can manually retry. |
 | **Redis operations** | Fail fast, fallback to DB | Redis failures via github.com/redis/go-redis/v9 should degrade gracefully, not block requests |
 | **OAuth provider calls** | Retry 2x, then fail with user message | OAuth failures (github.com/markbates/goth) are often transient; limited retries appropriate |
 
@@ -291,8 +291,8 @@ This section defines the deployment topology, environment configurations, and CI
 
 **Component Distribution:**
 - **API Nodes:** Run all ARCH components except ARCH-004 workers. Horizontally scalable.
-- **LP Worker Pool:** Dedicated processes for ARCH-004 job execution using go-coinor/clp. Scaled based on queue depth.
-- **Redis:** Single cluster handling cache (ARCH-011), sessions (ARCH-006 via github.com/redis/go-redis/v9), and job queue (ARCH-004 via go-redis/queue or machinery).
+- **LP Worker Pool:** Dedicated processes for ARCH-004 job execution using the pure-Go wrapper and packaged native COIN-OR CLP executable. Scaled based on queue depth; the API nodes never execute the solver.
+- **Redis:** Single cluster handling cache (ARCH-011), sessions (ARCH-006 via github.com/redis/go-redis/v9), and the ARCH-004 optimization Redis Stream (`XADD`/`XREADGROUP`/`XAUTOCLAIM`/`XACK`).
 - **PostgreSQL:** Primary for writes, read replicas for query distribution.
 
 ---

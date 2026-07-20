@@ -33,7 +33,7 @@ test("declares explicit Find substitutions action without a raw food object id i
 	expect(source).toContain("data-substitution-search");
 	expect(source).toContain("Find substitutions");
 	expect(source).toContain("w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)]");
-	expect(source).toContain("disabled={$searchStore.substitutionInputs.length === 0 || !executionAllowed}");
+	expect(source).toContain("disabled={($substitutionState?.substitutionInputs.length ?? 0) === 0 || !executionAllowed}");
 	expect(source).toContain("data-substitution-entitlement-feedback");
 	expect(source).not.toContain('id="substitution-food-object-id"');
 	expect(source).not.toContain("Food object id");
@@ -44,7 +44,7 @@ test("declares explicit Find substitutions action without a raw food object id i
 test("declares include and exclude substitution filter comboboxes with removable chips", () => {
 	expect(source).toContain('aria-label="Substitution filters"');
 	expect(source).toContain('data-substitution-filters');
-	expect(source).toContain("{#if $searchStore.substitutionInputs.length > 0}");
+	expect(source).toContain("{#if ($substitutionState?.substitutionInputs.length ?? 0) > 0}");
 	expect(source).toContain('id="substitution-include-filter"');
 	expect(source).toContain('id="substitution-exclude-filter"');
 	expect(source).toContain("Must include");
@@ -84,8 +84,8 @@ test("renders selected items as cards by human-facing label instead of raw id wh
 	expect(source).toContain("inputLabel(input.foodObjectId)");
 	expect(source).toContain("inputInitial(input.foodObjectId)");
 	expect(source).toContain("inputItem(input.foodObjectId)");
-	expect(source).toContain("substitutionInputLabels");
-	expect(source).toContain("substitutionInputItems");
+	expect(source).toContain("$substitutionState?.substitutionInputLabels");
+	expect(source).toContain("$substitutionState?.substitutionInputItems");
 	expect(source).toContain("data-food-object-id={input.foodObjectId}");
 	expect(source).toContain("data-substitution-card");
 	expect(source).toContain("data-substitution-placeholder");

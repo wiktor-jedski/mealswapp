@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { searchStore, removeSubstitutionInput, requestSubstitutionSearch, setFilters, updateSubstitutionInput } from "../stores/search";
-  import type { ClassificationSummary, FoodObject, SearchFilter, SearchFilterKind, SubstitutionUnit } from "../api/generated";
+  import { searchStore, substitutionState, removeSubstitutionInput, requestSubstitutionSearch, setFilters, updateSubstitutionInput } from "../stores/search";
+  import type { ClassificationSummary, FoodObject, SearchFilter, SearchFilterKind, SubstitutionInput, SubstitutionUnit } from "../api/generated";
   import { preferencesStore } from "../stores/preferences";
   import type { UnitSystem } from "../stores/preferences";
   import {
@@ -146,7 +146,7 @@
     }
   ];
 
-  let selectedItems = $derived(Object.values($searchStore.substitutionInputItems));
+  let selectedItems = $derived(Object.values($substitutionState?.substitutionInputItems ?? {}));
   let classificationFilterOptions = $derived(selectedItems.flatMap(classificationOptionsFromItem));
   let includeFilterOptions = $derived(dedupeFilterOptions([
     ...classificationFilterOptions.map((option) => ({ ...option, include: true })),
@@ -162,7 +162,11 @@
   let activeIncludeFilters = $derived($searchStore.filters.filter((filter) => filter.include));
   let activeExcludeFilters = $derived($searchStore.filters.filter((filter) => !filter.include));
   $effect(() => {
-    synchronizeInputUnits($preferencesStore.unitSystem, $searchStore.substitutionInputs, $searchStore.substitutionInputItems);
+    synchronizeInputUnits(
+      $preferencesStore.unitSystem,
+      $substitutionState?.substitutionInputs ?? [],
+      $substitutionState?.substitutionInputItems ?? {}
+    );
   });
 
   /** Guards NaN/empty quantity edits so only finite values reach the store. */
@@ -186,7 +190,7 @@
 
   /** Human-facing label for a selected substitution input; falls back to id only for legacy stored rows. */
   function inputLabel(foodObjectId: string): string {
-    return $searchStore.substitutionInputLabels[foodObjectId] ?? foodObjectId;
+    return $substitutionState?.substitutionInputLabels[foodObjectId] ?? foodObjectId;
   }
 
   /** Placeholder initial for selected-item cards; autocomplete currently supplies label/id only. */
@@ -195,7 +199,7 @@
   }
 
   function inputItem(foodObjectId: string): FoodObject | undefined {
-    return $searchStore.substitutionInputItems[foodObjectId];
+    return $substitutionState?.substitutionInputItems[foodObjectId];
   }
 
   function foodCategories(item: FoodObject): ClassificationSummary[] {
@@ -212,8 +216,8 @@
 
   function synchronizeInputUnits(
     unitSystem: UnitSystem,
-    inputs: typeof $searchStore.substitutionInputs,
-    items: typeof $searchStore.substitutionInputItems
+    inputs: SubstitutionInput[],
+    items: Record<string, FoodObject>
   ): void {
     for (const input of inputs) {
       const item = items[input.foodObjectId];
@@ -324,9 +328,9 @@
 
 <!-- Implements DESIGN-001 SearchView Substitution Input controls. -->
 <section class="grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-label="Substitution inputs">
-  {#if $searchStore.substitutionInputs.length > 0}
+  {#if ($substitutionState?.substitutionInputs.length ?? 0) > 0}
     <ul class="grid gap-3">
-      {#each $searchStore.substitutionInputs as input (input.foodObjectId)}
+      {#each $substitutionState?.substitutionInputs ?? [] as input (input.foodObjectId)}
         {@const selectedItem = inputItem(input.foodObjectId)}
         <li class="relative grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" data-substitution-card>
           <h3 class="text-left text-base font-semibold" data-food-object-id={input.foodObjectId}>{inputLabel(input.foodObjectId)}</h3>
@@ -453,7 +457,7 @@
     </p>
   {/if}
 
-  {#if $searchStore.substitutionInputs.length > 0}
+  {#if ($substitutionState?.substitutionInputs.length ?? 0) > 0}
   <div class="grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3" aria-label="Substitution filters" data-substitution-filters>
     <div class="grid gap-3 md:grid-cols-2">
       <div class="relative grid gap-1">
@@ -588,7 +592,7 @@
   <button
     type="button"
     class="w-full rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-60"
-    disabled={$searchStore.substitutionInputs.length === 0 || !executionAllowed}
+    disabled={($substitutionState?.substitutionInputs.length ?? 0) === 0 || !executionAllowed}
     aria-describedby={entitlementFeedback ? "substitution-entitlement-feedback" : undefined}
     onclick={onSubstitutionSearch}
     data-substitution-search

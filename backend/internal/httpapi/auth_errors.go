@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"math"
 	"strconv"
 	"time"
 
@@ -17,7 +18,13 @@ func InvalidCredentialsError() AppError {
 // AccountLockedError returns locked-account retry metadata without exposing identity.
 // Implements DESIGN-006 AccountLockoutTracker.
 func AccountLockedError(ctx *fiber.Ctx, retryAfter time.Duration) AppError {
-	seconds := max(int(retryAfter.Seconds()), 1)
-	ctx.Set("Retry-After", strconv.Itoa(seconds))
-	return AppError{HTTPStatus: fiber.StatusTooManyRequests, Category: "auth", Code: "account_locked", Message: auth.GenericInvalidCredentialMessage, Retryable: true}
+	return retryableTooManyRequests(ctx, retryAfter, "auth", "account_locked", auth.GenericInvalidCredentialMessage)
+}
+
+// retryableTooManyRequests applies the shared 429 envelope and positive
+// whole-second Retry-After contract.
+// Implements DESIGN-004 JobStatusTracker, DESIGN-006 AccountLockoutTracker, and DESIGN-010 RateLimiter.
+func retryableTooManyRequests(ctx *fiber.Ctx, retryAfter time.Duration, category, code, message string) AppError {
+	ctx.Set(fiber.HeaderRetryAfter, strconv.FormatInt(max(int64(math.Ceil(retryAfter.Seconds())), 1), 10))
+	return AppError{HTTPStatus: fiber.StatusTooManyRequests, Category: category, Code: code, Message: message, Retryable: true}
 }

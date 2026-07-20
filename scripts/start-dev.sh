@@ -3,7 +3,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=dev-processes.sh
+source "$ROOT_DIR/scripts/dev-processes.sh"
 BACKEND_PID=""
+WORKER_PID=""
 FRONTEND_PID=""
 STRIPE_PID=""
 STRIPE_LOG=""
@@ -14,10 +17,12 @@ START_STRIPE_CLI="${MEALSWAPP_START_STRIPE_CLI:-false}"
 cleanup() {
     local pids=()
     trap - EXIT INT TERM
-    [[ -n "$BACKEND_PID" ]] && kill "$BACKEND_PID" 2>/dev/null || true
-    [[ -n "$FRONTEND_PID" ]] && kill "$FRONTEND_PID" 2>/dev/null || true
-    [[ -n "$STRIPE_PID" ]] && kill "$STRIPE_PID" 2>/dev/null || true
+    stop_dev_process "$BACKEND_PID"
+    stop_dev_process "$WORKER_PID"
+    stop_dev_process "$FRONTEND_PID"
+    stop_dev_process "$STRIPE_PID"
     [[ -n "$BACKEND_PID" ]] && pids+=("$BACKEND_PID")
+    [[ -n "$WORKER_PID" ]] && pids+=("$WORKER_PID")
     [[ -n "$FRONTEND_PID" ]] && pids+=("$FRONTEND_PID")
     [[ -n "$STRIPE_PID" ]] && pids+=("$STRIPE_PID")
     [[ "${#pids[@]}" -gt 0 ]] && wait "${pids[@]}" 2>/dev/null || true
@@ -70,12 +75,17 @@ fi
 STRIPE_WEBHOOK_URL="${MEALSWAPP_STRIPE_WEBHOOK_URL:-http://127.0.0.1:${MEALSWAPP_HTTP_PORT:-8080}/api/v1/billing/stripe/webhook}"
 START_STRIPE_CLI="${MEALSWAPP_START_STRIPE_CLI:-$START_STRIPE_CLI}"
 
-for command in go bun; do
+for command in go bun setsid; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
     fi
 done
+
+if ! command -v "${MEALSWAPP_CLP_EXECUTABLE:-clp}" >/dev/null 2>&1; then
+    echo "Required CLP executable not found: ${MEALSWAPP_CLP_EXECUTABLE:-clp}" >&2
+    exit 1
+fi
 
 if [[ "$START_STRIPE_CLI" == "true" ]] && ! command -v stripe >/dev/null 2>&1; then
     echo "Required command not found: stripe" >&2
@@ -104,8 +114,8 @@ if [[ "$START_STRIPE_CLI" == "true" ]]; then
     fi
     STRIPE_LOG="$(mktemp)"
     echo "Starting Stripe CLI forwarding to ${STRIPE_WEBHOOK_URL}..."
-    stripe listen --api-key "$MEALSWAPP_STRIPE_SECRET_KEY" --forward-to "$STRIPE_WEBHOOK_URL" >"$STRIPE_LOG" 2>&1 &
-    STRIPE_PID=$!
+    start_dev_process "$ROOT_DIR" stripe listen --api-key "$MEALSWAPP_STRIPE_SECRET_KEY" --forward-to "$STRIPE_WEBHOOK_URL" >"$STRIPE_LOG" 2>&1
+    STRIPE_PID=$DEV_PROCESS_PID
 
     for _ in {1..60}; do
         if ! kill -0 "$STRIPE_PID" 2>/dev/null; then
@@ -130,30 +140,28 @@ if [[ "$START_STRIPE_CLI" == "true" ]]; then
 fi
 
 echo "Starting backend at http://localhost:${MEALSWAPP_HTTP_PORT:-8080}..."
-(
-    cd "$ROOT_DIR/backend"
-    exec go run ./cmd/api
-) &
-BACKEND_PID=$!
+start_dev_process "$ROOT_DIR/backend" go run ./cmd/api
+BACKEND_PID=$DEV_PROCESS_PID
+
+echo "Starting optimization worker..."
+start_dev_process "$ROOT_DIR/backend" go run ./cmd/worker
+WORKER_PID=$DEV_PROCESS_PID
 
 echo "Starting frontend at http://localhost:5173..."
-(
-    cd "$ROOT_DIR/frontend"
-    exec bun run dev
-) &
-FRONTEND_PID=$!
+start_dev_process "$ROOT_DIR/frontend" bun run dev
+FRONTEND_PID=$DEV_PROCESS_PID
 
 if [[ "$START_STRIPE_CLI" == "true" ]]; then
-    echo "Development environment running. Press Ctrl-C to stop Stripe CLI, backend, and frontend."
+    echo "Development environment running. Press Ctrl-C to stop Stripe CLI, backend, worker, and frontend."
 else
-    echo "Development environment running. Press Ctrl-C to stop the backend and frontend."
+    echo "Development environment running. Press Ctrl-C to stop the backend, worker, and frontend."
 fi
 
 set +e
 if [[ -n "$STRIPE_PID" ]]; then
-    wait -n "$BACKEND_PID" "$FRONTEND_PID" "$STRIPE_PID"
+    wait -n "$BACKEND_PID" "$WORKER_PID" "$FRONTEND_PID" "$STRIPE_PID"
 else
-    wait -n "$BACKEND_PID" "$FRONTEND_PID"
+    wait -n "$BACKEND_PID" "$WORKER_PID" "$FRONTEND_PID"
 fi
 status=$?
 set -e

@@ -5,16 +5,17 @@ package seed
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/migrations"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/testdatabase"
 )
 
 type fakeBeginner struct {
@@ -61,45 +62,13 @@ func TestRunErrors(t *testing.T) {
 	}
 }
 
-const seedTestDatabaseURL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
-
 func openSeedTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	databaseURL := os.Getenv("MEALSWAPP_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = seedTestDatabaseURL
-	}
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if _, err := pool.Exec(ctx, `SELECT pg_advisory_lock(9010101)`); err != nil {
-		pool.Close()
-		t.Fatalf("acquire seed test database lock: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `SELECT pg_advisory_unlock(9010101)`)
-	})
 	migrationDir, err := filepath.Abs("../../../database/migrations")
 	if err != nil {
-		pool.Close()
 		t.Fatalf("resolve migration dir: %v", err)
 	}
-	if err := migrations.Run(ctx, pool, "down", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("reset migrations down: %v", err)
-	}
-	if err := migrations.Run(ctx, pool, "up", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("apply migrations up: %v", err)
-	}
-	t.Cleanup(pool.Close)
-	return pool
+	return testdatabase.Reset(t, migrationDir)
 }
 
 func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
@@ -122,6 +91,41 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	if firstCounts != secondCounts {
 		t.Fatalf("seed counts changed after second run: first=%#v second=%#v", firstCounts, secondCounts)
 	}
+	if firstCounts.Meals != 27 {
+		t.Fatalf("seeded meal count = %d, want 27", firstCounts.Meals)
+	}
+	wantReplacementMeals := []string{
+		"Almonds", "Avocado", "Banana", "Boiled Potatoes", "Cheddar Cheese",
+		"Chicken Breast", "Chickpeas", "Cooked Brown Rice", "Cooked White Rice",
+		"Egg Whites", "Firm Tofu", "Ghee", "Granulated Sugar", "Lean Beef",
+		"Lentils", "Peanut Butter", "Protein Isolate", "Rolled Oats", "Salmon Fillet",
+		"Seitan", "Sweet Potato", "Tuna in Water", "Turkey Breast", "Whole Eggs",
+		"Whole Wheat Bread",
+	}
+	rows, err := db.Query(ctx, `
+		SELECT name
+		FROM meals
+		WHERE id::text LIKE '22000000-0000-0000-0000-0000000001%'
+		ORDER BY name
+	`)
+	if err != nil {
+		t.Fatalf("query seeded replacement meals: %v", err)
+	}
+	defer rows.Close()
+	gotReplacementMeals := make([]string, 0, len(wantReplacementMeals))
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan seeded replacement meal: %v", err)
+		}
+		gotReplacementMeals = append(gotReplacementMeals, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate seeded replacement meals: %v", err)
+	}
+	if !slices.Equal(gotReplacementMeals, wantReplacementMeals) {
+		t.Fatalf("seeded replacement meals = %#v, want %#v", gotReplacementMeals, wantReplacementMeals)
+	}
 
 	foodID := uuid.MustParse("21000000-0000-0000-0000-000000000001")
 	oatMilkID := uuid.MustParse("21000000-0000-0000-0000-000000000003")
@@ -130,6 +134,23 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	userID := uuid.MustParse("23000000-0000-0000-0000-000000000001")
 	foodRepo := repository.NewPostgresFoodItemRepository(db)
 	mealRepo := repository.NewPostgresMealRepository(db)
+	salmonID := uuid.MustParse("22000000-0000-0000-0000-000000000104")
+	substitutions := search.NewSubstitutionService(foodRepo, nil).WithMealRepository(mealRepo)
+	salmonResponse, err := substitutions.Search(ctx, search.SearchRequest{
+		Query: "", Mode: search.SearchModeSubstitution, Page: 1,
+		SubstitutionInputs: []search.SubstitutionInput{{
+			FoodObjectID: salmonID, FoodObjectType: repository.FoodObjectTypeMeal, Quantity: 100, Unit: "g",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("seeded Salmon substitution error = %v", err)
+	}
+	if salmonResponse.Rejection != nil || salmonResponse.SourceSummary == nil || salmonResponse.SourceSummary.Macros != (repository.MacroValues{Protein: 20, Fat: 13}) || salmonResponse.SourceSummary.Calories != 197 {
+		t.Fatalf("seeded Salmon substitution response = %+v", salmonResponse)
+	}
+	if !slices.Contains(salmonResponse.ItemTypes, repository.FoodObjectTypeMeal) {
+		t.Fatalf("seeded Salmon substitutions contain no Meal candidates: types=%+v items=%+v", salmonResponse.ItemTypes, salmonResponse.Items)
+	}
 	classificationRepo := repository.NewPostgresClassificationRepository(db)
 	entitlementRepo := repository.NewPostgresEntitlementRepository(db)
 	savedRepo := repository.NewPostgresSavedDataRepository(db)
