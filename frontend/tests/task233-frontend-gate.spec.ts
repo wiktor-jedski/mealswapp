@@ -98,6 +98,7 @@ function meal(id: typeof APPLE_ID | typeof OATS_ID): FoodObjectEnvelope {
 		requestId: `task-233-meal-${id}`,
 		data: {
 			id,
+			objectType: "food_item",
 			name: apple ? "Apple" : "Oats",
 			physicalState: "solid",
 			imageUrl: null,
@@ -115,8 +116,8 @@ function diet(id: string, name: string, macros = { protein: 31, carbohydrates: 8
 		id,
 		name,
 		entries: [
-			{ id: ENTRY_A, mealId: APPLE_ID, quantity: 150, unit: "g", position: 0 },
-			{ id: ENTRY_B, mealId: OATS_ID, quantity: 100, unit: "g", position: 1 }
+			{ id: ENTRY_A, foodObjectId: APPLE_ID, foodObjectType: "food_item", quantity: 150, unit: "g", position: 0 },
+			{ id: ENTRY_B, foodObjectId: OATS_ID, foodObjectType: "food_item", quantity: 100, unit: "g", position: 1 }
 		],
 		aggregateMacros: macros,
 		createdAt: "2026-07-18T00:00:00Z",
@@ -179,7 +180,7 @@ async function installGate(page: Page, options: GateOptions = {}): Promise<GateR
 		delayedHydrationWasAborted: () => delayedHydrationAborted
 	};
 	page.on("requestfailed", (request) => {
-		if (options.delayMealHydration && request.url().endsWith(`/api/v1/food-objects/${APPLE_ID}`)) delayedHydrationAborted = true;
+		if (options.delayMealHydration && new URL(request.url()).pathname.endsWith(`/api/v1/food-objects/${APPLE_ID}`)) delayedHydrationAborted = true;
 	});
 
 	await page.route(/\/api\/v1\/profile$/, (route) => currentUser ? fulfillJson(route, 200, profile(currentUser)) : fulfillJson(route, 401, errorEnvelope("anonymous_session", "Please sign in.", false)));
@@ -193,12 +194,12 @@ async function installGate(page: Page, options: GateOptions = {}): Promise<GateR
 	await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => {
 		const query = new URL(route.request().url()).searchParams.get("query")?.toLowerCase() ?? "";
 		const items = [
-			{ itemId: APPLE_ID, label: "Apple", exactMatch: query === "apple", levenshteinDistance: 0, length: 5, rank: 1 },
-			{ itemId: OATS_ID, label: "Oats", exactMatch: query === "oats", levenshteinDistance: 0, length: 4, rank: 1 }
+			{ itemId: APPLE_ID, objectType: "food_item", label: "Apple", exactMatch: query === "apple", levenshteinDistance: 0, length: 5, rank: 1 },
+			{ itemId: OATS_ID, objectType: "food_item", label: "Oats", exactMatch: query === "oats", levenshteinDistance: 0, length: 4, rank: 1 }
 		].filter((item) => item.label.toLowerCase().includes(query));
 		return fulfillJson(route, 200, { status: "ok", requestId: "task-233-autocomplete", data: { items } });
 	});
-	await page.route(`**/api/v1/food-objects/${APPLE_ID}`, async (route) => {
+	await page.route(new RegExp(`/api/v1/food-objects/${APPLE_ID}(?:\\?.*)?$`), async (route) => {
 		if (options.delayMealHydration) {
 			markDelayedHydrationStarted();
 			await delayedHydrationRelease;
@@ -213,7 +214,7 @@ async function installGate(page: Page, options: GateOptions = {}): Promise<GateR
 			throw error;
 		}
 	});
-	await page.route(`**/api/v1/food-objects/${OATS_ID}`, (route) => fulfillJson(route, 200, meal(OATS_ID)));
+	await page.route(new RegExp(`/api/v1/food-objects/${OATS_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(OATS_ID)));
 	await page.route(/\/api\/v1\/daily-diets$/, async (route) => {
 		if (!currentUser) return fulfillJson(route, 401, errorEnvelope("anonymous_session", "Please sign in.", false));
 		if (route.request().method() === "POST") {
@@ -315,9 +316,9 @@ test("lost create response replays one write, replace installs authoritative mac
 	await addMeal(page, "apple", "Apple");
 	await addMeal(page, "oats", "Oats");
 	await page.getByLabel("Collection name").fill("Training day");
-	await page.getByRole("button", { name: "Save Daily Diet" }).press("Enter");
+	await page.getByRole("button", { name: "Save", exact: true }).press("Enter");
 	await expect(page.locator("[data-daily-diet-save-error]")).toContainText("could not be saved");
-	await page.getByRole("button", { name: "Save Daily Diet" }).press("Enter");
+	await page.getByRole("button", { name: "Save", exact: true }).press("Enter");
 	await expect(page.locator("[data-daily-diet-server-total]")).toBeVisible();
 	expect(runtime.createKeys).toHaveLength(2);
 	expect(runtime.createKeys[1]).toBe(runtime.createKeys[0]);
@@ -325,7 +326,7 @@ test("lost create response replays one write, replace installs authoritative mac
 
 	await page.getByLabel("Quantity for Apple").fill("175");
 	await expect(page.locator("[data-daily-diet-server-total]")).toHaveCount(0);
-	await page.getByRole("button", { name: "Update Daily Diet" }).press("Enter");
+	await page.getByRole("button", { name: "Update", exact: true }).press("Enter");
 	await expect(page.locator("[data-macro-protein]")).toHaveText("45g");
 	expect(runtime.replaceBodies).toHaveLength(1);
 	await chooseDiet(page, "Training day");
@@ -357,7 +358,7 @@ test("malformed collection and optimization payloads fail closed and recover wit
 	await openMode(page, "Daily Diet");
 	await addMeal(page, "apple", "Apple");
 	await addMeal(page, "oats", "Oats");
-	await page.getByRole("button", { name: "Save Daily Diet" }).click();
+	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await chooseDiet(page, "My Daily Diet");
 	await page.getByRole("button", { name: "Generate alternatives" }).click();
 	await expect(page.locator("[data-optimization-error]")).toContainText("invalid response");
@@ -376,7 +377,7 @@ test("queue ambiguity reuses its key and terminal timeout rotates the next inten
 	await openMode(page, "Daily Diet");
 	await addMeal(page, "apple", "Apple");
 	await addMeal(page, "oats", "Oats");
-	await page.getByRole("button", { name: "Save Daily Diet" }).click();
+	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await chooseDiet(page, "My Daily Diet");
 	await page.getByRole("button", { name: "Generate alternatives" }).click();
 	await expect(page.locator("[data-optimization-error]")).toContainText("queue is temporarily unavailable");
@@ -399,7 +400,7 @@ test("infeasible output stays terminal, actionable, and free of stale alternativ
 	await openMode(page, "Daily Diet");
 	await addMeal(page, "apple", "Apple");
 	await addMeal(page, "oats", "Oats");
-	await page.getByRole("button", { name: "Save Daily Diet" }).click();
+	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await chooseDiet(page, "My Daily Diet");
 	await page.getByRole("button", { name: "Generate alternatives" }).click();
 	await expect(page.locator("[data-optimization-error]")).toContainText("No meal combination matched");
@@ -417,7 +418,7 @@ test("remount resumes acknowledged polling, then logout and account change clear
 	await openMode(page, "Daily Diet");
 	await addMeal(page, "apple", "Apple");
 	await addMeal(page, "oats", "Oats");
-	await page.getByRole("button", { name: "Save Daily Diet" }).click();
+	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await chooseDiet(page, "My Daily Diet");
 	await page.getByRole("button", { name: "Generate alternatives" }).click();
 	await expect(page.locator("[data-optimization-progress]")).toContainText("Building validated alternatives");

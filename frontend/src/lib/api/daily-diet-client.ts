@@ -236,11 +236,11 @@ function decodeDiet(value: unknown, status: number, requestId: string): DailyDie
 
 	const entries = value.entries.map((entry) => {
 		if (
-			!exactObject(entry, ["id", "mealId", "quantity", "unit", "position"]) ||
-			!uuid(entry.id) || !uuid(entry.mealId) || !boundedQuantity(entry.quantity) ||
+			!exactObject(entry, ["id", "foodObjectId", "foodObjectType", "quantity", "unit", "position"]) ||
+			!uuid(entry.id) || !uuid(entry.foodObjectId) || !foodObjectType(entry.foodObjectType) || !boundedQuantity(entry.quantity) ||
 			!canonicalUnit(entry.unit) || !boundedPosition(entry.position)
 		) throw malformedResponse(status, requestId);
-		return { id: entry.id, mealId: entry.mealId, quantity: entry.quantity, unit: entry.unit, position: entry.position };
+		return { id: entry.id, foodObjectId: entry.foodObjectId, foodObjectType: entry.foodObjectType, quantity: entry.quantity, unit: entry.unit, position: entry.position };
 	});
 
 	const macros = value.aggregateMacros;
@@ -258,6 +258,10 @@ function decodeDiet(value: unknown, status: number, requestId: string): DailyDie
 		createdAt: value.createdAt,
 		updatedAt: value.updatedAt
 	};
+}
+
+function foodObjectType(value: unknown): value is "food_item" | "meal" {
+	return value === "food_item" || value === "meal";
 }
 
 function malformedResponse(status: number, requestId?: string): DailyDietClientError {

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -22,9 +21,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/migrations"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/testdatabase"
 )
 
 // TestDailyDietProductionAPIWithLivePostgres verifies the complete authenticated CRUD path against PostgreSQL.
@@ -32,6 +31,15 @@ import (
 func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 	db := openDailyDietAPIIntegrationDB(t)
 	ctx := context.Background()
+	foodRepo := repository.NewPostgresFoodItemRepository(db)
+	foodA, err := foodRepo.Create(ctx, repository.FoodItemEntity{
+		Name: "Live Diet Food A", PhysicalState: repository.PhysicalStateLiquid,
+		DensityGramsPerMilliliter: 1, DensitySourceKind: "manual",
+		MacrosPer100: repository.MacroValues{Protein: 3.4, Carbohydrates: 5, Fat: 1},
+	})
+	if err != nil {
+		t.Fatalf("create Food Item A: %v", err)
+	}
 	mealRepo := repository.NewPostgresMealRepository(db)
 	mealA, err := mealRepo.Create(ctx, repository.MealEntity{
 		Type: repository.MealTypeSingle, Name: "Live Diet Meal A", PhysicalState: repository.PhysicalStateSolid,
@@ -60,7 +68,7 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 	}
 	csrfToken, userCookies := fetchLiveDailyDietCSRF(t, server, userCookies)
 	otherCSRF, otherCookies := fetchLiveDailyDietCSRF(t, server, otherCookies)
-	body := liveDailyDietBody("Training Day", mealA, mealB)
+	body := liveMixedDailyDietBody("Training Day", foodA, mealB)
 
 	resp := liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, userCookies, "live-csrf-failure", "")
 	assertLiveDailyDietStatus(t, resp, fiber.StatusForbidden)
@@ -68,7 +76,7 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 		t.Fatalf("CSRF failure wrote %d diets", got)
 	}
 
-	missingMealBody := liveDailyDietBody("Missing Meal", uuid.New(), mealB)
+	missingMealBody := liveMixedDailyDietBody("Missing Food Object", uuid.New(), mealB)
 	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", missingMealBody, userCookies, "live-missing-meal", csrfToken)
 	assertLiveDailyDietStatus(t, resp, fiber.StatusNotFound)
 	if got := countLiveSavedDiets(t, db, userID); got != 0 {
@@ -82,7 +90,7 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 		t.Fatalf("create status = %d body = %+v", resp.StatusCode, created)
 	}
 	dietID := liveUUIDFromData(t, created.Data, "id")
-	assertLiveAggregate(t, created.Data, 20, 30, 9, 281)
+	assertLiveAggregate(t, created.Data, 13.4, 15, 5, 158.6)
 
 	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, userCookies, "live-create-key", csrfToken)
 	replayed := decodeLiveDailyDietEnvelope(t, resp)
@@ -106,7 +114,7 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 	if resp.StatusCode != fiber.StatusOK || liveUUIDFromData(t, read.Data, "id") != dietID {
 		t.Fatalf("read status=%d body=%+v", resp.StatusCode, read)
 	}
-	assertLiveAggregate(t, read.Data, 20, 30, 9, 281)
+	assertLiveAggregate(t, read.Data, 13.4, 15, 5, 158.6)
 
 	resp = liveDailyDietRequest(t, server, fiber.MethodGet, "/api/v1/daily-diets", "", userCookies, "", "")
 	list := decodeLiveDailyDietEnvelope(t, resp)
@@ -145,8 +153,8 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 	if got := countLiveSavedDiets(t, db, userID); got != 0 {
 		t.Fatalf("delete count = %d, want 0", got)
 	}
-	if _, err := db.Exec(ctx, `UPDATE meals SET protein_per_100 = 999, carbohydrates_per_100 = 999, fat_per_100 = 999 WHERE id = $1`, mealA); err != nil {
-		t.Fatalf("change meal macros before replay: %v", err)
+	if _, err := db.Exec(ctx, `UPDATE food_items SET protein_per_100 = 999, carbohydrates_per_100 = 999, fat_per_100 = 999 WHERE id = $1`, foodA); err != nil {
+		t.Fatalf("change Food Item macros before replay: %v", err)
 	}
 	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, userCookies, "live-create-key", csrfToken)
 	afterDeletionReplay := decodeLiveDailyDietEnvelope(t, resp)
@@ -220,40 +228,11 @@ func liveConcurrentDailyDietCreate(wait *sync.WaitGroup, start <-chan struct{}, 
 
 func openDailyDietAPIIntegrationDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	databaseURL := os.Getenv("MEALSWAPP_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
-	}
-	db, err := pgxpool.New(context.Background(), databaseURL)
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if err := db.Ping(context.Background()); err != nil {
-		db.Close()
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if _, err := db.Exec(context.Background(), `SELECT pg_advisory_lock(9010101)`); err != nil {
-		db.Close()
-		t.Fatalf("lock integration database: %v", err)
-	}
 	migrationDir, err := filepath.Abs("../../../database/migrations")
 	if err != nil {
-		db.Close()
 		t.Fatalf("resolve migration directory: %v", err)
 	}
-	if err := migrations.Run(context.Background(), db, "down", migrationDir); err != nil {
-		db.Close()
-		t.Fatalf("reset migrations down: %v", err)
-	}
-	if err := migrations.Run(context.Background(), db, "up", migrationDir); err != nil {
-		db.Close()
-		t.Fatalf("apply migrations up: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = db.Exec(context.Background(), `SELECT pg_advisory_unlock(9010101)`)
-		db.Close()
-	})
-	return db
+	return testdatabase.Reset(t, migrationDir)
 }
 
 func liveDailyDietAPIConfig() config.Config {
@@ -361,7 +340,11 @@ func countLiveSavedDiets(t *testing.T, db *pgxpool.Pool, userID uuid.UUID) int {
 }
 
 func liveDailyDietBody(name string, mealA, mealB uuid.UUID) string {
-	return fmt.Sprintf(`{"name":%q,"entries":[{"mealId":%q,"quantity":100,"unit":"g","position":0},{"mealId":%q,"quantity":200,"unit":"g","position":1}]}`, name, mealA.String(), mealB.String())
+	return fmt.Sprintf(`{"name":%q,"entries":[{"foodObjectId":%q,"foodObjectType":"meal","quantity":100,"unit":"g","position":0},{"foodObjectId":%q,"foodObjectType":"meal","quantity":200,"unit":"g","position":1}]}`, name, mealA.String(), mealB.String())
+}
+
+func liveMixedDailyDietBody(name string, foodItem, meal uuid.UUID) string {
+	return fmt.Sprintf(`{"name":%q,"entries":[{"foodObjectId":%q,"foodObjectType":"food_item","quantity":100,"unit":"ml","position":0},{"foodObjectId":%q,"foodObjectType":"meal","quantity":200,"unit":"g","position":1}]}`, name, foodItem.String(), meal.String())
 }
 
 func mergeLiveDailyDietCookies(existing, updates []*http.Cookie) []*http.Cookie {

@@ -109,6 +109,15 @@ export function formatDisplayQuantity(quantity: number): string {
 }
 
 /**
+ * Formats user-facing energy values as whole kilocalories.
+ *
+ * @remarks Implements DESIGN-001 SearchView nutrition display formatting.
+ */
+export function formatCalories(calories: number): string {
+	return `${Math.round(calories)}`;
+}
+
+/**
  * Human-readable nutrition basis label following the active unit preference.
  *
  * @remarks Implements DESIGN-001 ResultsGrid macro basis display.

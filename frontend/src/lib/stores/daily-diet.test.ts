@@ -22,7 +22,7 @@ function diet(id = "diet-1", name = "Training day"): DailyDiet {
 	return {
 		id,
 		name,
-		entries: [{ id: `${id}-entry`, mealId: "meal-1", quantity: 100, unit: "g", position: 0 }],
+		entries: [{ id: `${id}-entry`, foodObjectId: "meal-1", foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }],
 		aggregateMacros: { protein: 20, carbohydrates: 30, fat: 10, calories: 290 },
 		createdAt: "2026-07-11T00:00:00Z",
 		updatedAt: "2026-07-11T00:00:00Z"
@@ -31,7 +31,7 @@ function diet(id = "diet-1", name = "Training day"): DailyDiet {
 
 const replacement: DailyDietReplaceRequest = {
 	name: "Updated day",
-	entries: [{ mealId: "meal-1", quantity: 150, unit: "g", position: 0 }]
+	entries: [{ foodObjectId: "meal-1", foodObjectType: "meal", quantity: 150, unit: "g", position: 0 }]
 };
 
 function fakeApi(overrides: Partial<DailyDietApi> = {}): DailyDietApi {
@@ -78,7 +78,7 @@ function abortable<T>(pending: Deferred<T>, signal?: AbortSignal): Promise<T> {
 
 const createRequest: DailyDietCreateRequest = {
 	name: "Created day",
-	entries: [{ mealId: "meal-1", quantity: 100, unit: "g", position: 0 }]
+	entries: [{ foodObjectId: "meal-1", foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }]
 };
 
 afterEach(() => {
@@ -128,7 +128,7 @@ test("create and delete reconcile server state without optimistic unsafe writes"
 	}));
 
 	await controller.load();
-	await controller.create({ name: created.name, entries: [{ mealId: "meal-1", quantity: 100, unit: "g", position: 0 }] });
+	await controller.create({ name: created.name, entries: [{ foodObjectId: "meal-1", foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }] });
 	expect(get(store).collections).toEqual([created]);
 	expect(get(store).collections[0]?.aggregateMacros).toEqual(created.aggregateMacros);
 
@@ -167,7 +167,7 @@ test("successful replacement installs only the decoded server-derived DTO state"
 	const original = diet();
 	const serverDiet = {
 		...diet("diet-1", "Updated day"),
-		entries: [{ id: "server-entry", mealId: "meal-1", quantity: 150, unit: "g" as const, position: 0 }],
+		entries: [{ id: "server-entry", foodObjectId: "meal-1", foodObjectType: "meal" as const, quantity: 150, unit: "g" as const, position: 0 }],
 		aggregateMacros: { protein: 30, carbohydrates: 45, fat: 15, calories: 435 },
 		updatedAt: "2026-07-11T00:01:00Z"
 	};

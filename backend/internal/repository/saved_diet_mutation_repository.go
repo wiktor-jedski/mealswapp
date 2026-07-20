@@ -215,7 +215,9 @@ func validateDailyDietCreateClaim(claim DailyDietCreateClaim) error {
 	}
 	for index, entry := range claim.Diet.Entries {
 		responseEntry := claim.Response.Entries[index]
-		if entry.ID != responseEntry.ID || entry.SavedDietID != claim.Diet.ID || entry.MealID != responseEntry.MealID || entry.Quantity != responseEntry.Quantity || entry.Unit != responseEntry.Unit || entry.Position != responseEntry.Position {
+		entryID, entryType := savedDietEntryFoodObject(entry)
+		responseID, responseType := responseEntryFoodObject(responseEntry)
+		if entry.ID != responseEntry.ID || entry.SavedDietID != claim.Diet.ID || entryID != responseID || entryType != responseType || entry.Quantity != responseEntry.Quantity || entry.Unit != responseEntry.Unit || entry.Position != responseEntry.Position {
 			return validationError("daily diet create entries do not match")
 		}
 	}
@@ -246,7 +248,8 @@ func validateDailyDietCreateResponse(response DailyDietCreateResponse) error {
 	}
 	positions := make(map[int]struct{}, len(response.Entries))
 	for _, entry := range response.Entries {
-		if entry.ID == uuid.Nil || entry.MealID == uuid.Nil || entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) || ValidateQuantityUnit(entry.Unit) != nil || entry.Position < 0 || entry.Position >= 100 {
+		objectID, objectType := responseEntryFoodObject(entry)
+		if entry.ID == uuid.Nil || objectID == uuid.Nil || (objectType != FoodObjectTypeMeal && objectType != FoodObjectTypeFoodItem) || entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) || ValidateQuantityUnit(entry.Unit) != nil || entry.Position < 0 || entry.Position >= 100 {
 			return validationError("daily diet create response entry is invalid")
 		}
 		if _, exists := positions[entry.Position]; exists {
@@ -270,9 +273,24 @@ func createSavedDietSnapshot(ctx context.Context, db transactionalExecutor, clai
 		return mapPostgresError(err, "create saved diet")
 	}
 	for _, entry := range claim.Diet.Entries {
-		if _, err := db.Exec(ctx, savedDietEntryInsertSnapshotSQL, entry.ID, claim.Diet.ID, entry.MealID, entry.Quantity, entry.Unit, entry.Position, entry.CreatedAt); err != nil {
+		objectID, objectType := savedDietEntryFoodObject(entry)
+		if _, err := db.Exec(ctx, savedDietEntryInsertSnapshotSQL, entry.ID, claim.Diet.ID, objectID, objectType, entry.Quantity, entry.Unit, entry.Position, entry.CreatedAt); err != nil {
 			return mapPostgresError(err, "create saved diet entry")
 		}
 	}
 	return ensureSavedDietItem(ctx, db, claim.UserID, claim.Diet.ID)
+}
+
+func savedDietEntryFoodObject(entry SavedDietMealEntry) (uuid.UUID, FoodObjectType) {
+	if entry.FoodObjectID != uuid.Nil {
+		return entry.FoodObjectID, entry.FoodObjectType
+	}
+	return entry.MealID, FoodObjectTypeMeal
+}
+
+func responseEntryFoodObject(entry DailyDietCreateResponseEntry) (uuid.UUID, FoodObjectType) {
+	if entry.FoodObjectID != uuid.Nil {
+		return entry.FoodObjectID, entry.FoodObjectType
+	}
+	return entry.MealID, FoodObjectTypeMeal
 }

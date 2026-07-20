@@ -37,7 +37,7 @@ const OPTIMIZATION_FALLBACKS: Readonly<Record<number, ErrorRule>> = {
 const APPROVED_RULES: Readonly<Record<string, ErrorRule>> = Object.fromEntries([
 	...approved("daily_diet", 400, DAILY_DIET_FALLBACKS[400]!, ["invalid_json", "validation_failed", "idempotency_key_required"]),
 	...approved("daily_diet", 401, DAILY_DIET_FALLBACKS[401]!, ["unauthorized", "session_expired"]),
-	...approved("daily_diet", 409, DAILY_DIET_FALLBACKS[409]!, ["conflict", "idempotency_key_conflict"]),
+	...approved("daily_diet", 409, DAILY_DIET_FALLBACKS[409]!, ["conflict", "idempotency_key_conflict", "duplicate_daily_diet_name"]),
 	...approved("daily_diet", 429, DAILY_DIET_FALLBACKS[429]!, ["daily_diet_rate_limited"]),
 	...approved("daily_diet", 500, DAILY_DIET_FALLBACKS[500]!, ["internal_error"]),
 	...approved("daily_diet", 503, DAILY_DIET_FALLBACKS[503]!, ["daily_diet_unavailable"]),

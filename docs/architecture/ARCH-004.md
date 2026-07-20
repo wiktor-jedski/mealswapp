@@ -25,7 +25,7 @@
 
 **Interface Definition:**
 
-- `Input`: POST /api/v1/optimization/jobs -> SavedDietOptimizationRequest { dailyDietId: UUID, tolerancePercent: number, excludedMealIds: UUID[] }; the server derives macro targets from current saved-diet entries. A standalone macro-target input variant is deferred to Phase 10.
+- `Input`: POST /api/v1/optimization/jobs -> SavedDietOptimizationRequest { dailyDietId: UUID, tolerancePercent: number, excludedMealIds: UUID[] }; the server derives macro targets from current saved-diet entries. A standalone macro-target input variant is deferred to Phase 11.
 - `Output (Immediate)`: { jobId: string, status: 'queued', pollUrl: string }
 - `Output (Poll)`: GET /api/v1/jobs/{jobId} -> { status: 'queued'|'processing'|'completed'|'failed', result?: DietAlternative[], error?: string }
 - `Output (WebSocket)`: Event { jobId: string, status: 'completed', result: DietAlternative[] }

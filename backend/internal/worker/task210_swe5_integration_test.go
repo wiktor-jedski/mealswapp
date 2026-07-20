@@ -54,7 +54,7 @@ func TestTask210WorkerPublishesPartialAlternativesOnLaterSolverFailure(t *testin
 			TolerancePercent: 0,
 		},
 		Meals: []repository.MealEntity{{
-			ID: mealID, Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
+			ID: mealID, Name: "Test meal", Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
 			MacrosPer100:              repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10},
 			NormalizedMacrosAvailable: true,
 		}},
@@ -104,7 +104,7 @@ func TestTask210RedisJobStoreExpiresResultsWithOwnerMarker(t *testing.T) {
 		t.Fatalf("MarkProcessing() error = %v", err)
 	}
 	alternative := optimization.DietAlternative{
-		Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}},
+		Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Name: "Chicken Breast", Quantity: 100, Unit: "g", Position: 0}},
 		Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290,
 	}
 	if err := store.PublishCompleted(context.Background(), jobID, []optimization.DietAlternative{alternative}, time.Now().UTC()); err != nil {

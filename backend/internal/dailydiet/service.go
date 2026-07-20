@@ -31,28 +31,37 @@ var ErrMissingIdempotencyKey = errors.New("idempotency key is required")
 // Implements DESIGN-008 ProfileController daily-diet creation.
 var ErrIdempotencyConflict = errors.New("idempotency key reused with different body")
 
-// MealQuantity is one client-selected meal and its canonical quantity.
+// ErrDuplicateName means one user already owns a Daily Diet with the same normalized name.
+// Implements DESIGN-008 SavedDataRepository user-scoped Daily Diet naming.
+var ErrDuplicateName = errors.New("daily diet name already exists")
+
+// FoodObjectQuantity is one client-selected Meal or Food Item and its canonical quantity.
 // Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
-type MealQuantity struct {
-	MealID   uuid.UUID `json:"mealId"`
-	Quantity float64   `json:"quantity"`
-	Unit     string    `json:"unit"`
-	Position int       `json:"position"`
+type FoodObjectQuantity struct {
+	FoodObjectID   uuid.UUID                 `json:"foodObjectId"`
+	FoodObjectType repository.FoodObjectType `json:"foodObjectType"`
+	Quantity       float64                   `json:"quantity"`
+	Unit           string                    `json:"unit"`
+	Position       int                       `json:"position"`
+	MealID         uuid.UUID                 `json:"-"`
 }
+
+// MealQuantity preserves source compatibility for internal Meal-only callers.
+type MealQuantity = FoodObjectQuantity
 
 // CreateRequest contains only client-editable saved-diet fields.
 // Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
 type CreateRequest struct {
-	Name           string         `json:"name"`
-	Entries        []MealQuantity `json:"entries"`
-	IdempotencyKey string         `json:"-"`
+	Name           string               `json:"name"`
+	Entries        []FoodObjectQuantity `json:"entries"`
+	IdempotencyKey string               `json:"-"`
 }
 
 // ReplaceRequest contains only client-editable replacement fields.
 // Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
 type ReplaceRequest struct {
-	Name    string         `json:"name"`
-	Entries []MealQuantity `json:"entries"`
+	Name    string               `json:"name"`
+	Entries []FoodObjectQuantity `json:"entries"`
 }
 
 // DailyDiet is the API-safe saved-diet projection with server-derived totals.
@@ -69,11 +78,13 @@ type DailyDiet struct {
 // DailyDietEntry is one persisted meal entry returned by the API.
 // Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
 type DailyDietEntry struct {
-	ID       uuid.UUID `json:"id"`
-	MealID   uuid.UUID `json:"mealId"`
-	Quantity float64   `json:"quantity"`
-	Unit     string    `json:"unit"`
-	Position int       `json:"position"`
+	ID             uuid.UUID                 `json:"id"`
+	FoodObjectID   uuid.UUID                 `json:"foodObjectId"`
+	FoodObjectType repository.FoodObjectType `json:"foodObjectType"`
+	Quantity       float64                   `json:"quantity"`
+	Unit           string                    `json:"unit"`
+	Position       int                       `json:"position"`
+	MealID         uuid.UUID                 `json:"-"`
 }
 
 // MacroProjection contains server-derived one-day totals.
@@ -98,12 +109,17 @@ type CreateResult struct {
 type Service struct {
 	diets repository.DailyDietMutationRepository
 	meals repository.MealRepository
+	foods repository.FoodItemRepository
 }
 
 // NewService creates authenticated saved-diet behavior.
 // Implements DESIGN-008 ProfileController and SavedDataRepository.
-func NewService(diets repository.DailyDietMutationRepository, meals repository.MealRepository) *Service {
-	return &Service{diets: diets, meals: meals}
+func NewService(diets repository.DailyDietMutationRepository, meals repository.MealRepository, foods ...repository.FoodItemRepository) *Service {
+	service := &Service{diets: diets, meals: meals}
+	if len(foods) > 0 {
+		service.foods = foods[0]
+	}
+	return service
 }
 
 // Create persists a user-owned daily diet and replays exact idempotent retries.
@@ -123,7 +139,7 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, req CreateReques
 	if s == nil || s.diets == nil || s.meals == nil {
 		return CreateResult{}, repository.NewError(repository.ErrorKindConnection, "daily diet service is unavailable", nil)
 	}
-	entries := req.Entries
+	entries := normalizeFoodObjectEntries(req.Entries)
 	bodyHash, err := requestHash(name, entries)
 	if err != nil {
 		return CreateResult{}, err
@@ -146,7 +162,11 @@ func (s *Service) Create(ctx context.Context, userID uuid.UUID, req CreateReques
 	})
 	if err != nil {
 		if repository.IsKind(err, repository.ErrorKindConflict) {
-			return CreateResult{}, ErrIdempotencyConflict
+			var repositoryError *repository.Error
+			if errors.As(err, &repositoryError) && strings.Contains(repositoryError.Message, "idempotency key") {
+				return CreateResult{}, ErrIdempotencyConflict
+			}
+			return CreateResult{}, ErrDuplicateName
 		}
 		return CreateResult{}, err
 	}
@@ -196,8 +216,8 @@ func (s *Service) Replace(ctx context.Context, userID, dietID uuid.UUID, req Rep
 	if err != nil {
 		return DailyDiet{}, err
 	}
-	entries := req.Entries
-	if err := s.validateMeals(ctx, entries); err != nil {
+	entries := normalizeFoodObjectEntries(req.Entries)
+	if err := s.validateFoodObjects(ctx, entries); err != nil {
 		return DailyDiet{}, err
 	}
 	if s == nil || s.diets == nil || s.meals == nil {
@@ -207,6 +227,9 @@ func (s *Service) Replace(ctx context.Context, userID, dietID uuid.UUID, req Rep
 		return DailyDiet{}, err
 	}
 	if err := s.diets.Replace(ctx, userID, repository.SavedDiet{ID: dietID, Name: name, Entries: toRepositoryEntries(entries)}); err != nil {
+		if repository.IsKind(err, repository.ErrorKindConflict) {
+			return DailyDiet{}, ErrDuplicateName
+		}
 		return DailyDiet{}, err
 	}
 	return s.load(ctx, userID, dietID)
@@ -244,18 +267,15 @@ func (s *Service) load(ctx context.Context, userID, dietID uuid.UUID) (DailyDiet
 	return s.project(ctx, diet)
 }
 
-// validateMeals verifies every meal before any saved-diet write begins.
+// validateFoodObjects verifies every Meal or Food Item before any saved-diet write begins.
 // Implements DESIGN-008 SavedDataRepository.
-func (s *Service) validateMeals(ctx context.Context, entries []MealQuantity) error {
-	if s == nil || s.meals == nil {
-		return repository.NewError(repository.ErrorKindConnection, "meal service is unavailable", nil)
-	}
+func (s *Service) validateFoodObjects(ctx context.Context, entries []FoodObjectQuantity) error {
 	for _, entry := range entries {
-		meal, err := s.meals.GetByID(ctx, entry.MealID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		physicalState, _, err := s.foodObjectNutrition(ctx, entry.FoodObjectID, entry.FoodObjectType)
 		if err != nil {
 			return err
 		}
-		if _, err := quantityInMealBase(entry.Quantity, entry.Unit, meal.PhysicalState); err != nil {
+		if _, err := quantityInMealBase(entry.Quantity, entry.Unit, physicalState); err != nil {
 			return err
 		}
 	}
@@ -264,33 +284,38 @@ func (s *Service) validateMeals(ctx context.Context, entries []MealQuantity) err
 
 // prepareCreate validates each distinct meal once and builds the immutable persisted projection.
 // Implements DESIGN-008 SavedDataRepository durable create idempotency.
-func (s *Service) prepareCreate(ctx context.Context, userID uuid.UUID, name string, entries []MealQuantity) (repository.SavedDiet, repository.DailyDietCreateResponse, error) {
+func (s *Service) prepareCreate(ctx context.Context, userID uuid.UUID, name string, entries []FoodObjectQuantity) (repository.SavedDiet, repository.DailyDietCreateResponse, error) {
 	now := time.Now().UTC()
 	dietID := uuid.New()
 	diet := repository.SavedDiet{ID: dietID, UserID: userID, Name: name, CreatedAt: now, UpdatedAt: now, Entries: make([]repository.SavedDietMealEntry, 0, len(entries))}
 	response := repository.DailyDietCreateResponse{ID: dietID, Name: name, CreatedAt: now, UpdatedAt: now, Entries: make([]repository.DailyDietCreateResponseEntry, 0, len(entries))}
-	meals := make(map[uuid.UUID]repository.MealEntity, len(entries))
+	type nutrition struct {
+		physicalState repository.PhysicalState
+		macros        repository.MacroValues
+	}
+	objects := make(map[string]nutrition, len(entries))
 	for _, entry := range entries {
-		meal, ok := meals[entry.MealID]
+		objectKey := string(entry.FoodObjectType) + ":" + entry.FoodObjectID.String()
+		object, ok := objects[objectKey]
 		if !ok {
-			var err error
-			meal, err = s.meals.GetByID(ctx, entry.MealID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+			physicalState, macros, err := s.foodObjectNutrition(ctx, entry.FoodObjectID, entry.FoodObjectType)
 			if err != nil {
 				return repository.SavedDiet{}, repository.DailyDietCreateResponse{}, err
 			}
-			meals[entry.MealID] = meal
+			object = nutrition{physicalState: physicalState, macros: macros}
+			objects[objectKey] = object
 		}
-		baseQuantity, err := quantityInMealBase(entry.Quantity, entry.Unit, meal.PhysicalState)
+		baseQuantity, err := quantityInMealBase(entry.Quantity, entry.Unit, object.physicalState)
 		if err != nil {
 			return repository.SavedDiet{}, repository.DailyDietCreateResponse{}, err
 		}
-		macros := repository.ScaleMacros(meal.MacrosPer100, baseQuantity, 100)
+		macros := repository.ScaleMacros(object.macros, baseQuantity, 100)
 		response.AggregateMacros.Protein += macros.Protein
 		response.AggregateMacros.Carbohydrates += macros.Carbohydrates
 		response.AggregateMacros.Fat += macros.Fat
 		entryID := uuid.New()
-		diet.Entries = append(diet.Entries, repository.SavedDietMealEntry{ID: entryID, SavedDietID: dietID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position, CreatedAt: now})
-		response.Entries = append(response.Entries, repository.DailyDietCreateResponseEntry{ID: entryID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
+		diet.Entries = append(diet.Entries, repository.SavedDietMealEntry{ID: entryID, SavedDietID: dietID, FoodObjectID: entry.FoodObjectID, FoodObjectType: entry.FoodObjectType, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position, CreatedAt: now})
+		response.Entries = append(response.Entries, repository.DailyDietCreateResponseEntry{ID: entryID, FoodObjectID: entry.FoodObjectID, FoodObjectType: entry.FoodObjectType, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
 	}
 	response.AggregateMacros.Protein = round4(response.AggregateMacros.Protein)
 	response.AggregateMacros.Carbohydrates = round4(response.AggregateMacros.Carbohydrates)
@@ -304,7 +329,7 @@ func (s *Service) prepareCreate(ctx context.Context, userID uuid.UUID, name stri
 func createResultFromClaim(result repository.DailyDietCreateClaimResult) CreateResult {
 	entries := make([]DailyDietEntry, len(result.Response.Entries))
 	for index, entry := range result.Response.Entries {
-		entries[index] = DailyDietEntry{ID: entry.ID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position}
+		entries[index] = DailyDietEntry{ID: entry.ID, FoodObjectID: entry.FoodObjectID, FoodObjectType: entry.FoodObjectType, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position}
 	}
 	macros := result.Response.AggregateMacros
 	return CreateResult{Diet: DailyDiet{ID: result.Response.ID, Name: result.Response.Name, Entries: entries, AggregateMacros: MacroProjection{Protein: macros.Protein, Carbohydrates: macros.Carbohydrates, Fat: macros.Fat, Calories: macros.Calories}, CreatedAt: result.Response.CreatedAt, UpdatedAt: result.Response.UpdatedAt}, Status: result.StatusCode, Replayed: result.Replayed}
@@ -316,19 +341,20 @@ func (s *Service) project(ctx context.Context, diet repository.SavedDiet) (Daily
 	entries := make([]DailyDietEntry, 0, len(diet.Entries))
 	projection := MacroProjection{}
 	for _, entry := range diet.Entries {
-		meal, err := s.meals.GetByID(ctx, entry.MealID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		objectID, objectType := repositoryEntryFoodObject(entry)
+		physicalState, objectMacros, err := s.foodObjectNutrition(ctx, objectID, objectType)
 		if err != nil {
 			return DailyDiet{}, err
 		}
-		baseQuantity, err := quantityInMealBase(entry.Quantity, entry.Unit, meal.PhysicalState)
+		baseQuantity, err := quantityInMealBase(entry.Quantity, entry.Unit, physicalState)
 		if err != nil {
 			return DailyDiet{}, err
 		}
-		macros := repository.ScaleMacros(meal.MacrosPer100, baseQuantity, 100)
+		macros := repository.ScaleMacros(objectMacros, baseQuantity, 100)
 		projection.Protein += macros.Protein
 		projection.Carbohydrates += macros.Carbohydrates
 		projection.Fat += macros.Fat
-		entries = append(entries, DailyDietEntry{ID: entry.ID, MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
+		entries = append(entries, DailyDietEntry{ID: entry.ID, FoodObjectID: objectID, FoodObjectType: objectType, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
 	}
 	projection.Protein = round4(projection.Protein)
 	projection.Carbohydrates = round4(projection.Carbohydrates)
@@ -337,9 +363,16 @@ func (s *Service) project(ctx context.Context, diet repository.SavedDiet) (Daily
 	return DailyDiet{ID: diet.ID, Name: diet.Name, Entries: entries, AggregateMacros: projection, CreatedAt: diet.CreatedAt, UpdatedAt: diet.UpdatedAt}, nil
 }
 
+func repositoryEntryFoodObject(entry repository.SavedDietMealEntry) (uuid.UUID, repository.FoodObjectType) {
+	if entry.FoodObjectID != uuid.Nil {
+		return entry.FoodObjectID, entry.FoodObjectType
+	}
+	return entry.MealID, repository.FoodObjectTypeMeal
+}
+
 // normalizeRequest validates client-editable saved-diet fields.
 // Implements DESIGN-008 SavedDataRepository.
-func normalizeRequest(name string, entries []MealQuantity) (string, error) {
+func normalizeRequest(name string, entries []FoodObjectQuantity) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > maxNameLength || strings.ContainsRune(name, '\x00') {
 		return "", validationError("daily diet name is invalid")
@@ -348,9 +381,9 @@ func normalizeRequest(name string, entries []MealQuantity) (string, error) {
 		return "", validationError("daily diet entries must contain between 1 and 100 meals")
 	}
 	seenPositions := make(map[int]struct{}, len(entries))
-	for _, entry := range entries {
-		if entry.MealID == uuid.Nil {
-			return "", validationError("saved diet meal id is required")
+	for _, entry := range normalizeFoodObjectEntries(entries) {
+		if entry.FoodObjectID == uuid.Nil || (entry.FoodObjectType != repository.FoodObjectTypeMeal && entry.FoodObjectType != repository.FoodObjectTypeFoodItem) {
+			return "", validationError("saved diet Food Object identity is required")
 		}
 		if entry.Quantity <= 0 || entry.Quantity > maxQuantity || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) {
 			return "", validationError("saved diet meal quantity must be finite and positive")
@@ -369,14 +402,46 @@ func normalizeRequest(name string, entries []MealQuantity) (string, error) {
 	return name, nil
 }
 
-// toRepositoryEntries maps API quantities to persistence entries.
-// Implements DESIGN-008 SavedDataRepository.
-func toRepositoryEntries(entries []MealQuantity) []repository.SavedDietMealEntry {
-	result := make([]repository.SavedDietMealEntry, 0, len(entries))
-	for _, entry := range entries {
-		result = append(result, repository.SavedDietMealEntry{MealID: entry.MealID, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
+func normalizeFoodObjectEntries(entries []FoodObjectQuantity) []FoodObjectQuantity {
+	result := append([]FoodObjectQuantity(nil), entries...)
+	for index := range result {
+		if result[index].FoodObjectID == uuid.Nil && result[index].MealID != uuid.Nil {
+			result[index].FoodObjectID = result[index].MealID
+			result[index].FoodObjectType = repository.FoodObjectTypeMeal
+		}
 	}
 	return result
+}
+
+// toRepositoryEntries maps API quantities to persistence entries.
+// Implements DESIGN-008 SavedDataRepository.
+func toRepositoryEntries(entries []FoodObjectQuantity) []repository.SavedDietMealEntry {
+	result := make([]repository.SavedDietMealEntry, 0, len(entries))
+	for _, entry := range entries {
+		result = append(result, repository.SavedDietMealEntry{FoodObjectID: entry.FoodObjectID, FoodObjectType: entry.FoodObjectType, Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position})
+	}
+	return result
+}
+
+// foodObjectNutrition resolves the authoritative nutrition basis for one Daily Diet entry.
+// Implements DESIGN-005 FoodItemRepository/MealRepository and DESIGN-008 SavedDataRepository.
+func (s *Service) foodObjectNutrition(ctx context.Context, id uuid.UUID, objectType repository.FoodObjectType) (repository.PhysicalState, repository.MacroValues, error) {
+	switch objectType {
+	case repository.FoodObjectTypeMeal:
+		if s == nil || s.meals == nil {
+			return "", repository.MacroValues{}, repository.NewError(repository.ErrorKindConnection, "meal service is unavailable", nil)
+		}
+		meal, err := s.meals.GetByID(ctx, id, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		return meal.PhysicalState, meal.MacrosPer100, err
+	case repository.FoodObjectTypeFoodItem:
+		if s == nil || s.foods == nil {
+			return "", repository.MacroValues{}, repository.NewError(repository.ErrorKindConnection, "Food Item service is unavailable", nil)
+		}
+		food, err := s.foods.GetByID(ctx, id, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		return food.PhysicalState, food.MacrosPer100, err
+	default:
+		return "", repository.MacroValues{}, validationError("Food Object type is invalid")
+	}
 }
 
 // quantityInMealBase converts a canonical quantity to the meal's metric basis.
@@ -428,10 +493,10 @@ func validateIdempotencyKey(value string) (string, error) {
 
 // requestHash hashes only server-accepted create fields.
 // Implements DESIGN-008 ProfileController daily-diet idempotency.
-func requestHash(name string, entries []MealQuantity) (string, error) {
+func requestHash(name string, entries []FoodObjectQuantity) (string, error) {
 	payload, err := json.Marshal(struct {
-		Name    string         `json:"name"`
-		Entries []MealQuantity `json:"entries"`
+		Name    string               `json:"name"`
+		Entries []FoodObjectQuantity `json:"entries"`
 	}{Name: strings.TrimSpace(name), Entries: entries})
 	if err != nil {
 		return "", err

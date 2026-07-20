@@ -70,7 +70,7 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	idempotencyRepo := repository.NewPostgresCheckoutIdempotencyRepository(pg)
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
 	mealRepo := repository.NewPostgresMealRepository(pg)
-	dailyDietService := dailydiet.NewService(savedRepo, mealRepo)
+	dailyDietService := dailydiet.NewService(savedRepo, mealRepo, foodRepo)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
 	var searchResponseCache search.SearchResponseCache
 	var similarityCache search.SimilarityCalculationCache
@@ -112,13 +112,13 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		httpapi.NewProfileController(profile.NewService(identities, encryption), dailyDietService),
 		httpapi.NewSearchController(search.NewSearchDispatcher(
 			search.NewCatalogService(foodRepo, searchResponseCache),
-			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache),
+			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache).WithMealRepository(mealRepo),
 		)).WithAutocompleteService(searchAutocompleteAdapter{
 			service: search.NewAutocompleteService(foodRepo, mealRepo),
 			cache:   redisStore,
 			ttl:     cache.DefaultAutocompleteTTL,
 		}).WithSearchHistoryAppender(userDataService).WithSearchUsageGate(usageLimiter),
-		httpapi.NewFoodObjectController(foodRepo),
+		httpapi.NewFoodObjectController(foodRepo, mealRepo),
 		httpapi.NewUserDataController(userDataService),
 		httpapi.NewOptimizationController(optimizationJobs, optimizationQueue, savedRepo, entitlementManager, idempotencyRepo, optimizationAdmission).WithTelemetry(optimizationTelemetry),
 		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption, savedRepo)),

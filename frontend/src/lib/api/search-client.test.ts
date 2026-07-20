@@ -451,6 +451,15 @@ test("fetchFoodObject GETs /api/v1/food-objects/{id} with credentials", async ()
 	expect(call.init.body).toBeUndefined();
 });
 
+// Implements DESIGN-001 SearchView typed Food Object hydration request verification.
+test("fetchFoodObject preserves the selected Food Object type", async () => {
+	fetchMock.enqueueResponse(jsonResponse(200, makeFoodObjectEnvelope()));
+
+	await fetchFoodObject("meal 1", new AbortController().signal, "meal");
+
+	expect(lastCall().url).toBe("/api/v1/food-objects/meal%201?objectType=meal");
+});
+
 // Implements DESIGN-001 SearchView selected Substitution Input hydration error mapping verification.
 test("fetchFoodObject maps 404 to not found SearchClientError", async () => {
 	fetchMock.enqueueResponse(jsonResponse(404, {

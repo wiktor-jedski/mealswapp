@@ -197,7 +197,11 @@ func encodeCSV(bundle ExportBundle) []byte {
 	for _, diet := range bundle.SavedDiets {
 		rows = append(rows, []string{"savedDiets", diet.Name, diet.ID.String()})
 		for _, entry := range diet.Entries {
-			rows = append(rows, []string{"savedDietMeals", diet.ID.String(), entry.MealID.String()})
+			objectID, objectType := entry.FoodObjectID, entry.FoodObjectType
+			if objectID == uuid.Nil {
+				objectID, objectType = entry.MealID, repository.FoodObjectTypeMeal
+			}
+			rows = append(rows, []string{"savedDietEntries", string(objectType), objectID.String()})
 		}
 	}
 	for _, entry := range bundle.History {

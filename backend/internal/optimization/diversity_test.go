@@ -219,6 +219,22 @@ func TestTask219PackagedCLPLexicographicObjective(t *testing.T) {
 	}
 }
 
+// Implements DESIGN-004 SolutionValidator CLP text-precision boundary verification.
+func TestSolutionSatisfiesModelAcceptsRoundedCLPBoundaryQuantity(t *testing.T) {
+	mealID := uuid.MustParse("00000000-0000-4000-8000-000000000099")
+	model := LPModel{
+		Variables: []LPVariable{{ItemID: mealID.String(), LowerBound: 0, UpperBound: MaximumMealQuantity}},
+		Constraints: []LPConstraint{{
+			Name: "carbohydrate", LowerBound: 144, UpperBound: 176,
+			Coefficients: map[string]float64{mealID.String(): 1},
+		}},
+	}
+	solution := LPSolution{mealID.String(): 143.999997}
+	if err := solutionSatisfiesModel(solution, model); err != nil {
+		t.Fatalf("rounded CLP boundary solution rejected: %v", err)
+	}
+}
+
 func lexicographicFixtureModel(diverseCalories float64) LPModel {
 	return LPModel{
 		Variables: []LPVariable{

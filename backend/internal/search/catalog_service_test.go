@@ -62,7 +62,7 @@ func (c *searchCacheStub) SetSearchResponse(_ context.Context, req SearchRequest
 }
 
 func (c *searchCacheStub) SearchResponseCacheMetadata(SearchRequest, CacheStatus) *CacheMetadata {
-	return &CacheMetadata{Status: CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v2", TTLSeconds: 300}
+	return &CacheMetadata{Status: CacheStatusMiss, Namespace: "search", SchemaVersion: "search-response-v3", TTLSeconds: 300}
 }
 
 func TestCatalogServiceSearchFiltersPaginationSortingWarningsAndCacheMiss(t *testing.T) {
@@ -102,7 +102,7 @@ func TestCatalogServiceSearchFiltersPaginationSortingWarningsAndCacheMiss(t *tes
 	if len(response.Warnings) != 1 || response.Warnings[0] == "" {
 		t.Fatalf("warnings = %#v", response.Warnings)
 	}
-	if response.Cache == nil || response.Cache.Status != CacheStatusMiss || response.Cache.Namespace != "search" || response.Cache.SchemaVersion != "search-response-v2" || response.Cache.TTLSeconds != 300 {
+	if response.Cache == nil || response.Cache.Status != CacheStatusMiss || response.Cache.Namespace != "search" || response.Cache.SchemaVersion != "search-response-v3" || response.Cache.TTLSeconds != 300 {
 		t.Fatalf("cache miss metadata = %+v", response.Cache)
 	}
 	if cache.setReq.Query != "apple bowl" || cache.setReq.Page != 2 {

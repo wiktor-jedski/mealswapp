@@ -4,6 +4,12 @@
 
   // Implements DESIGN-001 SearchView mode controls (Catalog, Substitution, Daily Diet, Daily Diet Alternative).
 
+  interface Props {
+    onModeChange?: (mode: SearchMode) => void;
+  }
+
+  let { onModeChange = setMode }: Props = $props();
+
   /**
    * Mode options rendered above the search bar. Selecting one calls `setMode`, which resets
    * incompatible state and pagination through the search store.
@@ -51,7 +57,7 @@
         class="rounded border px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         class:border-[var(--color-primary)]={$searchStore.mode === option.value}
         aria-pressed={$searchStore.mode === option.value}
-        onclick={() => setMode(option.value)}
+        onclick={() => onModeChange(option.value)}
       >
         {option.label}
       </button>

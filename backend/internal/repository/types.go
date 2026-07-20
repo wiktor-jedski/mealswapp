@@ -91,6 +91,16 @@ type FoodItemEntity struct {
 	UpdatedAt                       time.Time
 }
 
+// FoodObjectType distinguishes the two object kinds accepted by Daily Diet entries.
+// Implements DESIGN-008 SavedDataRepository Food Object entry contract.
+type FoodObjectType string
+
+// Implements DESIGN-008 SavedDataRepository Food Object entry contract.
+const (
+	FoodObjectTypeFoodItem FoodObjectType = "food_item"
+	FoodObjectTypeMeal     FoodObjectType = "meal"
+)
+
 // MealType identifies opaque single and composite meals.
 // Implements DESIGN-005 MealEntity.
 type MealType string
@@ -304,7 +314,7 @@ type SavedItem struct {
 	CreatedAt time.Time
 }
 
-// SavedDiet stores one user-owned daily diet and its ordered meal entries.
+// SavedDiet stores one user-owned daily diet and its ordered Food Object entries.
 // Implements DESIGN-008 SavedDataRepository.
 type SavedDiet struct {
 	ID        uuid.UUID
@@ -315,16 +325,19 @@ type SavedDiet struct {
 	UpdatedAt time.Time
 }
 
-// SavedDietMealEntry stores one positive, canonically-unitized meal quantity.
+// SavedDietMealEntry stores one positive, canonically-unitized Meal or Food Item quantity.
 // Implements DESIGN-008 SavedDataRepository.
 type SavedDietMealEntry struct {
-	ID          uuid.UUID
-	SavedDietID uuid.UUID
-	MealID      uuid.UUID
-	Quantity    float64
-	Unit        string
-	Position    int
-	CreatedAt   time.Time
+	ID             uuid.UUID
+	SavedDietID    uuid.UUID
+	FoodObjectID   uuid.UUID
+	FoodObjectType FoodObjectType
+	// MealID is retained as an internal compatibility projection for Meal entries.
+	MealID    uuid.UUID
+	Quantity  float64
+	Unit      string
+	Position  int
+	CreatedAt time.Time
 }
 
 // DailyDiet is the descriptive alias used by the Phase 07 API boundary.
@@ -349,11 +362,13 @@ type DailyDietCreateResponse struct {
 // DailyDietCreateResponseEntry is one immutable entry in a create response.
 // Implements DESIGN-008 SavedDataRepository durable create idempotency.
 type DailyDietCreateResponseEntry struct {
-	ID       uuid.UUID `json:"id"`
-	MealID   uuid.UUID `json:"mealId"`
-	Quantity float64   `json:"quantity"`
-	Unit     string    `json:"unit"`
-	Position int       `json:"position"`
+	ID             uuid.UUID      `json:"id"`
+	FoodObjectID   uuid.UUID      `json:"foodObjectId"`
+	FoodObjectType FoodObjectType `json:"foodObjectType"`
+	MealID         uuid.UUID      `json:"-"`
+	Quantity       float64        `json:"quantity"`
+	Unit           string         `json:"unit"`
+	Position       int            `json:"position"`
 }
 
 // DailyDietCreateResponseMacros is the immutable aggregate returned by create.

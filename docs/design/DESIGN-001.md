@@ -4,7 +4,7 @@
 **Static aspects covered:** SearchView, SidebarComponent, ResultsGrid, AutocompleteDropdown, ThemeProvider, OfflineBanner, SettingsPanel, LocalStorageManager, ServiceWorker.
 
 ### 0. Static Aspect Responsibilities
-- `SearchView`: owns catalog query input, Substitution Input composition, filter composition, debounce timing, and result loading orchestration.
+- `SearchView`: owns catalog query input, Substitution Input composition, filter composition, debounce timing, result loading orchestration, and canonical SPA route/history synchronization.
 - `SidebarComponent`: owns navigation between Catalog Search, Substitution Search, Daily Diet Alternative Search, saved filters, settings entry points, and responsive collapse behavior.
 - `ResultsGrid`: owns result card layout, pagination controls, image fallback display, and similarity badge rendering.
 - `AutocompleteDropdown`: owns ranked suggestion display, keyboard focus movement, selection, and dismissal rules.
@@ -16,7 +16,8 @@
 - Authenticated browser-session creation is delegated to DESIGN-018. `SearchView` and `SidebarComponent` consume its frontend-safe session projection only for display, anonymous fallbacks, and protected-action routing.
 
 ### 1. Data Structures & Types
-- `type SearchMode = "catalog" | "substitution" | "daily_diet_alternative"`
+- `type SearchMode = "catalog" | "substitution" | "daily_diet" | "daily_diet_alternative"`
+- `interface ShellRoute { view: "search" | "subscription" | "privacy" | "terms"; mode: SearchMode; billingReturn: "success" | "cancel" | null }`
 - `interface SearchState { query: string; mode: SearchMode; substitutionInputs: SubstitutionInputViewModel[]; filters: SearchFilter[]; page: number; selectedIndex: number; isOnline: boolean; isLoading: boolean; authStatus: "unknown" | "anonymous" | "authenticated" | "expired"; error?: AppError }`
 - `interface SubstitutionInputViewModel { foodObjectId: string; quantity: number; unit: string; label: string }`
 - `interface SearchFilter { id: string; kind: "food_category" | "culinary_role" | "food_object_type" | "allergen" | "dietary_preset"; mode: "include" | "exclude"; label: string }`
@@ -38,6 +39,7 @@
 9. Persist theme and unit preference changes to localStorage, then update CSS variables through ARCH-016.
 10. Route authenticated-only actions, including saved-data and checkout entry points, through DESIGN-018 `AuthenticatedActionGuard` before calling protected APIs.
 11. Surface network, timeout, entitlement, auth, and validation failures through ARCH-017 instead of local ad hoc messages.
+12. Push canonical URLs for top-level navigation and Search-mode changes, restore state on `popstate` and refresh, and replace consumed billing-return URLs with `/subscription`.
 
 ### 3. State Management & Error Handling
 - `idle`: no active request; search input can be edited.

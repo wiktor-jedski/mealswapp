@@ -77,7 +77,7 @@ func TestProfileControllerDailyDietCRUDUsesJWTUserAndCSRF(t *testing.T) {
 		t.Fatalf("anonymous list status = %d, want 401", resp.StatusCode)
 	}
 
-	postBody := `{"name":"Training Day","entries":[{"mealId":"` + mealA.String() + `","quantity":100,"unit":"g","position":0},{"mealId":"` + mealB.String() + `","quantity":200,"unit":"g","position":1}]}`
+	postBody := `{"name":"Training Day","entries":[{"foodObjectId":"` + mealA.String() + `","foodObjectType":"meal","quantity":100,"unit":"g","position":0},{"foodObjectId":"` + mealB.String() + `","foodObjectType":"meal","quantity":200,"unit":"g","position":1}]}`
 	request := httptest.NewRequest(fiber.MethodPost, "/api/v1/daily-diets", strings.NewReader(postBody))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", "daily-key-1")
@@ -203,7 +203,7 @@ func TestProfileControllerDailyDietRejectsClientOwnershipInvalidBodyAndStableErr
 	controller := NewProfileController(&fakeProfileService{}, service)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: controller.Routes()})
 	csrfToken, csrfCookies := fetchCSRFToken(t, app)
-	validBody := `{"name":"Training Day","entries":[{"mealId":"` + uuid.NewString() + `","quantity":100,"unit":"g","position":0}]}`
+	validBody := `{"name":"Training Day","entries":[{"foodObjectId":"` + uuid.NewString() + `","foodObjectType":"meal","quantity":100,"unit":"g","position":0}]}`
 
 	request := httptest.NewRequest(fiber.MethodPost, "/api/v1/daily-diets", strings.NewReader(validBody))
 	request.Header.Set("Content-Type", "application/json")
@@ -221,7 +221,24 @@ func TestProfileControllerDailyDietRejectsClientOwnershipInvalidBodyAndStableErr
 		t.Fatalf("conflict response = %d %+v", resp.StatusCode, body)
 	}
 
-	invalidBody := `{"name":"Training Day","userId":"` + uuid.NewString() + `","entries":[{"mealId":"` + uuid.NewString() + `","quantity":100,"unit":"g","position":0}]}`
+	service.createErr = dailydiet.ErrDuplicateName
+	request = httptest.NewRequest(fiber.MethodPost, "/api/v1/daily-diets", strings.NewReader(validBody))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "daily-key-duplicate-name")
+	request.Header.Set("X-CSRF-Token", csrfToken)
+	addCookies(request, csrfCookies)
+	addCookies(request, authCookies)
+	resp, err = app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body = decodeEnvelope(t, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusConflict || body.Error == nil || body.Error.Code != "duplicate_daily_diet_name" {
+		t.Fatalf("duplicate name response = %d %+v", resp.StatusCode, body)
+	}
+
+	invalidBody := `{"name":"Training Day","userId":"` + uuid.NewString() + `","entries":[{"foodObjectId":"` + uuid.NewString() + `","foodObjectType":"meal","quantity":100,"unit":"g","position":0}]}`
 	request = httptest.NewRequest(fiber.MethodPost, "/api/v1/daily-diets", strings.NewReader(invalidBody))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", "daily-key-3")
@@ -233,7 +250,7 @@ func TestProfileControllerDailyDietRejectsClientOwnershipInvalidBodyAndStableErr
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != fiber.StatusBadRequest || service.createReq.IdempotencyKey != "daily-key-2" {
+	if resp.StatusCode != fiber.StatusBadRequest || service.createReq.IdempotencyKey != "daily-key-duplicate-name" {
 		t.Fatalf("invalid ownership body status=%d createReq=%+v", resp.StatusCode, service.createReq)
 	}
 
@@ -297,13 +314,13 @@ func TestProfileControllerDailyDietListMapsUnavailableMealToNotFound(t *testing.
 func TestValidateDailyDietBodyMapUsesCanonicalQuantityUnits(t *testing.T) {
 	mealID := uuid.NewString()
 	for _, unit := range []string{"g", "ml", "oz", "fl_oz"} {
-		body := map[string]any{"name": "Diet", "entries": []any{map[string]any{"mealId": mealID, "quantity": 1.0, "unit": unit, "position": 0.0}}}
+		body := map[string]any{"name": "Diet", "entries": []any{map[string]any{"foodObjectId": mealID, "foodObjectType": "meal", "quantity": 1.0, "unit": unit, "position": 0.0}}}
 		if err := validateDailyDietBodyMap(body); err != nil {
 			t.Fatalf("validateDailyDietBodyMap(%q) error = %v", unit, err)
 		}
 	}
 	for _, unit := range []string{"serving", "cup"} {
-		body := map[string]any{"name": "Diet", "entries": []any{map[string]any{"mealId": mealID, "quantity": 1.0, "unit": unit, "position": 0.0}}}
+		body := map[string]any{"name": "Diet", "entries": []any{map[string]any{"foodObjectId": mealID, "foodObjectType": "meal", "quantity": 1.0, "unit": unit, "position": 0.0}}}
 		if err := validateDailyDietBodyMap(body); err == nil {
 			t.Fatalf("validateDailyDietBodyMap(%q) error = nil, want rejection", unit)
 		}

@@ -115,19 +115,39 @@ test("focuses the search bar on initial load and after mode changes", async ({ p
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find alternatives for a food using quantity and unit context.");
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet", exact: true }).click();
-	await expect(input).toBeFocused();
-	await expect(input).toHaveAttribute("placeholder", "Search meals to add to your day…");
+	const savedDietSearch = page.getByRole("combobox", { name: "Search saved Daily Diets" });
+	await expect(savedDietSearch).toBeFocused();
+	await expect(savedDietSearch).toHaveAttribute("placeholder", "Search saved Daily Diets by name…");
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Search across saved daily diets.");
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
-	await expect(input).toBeFocused();
-	await expect(input).toHaveAttribute("placeholder", "Search within a saved daily diet or paste its ID…");
+	await expect(savedDietSearch).toBeFocused();
+	await expect(savedDietSearch).toHaveAttribute("placeholder", "Search saved Daily Diets by name…");
+	await expect(searchCombobox(page)).toHaveCount(0);
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Search for replacements within a saved daily diet.");
 
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Catalog" }).click();
 	await expect(input).toBeFocused();
 	await expect(input).toHaveAttribute("placeholder", "Search foods, meals, or ingredients…");
 	await expect(page.locator("[data-search-mode-description]")).toHaveText("Find foods, meals, or ingredients by name.");
+});
+
+// Implements DESIGN-001 SearchView mode URL, refresh, and browser-history restoration verification.
+test("preserves Search modes across URLs, refresh, and Back navigation", async ({ page }) => {
+	await stubApi(page);
+	await page.goto("/");
+	const modes = page.getByRole("navigation", { name: "Search modes" });
+
+	await modes.getByRole("button", { name: "Substitution" }).click();
+	await expect(page).toHaveURL("http://localhost:4173/?mode=substitution");
+	await page.reload();
+	await expect(modes.getByRole("button", { name: "Substitution" })).toHaveAttribute("aria-pressed", "true");
+
+	await modes.getByRole("button", { name: "Daily Diet", exact: true }).click();
+	await expect(page).toHaveURL("http://localhost:4173/?mode=daily_diet");
+	await page.goBack();
+	await expect(page).toHaveURL("http://localhost:4173/?mode=substitution");
+	await expect(modes.getByRole("button", { name: "Substitution" })).toHaveAttribute("aria-pressed", "true");
 });
 
 // Implements DESIGN-001 SidebarComponent duplicate search-mode navigation removal verification.

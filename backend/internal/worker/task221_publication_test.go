@@ -132,7 +132,7 @@ func task221RawCompletedJob(t *testing.T, jobID uuid.UUID, score any, omitScore 
 
 func task221Alternative(score float64) optimization.DietAlternative {
 	return optimization.DietAlternative{
-		Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}},
+		Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Name: "Chicken Breast", Quantity: 100, Unit: "g", Position: 0}},
 		Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290, SimilarityScore: score,
 	}
 }

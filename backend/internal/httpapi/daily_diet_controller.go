@@ -171,16 +171,20 @@ func validateDailyDietBodyMap(body map[string]any) error {
 	positions := make(map[int]struct{}, len(rawEntries))
 	for _, rawEntry := range rawEntries {
 		entry, ok := rawEntry.(map[string]any)
-		if !ok || len(entry) != 4 {
+		if !ok || len(entry) != 5 {
 			return errors.New("daily diet meal entry is invalid")
 		}
-		mealID, ok := entry["mealId"].(string)
+		foodObjectID, ok := entry["foodObjectId"].(string)
 		if !ok {
-			return errors.New("meal id is invalid")
+			return errors.New("Food Object id is invalid")
 		}
-		parsedID, err := uuid.Parse(mealID)
+		parsedID, err := uuid.Parse(foodObjectID)
 		if err != nil || parsedID == uuid.Nil {
-			return errors.New("meal id is invalid")
+			return errors.New("Food Object id is invalid")
+		}
+		foodObjectType, ok := entry["foodObjectType"].(string)
+		if !ok || (foodObjectType != string(repository.FoodObjectTypeMeal) && foodObjectType != string(repository.FoodObjectTypeFoodItem)) {
+			return errors.New("Food Object type is invalid")
 		}
 		quantity, ok := entry["quantity"].(float64)
 		if !ok || math.IsNaN(quantity) || math.IsInf(quantity, 0) || quantity <= 0 || quantity > 1_000_000 {
@@ -228,8 +232,12 @@ func parseDailyDietID(value string) (uuid.UUID, error) {
 func dailyDietData(diet dailydiet.DailyDiet) map[string]any {
 	entries := make([]map[string]any, 0, len(diet.Entries))
 	for _, entry := range diet.Entries {
+		foodObjectID, foodObjectType := entry.FoodObjectID, entry.FoodObjectType
+		if foodObjectID == uuid.Nil && entry.MealID != uuid.Nil {
+			foodObjectID, foodObjectType = entry.MealID, repository.FoodObjectTypeMeal
+		}
 		entries = append(entries, map[string]any{
-			"id": entry.ID.String(), "mealId": entry.MealID.String(), "quantity": entry.Quantity,
+			"id": entry.ID.String(), "foodObjectId": foodObjectID.String(), "foodObjectType": foodObjectType, "quantity": entry.Quantity,
 			"unit": entry.Unit, "position": entry.Position,
 		})
 	}
@@ -263,6 +271,8 @@ func dailyDietError(err error) error {
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "idempotency_key_required", Message: "Idempotency-Key header is required"}
 	case errors.Is(err, dailydiet.ErrIdempotencyConflict):
 		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "idempotency_key_conflict", Message: "Idempotency-Key was already used with a different request body"}
+	case errors.Is(err, dailydiet.ErrDuplicateName):
+		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "duplicate_daily_diet_name", Message: "A Daily Diet with this name already exists"}
 	case repository.IsKind(err, repository.ErrorKindNotFound):
 		return AppError{HTTPStatus: fiber.StatusNotFound, Category: "validation", Code: "not_found", Message: "resource not found"}
 	case repository.IsKind(err, repository.ErrorKindConflict):

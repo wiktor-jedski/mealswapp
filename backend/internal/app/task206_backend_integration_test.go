@@ -305,7 +305,7 @@ func grantTask206Trial(t *testing.T, db *pgxpool.Pool, userID uuid.UUID) {
 
 func createTask206SavedDiet(t *testing.T, server *fiber.App, cookies []*http.Cookie, csrfToken string, mealID uuid.UUID) uuid.UUID {
 	t.Helper()
-	body := fmt.Sprintf(`{"name":"Task 206 saved diet","entries":[{"mealId":%q,"quantity":100,"unit":"g","position":0}]}`, mealID.String())
+	body := fmt.Sprintf(`{"name":"Task 206 saved diet","entries":[{"foodObjectId":%q,"foodObjectType":"meal","quantity":100,"unit":"g","position":0}]}`, mealID.String())
 	response := liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, cookies, "task-206-diet-"+uuid.NewString(), csrfToken)
 	envelope := decodeLiveDailyDietEnvelope(t, response)
 	response.Body.Close()

@@ -18,8 +18,9 @@ function indexOf(fragment: string): number {
 // Implements DESIGN-001 SearchView composed component presence verification.
 test("composes sidebar, mode controls, autocomplete, mode-specific controls, results, and offline banner", () => {
 	expect(source).toContain("<SidebarComponent");
-	expect(source).toContain("<SearchModes />");
+	expect(source).toContain("<SearchModes onModeChange={selectSearchMode} />");
 	expect(source).toContain("<AutocompleteDropdown");
+	expect(source).toContain("<SavedDailyDietSearch");
 	expect(source).toContain("<SubstitutionInputs");
 	expect(source).toContain("<DailyDietControls");
 	expect(source).not.toContain("<SettingsPanel");
@@ -29,13 +30,13 @@ test("composes sidebar, mode controls, autocomplete, mode-specific controls, res
 
 // Implements DESIGN-001 SearchView and SidebarComponent subscription view separation verification.
 test("renders billing controls only in the authenticated Subscription view branch", () => {
-	expect(source).toContain("type ShellView = \"search\" | \"subscription\" | \"privacy\" | \"terms\"");
+	expect(source).toContain("type ShellView");
 	expect(source).toContain("data-subscription-view");
 	expect(source).toContain("activeView === \"subscription\"");
 	expect(source).toContain("<SubscriptionBilling />");
 	expect(source).not.toContain("subscription-view-title");
 	expect(source).toContain("{:else}");
-	expect(source.indexOf("<SubscriptionBilling />")).toBeLessThan(source.indexOf("<SearchModes />"));
+	expect(source.indexOf("<SubscriptionBilling />")).toBeLessThan(source.indexOf("<SearchModes onModeChange={selectSearchMode} />"));
 	expect(source).toContain("openSubscriptionView");
 	expect(source).toContain("requestProtectedAction($authSessionStore");
 	expect(source).toContain('kind: "account"');
@@ -70,13 +71,24 @@ test("passes sidebar navigation callbacks that return to search without resettin
 	expect(source).toContain("function openPrivacyView(): void");
 	expect(source).toContain("function openTermsView(): void");
 	expect(source).toContain('activeView = "search"');
+	expect(source).toContain("pushBrowserRoute(searchRoute($searchStore.mode))");
 	expect(source).not.toContain("resetSearch");
+});
+
+// Implements DESIGN-001 SearchView canonical URL and browser-history restoration verification.
+test("synchronizes top-level views and Search modes with browser history", () => {
+	expect(source).toContain("parseShellRoute(window.location.href)");
+	expect(source).toContain('window.addEventListener("popstate", onPopState)');
+	expect(source).toContain("window.history.pushState");
+	expect(source).toContain("window.history.replaceState");
+	expect(source).toContain("function selectSearchMode(mode: SearchMode): void");
+	expect(source).toContain("setMode(route.mode)");
 });
 
 // Implements DESIGN-016 ComponentStyles legal views and DESIGN-015 DisclaimerRenderer placement verification.
 test("renders legal views with medical information in Terms of Service", () => {
-	expect(source).toContain('path === "/privacy"');
-	expect(source).toContain('path === "/terms"');
+	expect(source).toContain('shellViewRoute("privacy")');
+	expect(source).toContain('shellViewRoute("terms")');
 	expect(source).toContain("data-privacy-view");
 	expect(source).toContain("data-terms-view");
 	expect(source).toContain("Privacy Policy placeholder text.");
@@ -97,7 +109,7 @@ test("starts the entitlement query and renders usage plus blocked-mode feedback"
 
 // Implements DESIGN-001 SearchView documented visual order verification.
 test("visual order: modes → autocomplete → mode controls → results → offline banner", () => {
-	const modesPos = indexOf("<SearchModes />");
+	const modesPos = indexOf("<SearchModes onModeChange={selectSearchMode} />");
 	const searchPos = indexOf("<AutocompleteDropdown");
 	const resultsPos = indexOf("<SearchResults");
 	const offlinePos = indexOf("<OfflineBanner />");
@@ -130,7 +142,8 @@ test("autocomplete search bar is bound to setQuery and has no disabled attribute
 test("passes submitted search loading state into the autocomplete search bar", () => {
 	expect(source).toContain("let searchInFlight = $state(false)");
 	expect(source).toContain("searching={searchInFlight}");
-	expect(source).toContain('selectFirstOnEnter={activeMode === "substitution" || activeMode === "daily_diet"}');
+	expect(source).toContain('selectFirstOnEnter={activeMode === "substitution"}');
+	expect(source).toContain('loading={$dailyDietStore.status === "loading"}');
 	expect(source).toContain("onSearchInFlightChange");
 	expect(source).toContain("searchInFlight = searching");
 });
@@ -138,32 +151,33 @@ test("passes submitted search loading state into the autocomplete search bar", (
 // Implements DESIGN-001 SearchView selected Substitution Input hydration wiring verification.
 test("hydrates substitution autocomplete selections with food-object detail data", () => {
 	expect(source).toContain("fetchFoodObject");
-	expect(source).toContain("hydrateSubstitutionInput(item.itemId)");
+	expect(source).toContain("foodObjectType: item.objectType");
+	expect(source).toContain("hydrateSubstitutionInput(item.itemId, item.objectType)");
+	expect(source).toContain("fetchFoodObject(foodObjectId, new AbortController().signal, foodObjectType)");
 	expect(source).toContain("setSubstitutionInputItem(item)");
 	expect(source).toContain("displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)");
 	expect(source).toContain("updateSubstitutionInput");
 });
 
 // Implements DESIGN-001 SearchView identity-scoped Daily Diet selection verification.
-test("clears parent-owned Daily Diet selections when authenticated identity changes", () => {
-	expect(source).toContain("let dailyDietSelectionsUserId = $state<string | null>(null)");
-	expect(source).toContain("function clearIdentityOwnedDailyDietSelections(): void");
-	expect(source).toContain("dailyDietSelections = []");
-	expect(source).toContain("dailyDietSelectionError = null");
-	expect(source).toContain("dailyDietSelectionsUserId !== authenticatedUserId");
+test("clears parent-owned Daily Diet edit selection when authenticated identity changes", () => {
+	expect(source).toContain("let dailyDietEditSelection = $state<DailyDietEditSelection | null>(null)");
+	expect(source).toContain("dailyDietEditSelection = null");
 	expect(source).toContain("$effect.pre(() => {");
 	expect(source).toContain("dailyDietStateUserId !== authenticatedUserId");
 	expect(source).toContain("clearDailyDietState()");
 });
 
-// Implements DESIGN-001 SearchView identity- and mode-owned selected-meal hydration verification.
-test("cancels and generation-guards delayed Daily Diet hydration", () => {
-	expect(source).toContain("const dailyDietHydrationControllers = new Set<AbortController>()");
-	expect(source).toContain("dailyDietSelectionGeneration += 1");
-	expect(source).toContain("controller.abort()");
-	expect(source).toContain("dailyDietHydrationIsCurrent(initiatingUserId, initiatingGeneration, controller)");
-	expect(source).toContain('activeMode === "daily_diet"');
-	expect(source).toContain("$authSessionStore.userId === userId");
+// Implements DESIGN-001 SearchView saved Daily Diet edit selection wiring verification.
+test("routes saved Daily Diet search and list selections into the editor", () => {
+	expect(source).toContain("function editDailyDiet(diet: DailyDiet): void");
+	expect(source).toContain("function chooseSavedDailyDiet(diet: DailyDiet): void");
+	expect(source).toContain('activeMode === "daily_diet_alternative"');
+	expect(source).toContain("selectDailyDiet(diet.id)");
+	expect(source).toContain("dailyDietEditSelectionKey");
+	expect(source).toContain("onSelect={chooseSavedDailyDiet}");
+	expect(source).toContain("selectedDiet={dailyDietEditSelection}");
+	expect(source).toContain("onEditDiet={editDailyDiet}");
 });
 
 // Implements DESIGN-001 SearchView mode-specific placeholder guidance verification.
@@ -171,8 +185,10 @@ test("passes mode-specific placeholder guidance to the search input", () => {
 	expect(source).toContain("const searchPlaceholders: Record<SearchMode, string>");
 	expect(source).toContain("catalog: \"Search foods, meals, or ingredients…\"");
 	expect(source).toContain("substitution: \"Search a food to add as a substitution target…\"");
-	expect(source).toContain("daily_diet: \"Search meals to add to your day…\"");
-	expect(source).toContain("daily_diet_alternative: \"Search within a saved daily diet or paste its ID…\"");
+	expect(source).toContain("daily_diet: \"Search saved Daily Diets by name…\"");
+	expect(source).toContain("<SavedDailyDietSearch");
+	expect(source).toContain("daily_diet_alternative: \"Search saved Daily Diets by name…\"");
+	expect(source).toContain('activeMode === "daily_diet" || activeMode === "daily_diet_alternative"');
 	expect(source).toContain("placeholder={searchPlaceholders[activeMode]}");
 });
 

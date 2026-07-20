@@ -46,8 +46,9 @@ func main() {
 	telemetry := observability.NewOptimizationTelemetry(telemetrySink, telemetrySink, 1)
 	store := worker.NewRedisOptimizationJobStore(redisClient).WithTelemetry(telemetry)
 	mealRepository := repository.NewPostgresMealRepository(pg)
+	foodRepository := repository.NewPostgresFoodItemRepository(pg)
 	dietRepository := repository.NewPostgresSavedDataRepository(pg)
-	inputs := worker.NewRepositoryOptimizationInputLoader(optimization.NewConstraintBuilder(mealRepository, dietRepository))
+	inputs := worker.NewRepositoryOptimizationInputLoader(optimization.NewConstraintBuilder(mealRepository, dietRepository, foodRepository))
 	solver := optimization.NewLPSolverWrapper(optimization.CLPConfig{
 		Executable:      cfg.CLPExecutable,
 		ExpectedVersion: cfg.CLPVersion,

@@ -94,7 +94,7 @@ test("polling decodes completed alternatives through the generated nutrition pro
 			createdAt: "2026-07-11T00:00:00Z",
 			startedAt: "2026-07-11T00:00:01Z",
 			finishedAt: "2026-07-11T00:00:02Z",
-			alternatives: [{ meals: [{ mealId, quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
+			alternatives: [{ meals: [{ mealId, name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
 		}
 	};
 	fetchMock.enqueue(jsonResponse(200, response));
@@ -118,7 +118,7 @@ test("polling decodes failed jobs with contract-shaped partial alternatives", as
 			status: "failed",
 			pollUrl: acknowledgement.data!.pollUrl,
 			createdAt: "2026-07-11T00:00:00Z",
-			alternatives: [{ meals: [{ mealId, quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }],
+			alternatives: [{ meals: [{ mealId, name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }],
 			failure: { code: "solver_timeout", message: "Optimization took too long. Please try again." }
 		}
 	}));
@@ -142,7 +142,7 @@ test("polling rejects the legacy top-level calorie placement", async () => {
 			createdAt: "2026-07-11T00:00:00Z",
 			startedAt: "2026-07-11T00:00:01Z",
 			finishedAt: "2026-07-11T00:00:02Z",
-			alternatives: [{ meals: [{ mealId: "meal-1", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20 }, calories: 640, similarityScore: 0.8 }]
+			alternatives: [{ meals: [{ mealId: "meal-1", name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20 }, calories: 640, similarityScore: 0.8 }]
 		}
 	}));
 
@@ -201,7 +201,7 @@ test("accepts only exact 202 acknowledgement and exact 200 job variants", async 
 		pollUrl: acknowledgement.data!.pollUrl,
 		createdAt: "2026-07-11T00:00:00Z"
 	};
-	const alternative = { meals: [{ mealId, quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 };
+	const alternative = { meals: [{ mealId, name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 };
 	const jobs = [
 		{ ...common, status: "queued" },
 		{ ...common, status: "processing", startedAt: "2026-07-11T00:00:01Z" },
@@ -233,7 +233,7 @@ test("rejects malformed envelopes, identity fields, variant fields, poll URLs, d
 		createdAt: "2026-07-11T00:00:00Z",
 		startedAt: "2026-07-11T00:00:01Z",
 		finishedAt: "2026-07-11T00:00:02Z",
-		alternatives: [{ meals: [{ mealId, quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
+		alternatives: [{ meals: [{ mealId, name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
 	};
 	const malformed: unknown[] = [
 		{ status: "ok", requestId: "has space", data: common },
@@ -249,7 +249,7 @@ test("rejects malformed envelopes, identity fields, variant fields, poll URLs, d
 		{ status: "ok", requestId: "empty-alts", data: { ...common, alternatives: [] } },
 		{ status: "ok", requestId: "too-many-alts", data: { ...common, alternatives: Array(4).fill(common.alternatives[0]) } },
 		{ status: "ok", requestId: "empty-meals", data: { ...common, alternatives: [{ ...common.alternatives[0], meals: [] }] } },
-		{ status: "ok", requestId: "bad-meal", data: { ...common, alternatives: [{ ...common.alternatives[0], meals: [{ mealId, quantity: 0, unit: "kg", position: 100 }] }] } },
+		{ status: "ok", requestId: "bad-meal", data: { ...common, alternatives: [{ ...common.alternatives[0], meals: [{ mealId, name: "Chicken Breast", quantity: 0, unit: "kg", position: 100 }] }] } },
 		{ status: "ok", requestId: "bad-macros", data: { ...common, alternatives: [{ ...common.alternatives[0], macros: { protein: -1, carbohydrates: 80, fat: 20, calories: 640 } }] } },
 		{ status: "ok", requestId: "extra-alt", data: { ...common, alternatives: [{ ...common.alternatives[0], debug: true }] } }
 	];
@@ -358,7 +358,7 @@ test("job decoding table rejects missing, cross-variant, unsafe, and out-of-rang
 		createdAt: "2026-07-11T00:00:00Z",
 		startedAt: "2026-07-11T00:00:01Z",
 		finishedAt: "2026-07-11T00:00:02Z",
-		alternatives: [{ meals: [{ mealId, quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
+		alternatives: [{ meals: [{ mealId, name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
 	};
 	const alternative = common.alternatives[0]!;
 	const malformed = [
@@ -371,6 +371,8 @@ test("job decoding table rejects missing, cross-variant, unsafe, and out-of-rang
 		{ ...common, alternatives: [{ ...alternative, similarityScore: null }] },
 		{ ...common, alternatives: [{ ...alternative, meals: Array(101).fill(alternative.meals[0]) }] },
 		{ ...common, alternatives: [{ ...alternative, meals: [{ ...alternative.meals[0], mealId: "bad" }] }] },
+		{ ...common, alternatives: [{ ...alternative, meals: [{ ...alternative.meals[0], name: "" }] }] },
+		{ ...common, alternatives: [{ ...alternative, meals: [{ ...alternative.meals[0], name: " Chicken Breast " }] }] },
 		{ ...common, alternatives: [{ ...alternative, meals: [{ ...alternative.meals[0], quantity: 0.0001 }] }] },
 		{ ...common, alternatives: [{ ...alternative, meals: [{ ...alternative.meals[0], quantity: 1_000_001 }] }] },
 		{ ...common, alternatives: [{ ...alternative, meals: [{ ...alternative.meals[0], quantity: null }] }] },
@@ -411,7 +413,7 @@ test("polling rejects unknown terminal codes and out-of-contract similarity scor
 		status: "ok", requestId: "bad-score",
 		data: {
 			...common, status: "completed", startedAt: "2026-07-11T00:00:01Z",
-			alternatives: [{ meals: [{ mealId, quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.333333 }]
+			alternatives: [{ meals: [{ mealId, name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.333333 }]
 		}
 	}));
 

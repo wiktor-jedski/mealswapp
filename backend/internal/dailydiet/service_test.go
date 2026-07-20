@@ -20,6 +20,8 @@ type memoryDietRepository struct {
 	createCalls   int
 	replaceCalls  int
 	deleteCalls   int
+	claimErr      error
+	replaceErr    error
 }
 
 type memoryDailyDietClaim struct {
@@ -61,6 +63,9 @@ func (r *memoryDietRepository) GetDailyDietCreateClaim(_ context.Context, userID
 func (r *memoryDietRepository) ClaimDailyDietCreate(_ context.Context, claim repository.DailyDietCreateClaim) (repository.DailyDietCreateClaimResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.claimErr != nil {
+		return repository.DailyDietCreateClaimResult{}, r.claimErr
+	}
 	if r.idempotencies == nil {
 		r.idempotencies = map[string]memoryDailyDietClaim{}
 	}
@@ -105,6 +110,9 @@ func (r *memoryDietRepository) List(_ context.Context, userID uuid.UUID) ([]repo
 
 func (r *memoryDietRepository) Replace(_ context.Context, userID uuid.UUID, diet repository.SavedDiet) error {
 	r.replaceCalls++
+	if r.replaceErr != nil {
+		return r.replaceErr
+	}
 	stored, ok := r.diets[diet.ID]
 	if !ok || stored.UserID != userID {
 		return repository.NewError(repository.ErrorKindNotFound, "saved diet not found", nil)
@@ -185,6 +193,72 @@ func (r *memoryMealRepository) Create(context.Context, repository.MealEntity) (u
 }
 func (r *memoryMealRepository) Update(context.Context, repository.MealEntity) error { return nil }
 func (r *memoryMealRepository) Delete(context.Context, uuid.UUID) error             { return nil }
+
+type memoryFoodRepository struct {
+	foods map[uuid.UUID]repository.FoodItemEntity
+}
+
+func (r *memoryFoodRepository) GetByID(_ context.Context, id uuid.UUID, _ repository.RepositoryContext) (repository.FoodItemEntity, error) {
+	food, ok := r.foods[id]
+	if !ok {
+		return repository.FoodItemEntity{}, repository.NewError(repository.ErrorKindNotFound, "Food Item not found", nil)
+	}
+	return food, nil
+}
+func (r *memoryFoodRepository) Search(context.Context, repository.RepositoryQuery) ([]repository.FoodItemEntity, int, error) {
+	return nil, 0, nil
+}
+func (r *memoryFoodRepository) Create(context.Context, repository.FoodItemEntity) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (r *memoryFoodRepository) Update(context.Context, repository.FoodItemEntity) error { return nil }
+func (r *memoryFoodRepository) Delete(context.Context, uuid.UUID) error                 { return nil }
+
+func TestServiceCreateAggregatesFoodItemsAndMeals(t *testing.T) {
+	userID, foodID, mealID := uuid.New(), uuid.New(), uuid.New()
+	foods := &memoryFoodRepository{foods: map[uuid.UUID]repository.FoodItemEntity{
+		foodID: {ID: foodID, PhysicalState: repository.PhysicalStateLiquid, MacrosPer100: repository.MacroValues{Protein: 3.4, Carbohydrates: 5, Fat: 1}},
+	}}
+	meals := &memoryMealRepository{meals: map[uuid.UUID]repository.MealEntity{
+		mealID: {ID: mealID, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 20, Fat: 5}},
+	}}
+	request := CreateRequest{Name: "Mixed day", IdempotencyKey: "mixed-food-objects", Entries: []FoodObjectQuantity{
+		{FoodObjectID: foodID, FoodObjectType: repository.FoodObjectTypeFoodItem, Quantity: 100, Unit: "ml", Position: 0},
+		{FoodObjectID: mealID, FoodObjectType: repository.FoodObjectTypeMeal, Quantity: 100, Unit: "g", Position: 1},
+	}}
+
+	created, err := NewService(&memoryDietRepository{}, meals, foods).Create(context.Background(), userID, request)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	want := MacroProjection{Protein: 13.4, Carbohydrates: 25, Fat: 6, Calories: 207.6}
+	if created.Diet.AggregateMacros != want || !reflect.DeepEqual(created.Diet.Entries[0].FoodObjectType, repository.FoodObjectTypeFoodItem) {
+		t.Fatalf("created = %+v, want aggregate %+v with Food Item entry", created.Diet, want)
+	}
+}
+
+func TestServiceMapsDailyDietNameConflicts(t *testing.T) {
+	userID, mealID := uuid.New(), uuid.New()
+	meals := &memoryMealRepository{meals: map[uuid.UUID]repository.MealEntity{
+		mealID: {ID: mealID, PhysicalState: repository.PhysicalStateSolid},
+	}}
+	request := CreateRequest{Name: "Training Day", IdempotencyKey: "duplicate-name", Entries: []MealQuantity{{MealID: mealID, Quantity: 100, Unit: "g", Position: 0}}}
+	diets := &memoryDietRepository{claimErr: repository.NewError(repository.ErrorKindConflict, "create saved diet", nil)}
+	service := NewService(diets, meals)
+	if _, err := service.Create(context.Background(), userID, request); err != ErrDuplicateName {
+		t.Fatalf("Create() error = %v, want %v", err, ErrDuplicateName)
+	}
+
+	dietID := uuid.New()
+	diets = &memoryDietRepository{
+		diets:      map[uuid.UUID]repository.SavedDiet{dietID: {ID: dietID, UserID: userID}},
+		replaceErr: repository.NewError(repository.ErrorKindConflict, "replace saved diet", nil),
+	}
+	service = NewService(diets, meals)
+	if _, err := service.Replace(context.Background(), userID, dietID, ReplaceRequest{Name: "Training Day", Entries: request.Entries}); err != ErrDuplicateName {
+		t.Fatalf("Replace() error = %v, want %v", err, ErrDuplicateName)
+	}
+}
 
 func TestServiceCreateAggregatesMultipleMealsAndReplaysIdempotently(t *testing.T) {
 	userID := uuid.New()
@@ -444,3 +518,4 @@ func copyEntries(entries []repository.SavedDietMealEntry, dietID uuid.UUID) []re
 
 var _ repository.DailyDietMutationRepository = (*memoryDietRepository)(nil)
 var _ repository.MealRepository = (*memoryMealRepository)(nil)
+var _ repository.FoodItemRepository = (*memoryFoodRepository)(nil)

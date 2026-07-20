@@ -10,10 +10,8 @@ import type {
   SavedItemsEnvelope,
   SearchHistoryEnvelope,
   SearchRequest,
-  SearchMode,
   SearchResponse,
-  SearchResponseEnvelope,
-  SearchRejectionEnvelope
+  SearchResponseEnvelope
 } from "../src/lib/api/generated";
 
 // Implements DESIGN-001 SearchView Phase 05 integration coverage with controlled API responses.
@@ -45,6 +43,7 @@ async function setResolvedTheme(page: Page, target: "light" | "dark"): Promise<v
 function foodObject(i: number): SearchResponse["items"][number] {
   return {
     id: `food-${i}`,
+    objectType: "food_item",
     name: `Food ${i}`,
     physicalState: i % 2 === 0 ? "solid" : "liquid",
     imageUrl: i % 3 === 0 ? null : `https://example.test/food-${i}.png`,
@@ -84,8 +83,8 @@ const autocompleteEnvelope: AutocompleteEnvelope = {
   requestId: "autocomplete-workflow-0001",
   data: {
     items: [
-      { itemId: "food-apple", label: "Apple", exactMatch: true, levenshteinDistance: 0, length: 5, rank: 1 },
-      { itemId: "food-applesauce", label: "Applesauce", exactMatch: false, levenshteinDistance: 2, length: 10, rank: 2 }
+      { itemId: "food-apple", objectType: "food_item", label: "Apple", exactMatch: true, levenshteinDistance: 0, length: 5, rank: 1 },
+      { itemId: "food-applesauce", objectType: "food_item", label: "Applesauce", exactMatch: false, levenshteinDistance: 2, length: 10, rank: 2 }
     ]
   }
 };
@@ -95,6 +94,7 @@ const hydratedFoodObjectEnvelope: FoodObjectEnvelope = {
   requestId: "food-object-workflow-0001",
   data: {
     id: "food-apple",
+    objectType: "food_item",
     name: "Apple",
     physicalState: "solid",
     imageUrl: null,
@@ -150,7 +150,7 @@ const authSessionEnvelope: AuthSessionEnvelope = {
 const savedDailyDiet: DailyDiet = {
   id: "00000000-0000-0000-0000-000000000021",
   name: "Training day",
-  entries: [{ id: "00000000-0000-0000-0000-000000000022", mealId: "00000000-0000-0000-0000-000000000023", quantity: 100, unit: "g", position: 0 }],
+  entries: [{ id: "00000000-0000-0000-0000-000000000022", foodObjectId: "00000000-0000-0000-0000-000000000023", foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }],
   aggregateMacros: { protein: 1, carbohydrates: 14, fat: 0.2, calories: 62 },
   createdAt: "2026-07-05T00:00:00Z",
   updatedAt: "2026-07-05T00:00:00Z"
@@ -318,7 +318,7 @@ test("Substitution Input search sends inputs and renders ranked results", async 
   await page.route(/\/api\/v1\/food-objects\/[^/]+$/, (route) => fulfillJson(route, 200, hydratedFoodObjectEnvelope));
   await page.route(/\/api\/v1\/search$/, async (route) => {
     seenRequestBody = (await route.request().postDataJSON()) as SearchRequest;
-    await fulfillJson(route, 200, searchEnvelope(3, 1));
+    await fulfillJson(route, 200, searchEnvelope(7, 1));
   });
   await page.goto("/");
 
@@ -340,12 +340,70 @@ test("Substitution Input search sends inputs and renders ranked results", async 
   await page.locator("#qty-food-apple").fill("150");
   await page.getByRole("button", { name: "Find substitutions" }).click();
   await expect(page.locator("[data-result-card]")).toHaveCount(3);
+  await expect(page.locator("[data-results-page]")).toHaveText("Page 1 of 3");
   await expect(page.locator("[data-result-similarity]").first()).toBeVisible();
   expect(seenRequestBody).not.toBeNull();
   expect(seenRequestBody!.mode).toBe("substitution");
   expect(seenRequestBody!.query).toBe("");
   expect(seenRequestBody!.substitutionInputs?.[0]?.foodObjectId).toBe("food-apple");
+  expect(seenRequestBody!.substitutionInputs?.[0]?.foodObjectType).toBe("food_item");
   expect(seenRequestBody!.substitutionInputs?.[0]?.quantity).toBe(150);
+});
+
+// Implements DESIGN-001 SearchView Meal substitution input hydration and request projection verification.
+test("Substitution accepts a Meal input with its macro profile and explicit object type", async ({ page }) => {
+  const salmonId = "22000000-0000-0000-0000-000000000104";
+  let requestedObjectType: string | null = null;
+  let seenRequestBody: SearchRequest | null = null;
+  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "salmon-autocomplete",
+    data: { items: [{ itemId: salmonId, objectType: "meal", label: "Salmon Fillet", exactMatch: true, levenshteinDistance: 0, length: 13, rank: 1 }] }
+  } satisfies AutocompleteEnvelope));
+  await page.route(/\/api\/v1\/food-objects\/[^/]+$/, (route) => {
+    requestedObjectType = new URL(route.request().url()).searchParams.get("objectType");
+    return fulfillJson(route, 200, {
+      status: "ok",
+      requestId: "salmon-food-object",
+      data: {
+        id: salmonId, objectType: "meal", name: "Salmon Fillet", physicalState: "solid", imageUrl: null,
+        classifications: [{ id: "protein", name: "Protein", kind: "food_category" }],
+        primaryFoodCategory: { id: "protein", name: "Protein", kind: "food_category" },
+        macros: { protein: 20, carbohydrates: 0, fat: 13 }, macroBasis: "100g", calories: 197
+      }
+    } satisfies FoodObjectEnvelope);
+  });
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    seenRequestBody = (await route.request().postDataJSON()) as SearchRequest;
+    await fulfillJson(route, 200, {
+      status: "ok",
+      requestId: "mixed-substitution-results",
+      data: {
+        items: [{
+          id: "22000000-0000-0000-0000-000000000102", objectType: "meal", name: "Turkey Breast",
+          physicalState: "solid", imageUrl: null,
+          classifications: [{ id: "protein", name: "Protein", kind: "food_category" }],
+          primaryFoodCategory: { id: "protein", name: "Protein", kind: "food_category" },
+          macros: { protein: 29, carbohydrates: 0, fat: 1 }, macroBasis: "100g", calories: 125
+        }],
+        totalCount: 1, page: 1, similarityScores: [0.99],
+        similarityMetadata: [{ itemId: "22000000-0000-0000-0000-000000000102", score: 0.99, tier: "excellent", imageUrl: "", matchingQuantity: 125 }],
+        warnings: []
+      }
+    } satisfies SearchResponseEnvelope);
+  });
+  await page.goto("/");
+
+  await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Substitution" }).click();
+  await page.getByLabel("Food search").fill("salmon");
+  await page.getByRole("option", { name: "Salmon Fillet", exact: true }).click();
+  await expect(page.locator("[data-substitution-macros]")).toContainText("20g");
+  await expect(page.locator("[data-substitution-calories]")).toContainText("197 kcal");
+  expect(requestedObjectType).toBe("meal");
+
+  await page.getByRole("button", { name: "Find substitutions" }).click();
+  await expect(page.locator("[data-result-name]")).toHaveText("Turkey Breast");
+  expect(seenRequestBody?.substitutionInputs?.[0]).toMatchObject({ foodObjectId: salmonId, foodObjectType: "meal", quantity: 100, unit: "g" });
 });
 
 // Implements DESIGN-001 SearchView free-user usage and single-input Substitution entitlement verification.
@@ -449,8 +507,8 @@ test("free users get entitlement feedback for Daily Diet Alternative without sen
   await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
   await expect(page.locator("[data-entitlement-feedback]")).toContainText("trial and paid plans");
   await expect(page.locator("[data-daily-diet-alternative-entitlement]")).toContainText("trial and paid plans");
-  await page.getByLabel("Food search").fill("apple");
-  await page.getByLabel("Food search").press("Enter");
+  await expect(page.getByRole("combobox", { name: "Search saved Daily Diets" })).toBeVisible();
+  await expect(page.getByLabel("Food search")).toHaveCount(0);
 
   await expect(page.locator("[data-results-grid]")).toHaveCount(0);
   expect(searchRequestCount).toBe(0);
@@ -476,18 +534,12 @@ for (const tier of ["trial", "paid"] as const) {
 
   // Implements DESIGN-001 SearchView trial/paid Daily Diet Alternative entitlement unlock verification.
   test(`${tier} users can execute paid Daily Diet Alternative mode`, async ({ page }) => {
-    let seenMode: SearchMode | null = null;
     await stubEntitlement(page, entitlementEnvelope({
       tier,
       allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"],
       usageRemaining: null
     }));
     await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
-    await page.route(/\/api\/v1\/search$/, async (route) => {
-      const body = (await route.request().postDataJSON()) as SearchRequest;
-      seenMode = body.mode;
-      await fulfillJson(route, 200, searchEnvelope(1, 1));
-    });
     await stubSavedDiets(page);
     await page.goto("/");
 
@@ -495,11 +547,8 @@ for (const tier of ["trial", "paid"] as const) {
     await expect(page.locator("[data-entitlement-feedback]")).toHaveCount(0);
     await page.getByRole("radio", { name: "Use Training day as Daily Diet Alternative input" }).click();
     await expect(page.locator("[data-daily-diet-alternative-selected]")).toBeVisible();
-    await page.getByLabel("Food search").fill("apple");
-    await page.getByLabel("Food search").press("Enter");
-
-    await expect(page.locator("[data-result-card]")).toHaveCount(1);
-    expect(seenMode).toBe("daily_diet_alternative");
+    await expect(page.locator("[data-optimization-workflow]")).toBeVisible();
+    await expect(page.getByLabel("Food search")).toHaveCount(0);
   });
 }
 
@@ -595,21 +644,19 @@ test("Catalog results can add full item data to the substitution input list", as
   const substitutionRequest = seenRequests.find((request) => request.mode === "substitution");
   expect(substitutionRequest?.substitutionInputs?.[0]).toEqual({
     foodObjectId: "food-1",
+    foodObjectType: "food_item",
     quantity: 100,
     unit: "ml"
   });
 });
 
-// Implements DESIGN-001 SearchView Daily Diet Alternative 422 rejection verification.
-test("Daily Diet Alternative search shows the structured 422 rejection", async ({ page }) => {
-  const rejectionEnvelope: SearchRejectionEnvelope = {
-    status: "error",
-    requestId: "rejection-workflow-0001",
-    data: { rejection: { code: "no_alternative_found", message: "No daily diet alternative available.", field: "dailyDietId" } },
-    error: { category: "validation", code: "no_alternative_found", message: "No daily diet alternative available.", retryable: false }
-  };
-  await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope));
-  await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 422, rejectionEnvelope));
+// Implements DESIGN-001 SearchView Daily Diet Alternative optimization-only selection verification.
+test("Daily Diet Alternative selection does not execute the legacy text-search endpoint", async ({ page }) => {
+  let legacySearchRequests = 0;
+  await page.route(/\/api\/v1\/search$/, async (route) => {
+    legacySearchRequests += 1;
+    await fulfillJson(route, 200, searchEnvelope(1, 1));
+  });
   await stubEntitlement(page, entitlementEnvelope());
   await stubSavedDiets(page);
   await page.goto("/");
@@ -617,10 +664,8 @@ test("Daily Diet Alternative search shows the structured 422 rejection", async (
   await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative" }).click();
   await page.getByRole("radio", { name: "Use Training day as Daily Diet Alternative input" }).click();
   await expect(page.locator("[data-daily-diet-alternative-selected]")).toBeVisible();
-  await page.getByLabel("Food search").fill("apple");
-  await page.getByLabel("Food search").press("Enter");
-
-  await expect(page.locator("[data-rejection-message]")).toContainText("No daily diet alternative");
+  await expect(page.locator("[data-optimization-workflow]")).toBeVisible();
+  expect(legacySearchRequests).toBe(0);
 });
 
 // Verifies IT-ARCH-001-001.

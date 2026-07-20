@@ -9,6 +9,10 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
+// SubstitutionPageSize keeps replacement result pages intentionally compact.
+// Implements DESIGN-002 PaginationHandler Substitution Search page size.
+const SubstitutionPageSize = 3
+
 // SubstitutionFoodRepository is the repository primitive used by Substitution Search orchestration.
 // Implements DESIGN-002 SearchController and CulinaryRoleWeighter.
 type SubstitutionFoodRepository interface {
@@ -16,12 +20,27 @@ type SubstitutionFoodRepository interface {
 	Search(ctx context.Context, q repository.RepositoryQuery) ([]repository.FoodItemEntity, int, error)
 }
 
+// SubstitutionMealRepository resolves meal inputs without coupling substitution output queries to meal persistence.
+// Implements DESIGN-002 SearchController Food Object substitution input resolution.
+type SubstitutionMealRepository interface {
+	GetByID(ctx context.Context, id uuid.UUID, rc repository.RepositoryContext) (repository.MealEntity, error)
+	Search(ctx context.Context, q repository.RepositoryQuery) ([]repository.MealEntity, int, error)
+}
+
 // SubstitutionService orchestrates Substitution Search over source macros, filters, similarity, and cache.
 // Implements DESIGN-002 SearchController and CulinaryRoleWeighter.
 type SubstitutionService struct {
 	repository      SubstitutionFoodRepository
+	mealRepository  SubstitutionMealRepository
 	cache           SearchResponseCache
 	similarityCache SimilarityCalculationCache
+}
+
+// WithMealRepository enables Meal inputs returned by the shared autocomplete surface.
+// Implements DESIGN-002 SearchController Food Object substitution input resolution.
+func (s *SubstitutionService) WithMealRepository(meals SubstitutionMealRepository) *SubstitutionService {
+	s.mealRepository = meals
+	return s
 }
 
 // NewSubstitutionService creates Substitution Search orchestration.
@@ -87,7 +106,7 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 	if rejection != nil {
 		return SearchResponse{Items: []repository.FoodItemEntity{}, TotalCount: 0, Page: req.Page, SimilarityScores: []float64{}, Warnings: sourceWarnings, Rejection: rejection}, nil
 	}
-	candidates, _, err := s.repository.Search(ctx, processed.RepositoryQuery)
+	candidates, err := s.loadCandidateObjects(ctx, processed.RepositoryQuery)
 	if err != nil {
 		return SearchResponse{}, err
 	}
@@ -104,6 +123,8 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 		return SearchResponse{}, SimilarityUnavailableError{Cause: err}
 	}
 	ranked := rankSubstitutionCandidates(candidates, calculation.Results, len(req.SubstitutionInputs) == 1, sourceRoles)
+	totalCount := len(ranked.items)
+	ranked = paginateRankedSubstitutions(ranked, req.Page)
 	warnings := append(catalogWarnings(processed.ExclusionRules), sourceWarnings...)
 	warnings = append(warnings, similarityWarnings...)
 	for _, diagnostic := range calculation.Diagnostics {
@@ -112,7 +133,8 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 
 	return SearchResponse{
 		Items:              ranked.items,
-		TotalCount:         len(ranked.items),
+		ItemTypes:          ranked.itemTypes,
+		TotalCount:         totalCount,
 		Page:               req.Page,
 		SimilarityScores:   ranked.scores,
 		SimilarityMetadata: ranked.metadata,
@@ -127,7 +149,9 @@ func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs
 	warnings := []string{}
 	if s.similarityCache != nil {
 		if cached, hit, err := s.similarityCache.GetSimilarityCalculation(ctx, inputs); err == nil && hit {
-			return cached, warnings, nil
+			if similarityCalculationCoversTargets(cached, req.Targets) {
+				return cached, warnings, nil
+			}
 		} else if err != nil {
 			warnings = append(warnings, WarningCacheUnavailable)
 		}
@@ -146,11 +170,33 @@ func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs
 	return calculation, warnings, nil
 }
 
+func similarityCalculationCoversTargets(calculation SimilarityCalculation, targets []TargetMacroVector) bool {
+	covered := make(map[uuid.UUID]struct{}, len(calculation.Results)+len(calculation.Diagnostics))
+	for _, result := range calculation.Results {
+		covered[result.ItemID] = struct{}{}
+	}
+	for _, diagnostic := range calculation.Diagnostics {
+		covered[diagnostic.ItemID] = struct{}{}
+	}
+	for _, target := range targets {
+		if _, ok := covered[target.ItemID]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // substitutionSource carries the combined source Macro Profile for Substitution Search.
 // Implements DESIGN-002 SearchController.
 type substitutionSource struct {
 	macros  repository.MacroValues
 	summary *SubstitutionSourceSummary
+}
+
+type substitutionSourceObject struct {
+	physicalState repository.PhysicalState
+	macros        repository.MacroValues
+	culinaryRoles []repository.ClassificationEntity
 }
 
 // combineSourceMacros combines one or more Substitution Inputs into one Macro Profile.
@@ -165,17 +211,17 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 		if input.FoodObjectID == uuid.Nil || input.Quantity <= 0 || input.Unit == "" {
 			return substitutionSource{}, nil, warnings, &SearchRejection{Code: "rejected_search", Message: "substitution input requires foodObjectId, positive quantity, and unit", Field: "substitutionInputs"}
 		}
-		food, err := s.repository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		food, err := s.loadSourceObject(ctx, input)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("skipped source %s load_failed", input.FoodObjectID))
 			continue
 		}
-		baseQuantity, baseUnit, err := sourceBaseQuantity(input, food)
+		baseQuantity, baseUnit, err := sourceBaseQuantity(input, food.physicalState)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("skipped source %s conversion_failed", input.FoodObjectID))
 			continue
 		}
-		scaled := repository.ScaleMacros(food.MacrosPer100, baseQuantity, 100)
+		scaled := repository.ScaleMacros(food.macros, baseQuantity, 100)
 		total.Protein += scaled.Protein
 		total.Carbohydrates += scaled.Carbohydrates
 		total.Fat += scaled.Fat
@@ -185,7 +231,7 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 			totalGrams += baseQuantity
 		}
 		if index == 0 {
-			firstRoles = food.CulinaryRoles
+			firstRoles = food.culinaryRoles
 		}
 	}
 	if _, err := NormalizeMacroVector(total); err != nil {
@@ -202,14 +248,40 @@ func (s *SubstitutionService) combineSourceMacros(ctx context.Context, inputs []
 	}, firstRoles, warnings, nil
 }
 
+// loadSourceObject resolves the explicitly selected Food Object subtype into the common macro surface.
+// Implements DESIGN-002 SearchController Food Object substitution input resolution.
+func (s *SubstitutionService) loadSourceObject(ctx context.Context, input SubstitutionInput) (substitutionSourceObject, error) {
+	if input.FoodObjectType == repository.FoodObjectTypeMeal {
+		if s.mealRepository == nil {
+			return substitutionSourceObject{}, fmt.Errorf("meal repository unavailable")
+		}
+		meal, err := s.mealRepository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		if err != nil {
+			return substitutionSourceObject{}, err
+		}
+		roles := make([]repository.ClassificationEntity, 0, len(meal.Classifications))
+		for _, classification := range meal.Classifications {
+			if classification.Kind == repository.ClassificationKindCulinaryRole {
+				roles = append(roles, classification)
+			}
+		}
+		return substitutionSourceObject{physicalState: meal.PhysicalState, macros: meal.MacrosPer100, culinaryRoles: roles}, nil
+	}
+	food, err := s.repository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+	if err != nil {
+		return substitutionSourceObject{}, err
+	}
+	return substitutionSourceObject{physicalState: food.PhysicalState, macros: food.MacrosPer100, culinaryRoles: food.CulinaryRoles}, nil
+}
+
 // sourceBaseQuantity converts an input quantity into the food item's macro storage basis.
 // Implements DESIGN-002 SearchController.
-func sourceBaseQuantity(input SubstitutionInput, food repository.FoodItemEntity) (float64, string, error) {
+func sourceBaseQuantity(input SubstitutionInput, physicalState repository.PhysicalState) (float64, string, error) {
 	if err := repository.ValidateQuantityUnit(input.Unit); err != nil {
 		return 0, "", err
 	}
 	baseUnit := "g"
-	if food.PhysicalState == repository.PhysicalStateLiquid {
+	if physicalState == repository.PhysicalStateLiquid {
 		baseUnit = "ml"
 	}
 	quantity, err := repository.ConvertUnit(input.Quantity, input.Unit, baseUnit)
@@ -218,14 +290,75 @@ func sourceBaseQuantity(input SubstitutionInput, food repository.FoodItemEntity)
 
 // excludeSubstitutionSources removes input Food Objects from substitute candidates.
 // Implements DESIGN-002 SearchController.
-func excludeSubstitutionSources(items []repository.FoodItemEntity, inputs []SubstitutionInput) []repository.FoodItemEntity {
+type substitutionObjectCandidate struct {
+	item       repository.FoodItemEntity
+	objectType repository.FoodObjectType
+}
+
+func (s *SubstitutionService) loadCandidateObjects(ctx context.Context, query repository.RepositoryQuery) ([]substitutionObjectCandidate, error) {
+	query.Offset = 0
+	query.Limit = PageSize
+	foods, foodTotal, err := s.repository.Search(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if foodTotal > len(foods) {
+		query.Limit = foodTotal
+		foods, _, err = s.repository.Search(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+	}
+	candidates := make([]substitutionObjectCandidate, 0, len(foods))
+	for _, food := range foods {
+		candidates = append(candidates, substitutionObjectCandidate{item: food, objectType: repository.FoodObjectTypeFoodItem})
+	}
+	if s.mealRepository == nil {
+		return candidates, nil
+	}
+	query.Limit = PageSize
+	meals, mealTotal, err := s.mealRepository.Search(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	if mealTotal > len(meals) {
+		query.Limit = mealTotal
+		meals, _, err = s.mealRepository.Search(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, meal := range meals {
+		candidates = append(candidates, mealSubstitutionCandidate(meal))
+	}
+	return candidates, nil
+}
+
+func mealSubstitutionCandidate(meal repository.MealEntity) substitutionObjectCandidate {
+	item := repository.FoodItemEntity{
+		ID: meal.ID, Name: meal.Name, PhysicalState: meal.PhysicalState,
+		PrepTimeMinutes: meal.PrepTimeMinutes, AverageUnitWeightGrams: meal.AverageUnitWeightGrams,
+		MacrosPer100: meal.MacrosPer100, CreatedAt: meal.CreatedAt, UpdatedAt: meal.UpdatedAt,
+	}
+	for _, classification := range meal.Classifications {
+		switch classification.Kind {
+		case repository.ClassificationKindFoodCategory:
+			item.FoodCategories = append(item.FoodCategories, classification)
+		case repository.ClassificationKindCulinaryRole:
+			item.CulinaryRoles = append(item.CulinaryRoles, classification)
+		}
+	}
+	return substitutionObjectCandidate{item: item, objectType: repository.FoodObjectTypeMeal}
+}
+
+func excludeSubstitutionSources(items []substitutionObjectCandidate, inputs []SubstitutionInput) []substitutionObjectCandidate {
 	sourceIDs := make(map[uuid.UUID]struct{}, len(inputs))
 	for _, input := range inputs {
 		sourceIDs[input.FoodObjectID] = struct{}{}
 	}
-	filtered := make([]repository.FoodItemEntity, 0, len(items))
+	filtered := make([]substitutionObjectCandidate, 0, len(items))
 	for _, item := range items {
-		if _, isSource := sourceIDs[item.ID]; isSource {
+		if _, isSource := sourceIDs[item.item.ID]; isSource {
 			continue
 		}
 		filtered = append(filtered, item)
@@ -235,14 +368,14 @@ func excludeSubstitutionSources(items []repository.FoodItemEntity, inputs []Subs
 
 // substitutionTargets adapts repository food items into DESIGN-003 comparison targets.
 // Implements DESIGN-003 CosineSimilarityCalculator.
-func substitutionTargets(items []repository.FoodItemEntity) []TargetMacroVector {
+func substitutionTargets(items []substitutionObjectCandidate) []TargetMacroVector {
 	targets := make([]TargetMacroVector, 0, len(items))
 	for _, item := range items {
 		targets = append(targets, TargetMacroVector{
-			ItemID:              item.ID,
-			Macros:              item.MacrosPer100,
-			CaloriesPerBaseUnit: CalculateCalories(item.MacrosPer100) / 100,
-			ProteinPerBaseUnit:  item.MacrosPer100.Protein / 100,
+			ItemID:              item.item.ID,
+			Macros:              item.item.MacrosPer100,
+			CaloriesPerBaseUnit: CalculateCalories(item.item.MacrosPer100) / 100,
+			ProteinPerBaseUnit:  item.item.MacrosPer100.Protein / 100,
 		})
 	}
 	return targets
@@ -251,15 +384,17 @@ func substitutionTargets(items []repository.FoodItemEntity) []TargetMacroVector 
 // rankedSubstitutionResponse carries response items and their final substitution scores.
 // Implements DESIGN-002 SearchController.
 type rankedSubstitutionResponse struct {
-	items    []repository.FoodItemEntity
-	scores   []float64
-	metadata []SimilarityMetadata
+	items     []repository.FoodItemEntity
+	itemTypes []repository.FoodObjectType
+	scores    []float64
+	metadata  []SimilarityMetadata
 }
 
 // substitutionCandidate stores intermediate similarity and final ranking scores.
 // Implements DESIGN-002 CulinaryRoleWeighter.
 type substitutionCandidate struct {
 	item            repository.FoodItemEntity
+	objectType      repository.FoodObjectType
 	metadata        SimilarityMetadata
 	similarityScore float64
 	finalScore      float64
@@ -267,10 +402,10 @@ type substitutionCandidate struct {
 
 // rankSubstitutionCandidates sorts accepted targets by score and user-facing name.
 // Implements DESIGN-002 CulinaryRoleWeighter.
-func rankSubstitutionCandidates(items []repository.FoodItemEntity, results []SimilarityResult, applyRoleWeight bool, sourceRoles []repository.ClassificationEntity) rankedSubstitutionResponse {
-	itemByID := make(map[uuid.UUID]repository.FoodItemEntity, len(items))
+func rankSubstitutionCandidates(items []substitutionObjectCandidate, results []SimilarityResult, applyRoleWeight bool, sourceRoles []repository.ClassificationEntity) rankedSubstitutionResponse {
+	itemByID := make(map[uuid.UUID]substitutionObjectCandidate, len(items))
 	for _, item := range items {
-		itemByID[item.ID] = item
+		itemByID[item.item.ID] = item
 	}
 	candidates := make([]substitutionCandidate, 0, len(results))
 	for _, result := range results {
@@ -280,10 +415,11 @@ func rankSubstitutionCandidates(items []repository.FoodItemEntity, results []Sim
 		}
 		finalScore := result.Score
 		if applyRoleWeight {
-			finalScore = ApplyCulinaryRoleWeight(result.Score, item.CulinaryRoles, sourceRoles)
+			finalScore = ApplyCulinaryRoleWeight(result.Score, item.item.CulinaryRoles, sourceRoles)
 		}
 		candidates = append(candidates, substitutionCandidate{
-			item:            item,
+			item:            item.item,
+			objectType:      item.objectType,
 			metadata:        similarityMetadataFromResult(result),
 			similarityScore: result.Score,
 			finalScore:      finalScore,
@@ -297,15 +433,30 @@ func rankSubstitutionCandidates(items []repository.FoodItemEntity, results []Sim
 	})
 
 	response := rankedSubstitutionResponse{
-		items:    make([]repository.FoodItemEntity, 0, len(candidates)),
-		scores:   make([]float64, 0, len(candidates)),
-		metadata: make([]SimilarityMetadata, 0, len(candidates)),
+		items:     make([]repository.FoodItemEntity, 0, len(candidates)),
+		itemTypes: make([]repository.FoodObjectType, 0, len(candidates)),
+		scores:    make([]float64, 0, len(candidates)),
+		metadata:  make([]SimilarityMetadata, 0, len(candidates)),
 	}
 	for _, candidate := range candidates {
 		response.items = append(response.items, candidate.item)
+		response.itemTypes = append(response.itemTypes, candidate.objectType)
 		response.scores = append(response.scores, candidate.finalScore)
 		response.metadata = append(response.metadata, candidate.metadata)
 	}
+	return response
+}
+
+func paginateRankedSubstitutions(response rankedSubstitutionResponse, page int) rankedSubstitutionResponse {
+	offset := (max(page, 1) - 1) * SubstitutionPageSize
+	if offset >= len(response.items) {
+		return rankedSubstitutionResponse{items: []repository.FoodItemEntity{}, itemTypes: []repository.FoodObjectType{}, scores: []float64{}, metadata: []SimilarityMetadata{}}
+	}
+	end := min(offset+SubstitutionPageSize, len(response.items))
+	response.items = response.items[offset:end]
+	response.itemTypes = response.itemTypes[offset:end]
+	response.scores = response.scores[offset:end]
+	response.metadata = response.metadata[offset:end]
 	return response
 }
 

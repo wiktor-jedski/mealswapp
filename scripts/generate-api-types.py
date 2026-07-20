@@ -113,12 +113,21 @@ DAILY_DIET_SCHEMA_RULES = {
 		"      schema:\n        type: string\n        minLength: 8\n        maxLength: 255\n",
 	),
 	"CanonicalQuantityUnit": ("      type: string\n      enum: [g, ml, oz, fl_oz]\n",),
-	"DailyDietMealEntry": (
+	"FoodObjectType": ("      type: string\n      enum: [food_item, meal]\n",),
+	"FoodObjectQuantity": (
 		"      type: object\n",
 		"      additionalProperties: false\n",
-		"      required: [id, mealId, quantity, unit, position]\n",
+		"      required: [foodObjectId, foodObjectType, quantity, unit, position]\n",
+		"        foodObjectId:\n          type: string\n          format: uuid\n",
+		"        foodObjectType:\n          $ref: \"#/components/schemas/FoodObjectType\"\n",
+	),
+	"DailyDietFoodObjectEntry": (
+		"      type: object\n",
+		"      additionalProperties: false\n",
+		"      required: [id, foodObjectId, foodObjectType, quantity, unit, position]\n",
 		"        id:\n          type: string\n          format: uuid\n",
-		"        mealId:\n          type: string\n          format: uuid\n",
+		"        foodObjectId:\n          type: string\n          format: uuid\n",
+		"        foodObjectType:\n          $ref: \"#/components/schemas/FoodObjectType\"\n",
 		"        quantity:\n          type: number\n          exclusiveMinimum: 0\n          maximum: 1000000\n          multipleOf: 0.001\n",
 		"        unit:\n          $ref: \"#/components/schemas/CanonicalQuantityUnit\"\n",
 		"        position:\n          type: integer\n          minimum: 0\n          maximum: 99\n",
@@ -138,7 +147,7 @@ DAILY_DIET_SCHEMA_RULES = {
 		"      required: [id, name, entries, aggregateMacros, createdAt, updatedAt]\n",
 		"        id:\n          type: string\n          format: uuid\n",
 		"        name:\n          type: string\n          minLength: 1\n          maxLength: 120\n",
-		"        entries:\n          type: array\n          minItems: 1\n          maxItems: 100\n          items:\n            $ref: \"#/components/schemas/DailyDietMealEntry\"\n",
+		"        entries:\n          type: array\n          minItems: 1\n          maxItems: 100\n          items:\n            $ref: \"#/components/schemas/DailyDietFoodObjectEntry\"\n",
 		"        aggregateMacros:\n          $ref: \"#/components/schemas/MacroProjection\"\n",
 		"        createdAt:\n          type: string\n          format: date-time\n",
 		"        updatedAt:\n          type: string\n          format: date-time\n",
@@ -161,7 +170,7 @@ DAILY_DIET_SCHEMA_RULES = {
 }
 
 DAILY_DIET_SCHEMA_RULE_COUNTS = {
-	"DailyDietMealEntry": {
+	"DailyDietFoodObjectEntry": {
 		"          format: uuid\n": 2,
 	},
 	"MacroProjection": {
@@ -175,7 +184,8 @@ DAILY_DIET_SCHEMA_RULE_COUNTS = {
 }
 
 DAILY_DIET_PROPERTY_NAMES = {
-	"DailyDietMealEntry": {"id", "mealId", "quantity", "unit", "position"},
+	"FoodObjectQuantity": {"foodObjectId", "foodObjectType", "quantity", "unit", "position"},
+	"DailyDietFoodObjectEntry": {"id", "foodObjectId", "foodObjectType", "quantity", "unit", "position"},
 	"MacroProjection": {"protein", "carbohydrates", "fat", "calories"},
 	"DailyDiet": {"id", "name", "entries", "aggregateMacros", "createdAt", "updatedAt"},
 	"DailyDietEnvelope": {"status", "requestId", "data"},
@@ -194,8 +204,9 @@ OPTIMIZATION_SCHEMA_RULES = {
 	"MealQuantity": (
 		"      type: object\n",
 		"      additionalProperties: false\n",
-		"      required: [mealId, quantity, unit, position]\n",
+		"      required: [mealId, name, quantity, unit, position]\n",
 		"        mealId:\n          type: string\n          format: uuid\n",
+		"        name:\n          type: string\n          minLength: 1\n          maxLength: 200\n",
 		"        quantity:\n          type: number\n          exclusiveMinimum: 0\n          maximum: 1000000\n          multipleOf: 0.001\n",
 		"        unit:\n          $ref: \"#/components/schemas/CanonicalQuantityUnit\"\n",
 		"        position:\n          type: integer\n          minimum: 0\n          maximum: 99\n",
@@ -284,7 +295,7 @@ OPTIMIZATION_SCHEMA_RULES = {
 }
 
 OPTIMIZATION_PROPERTY_NAMES = {
-	"MealQuantity": {"mealId", "quantity", "unit", "position"},
+	"MealQuantity": {"mealId", "name", "quantity", "unit", "position"},
 	"MacroProjection": {"protein", "carbohydrates", "fat", "calories"},
 	"OptimizationAlternative": {"meals", "macros", "similarityScore"},
 	"OptimizationFailure": {"code", "message"},
@@ -817,10 +828,23 @@ export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 /** Canonical quantity units accepted by saved daily-diet entries. */
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
+/** Distinguishes Food Items from Meals in Daily Diet entries. */
+export type FoodObjectType = "food_item" | "meal";
+
+/** One ordered Food Object quantity supplied to a saved Daily Diet. */
+export interface FoodObjectQuantity {
+	foodObjectId: string;
+	foodObjectType: FoodObjectType;
+	quantity: number;
+	unit: CanonicalQuantityUnit;
+	position: number;
+}
+
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
 /** One ordered meal quantity supplied to or returned from a saved diet. */
 export interface MealQuantity {
 	mealId: string;
+	name: string;
 	quantity: number;
 	unit: CanonicalQuantityUnit;
 	position: number;
@@ -828,7 +852,7 @@ export interface MealQuantity {
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
 /** One persisted saved-diet meal entry. */
-export interface DailyDietMealEntry extends MealQuantity {
+export interface DailyDietFoodObjectEntry extends FoodObjectQuantity {
 	id: string;
 }
 
@@ -846,7 +870,7 @@ export interface MacroProjection {
 export interface DailyDiet {
 	id: string;
 	name: string;
-	entries: DailyDietMealEntry[];
+	entries: DailyDietFoodObjectEntry[];
 	aggregateMacros: MacroProjection;
 	createdAt: string;
 	updatedAt: string;
@@ -856,7 +880,7 @@ export interface DailyDiet {
 /** Client-editable saved-diet fields with no authoritative aggregate totals. */
 export interface DailyDietCreateRequest {
 	name: string;
-	entries: MealQuantity[];
+	entries: FoodObjectQuantity[];
 }
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
@@ -1503,6 +1527,7 @@ export type SubstitutionUnit = CanonicalQuantityUnit;
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 \tfoodObjectId: string;
+\tfoodObjectType?: FoodObjectType;
 \tquantity: number;
 \tunit: SubstitutionUnit;
 }
@@ -1547,6 +1572,7 @@ export interface SourceSummary {
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
 	id: string;
+	objectType: FoodObjectType;
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
@@ -1621,6 +1647,7 @@ export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRej
 /** Ranked autocomplete suggestion. */
 export interface RankedAutocomplete {
 \titemId: string;
+\tobjectType: FoodObjectType;
 \tlabel: string;
 \texactMatch: boolean;
 \tlevenshteinDistance: number;
@@ -1643,7 +1670,7 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 
 def generated_contract(source: str) -> str:
 	"""Render shared quantity enums from the OpenAPI source of truth."""
-	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 3:
+	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 4:
 		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
 	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
 	if match is None:

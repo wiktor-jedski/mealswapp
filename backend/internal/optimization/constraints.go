@@ -32,6 +32,7 @@ type MacroTarget struct {
 // Implements DESIGN-004 ConstraintBuilder and DESIGN-008 SavedDataRepository.
 type MealQuantity struct {
 	MealID   uuid.UUID
+	Name     string
 	Quantity float64
 	Unit     string
 	Position int
@@ -81,6 +82,7 @@ type LPModel struct {
 type ConstraintBuilder struct {
 	meals repository.MealRepository
 	diets repository.DailyDietRepository
+	foods repository.FoodItemRepository
 }
 
 // SavedDietOptimizationInputs contains the server-owned diet snapshot and all
@@ -93,8 +95,12 @@ type SavedDietOptimizationInputs struct {
 
 // NewConstraintBuilder creates a repository-backed constraint builder.
 // Implements DESIGN-004 ConstraintBuilder.
-func NewConstraintBuilder(meals repository.MealRepository, diets repository.DailyDietRepository) *ConstraintBuilder {
-	return &ConstraintBuilder{meals: meals, diets: diets}
+func NewConstraintBuilder(meals repository.MealRepository, diets repository.DailyDietRepository, foods ...repository.FoodItemRepository) *ConstraintBuilder {
+	builder := &ConstraintBuilder{meals: meals, diets: diets}
+	if len(foods) > 0 {
+		builder.foods = foods[0]
+	}
+	return builder
 }
 
 // BuildConstraints constructs variables and hard constraints in stable meal-ID
@@ -129,6 +135,7 @@ func buildConstraintsFromIndex(req DietOptimizationRequest, byID map[string]repo
 		return LPModel{}, err
 	}
 	original := originalMealIDs(req.OriginalDiet)
+	sourceOnlyFoodItems := originalFoodItemIDs(req.OriginalDiet)
 	variables := make([]LPVariable, 0, len(byID))
 	for _, itemID := range ids {
 		meal, ok := byID[itemID]
@@ -136,6 +143,9 @@ func buildConstraintsFromIndex(req DietOptimizationRequest, byID map[string]repo
 			return LPModel{}, validationError("meal index order is invalid")
 		}
 		if _, isExcluded := excluded[meal.ID]; isExcluded {
+			continue
+		}
+		if _, sourceOnly := sourceOnlyFoodItems[meal.ID]; sourceOnly {
 			continue
 		}
 		if err := validateMeal(meal); err != nil {
@@ -238,19 +248,37 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 	context := repository.RepositoryContext{UserID: &owner, UnitSystem: unitSystem}
 	meals := make([]repository.MealEntity, 0)
 	seen := make(map[uuid.UUID]struct{})
-	for _, entry := range diet.Entries {
-		if _, ok := seen[entry.MealID]; ok {
+	for index, entry := range diet.Entries {
+		objectID, objectType := entry.FoodObjectID, entry.FoodObjectType
+		if objectID == uuid.Nil && entry.MealID != uuid.Nil {
+			objectID, objectType = entry.MealID, repository.FoodObjectTypeMeal
+		}
+		if _, ok := seen[objectID]; ok {
 			continue
 		}
-		meal, err := b.meals.GetByID(ctx, entry.MealID, context)
-		if err != nil {
-			return SavedDietOptimizationInputs{}, err
+		var meal repository.MealEntity
+		if objectType == repository.FoodObjectTypeFoodItem {
+			if b.foods == nil {
+				return SavedDietOptimizationInputs{}, validationError("Food Item repository is required for this saved diet")
+			}
+			food, err := b.foods.GetByID(ctx, objectID, context)
+			if err != nil {
+				return SavedDietOptimizationInputs{}, err
+			}
+			meal = repository.MealEntity{ID: food.ID, Type: repository.MealTypeSingle, Name: food.Name, PhysicalState: food.PhysicalState, MacrosPer100: food.MacrosPer100, NormalizedMacrosAvailable: true}
+		} else {
+			var err error
+			meal, err = b.meals.GetByID(ctx, objectID, context)
+			if err != nil {
+				return SavedDietOptimizationInputs{}, err
+			}
 		}
 		if err := validateMeal(meal); err != nil {
 			return SavedDietOptimizationInputs{}, validationError("original diet meal has no usable nutrition basis")
 		}
 		meals = append(meals, meal)
-		seen[entry.MealID] = struct{}{}
+		seen[objectID] = struct{}{}
+		diet.Entries[index].MealID = objectID
 	}
 
 	for offset := 0; ; offset += mealSearchPageSize {
@@ -319,12 +347,16 @@ func targetForRequest(req DietOptimizationRequest, meals map[string]repository.M
 	entries := req.OriginalDiet.Entries
 	target := MacroTarget{}
 	for _, entry := range entries {
-		if entry.MealID == uuid.Nil {
-			return MacroTarget{}, validationError("original diet meal id is required")
+		objectID := entry.MealID
+		if entry.FoodObjectID != uuid.Nil {
+			objectID = entry.FoodObjectID
 		}
-		meal, ok := meals[entry.MealID.String()]
+		if objectID == uuid.Nil {
+			return MacroTarget{}, validationError("original diet Food Object id is required")
+		}
+		meal, ok := meals[objectID.String()]
 		if !ok {
-			return MacroTarget{}, validationError("original diet meal is not available: " + entry.MealID.String())
+			return MacroTarget{}, validationError("original diet Food Object is not available: " + objectID.String())
 		}
 		if err := validateMeal(meal); err != nil {
 			return MacroTarget{}, validationError("original diet meal has no usable nutrition basis")
@@ -430,7 +462,21 @@ func excludedMealIDs(req DietOptimizationRequest) (map[uuid.UUID]struct{}, error
 func originalMealIDs(diet repository.SavedDiet) map[uuid.UUID]struct{} {
 	result := make(map[uuid.UUID]struct{}, len(diet.Entries))
 	for _, entry := range diet.Entries {
-		result[entry.MealID] = struct{}{}
+		if entry.FoodObjectID != uuid.Nil {
+			result[entry.FoodObjectID] = struct{}{}
+		} else if entry.MealID != uuid.Nil {
+			result[entry.MealID] = struct{}{}
+		}
+	}
+	return result
+}
+
+func originalFoodItemIDs(diet repository.SavedDiet) map[uuid.UUID]struct{} {
+	result := make(map[uuid.UUID]struct{})
+	for _, entry := range diet.Entries {
+		if entry.FoodObjectType == repository.FoodObjectTypeFoodItem && entry.FoodObjectID != uuid.Nil {
+			result[entry.FoodObjectID] = struct{}{}
+		}
 	}
 	return result
 }

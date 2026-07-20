@@ -52,9 +52,9 @@ func TestRunPublishesAlternativeBeforeAcknowledgingQueuedJob(t *testing.T) {
 			TolerancePercent: 0,
 		},
 		Meals: []repository.MealEntity{
-			{ID: mealIDs[0], Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
-			{ID: mealIDs[1], Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
-			{ID: mealIDs[2], Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
+			{ID: mealIDs[0], Name: "Meal one", Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
+			{ID: mealIDs[1], Name: "Meal two", Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
+			{ID: mealIDs[2], Name: "Meal three", Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 20, Carbohydrates: 30, Fat: 10}, NormalizedMacrosAvailable: true},
 		},
 	}}
 	processor := NewOptimizationProcessor(jobStore, inputs, &integrationSolver{mealIDs: mealIDs})
@@ -135,7 +135,7 @@ func TestRedisOptimizationJobStoreTerminalTransitionsAreAtomic(t *testing.T) {
 	firstClient.AddHook(&optimizationTransitionHook{state: state, role: "first"})
 	secondClient.AddHook(&optimizationTransitionHook{state: state, role: "second"})
 
-	completed := optimization.DietAlternative{Meals: []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}}, Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 200}
+	completed := optimization.DietAlternative{Meals: []optimization.MealQuantity{{MealID: uuid.New(), Name: "Chicken Breast", Quantity: 100, Unit: "g", Position: 0}}, Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 200}
 	results := make(chan error, 2)
 	go func() {
 		results <- NewRedisOptimizationJobStore(firstClient).PublishCompleted(context.Background(), jobID, []optimization.DietAlternative{completed}, time.Now().UTC())

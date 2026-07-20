@@ -29,7 +29,7 @@ func TestOptimizationProcessorAppliesOneDeadlineAcrossAlternativeSolves(t *testi
 			OriginalDiet: repository.SavedDiet{ID: dietID, UserID: userID, Entries: []repository.SavedDietMealEntry{{MealID: mealID, Quantity: 100, Unit: "g"}}},
 		},
 		Meals: []repository.MealEntity{{
-			ID: mealID, Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
+			ID: mealID, Name: "Test meal", Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
 			MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 10, Fat: 10}, NormalizedMacrosAvailable: true,
 		}},
 	}}
@@ -177,7 +177,7 @@ func TestOptimizationProcessorTreatsInvalidFailureAsRetryableWorkerCrash(t *test
 			ID: dietID, UserID: userID, Entries: []repository.SavedDietMealEntry{{MealID: mealID, Quantity: 100, Unit: "g"}},
 		}},
 		Meals: []repository.MealEntity{{
-			ID: mealID, Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
+			ID: mealID, Name: "Test meal", Type: repository.MealTypeSingle, PhysicalState: repository.PhysicalStateSolid,
 			MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 10, Fat: 10}, NormalizedMacrosAvailable: true,
 		}},
 	}}

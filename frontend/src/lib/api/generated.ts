@@ -351,10 +351,23 @@ export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 /** Canonical quantity units accepted by saved daily-diet entries. */
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
+/** Distinguishes Food Items from Meals in Daily Diet entries. */
+export type FoodObjectType = "food_item" | "meal";
+
+/** One ordered Food Object quantity supplied to a saved Daily Diet. */
+export interface FoodObjectQuantity {
+	foodObjectId: string;
+	foodObjectType: FoodObjectType;
+	quantity: number;
+	unit: CanonicalQuantityUnit;
+	position: number;
+}
+
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
 /** One ordered meal quantity supplied to or returned from a saved diet. */
 export interface MealQuantity {
 	mealId: string;
+	name: string;
 	quantity: number;
 	unit: CanonicalQuantityUnit;
 	position: number;
@@ -362,7 +375,7 @@ export interface MealQuantity {
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
 /** One persisted saved-diet meal entry. */
-export interface DailyDietMealEntry extends MealQuantity {
+export interface DailyDietFoodObjectEntry extends FoodObjectQuantity {
 	id: string;
 }
 
@@ -380,7 +393,7 @@ export interface MacroProjection {
 export interface DailyDiet {
 	id: string;
 	name: string;
-	entries: DailyDietMealEntry[];
+	entries: DailyDietFoodObjectEntry[];
 	aggregateMacros: MacroProjection;
 	createdAt: string;
 	updatedAt: string;
@@ -390,7 +403,7 @@ export interface DailyDiet {
 /** Client-editable saved-diet fields with no authoritative aggregate totals. */
 export interface DailyDietCreateRequest {
 	name: string;
-	entries: MealQuantity[];
+	entries: FoodObjectQuantity[];
 }
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
@@ -1037,6 +1050,7 @@ export type SubstitutionUnit = CanonicalQuantityUnit;
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 	foodObjectId: string;
+	foodObjectType?: FoodObjectType;
 	quantity: number;
 	unit: SubstitutionUnit;
 }
@@ -1081,6 +1095,7 @@ export interface SourceSummary {
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
 	id: string;
+	objectType: FoodObjectType;
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
@@ -1155,6 +1170,7 @@ export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRej
 /** Ranked autocomplete suggestion. */
 export interface RankedAutocomplete {
 	itemId: string;
+	objectType: FoodObjectType;
 	label: string;
 	exactMatch: boolean;
 	levenshteinDistance: number;

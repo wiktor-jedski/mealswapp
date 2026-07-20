@@ -495,7 +495,7 @@ func replaceSavedDietEntries(ctx context.Context, db transactionalExecutor, diet
 		return mapPostgresError(err, "clear saved diet entries")
 	}
 	for _, entry := range entries {
-		if _, err := db.Exec(ctx, savedDietEntryInsertSQL, dietID, entry.MealID, entry.Quantity, entry.Unit, entry.Position); err != nil {
+		if _, err := db.Exec(ctx, savedDietEntryInsertSQL, dietID, entry.FoodObjectID, entry.FoodObjectType, entry.Quantity, entry.Unit, entry.Position); err != nil {
 			return mapPostgresError(err, "replace saved diet entries")
 		}
 	}
@@ -524,8 +524,16 @@ func scanSavedDiet(row pgx.Row, diet *SavedDiet) error {
 // scanSavedDietEntry scans one ordered saved-diet meal-entry row.
 // Implements DESIGN-008 SavedDataRepository.
 func scanSavedDietEntry(rows pgx.Rows, entry *SavedDietMealEntry) error {
-	if err := rows.Scan(&entry.ID, &entry.SavedDietID, &entry.MealID, &entry.Quantity, &entry.Unit, &entry.Position, &entry.CreatedAt); err != nil {
+	var mealID, foodItemID *uuid.UUID
+	if err := rows.Scan(&entry.ID, &entry.SavedDietID, &mealID, &foodItemID, &entry.Quantity, &entry.Unit, &entry.Position, &entry.CreatedAt); err != nil {
 		return mapPostgresError(err, "scan saved diet entry")
+	}
+	if mealID != nil && foodItemID == nil {
+		entry.FoodObjectID, entry.FoodObjectType, entry.MealID = *mealID, FoodObjectTypeMeal, *mealID
+	} else if foodItemID != nil && mealID == nil {
+		entry.FoodObjectID, entry.FoodObjectType = *foodItemID, FoodObjectTypeFoodItem
+	} else {
+		return NewError(ErrorKindInternal, "saved diet entry has invalid Food Object identity", nil)
 	}
 	return nil
 }
@@ -543,8 +551,9 @@ func validateSavedDietInput(userID uuid.UUID, diet SavedDiet, replacing bool) er
 		return validationError("saved diet name contains invalid characters")
 	}
 	for _, entry := range diet.Entries {
-		if entry.MealID == uuid.Nil {
-			return validationError("saved diet meal id is required")
+		legacyMeal := entry.FoodObjectID == uuid.Nil && entry.MealID != uuid.Nil
+		if !legacyMeal && (entry.FoodObjectID == uuid.Nil || (entry.FoodObjectType != FoodObjectTypeMeal && entry.FoodObjectType != FoodObjectTypeFoodItem)) {
+			return validationError("saved diet Food Object identity is required")
 		}
 		if entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) {
 			return validationError("saved diet meal quantity must be finite and positive")
@@ -560,6 +569,12 @@ func validateSavedDietInput(userID uuid.UUID, diet SavedDiet, replacing bool) er
 // Implements DESIGN-008 SavedDataRepository.
 func normalizeSavedDietEntries(entries []SavedDietMealEntry) ([]SavedDietMealEntry, error) {
 	result := append([]SavedDietMealEntry(nil), entries...)
+	for index := range result {
+		if result[index].FoodObjectID == uuid.Nil && result[index].MealID != uuid.Nil {
+			result[index].FoodObjectID = result[index].MealID
+			result[index].FoodObjectType = FoodObjectTypeMeal
+		}
+	}
 	if len(result) > 1 {
 		allDefault := true
 		for _, entry := range result {

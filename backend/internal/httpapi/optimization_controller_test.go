@@ -68,7 +68,7 @@ func TestOptimizationHTTPSubmissionAndPolling(t *testing.T) {
 	}
 	finished := started.Add(time.Minute)
 	job.Status, job.FinishedAt = worker.OptimizationJobCompleted, &finished
-	job.Alternatives = []optimization.DietAlternative{{Meals: []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}}, Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290}}
+	job.Alternatives = []optimization.DietAlternative{{Meals: []optimization.MealQuantity{{MealID: uuid.New(), Name: "Chicken Breast", Quantity: 100, Unit: "g", Position: 0}}, Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290}}
 	store.setJob(job)
 	poll = optimizationHTTPPoll(t, app, jobID, cookies)
 	if poll.StatusCode != fiber.StatusOK || poll.Data["status"] != string(worker.OptimizationJobCompleted) || len(poll.Data["alternatives"].([]any)) != 1 {
@@ -81,6 +81,10 @@ func TestOptimizationHTTPSubmissionAndPolling(t *testing.T) {
 	}
 	if _, exists := alternative["calories"]; exists {
 		t.Fatalf("completed alternative = %+v, must not expose legacy top-level calories", alternative)
+	}
+	meals := alternative["meals"].([]any)
+	if got := meals[0].(map[string]any)["name"]; got != "Chicken Breast" {
+		t.Fatalf("completed alternative meal name = %v, want Chicken Breast", got)
 	}
 
 	job.Status = worker.OptimizationJobFailed
@@ -392,7 +396,7 @@ func TestOptimizationHTTPRejectsInvalidPersistedSimilarityBeforeProjection(t *te
 			store.setJob(worker.OptimizationJob{
 				JobID: jobID, UserID: userID, DailyDietID: uuid.New(), Status: worker.OptimizationJobCompleted,
 				CreatedAt: time.Now().UTC(), Alternatives: []optimization.DietAlternative{{
-					Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}},
+					Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Name: "Chicken Breast", Quantity: 100, Unit: "g", Position: 0}},
 					Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290, SimilarityScore: tt.score,
 				}},
 			})
@@ -458,7 +462,7 @@ func optimizationHTTPRawCompletedJob(t *testing.T, jobID, userID uuid.UUID, scor
 	payload, err := json.Marshal(worker.OptimizationJob{
 		JobID: jobID, UserID: userID, DailyDietID: uuid.New(), Status: worker.OptimizationJobCompleted,
 		CreatedAt: time.Now().UTC(), Alternatives: []optimization.DietAlternative{{
-			Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Quantity: 100, Unit: "g", Position: 0}},
+			Meals:  []optimization.MealQuantity{{MealID: uuid.New(), Name: "Chicken Breast", Quantity: 100, Unit: "g", Position: 0}},
 			Macros: optimization.MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10}, Calories: 290,
 		}},
 	})

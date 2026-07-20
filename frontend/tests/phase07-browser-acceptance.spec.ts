@@ -113,6 +113,7 @@ function meal(id: typeof APPLE_ID | typeof OATS_ID): FoodObjectEnvelope {
 		requestId: `task-207-${id}`,
 		data: {
 			id,
+			objectType: "food_item",
 			name: apple ? "Apple" : "Oats",
 			physicalState: "solid",
 			imageUrl: null,
@@ -128,8 +129,8 @@ function meal(id: typeof APPLE_ID | typeof OATS_ID): FoodObjectEnvelope {
 function autocompleteEnvelope(query: string): AutocompleteEnvelope {
 	const normalized = query.toLowerCase();
 	const items = [
-		{ itemId: APPLE_ID, label: "Apple", exactMatch: normalized === "apple", levenshteinDistance: 0, length: 5, rank: 1 },
-		{ itemId: OATS_ID, label: "Oats", exactMatch: normalized === "oats", levenshteinDistance: 0, length: 4, rank: 2 }
+		{ itemId: APPLE_ID, objectType: "food_item" as const, label: "Apple", exactMatch: normalized === "apple", levenshteinDistance: 0, length: 5, rank: 1 },
+		{ itemId: OATS_ID, objectType: "food_item" as const, label: "Oats", exactMatch: normalized === "oats", levenshteinDistance: 0, length: 4, rank: 2 }
 	].filter((item) => item.label.toLowerCase().includes(normalized));
 	return { status: "ok", requestId: "task-207-autocomplete", data: { items } };
 }
@@ -147,8 +148,8 @@ function savedDiet(name = "Training day"): DailyDiet {
 		id: DIET_ID,
 		name,
 		entries: [
-			{ id: ENTRY_IDS[0], mealId: APPLE_ID, quantity: 150, unit: "g", position: 0 },
-			{ id: ENTRY_IDS[1], mealId: OATS_ID, quantity: 100, unit: "g", position: 1 }
+			{ id: ENTRY_IDS[0], foodObjectId: APPLE_ID, foodObjectType: "food_item", quantity: 150, unit: "g", position: 0 },
+			{ id: ENTRY_IDS[1], foodObjectId: OATS_ID, foodObjectType: "food_item", quantity: 100, unit: "g", position: 1 }
 		],
 		aggregateMacros: { protein: 31, carbohydrates: 82, fat: 7.2, calories: 500 },
 		createdAt: "2026-07-11T00:00:00Z",
@@ -243,8 +244,8 @@ async function installFixture(page: Page, fixture: BrowserFixture): Promise<Fixt
 		const query = new URL(route.request().url()).searchParams.get("query") ?? "";
 		return fulfillJson(route, 200, autocompleteEnvelope(query));
 	});
-	await page.route(new RegExp(`/api/v1/food-objects/(${APPLE_ID}|${OATS_ID})$`), (route) => {
-		const id = route.request().url().split("/").pop() as typeof APPLE_ID | typeof OATS_ID;
+	await page.route(new RegExp(`/api/v1/food-objects/(${APPLE_ID}|${OATS_ID})(?:\\?.*)?$`), (route) => {
+		const id = new URL(route.request().url()).pathname.split("/").pop() as typeof APPLE_ID | typeof OATS_ID;
 		return fulfillJson(route, 200, meal(id));
 	});
 	await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
@@ -332,7 +333,7 @@ async function saveTwoMealDiet(page: Page): Promise<void> {
 	await name.focus();
 	await page.keyboard.press("ControlOrMeta+A");
 	await page.keyboard.type("Training day");
-	const save = page.getByRole("button", { name: "Save Daily Diet" });
+	const save = page.getByRole("button", { name: "Save", exact: true });
 	await save.focus();
 	await page.keyboard.press("Enter");
 	await expect(page.locator("[data-daily-diet-server-total]")).toHaveText("Totals confirmed by the server.");
@@ -481,7 +482,7 @@ test("free fixture shows entitlement guidance and disables Daily Diet save and o
 	await page.goto("/");
 	await openDailyDiet(page);
 	await expect(page.locator("[data-daily-diet-entitlement]")).toContainText("not included in your current plan");
-	await expect(page.getByRole("button", { name: "Save Daily Diet" })).toBeDisabled();
+	await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 	await page.getByRole("navigation", { name: "Search modes" }).getByRole("button", { name: "Daily Diet Alternative", exact: true }).click();
 	await expect(page.locator("[data-daily-diet-alternative-entitlement]")).toContainText("not included in your current plan");
 	await expect(page.locator("[data-optimization-submit]")).toHaveCount(0);

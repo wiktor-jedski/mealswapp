@@ -240,7 +240,7 @@ test("generated entitlement helper reads status with credentialed JSON headers",
 test("generated daily-diet and optimization contracts enforce protected request shapes", () => {
 	const dietRequest: DailyDietCreateRequest = {
 		name: "Training day",
-		entries: [{ mealId: "00000000-0000-0000-0000-000000000001", quantity: 100, unit: "g", position: 0 }]
+		entries: [{ foodObjectId: "00000000-0000-0000-0000-000000000001", foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }]
 	};
 	const optimizationRequest: DietOptimizationRequest = {
 		dailyDietId: "00000000-0000-0000-0000-000000000002",
@@ -248,7 +248,7 @@ test("generated daily-diet and optimization contracts enforce protected request 
 		 excludedMealIds: []
 	};
 	const alternative: OptimizationAlternative = {
-		meals: [{ mealId: "00000000-0000-0000-0000-000000000004", quantity: 100, unit: "g", position: 0 }],
+		meals: [{ mealId: "00000000-0000-0000-0000-000000000004", name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }],
 		macros: { protein: 120, carbohydrates: 180, fat: 60, calories: 1740 },
 		similarityScore: 0.9
 	};

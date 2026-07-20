@@ -247,6 +247,28 @@ func TestConstraintBuilderLoadsEligibleCatalogInBoundedPages(t *testing.T) {
 	}
 }
 
+func TestConstraintBuilderUsesFoodItemsAsSourceOnlyNutrition(t *testing.T) {
+	foodID, candidateID := uuid.New(), uuid.New()
+	candidate := eligibleConstraintMeal(candidateID, repository.PhysicalStateSolid, MacroTarget{Protein: 10})
+	diet := repository.SavedDiet{ID: constraintDiet, UserID: constraintUser, Entries: []repository.SavedDietMealEntry{{
+		FoodObjectID: foodID, FoodObjectType: repository.FoodObjectTypeFoodItem, Quantity: 100, Unit: "g",
+	}}}
+	foods := &constraintFoodRepository{foods: map[uuid.UUID]repository.FoodItemEntity{
+		foodID: {ID: foodID, Name: "Source Food", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}},
+	}}
+	inputs, err := NewConstraintBuilder(&pagedConstraintMealRepository{meals: []repository.MealEntity{candidate}}, &constraintDietRepository{diet: diet}, foods).LoadFromSavedDiet(context.Background(), constraintUser, constraintDiet, DietOptimizationRequest{})
+	if err != nil {
+		t.Fatalf("LoadFromSavedDiet() error = %v", err)
+	}
+	model, err := BuildConstraints(inputs.Request, inputs.Meals, nil)
+	if err != nil {
+		t.Fatalf("BuildConstraints() error = %v", err)
+	}
+	if len(model.Variables) != 1 || model.Variables[0].ItemID != candidateID.String() {
+		t.Fatalf("variables = %+v, want Meal candidate only", model.Variables)
+	}
+}
+
 func TestConstraintBuilderRequiresExactRepositoryDietIdentity(t *testing.T) {
 	meal := eligibleConstraintMeal(constraintMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 1})
 	for _, diet := range []repository.SavedDiet{
@@ -420,6 +442,26 @@ func (*pagedConstraintMealRepository) Update(context.Context, repository.MealEnt
 func (*pagedConstraintMealRepository) Delete(context.Context, uuid.UUID) error { return nil }
 
 type constraintDietRepository struct{ diet repository.SavedDiet }
+
+type constraintFoodRepository struct {
+	foods map[uuid.UUID]repository.FoodItemEntity
+}
+
+func (r *constraintFoodRepository) GetByID(_ context.Context, id uuid.UUID, _ repository.RepositoryContext) (repository.FoodItemEntity, error) {
+	food, ok := r.foods[id]
+	if !ok {
+		return repository.FoodItemEntity{}, repository.NewError(repository.ErrorKindNotFound, "Food Item not found", nil)
+	}
+	return food, nil
+}
+func (*constraintFoodRepository) Search(context.Context, repository.RepositoryQuery) ([]repository.FoodItemEntity, int, error) {
+	return nil, 0, nil
+}
+func (*constraintFoodRepository) Create(context.Context, repository.FoodItemEntity) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (*constraintFoodRepository) Update(context.Context, repository.FoodItemEntity) error { return nil }
+func (*constraintFoodRepository) Delete(context.Context, uuid.UUID) error                 { return nil }
 
 func (*constraintDietRepository) Create(context.Context, uuid.UUID, repository.SavedDiet) (uuid.UUID, error) {
 	return uuid.Nil, nil

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { convertQuantity, defaultDisplayQuantity, displayUnitForBasis } from "./units";
+import { convertQuantity, defaultDisplayQuantity, displayUnitForBasis, formatCalories } from "./units";
 
 // Implements DESIGN-001 SearchView Daily Diet default quantity verification.
 describe("defaultDisplayQuantity", () => {
@@ -21,4 +21,10 @@ describe("defaultDisplayQuantity", () => {
 		const displayQuantity = defaultDisplayQuantity(macroBasis, "imperial");
 		expect(Math.abs(convertQuantity(displayQuantity, displayUnit, baseUnit) - 100)).toBeLessThanOrEqual(0.1);
 	});
+});
+
+// Implements DESIGN-001 SearchView whole-kilocalorie display verification.
+test("formatCalories rounds floating-point energy values to the nearest whole kcal", () => {
+	expect(formatCalories(98.30000000000001)).toBe("98");
+	expect(formatCalories(98.5)).toBe("99");
 });

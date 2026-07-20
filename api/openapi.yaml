@@ -512,7 +512,7 @@ paths:
     post:
       operationId: postApiV1DailyDiet
       summary: Create an authenticated user's saved daily diet
-      description: Creates a user-owned collection. The server derives ownership and aggregate macros from the authenticated session and persisted meal data; clients cannot submit user IDs or authoritative totals.
+      description: Creates a user-owned collection. Names are unique per user after trimming and case folding. The server derives ownership and aggregate macros from the authenticated session and persisted Food Object data; clients cannot submit user IDs or authoritative totals.
       security:
         - cookieAuth: []
           csrfHeader: []
@@ -572,7 +572,7 @@ paths:
     put:
       operationId: putApiV1DailyDiet
       summary: Replace an authenticated user's saved daily diet
-      description: Replaces the user-owned collection and returns server-derived aggregate macros. The request contains meal quantities only; it cannot override ownership or totals.
+      description: Replaces the user-owned collection and returns server-derived aggregate macros. Names are unique per user after trimming and case folding. The request contains Food Object quantities only; it cannot override ownership or totals.
       security:
         - cookieAuth: []
           csrfHeader: []
@@ -1251,14 +1251,42 @@ components:
       type: string
       enum: [g, ml, oz, fl_oz]
       description: Canonical mass or volume unit accepted by saved-diet entries.
+    FoodObjectType:
+      type: string
+      enum: [food_item, meal]
+    FoodObjectQuantity:
+      type: object
+      additionalProperties: false
+      required: [foodObjectId, foodObjectType, quantity, unit, position]
+      properties:
+        foodObjectId:
+          type: string
+          format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+          multipleOf: 0.001
+        unit:
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 99
     MealQuantity:
       type: object
       additionalProperties: false
-      required: [mealId, quantity, unit, position]
+      required: [mealId, name, quantity, unit, position]
       properties:
         mealId:
           type: string
           format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
         quantity:
           type: number
           exclusiveMinimum: 0
@@ -1271,17 +1299,19 @@ components:
           type: integer
           minimum: 0
           maximum: 99
-    DailyDietMealEntry:
+    DailyDietFoodObjectEntry:
       type: object
       additionalProperties: false
-      required: [id, mealId, quantity, unit, position]
+      required: [id, foodObjectId, foodObjectType, quantity, unit, position]
       properties:
         id:
           type: string
           format: uuid
-        mealId:
+        foodObjectId:
           type: string
           format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
         quantity:
           type: number
           exclusiveMinimum: 0
@@ -1328,12 +1358,13 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+          description: User-scoped unique name, compared after trimming and case folding.
         entries:
           type: array
           minItems: 1
           maxItems: 100
           items:
-            $ref: "#/components/schemas/DailyDietMealEntry"
+            $ref: "#/components/schemas/DailyDietFoodObjectEntry"
         aggregateMacros:
           $ref: "#/components/schemas/MacroProjection"
         createdAt:
@@ -1352,12 +1383,13 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+          description: User-scoped unique name, compared after trimming and case folding.
         entries:
           type: array
           minItems: 1
           maxItems: 100
           items:
-            $ref: "#/components/schemas/MealQuantity"
+            $ref: "#/components/schemas/FoodObjectQuantity"
     DailyDietReplaceRequest:
       type: object
       additionalProperties: false
@@ -1368,12 +1400,13 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+          description: User-scoped unique name, compared after trimming and case folding.
         entries:
           type: array
           minItems: 1
           maxItems: 100
           items:
-            $ref: "#/components/schemas/MealQuantity"
+            $ref: "#/components/schemas/FoodObjectQuantity"
     DailyDietEnvelope:
       type: object
       required: [status, requestId, data]
@@ -1452,7 +1485,7 @@ components:
           minimum: 0
           maximum: 1
           multipleOf: 0.0001
-          description: Quantity-weighted Jaccard similarity between original and alternative meal quantities after conversion to canonical g/ml, rounded to four decimal places.
+          description: Cosine similarity between the original saved diet and alternative aggregate protein, carbohydrate, and fat vectors, rounded to four decimal places.
     OptimizationFailure:
       type: object
       additionalProperties: false
@@ -1725,6 +1758,8 @@ components:
         foodObjectId:
           type: string
           format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
         quantity:
           type: number
           exclusiveMinimum: 0
@@ -1810,11 +1845,13 @@ components:
     FoodObject:
       type: object
       additionalProperties: false
-      required: [id, name, physicalState, classifications, primaryFoodCategory, macros, macroBasis, calories]
+      required: [id, objectType, name, physicalState, classifications, primaryFoodCategory, macros, macroBasis, calories]
       properties:
         id:
           type: string
           format: uuid
+        objectType:
+          $ref: "#/components/schemas/FoodObjectType"
         name:
           type: string
         physicalState:
@@ -1962,11 +1999,13 @@ components:
           $ref: "#/components/schemas/AppError"
     RankedAutocomplete:
       type: object
-      required: [itemId, label, exactMatch, levenshteinDistance, length, rank]
+      required: [itemId, objectType, label, exactMatch, levenshteinDistance, length, rank]
       properties:
         itemId:
           type: string
           format: uuid
+        objectType:
+          $ref: "#/components/schemas/FoodObjectType"
         label:
           type: string
         exactMatch:

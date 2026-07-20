@@ -718,7 +718,7 @@ func optimizationJobData(job worker.OptimizationJob) map[string]any {
 		for _, alternative := range job.Alternatives {
 			meals := make([]map[string]any, 0, len(alternative.Meals))
 			for _, meal := range alternative.Meals {
-				meals = append(meals, map[string]any{"mealId": meal.MealID.String(), "quantity": meal.Quantity, "unit": meal.Unit, "position": meal.Position})
+				meals = append(meals, map[string]any{"mealId": meal.MealID.String(), "name": meal.Name, "quantity": meal.Quantity, "unit": meal.Unit, "position": meal.Position})
 			}
 			alternatives = append(alternatives, map[string]any{
 				"meals": meals,

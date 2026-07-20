@@ -79,6 +79,7 @@ function meal(id: typeof APPLE_ID | typeof OATS_ID): FoodObjectEnvelope {
     requestId: `daily-diet-${id}`,
     data: {
       id,
+      objectType: "food_item",
       name: apple ? "Apple" : "Oats",
       physicalState: "solid",
       imageUrl: null,
@@ -97,8 +98,8 @@ function autocompleteEnvelope(): AutocompleteEnvelope {
     requestId: "daily-diet-autocomplete",
     data: {
       items: [
-        { itemId: APPLE_ID, label: "Apple", exactMatch: true, levenshteinDistance: 0, length: 5, rank: 1 },
-        { itemId: OATS_ID, label: "Oats", exactMatch: true, levenshteinDistance: 0, length: 4, rank: 1 }
+        { itemId: APPLE_ID, objectType: "food_item", label: "Apple", exactMatch: true, levenshteinDistance: 0, length: 5, rank: 1 },
+        { itemId: OATS_ID, objectType: "food_item", label: "Oats", exactMatch: true, levenshteinDistance: 0, length: 4, rank: 1 }
       ]
     }
   };
@@ -112,7 +113,7 @@ function savedDailyDiet(): DailyDiet {
   return {
     id: DIET_ID,
     name: "Saved breakfast",
-    entries: [{ id: ENTRY_IDS[0], mealId: APPLE_ID, quantity: 100, unit: "g", position: 0 }],
+    entries: [{ id: ENTRY_IDS[0], foodObjectId: APPLE_ID, foodObjectType: "food_item", quantity: 100, unit: "g", position: 0 }],
     aggregateMacros: { protein: 1, carbohydrates: 14, fat: 0.2, calories: 52 },
     createdAt: "2026-07-11T00:00:00Z",
     updatedAt: "2026-07-11T00:00:00Z"
@@ -131,8 +132,14 @@ async function stubAuthenticatedDailyDiet(
   page: Page,
   tier: "free" | "paid" = "paid",
   listBehavior?: (route: Route) => Promise<void>
-): Promise<{ createBodies: () => Array<Record<string, unknown>> }> {
+): Promise<{
+  createBodies: () => Array<Record<string, unknown>>;
+  replaceBodies: () => Array<Record<string, unknown>>;
+  deleteCount: () => number;
+}> {
   const createBodies: Array<Record<string, unknown>> = [];
+  const replaceBodies: Array<Record<string, unknown>> = [];
+  let deleteCount = 0;
   let savedDiet: DailyDiet | null = null;
   await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 200, profileEnvelope()));
   await page.route(/\/api\/v1\/auth\/refresh$/, (route) => fulfillJson(route, 200, authSessionEnvelope()));
@@ -141,8 +148,8 @@ async function stubAuthenticatedDailyDiet(
   await page.route(/\/api\/v1\/search-history$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-history", data: { history: [] } }));
   await page.route(/\/api\/v1\/saved-items\?kind=favorite$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-favorites", data: { items: [] } }));
   await page.route(/\/api\/v1\/search\/autocomplete(\?.*)?$/, (route) => fulfillJson(route, 200, autocompleteEnvelope()));
-  await page.route(`**/api/v1/food-objects/${APPLE_ID}`, (route) => fulfillJson(route, 200, meal(APPLE_ID)));
-  await page.route(`**/api/v1/food-objects/${OATS_ID}`, (route) => fulfillJson(route, 200, meal(OATS_ID)));
+  await page.route(new RegExp(`/api/v1/food-objects/${APPLE_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(APPLE_ID)));
+  await page.route(new RegExp(`/api/v1/food-objects/${OATS_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(OATS_ID)));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
   await page.route(/\/api\/v1\/daily-diets$/, async (route) => {
     if (route.request().method() === "POST") {
@@ -166,8 +173,28 @@ async function stubAuthenticatedDailyDiet(
     if (listBehavior) return listBehavior(route);
     return fulfillJson(route, 200, savedDiet ? { status: "ok", requestId: "daily-diet-list", data: { diets: [savedDiet] } } satisfies DailyDietCollectionEnvelope : emptyDailyDiets());
   });
-  await page.route(`**/api/v1/daily-diets/${DIET_ID}`, (route) => fulfillJson(route, 200, emptyDailyDiets()));
-  return { createBodies: () => createBodies };
+  await page.route(`**/api/v1/daily-diets/${DIET_ID}`, async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      replaceBodies.push(body);
+      if (!savedDiet) throw new Error("Cannot replace a missing Daily Diet fixture");
+      savedDiet = {
+        ...savedDiet,
+        name: String(body.name),
+        entries: (body.entries as Array<Record<string, unknown>>).map((entry, index) => ({ id: ENTRY_IDS[index]!, ...entry })) as DailyDiet["entries"],
+        aggregateMacros: { protein: 30, carbohydrates: 80, fat: 7, calories: 490 },
+        updatedAt: "2026-07-12T00:00:00Z"
+      };
+      return fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-replaced", data: savedDiet } satisfies DailyDietEnvelope);
+    }
+    if (route.request().method() === "DELETE") {
+      deleteCount += 1;
+      savedDiet = null;
+      return route.fulfill({ status: 204, body: "" });
+    }
+    return fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-read", data: savedDiet ?? savedDailyDiet() } satisfies DailyDietEnvelope);
+  });
+  return { createBodies: () => createBodies, replaceBodies: () => replaceBodies, deleteCount: () => deleteCount };
 }
 
 async function selectMeal(page: Page, query: string, label: string, keyboard = false): Promise<void> {
@@ -196,20 +223,43 @@ test("authenticated user builds, edits, saves, and selects a two-meal Daily Diet
   await selectMeal(page, "oats", "Oats");
 
   await page.getByLabel("Collection name").fill("Training day");
-  await page.getByRole("button", { name: "Save Daily Diet" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator("[data-daily-diet-server-total]")).toHaveText("Totals confirmed by the server.");
   await expect(page.locator("[data-macro-protein]")).toHaveText("31g");
   await expect(page.locator("[data-macro-carbs]")).toHaveText("82g");
   expect(api.createBodies()[0]).toMatchObject({
     name: "Training day",
     entries: [
-      { mealId: APPLE_ID, quantity: 150, position: 0 },
-      { mealId: OATS_ID, quantity: 100, position: 1 }
+      { foodObjectId: APPLE_ID, foodObjectType: "food_item", quantity: 150, position: 0 },
+      { foodObjectId: OATS_ID, foodObjectType: "food_item", quantity: 100, position: 1 }
     ]
   });
 
   const collectionAxe = await new AxeBuilder({ page }).include("[data-daily-diet-collection]").analyze();
   expect(collectionAxe.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical")).toEqual([]);
+
+  await page.reload();
+  const savedSearch = page.getByLabel("Search saved Daily Diets");
+  await savedSearch.fill("training");
+  await expect(page.getByRole("option", { name: "Training day" })).toHaveAttribute("aria-selected", "true");
+  await savedSearch.press("Enter");
+  await expect(page.getByRole("heading", { name: "Edit your Daily Diet" })).toBeVisible();
+  await expect(page.locator("[data-daily-diet-item-macros]").first()).toContainText("Protein");
+  await page.getByLabel("Quantity for Apple").fill("175");
+  await page.getByRole("button", { name: "Update", exact: true }).click();
+  await expect(page.locator("[data-macro-protein]")).toHaveText("30g");
+  expect(api.replaceBodies()[0]).toMatchObject({
+    name: "Training day",
+    entries: [
+      { foodObjectId: APPLE_ID, quantity: 175, position: 0 },
+      { foodObjectId: OATS_ID, quantity: 100, position: 1 }
+    ]
+  });
+
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Build your Daily Diet" })).toBeVisible();
+  await expect(page.getByLabel("Collection name")).toHaveValue("My Daily Diet");
+  await expect(page.locator("[data-daily-diet-empty]")).toBeVisible();
 
   await page.getByRole("button", { name: "Daily Diet Alternative", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Use Training day as Daily Diet Alternative input" })).toBeVisible();
@@ -239,6 +289,21 @@ test("logout clears the authenticated user's unsaved Daily Diet draft", async ({
   await expect(page.locator("[data-daily-diet-auth-guidance]")).toContainText("Sign in to build and save a Daily Diet.");
 });
 
+test("selecting a saved Daily Diet exposes confirmed deletion and returns to create mode", async ({ page }) => {
+  const api = await stubAuthenticatedDailyDiet(page, "paid", (route) =>
+    fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-list-saved", data: { diets: [savedDailyDiet()] } } satisfies DailyDietCollectionEnvelope)
+  );
+  await page.goto("/?mode=daily_diet");
+  await page.getByLabel("Search saved Daily Diets").fill("saved");
+  await page.getByLabel("Search saved Daily Diets").press("Enter");
+  await expect(page.getByRole("heading", { name: "Edit your Daily Diet" })).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Build your Daily Diet" })).toBeVisible();
+  await expect(page.locator(`[data-saved-daily-diet="${DIET_ID}"]`)).toHaveCount(0);
+  expect(api.deleteCount()).toBe(1);
+});
+
 test("anonymous Daily Diet view gives sign-in guidance without loading protected collections", async ({ page }) => {
   let dailyDietRequests = 0;
   await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 401, { status: "error", requestId: "daily-diet-anonymous", error: { category: "auth", code: "anonymous_session", message: "Please sign in.", retryable: false } }));
@@ -255,7 +320,7 @@ test("authenticated free user sees entitlement guidance and cannot save", async 
   await page.goto("/");
   await page.getByRole("button", { name: "Daily Diet", exact: true }).click();
   await expect(page.locator("[data-daily-diet-entitlement]")).toContainText(/not included|available on trial and paid plans/);
-  await expect(page.getByRole("button", { name: "Save Daily Diet" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 });
 
 test("shows the real loading state while collections load, then resolves to empty", async ({ page }) => {
@@ -301,25 +366,20 @@ test("recovers from a real collection-list error through the retry action", asyn
   expect(listAttempts).toBe(2);
 });
 
-test("keyboard focus moves from mode to search and into the collection editor", async ({ page }) => {
+test("keyboard focus moves from saved-diet lookup into the collection editor", async ({ page }) => {
   await stubAuthenticatedDailyDiet(page);
   await page.goto("/");
 
   const dailyDietMode = page.getByRole("button", { name: "Daily Diet", exact: true });
   await dailyDietMode.focus();
   await dailyDietMode.press("Enter");
-  await expect(page.getByLabel("Food search")).toBeFocused();
-
-  await page.keyboard.type("apple");
-  await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeVisible();
-  await page.getByLabel("Food search").press("Enter");
-  await expect(page.getByLabel("Food search")).toBeFocused();
-
+  await expect(page.getByLabel("Search saved Daily Diets")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("Collection name")).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByLabel("Quantity for Apple")).toBeFocused();
-  await page.keyboard.press("ControlOrMeta+A");
-  await page.keyboard.type("125");
-  await expect(page.getByLabel("Quantity for Apple")).toHaveValue("125");
+  await expect(page.getByLabel("Food search")).toBeFocused();
+  await page.keyboard.type("apple");
+  await expect(page.getByRole("listbox", { name: "Autocomplete suggestions" })).toBeVisible();
+  await page.getByLabel("Food search").press("Enter");
+  await expect(page.getByLabel("Quantity for Apple")).toHaveValue("100");
 });

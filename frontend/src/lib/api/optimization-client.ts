@@ -213,10 +213,10 @@ function decodeAlternative(raw: unknown, status: number, requestId: string): Opt
 	const macros = raw.macros;
 	if (!boundedMacro(macros.protein) || !boundedMacro(macros.carbohydrates) || !boundedMacro(macros.fat) || !boundedMacro(macros.calories)) throw malformedResponse(status, requestId);
 	const meals = raw.meals.map((meal) => {
-		if (!exactObject(meal, ["mealId", "quantity", "unit", "position"]) || !uuid(meal.mealId) || !boundedQuantity(meal.quantity) || !canonicalUnit(meal.unit) || !boundedPosition(meal.position)) {
+		if (!exactObject(meal, ["mealId", "name", "quantity", "unit", "position"]) || !uuid(meal.mealId) || !boundedName(meal.name) || !boundedQuantity(meal.quantity) || !canonicalUnit(meal.unit) || !boundedPosition(meal.position)) {
 			throw malformedResponse(status, requestId);
 		}
-		return { mealId: meal.mealId, quantity: meal.quantity, unit: meal.unit, position: meal.position };
+		return { mealId: meal.mealId, name: meal.name, quantity: meal.quantity, unit: meal.unit, position: meal.position };
 	});
 	return { meals, macros: { protein: macros.protein, carbohydrates: macros.carbohydrates, fat: macros.fat, calories: macros.calories }, similarityScore: raw.similarityScore };
 }
@@ -311,6 +311,10 @@ function finiteNumber(value: unknown): value is number {
 
 function boundedMacro(value: unknown): value is number {
 	return finiteNumber(value) && value >= 0 && value <= 1_000_000_000;
+}
+
+function boundedName(value: unknown): value is string {
+	return typeof value === "string" && value.length > 0 && value.length <= 200 && value === value.trim();
 }
 
 function boundedQuantity(value: unknown): value is number {

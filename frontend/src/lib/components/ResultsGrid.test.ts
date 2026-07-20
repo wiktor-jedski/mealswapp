@@ -38,10 +38,10 @@ test("declares the documented container props", () => {
 	expect(source).toContain("onPageChange?: (page: number) => void");
 });
 
-// Implements DESIGN-001 ResultsGrid maximum-10-item page cap verification.
-test("enforces the 10-item page cap via a PAGE_SIZE slice", () => {
-	expect(source).toContain("PAGE_SIZE = 10");
-	expect(source).toContain(".slice(0, PAGE_SIZE)");
+// Implements DESIGN-001 ResultsGrid mode-specific page cap verification.
+test("enforces the active mode page cap via the pageSize prop", () => {
+	expect(source).toContain("pageSize = 10");
+	expect(source).toContain(".slice(0, pageSize)");
 	expect(source).toContain("{#each pagedResults as item, index (item.id)}");
 });
 
@@ -117,7 +117,8 @@ test("Previous and Next disabled bindings derive from page and totalPages", () =
 	expect(source).toContain("hasNext = $derived(page < totalPages)");
 	expect(source).toContain("disabled={!hasPrev}");
 	expect(source).toContain("disabled={!hasNext}");
-	expect(source).toContain("Math.ceil(totalCount / PAGE_SIZE)");
+	expect(source).toContain("Math.ceil(totalCount / pageSize)");
+	expect(source).toContain("results.slice(0, pageSize)");
 });
 
 // Implements DESIGN-001 ResultsGrid container traceability verification.

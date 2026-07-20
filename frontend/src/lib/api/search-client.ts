@@ -150,8 +150,9 @@ export async function fetchAutocomplete(query: string, signal: AbortSignal): Pro
  *
  * @remarks Implements DESIGN-001 SearchView selected Substitution Input hydration over generated envelopes.
  */
-export async function fetchFoodObject(id: string, signal: AbortSignal): Promise<FoodObject> {
-	const response = await fetch(`${FOOD_OBJECT_ENDPOINT}/${encodeURIComponent(id)}`, {
+export async function fetchFoodObject(id: string, signal: AbortSignal, objectType?: "food_item" | "meal"): Promise<FoodObject> {
+	const params = objectType ? `?objectType=${encodeURIComponent(objectType)}` : "";
+	const response = await fetch(`${FOOD_OBJECT_ENDPOINT}/${encodeURIComponent(id)}${params}`, {
 		method: "GET",
 		credentials: "include",
 		headers: {

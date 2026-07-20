@@ -7,17 +7,20 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 )
 
 // Implements DESIGN-004 SolutionValidator.
 const (
-	// SolutionValidationEpsilon absorbs arithmetic noise at a hard tolerance
-	// boundary without making a materially invalid solution acceptable.
-	SolutionValidationEpsilon = 1e-9
+	// SolutionValidationEpsilon absorbs arithmetic and CLP text-output rounding
+	// at a hard tolerance boundary without accepting a materially invalid result.
+	SolutionValidationEpsilon = 1e-7
 	maxAlternativeMealCount   = 100
+	publishedQuantityStep     = 0.001
 )
 
 // OptimizationFailureCode is the stable, user-safe failure vocabulary for an
@@ -133,8 +136,8 @@ func FailureCodeOf(err error) OptimizationFailureCode {
 
 // DietAlternative is a solver assignment after server-side recalculation.
 // Macros and Calories are derived from repository meal data; no solver totals
-// are accepted. SimilarityScore is the rounded quantity-weighted Jaccard
-// similarity between original and alternative canonical meal quantities.
+// are accepted. SimilarityScore is the rounded cosine similarity between the
+// original and alternative aggregate protein, carbohydrate, and fat vectors.
 // Implements DESIGN-004 SolutionValidator.
 type DietAlternative struct {
 	Meals           []MealQuantity `json:"meals"`
@@ -184,6 +187,7 @@ func ValidateDietAlternative(alternative DietAlternative) error {
 	}
 	for position, meal := range alternative.Meals {
 		if meal.MealID == uuid.Nil || !finite(meal.Quantity) || meal.Quantity <= 0 || meal.Quantity > MaximumMealQuantity ||
+			!validPublishedMealName(meal.Name) || !isPublishedQuantity(meal.Quantity) ||
 			(meal.Unit != "g" && meal.Unit != "ml") || meal.Position != position {
 			return errors.New("optimization alternative meal projection is invalid")
 		}
@@ -199,6 +203,12 @@ func ValidateDietAlternative(alternative DietAlternative) error {
 		return errors.New("optimization alternative similarity score is invalid")
 	}
 	return nil
+}
+
+// validPublishedMealName bounds repository-owned display text before persistence.
+// Implements DESIGN-004 SolutionValidator authoritative result publication.
+func validPublishedMealName(value string) bool {
+	return value == strings.TrimSpace(value) && len(value) > 0 && len(value) <= 200
 }
 
 // boundedProjectionNumber enforces the public macro/calorie projection range.
@@ -287,8 +297,10 @@ func (v *SolutionValidator) Validate(solution LPSolution, req DietOptimizationRe
 	if err != nil {
 		return DietAlternative{}, solutionValidationError("excluded meal data is invalid")
 	}
+	projected := make(map[string]float64, len(canonical))
+	projectionMargin := MacroTarget{}
 	ids := make([]string, 0, len(canonical))
-	for itemID, quantity := range canonical {
+	for itemID, rawQuantity := range canonical {
 		meal, ok := v.meals[itemID]
 		if !ok || meal.ID == uuid.Nil {
 			return DietAlternative{}, solutionValidationError("alternative contains an unknown meal")
@@ -296,12 +308,21 @@ func (v *SolutionValidator) Validate(solution LPSolution, req DietOptimizationRe
 		if _, isExcluded := excluded[meal.ID]; isExcluded {
 			return DietAlternative{}, solutionValidationError("alternative contains an excluded meal")
 		}
+		quantity := quantizePublishedQuantity(rawQuantity)
 		if quantity > MaximumMealQuantity+quantityTolerance(quantity, MaximumMealQuantity) {
 			return DietAlternative{}, solutionValidationError("alternative quantity exceeds the allowed maximum")
 		}
 		if err := validateMeal(meal); err != nil {
 			return DietAlternative{}, solutionValidationError("alternative meal data is invalid")
 		}
+		delta := math.Abs(rawQuantity - quantity)
+		projectionMargin.Protein += meal.MacrosPer100.Protein * delta / 100
+		projectionMargin.Carbohydrates += meal.MacrosPer100.Carbohydrates * delta / 100
+		projectionMargin.Fat += meal.MacrosPer100.Fat * delta / 100
+		if quantity == 0 {
+			continue
+		}
+		projected[itemID] = quantity
 		ids = append(ids, itemID)
 	}
 	if len(ids) == 0 {
@@ -317,13 +338,14 @@ func (v *SolutionValidator) Validate(solution LPSolution, req DietOptimizationRe
 	alternative := DietAlternative{Meals: make([]MealQuantity, 0, len(ids))}
 	for position, itemID := range ids {
 		meal := v.meals[itemID]
-		quantity := canonical[itemID]
+		quantity := projected[itemID]
 		macros := scaleMealMacros(meal.MacrosPer100, quantity)
 		alternative.Macros.Protein += macros.Protein
 		alternative.Macros.Carbohydrates += macros.Carbohydrates
 		alternative.Macros.Fat += macros.Fat
 		alternative.Meals = append(alternative.Meals, MealQuantity{
 			MealID:   meal.ID,
+			Name:     meal.Name,
 			Quantity: quantity,
 			Unit:     mealBaseUnit(meal),
 			Position: position,
@@ -336,50 +358,35 @@ func (v *SolutionValidator) Validate(solution LPSolution, req DietOptimizationRe
 	if alternative.Macros.Protein < 0 || alternative.Macros.Carbohydrates < 0 || alternative.Macros.Fat < 0 || alternative.Calories < 0 {
 		return DietAlternative{}, solutionValidationError("alternative totals are negative")
 	}
-	if !macroWithinTolerance(alternative.Macros.Protein, target.Protein, req.TolerancePercent) ||
-		!macroWithinTolerance(alternative.Macros.Carbohydrates, target.Carbohydrates, req.TolerancePercent) ||
-		!macroWithinTolerance(alternative.Macros.Fat, target.Fat, req.TolerancePercent) {
+	if !macroWithinProjectionTolerance(alternative.Macros.Protein, target.Protein, req.TolerancePercent, projectionMargin.Protein) ||
+		!macroWithinProjectionTolerance(alternative.Macros.Carbohydrates, target.Carbohydrates, req.TolerancePercent, projectionMargin.Carbohydrates) ||
+		!macroWithinProjectionTolerance(alternative.Macros.Fat, target.Fat, req.TolerancePercent, projectionMargin.Fat) {
 		return DietAlternative{}, solutionValidationError("alternative macros are outside the requested tolerance")
 	}
-	alternative.SimilarityScore, err = quantityWeightedSimilarity(req, canonical, v.meals)
+	alternative.SimilarityScore, err = macroSimilarity(target, alternative.Macros)
 	if err != nil {
 		return DietAlternative{}, solutionValidationError("alternative similarity could not be calculated")
 	}
 	return alternative, nil
 }
 
-// quantityWeightedSimilarity calculates intersection-over-union over canonical
-// g/ml quantities and rounds the public ratio to four decimal places.
-// Implements DESIGN-004 SolutionValidator authoritative similarity projection.
-func quantityWeightedSimilarity(req DietOptimizationRequest, alternative map[string]float64, meals map[string]repository.MealEntity) (float64, error) {
-	original := make(map[string]float64, len(req.OriginalDiet.Entries))
-	for _, entry := range req.OriginalDiet.Entries {
-		meal, ok := meals[entry.MealID.String()]
-		if !ok {
-			return 0, errors.New("original meal is unavailable")
-		}
-		quantity, err := quantityInNutritionBasis(entry, meal)
-		if err != nil {
-			return 0, err
-		}
-		original[entry.MealID.String()] += quantity
+// macroSimilarity uses the same normalized P/C/F cosine calculation as
+// Substitution Search and rounds the public ratio to four decimal places.
+// Implements DESIGN-003 CosineSimilarityCalculator and DESIGN-004 SolutionValidator.
+func macroSimilarity(original, alternative MacroTarget) (float64, error) {
+	source, err := search.NormalizeMacroVector(repository.MacroValues{
+		Protein: original.Protein, Carbohydrates: original.Carbohydrates, Fat: original.Fat,
+	})
+	if err != nil {
+		return 0, err
 	}
-	intersection, union := 0.0, 0.0
-	ids := make(map[string]struct{}, len(original)+len(alternative))
-	for id := range original {
-		ids[id] = struct{}{}
+	target, err := search.NormalizeMacroVector(repository.MacroValues{
+		Protein: alternative.Protein, Carbohydrates: alternative.Carbohydrates, Fat: alternative.Fat,
+	})
+	if err != nil {
+		return 0, err
 	}
-	for id := range alternative {
-		ids[id] = struct{}{}
-	}
-	for id := range ids {
-		intersection += math.Min(original[id], alternative[id])
-		union += math.Max(original[id], alternative[id])
-	}
-	if !finite(intersection) || !finite(union) || union <= 0 {
-		return 0, errors.New("similarity quantities are invalid")
-	}
-	score := math.Round((intersection/union)*10_000) / 10_000
+	score := math.Round(search.CosineSimilarity(source, target)*10_000) / 10_000
 	if !finite(score) || score < 0 || score > 1 {
 		return 0, errors.New("similarity score is invalid")
 	}
@@ -485,14 +492,37 @@ func quantityTolerance(values ...float64) float64 {
 // macroWithinTolerance checks a recomputed macro against its requested band.
 // Implements DESIGN-004 SolutionValidator.
 func macroWithinTolerance(value, target, tolerance float64) bool {
+	return macroWithinProjectionTolerance(value, target, tolerance, 0)
+}
+
+// macroWithinProjectionTolerance includes only the exact macro drift introduced
+// while converting a validated continuous solver result to public 0.001 units.
+// Implements DESIGN-004 SolutionValidator public quantity projection.
+func macroWithinProjectionTolerance(value, target, tolerance, projectionMargin float64) bool {
 	if !finite(value) || !finite(target) || !finite(tolerance) || target < 0 || tolerance < 0 {
 		return false
 	}
 	margin := target * tolerance / 100
-	if !finite(margin) {
+	if !finite(margin) || !finite(projectionMargin) || projectionMargin < 0 {
 		return false
 	}
-	return value >= target-margin-quantityTolerance(value, target-margin) && value <= target+margin+quantityTolerance(value, target+margin)
+	return value >= target-margin-projectionMargin-quantityTolerance(value, target-margin) && value <= target+margin+projectionMargin+quantityTolerance(value, target+margin)
+}
+
+// quantizePublishedQuantity converts CLP precision to the OpenAPI quantity step.
+// Implements DESIGN-004 SolutionValidator public quantity projection.
+func quantizePublishedQuantity(value float64) float64 {
+	return math.Round(value/publishedQuantityStep) * publishedQuantityStep
+}
+
+// isPublishedQuantity enforces the exact frontend/OpenAPI 0.001 quantity grid.
+// Implements DESIGN-004 SolutionValidator authoritative result publication.
+func isPublishedQuantity(value float64) bool {
+	if !finite(value) {
+		return false
+	}
+	scaled := value / publishedQuantityStep
+	return math.Abs(scaled-math.Round(scaled)) <= 1e-9
 }
 
 // scaleMealMacros independently scales repository per-100 macros by quantity.

@@ -38,6 +38,12 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 	if resp.StatusCode != fiber.StatusOK || calls != 2 {
 		t.Fatalf("valid substitution = %d calls=%d", resp.StatusCode, calls)
 	}
+	validMealSubstitutionBody := `{"query":"","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","foodObjectType":"meal","quantity":100,"unit":"g"}]}`
+	resp = postSearchValidation(t, app, validMealSubstitutionBody)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || calls != 3 {
+		t.Fatalf("valid meal substitution = %d calls=%d", resp.StatusCode, calls)
+	}
 	tooManyFilters := strings.TrimSuffix(strings.Repeat(`{"filterId":"dairy","kind":"allergen","include":true},`, 21), ",")
 	tooManyInputs := strings.TrimSuffix(strings.Repeat(`{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"g"},`, 21), ",")
 
@@ -51,6 +57,7 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 		"unsupported filter kind":      `{"query":"tomato","mode":"catalog","page":1,"filters":[{"filterId":"x","kind":"brand","include":true}]}`,
 		"old physical state kind":      `{"query":"tomato","mode":"catalog","page":1,"filters":[{"filterId":"solid","kind":"food_object_type","include":true}]}`,
 		"string substitution quantity": `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":"12.5","unit":"g"}]}`,
+		"invalid food object type":     `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","foodObjectType":"recipe","quantity":12.5,"unit":"g"}]}`,
 		"aliased substitution unit":    `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"gram"}]}`,
 		"fluid ounce alias":            `{"query":"tomato","mode":"substitution","page":1,"substitutionInputs":[{"foodObjectId":"2d4a5f20-c55f-4ba7-9751-779e682f7063","quantity":12.5,"unit":"fluid_ounce"}]}`,
 		"too many filters":             `{"query":"tomato","mode":"catalog","page":1,"filters":[` + tooManyFilters + `]}`,
@@ -69,7 +76,7 @@ func TestSearchRequestValidationStopsBeforeHandler(t *testing.T) {
 			t.Fatalf("%s response = %d %+v", name, resp.StatusCode, envelope)
 		}
 	}
-	if calls != 2 {
+	if calls != 3 {
 		t.Fatalf("invalid search dispatched handler calls=%d", calls)
 	}
 }

@@ -57,21 +57,37 @@ func TestValidateSolutionRecomputesEveryAcceptedAlternativeFromRepositoryMeals(t
 	}
 }
 
-// Implements DESIGN-004 SolutionValidator authoritative similarity fixtures.
-func TestValidateSolutionCalculatesBoundedQuantityWeightedSimilarity(t *testing.T) {
+// Implements DESIGN-004 SolutionValidator public quantity precision verification.
+func TestValidateSolutionQuantizesPublishedQuantitiesAndRecalculatesMacros(t *testing.T) {
+	meal := validatorMeal(validatorMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10, Carbohydrates: 20, Fat: 5})
+	req := validatorRequest([]repository.SavedDietMealEntry{{MealID: validatorMealA, Quantity: 100, Unit: "g"}}, 10, nil)
+	alternative, err := ValidateSolution(LPSolution{validatorMealA.String(): 90.0004}, req, []repository.MealEntity{meal})
+	if err != nil {
+		t.Fatalf("ValidateSolution() error = %v", err)
+	}
+	if alternative.Meals[0].Quantity != 90 {
+		t.Fatalf("published quantity = %v, want 90", alternative.Meals[0].Quantity)
+	}
+	if alternative.Macros != (MacroTarget{Protein: 9, Carbohydrates: 18, Fat: 4.5}) || alternative.Calories != 148.5 {
+		t.Fatalf("recalculated projection = macros %+v calories %v", alternative.Macros, alternative.Calories)
+	}
+}
+
+// Implements DESIGN-003 CosineSimilarityCalculator and DESIGN-004 SolutionValidator.
+func TestValidateSolutionCalculatesBoundedMacroSimilarity(t *testing.T) {
 	meals := []repository.MealEntity{
 		validatorMeal(validatorMealA, repository.PhysicalStateSolid, MacroTarget{Protein: 10, Carbohydrates: 10, Fat: 1}),
-		validatorMeal(validatorMealB, repository.PhysicalStateSolid, MacroTarget{Protein: 10, Carbohydrates: 10, Fat: 1}),
+		validatorMeal(validatorMealB, repository.PhysicalStateSolid, MacroTarget{Protein: 1, Carbohydrates: 10, Fat: 10}),
 	}
-	req := validatorRequest([]repository.SavedDietMealEntry{{MealID: validatorMealA, Quantity: 100, Unit: "g"}}, 0, nil)
+	req := validatorRequest([]repository.SavedDietMealEntry{{MealID: validatorMealA, Quantity: 100, Unit: "g"}}, 100, nil)
 	tests := []struct {
 		name     string
 		solution LPSolution
 		want     float64
 	}{
 		{name: "identical quantities", solution: LPSolution{validatorMealA.String(): 100}, want: 1},
-		{name: "partial overlap rounded", solution: LPSolution{validatorMealA.String(): 50, validatorMealB.String(): 50}, want: 0.3333},
-		{name: "disjoint meal set", solution: LPSolution{validatorMealB.String(): 100}, want: 0},
+		{name: "mixed macro profile rounded", solution: LPSolution{validatorMealA.String(): 50, validatorMealB.String(): 10}, want: 0.9899},
+		{name: "disjoint meal set still compares macros", solution: LPSolution{validatorMealB.String(): 20}, want: 0.597},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -89,7 +105,7 @@ func TestValidateSolutionCalculatesBoundedQuantityWeightedSimilarity(t *testing.
 // Implements DESIGN-004 SolutionValidator authoritative publication boundary.
 func TestValidateDietAlternativeRejectsMalformedResultShape(t *testing.T) {
 	valid := DietAlternative{
-		Meals:           []MealQuantity{{MealID: validatorMealA, Quantity: 100, Unit: "g", Position: 0}},
+		Meals:           []MealQuantity{{MealID: validatorMealA, Name: "Meal A", Quantity: 100, Unit: "g", Position: 0}},
 		Macros:          MacroTarget{Protein: 20, Carbohydrates: 30, Fat: 10},
 		Calories:        290,
 		SimilarityScore: 0.1234,
@@ -101,6 +117,8 @@ func TestValidateDietAlternativeRejectsMalformedResultShape(t *testing.T) {
 		{name: "nonfinite macro", mutate: func(alternative *DietAlternative) { alternative.Macros.Protein = math.Inf(1) }},
 		{name: "negative calories", mutate: func(alternative *DietAlternative) { alternative.Calories = -1 }},
 		{name: "invalid quantity", mutate: func(alternative *DietAlternative) { alternative.Meals[0].Quantity = 0 }},
+		{name: "missing name", mutate: func(alternative *DietAlternative) { alternative.Meals[0].Name = "" }},
+		{name: "unquantized quantity", mutate: func(alternative *DietAlternative) { alternative.Meals[0].Quantity = 100.0004 }},
 		{name: "invalid position", mutate: func(alternative *DietAlternative) { alternative.Meals[0].Position = 1 }},
 	}
 	for _, tt := range tests {
@@ -121,7 +139,7 @@ func TestValidateDietAlternativeRejectsMalformedResultShape(t *testing.T) {
 // Implements DESIGN-004 SolutionValidator authoritative result publication.
 func TestValidateDietAlternativeRejectsInvalidSimilarityScores(t *testing.T) {
 	valid := DietAlternative{
-		Meals:  []MealQuantity{{MealID: validatorMealA, Quantity: 100, Unit: "g", Position: 0}},
+		Meals:  []MealQuantity{{MealID: validatorMealA, Name: "Meal A", Quantity: 100, Unit: "g", Position: 0}},
 		Macros: MacroTarget{Protein: 10, Carbohydrates: 20, Fat: 5}, Calories: 165, SimilarityScore: 0.1234,
 	}
 	if err := ValidateDietAlternative(valid); err != nil {
@@ -300,7 +318,7 @@ func TestGenerateValidatedAlternativesPreservesValidPartialResultsAfterLaterSolv
 
 func validatorMeal(id uuid.UUID, state repository.PhysicalState, macros MacroTarget) repository.MealEntity {
 	return repository.MealEntity{
-		ID: id, Type: repository.MealTypeSingle, PhysicalState: state,
+		ID: id, Name: "Test meal", Type: repository.MealTypeSingle, PhysicalState: state,
 		MacrosPer100:              repository.MacroValues{Protein: macros.Protein, Carbohydrates: macros.Carbohydrates, Fat: macros.Fat},
 		NormalizedMacrosAvailable: true,
 	}

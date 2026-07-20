@@ -39,8 +39,9 @@ func TestDecodeDailyDietCreateResponseRejectsInvalidPersistedBodies(t *testing.T
 		{name: "empty diet ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { body["id"] = "" })},
 		{name: "nil entry ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["id"] = nil })},
 		{name: "empty entry ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["id"] = "" })},
-		{name: "nil meal ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["mealId"] = nil })},
-		{name: "empty meal ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["mealId"] = "" })},
+		{name: "nil Food Object ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["foodObjectId"] = nil })},
+		{name: "empty Food Object ID", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["foodObjectId"] = "" })},
+		{name: "invalid Food Object type", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["foodObjectType"] = "ingredient" })},
 		{name: "zero quantity", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["quantity"] = 0 })},
 		{name: "negative quantity", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["quantity"] = -1 })},
 		{name: "invalid unit", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["unit"] = "kg" })},
@@ -48,7 +49,7 @@ func TestDecodeDailyDietCreateResponseRejectsInvalidPersistedBodies(t *testing.T
 		{name: "out-of-range position", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseEntry(body)["position"] = 100 })},
 		{name: "duplicate positions", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) {
 			entry := responseEntry(body)
-			body["entries"] = append(body["entries"].([]any), map[string]any{"id": uuid.NewString(), "mealId": entry["mealId"], "quantity": 1, "unit": "g", "position": entry["position"]})
+			body["entries"] = append(body["entries"].([]any), map[string]any{"id": uuid.NewString(), "foodObjectId": entry["foodObjectId"], "foodObjectType": entry["foodObjectType"], "quantity": 1, "unit": "g", "position": entry["position"]})
 		})},
 		{name: "negative protein", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseMacros(body)["protein"] = -1 })},
 		{name: "negative carbohydrates", payload: mutatedDailyDietCreateResponsePayload(func(body map[string]any) { responseMacros(body)["carbohydrates"] = -1 })},
@@ -82,6 +83,11 @@ func TestPostgresDailyDietCreateClaimReplaysImmutableResponseAndCascades(t *test
 	if err != nil || created.Replayed || !reflect.DeepEqual(created.Response, claim.Response) {
 		t.Fatalf("ClaimDailyDietCreate() = %+v error=%v", created, err)
 	}
+	duplicateNameClaim := testDailyDietCreateClaim(userID, mealID, "duplicate-name-claim", strings.Repeat("9", 64))
+	if _, err := repo.ClaimDailyDietCreate(ctx, duplicateNameClaim); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("duplicate-name ClaimDailyDietCreate() error=%v, want conflict", err)
+	}
+	assertNoDailyDietClaimWrites(t, ctx, db, duplicateNameClaim)
 	if err := repo.Replace(ctx, userID, SavedDiet{ID: claim.Diet.ID, Name: "Changed", Entries: []SavedDietMealEntry{{MealID: mealID, Quantity: 5, Unit: "g", Position: 0}}}); err != nil {
 		t.Fatalf("Replace() error = %v", err)
 	}
@@ -232,8 +238,8 @@ func responseMacros(body map[string]any) map[string]any {
 func testDailyDietCreateClaim(userID, mealID uuid.UUID, key, hash string) DailyDietCreateClaim {
 	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
 	dietID, entryID := uuid.New(), uuid.New()
-	entry := SavedDietMealEntry{ID: entryID, SavedDietID: dietID, MealID: mealID, Quantity: 100, Unit: "g", Position: 0, CreatedAt: now}
-	responseEntry := DailyDietCreateResponseEntry{ID: entryID, MealID: mealID, Quantity: 100, Unit: "g", Position: 0}
+	entry := SavedDietMealEntry{ID: entryID, SavedDietID: dietID, FoodObjectID: mealID, FoodObjectType: FoodObjectTypeMeal, Quantity: 100, Unit: "g", Position: 0, CreatedAt: now}
+	responseEntry := DailyDietCreateResponseEntry{ID: entryID, FoodObjectID: mealID, FoodObjectType: FoodObjectTypeMeal, Quantity: 100, Unit: "g", Position: 0}
 	response := DailyDietCreateResponse{ID: dietID, Name: "Original", Entries: []DailyDietCreateResponseEntry{responseEntry}, AggregateMacros: DailyDietCreateResponseMacros{Protein: 10, Calories: 40}, CreatedAt: now, UpdatedAt: now}
 	return DailyDietCreateClaim{UserID: userID, Key: key, BodyHash: hash, Diet: SavedDiet{ID: dietID, UserID: userID, Name: "Original", Entries: []SavedDietMealEntry{entry}, CreatedAt: now, UpdatedAt: now}, Response: response, StatusCode: 201}
 }

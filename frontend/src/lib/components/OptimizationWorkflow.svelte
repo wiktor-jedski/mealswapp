@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DietOptimizationRequest } from "../api/generated";
-  import { dailyDietStore } from "../stores/daily-diet";
+  import { saveAlternativeDiet } from "../alternative-diet-save";
+  import { createDailyDiet, dailyDietStore } from "../stores/daily-diet";
   import { createOptimizationController, type OptimizationState } from "../stores/optimization";
 
   // Implements DESIGN-001 SearchView OptimizationWorkflow for the selected saved Daily Diet.
@@ -22,6 +23,10 @@
   let configuredDietId = $state<string | null>(null);
   let tolerancePercent = $state(10);
   let formError = $state<string | null>(null);
+  let savingAlternativeIndex = $state<number | null>(null);
+  let alternativeSaveNames = $state<Record<number, string>>({});
+  let alternativeSaveErrors = $state<Record<number, string>>({});
+  let saveFeedbackJobId = $state<string | null>(null);
 
   let selectedDiet = $derived(
     selectedDietId ? $dailyDietStore.collections.find((diet) => diet.id === selectedDietId) ?? null : null
@@ -42,6 +47,14 @@
   });
 
   $effect(() => () => controller.dispose());
+
+  $effect(() => {
+    if (saveFeedbackJobId === optimizationState.jobId) return;
+    saveFeedbackJobId = optimizationState.jobId;
+    savingAlternativeIndex = null;
+    alternativeSaveNames = {};
+    alternativeSaveErrors = {};
+  });
 
   function buildRequest(
     dailyDietId: string,
@@ -80,6 +93,27 @@
     await controller.retry(activeRequest ?? undefined);
   }
 
+  async function saveAlternative(index: number): Promise<void> {
+    const alternative = optimizationState.alternatives[index];
+    if (!selectedDiet || !alternative || !executionAllowed || savingAlternativeIndex !== null || $dailyDietStore.mutation !== "idle") return;
+    savingAlternativeIndex = index;
+    alternativeSaveErrors = { ...alternativeSaveErrors, [index]: "" };
+    try {
+      const saved = await saveAlternativeDiet(
+        selectedDiet.name,
+        index + 1,
+        alternative,
+        $dailyDietStore.collections,
+        createDailyDiet
+      );
+      alternativeSaveNames = { ...alternativeSaveNames, [index]: saved.name };
+    } catch {
+      alternativeSaveErrors = { ...alternativeSaveErrors, [index]: "This alternative could not be saved. Please try again." };
+    } finally {
+      savingAlternativeIndex = null;
+    }
+  }
+
   function formatNumber(value: number): string {
     return Number.isInteger(value) ? String(value) : value.toFixed(1);
   }
@@ -91,10 +125,7 @@
   aria-labelledby="optimization-title"
   data-optimization-workflow
 >
-  <div class="grid gap-1">
-    <h2 id="optimization-title" class="text-lg font-semibold">Optimize this Daily Diet</h2>
-    <p class="text-sm text-[var(--color-muted)]">Alternatives match the selected diet’s server-calculated macro targets.</p>
-  </div>
+  <h2 id="optimization-title" class="text-lg font-semibold">Target Macros</h2>
 
   {#if !selectedDiet}
     <p class="rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-sm text-[var(--color-muted)]" role="status" data-optimization-empty>
@@ -102,8 +133,7 @@
     </p>
   {:else}
     <form class="grid gap-4" aria-label="Daily Diet optimization form" onsubmit={submitOptimization}>
-      <fieldset class="grid gap-3">
-        <legend class="font-data text-xs uppercase text-[var(--color-muted)]">Server-derived target macros</legend>
+      <fieldset class="grid gap-3" aria-labelledby="optimization-title">
         <dl class="grid grid-cols-2 gap-3 rounded border border-[var(--color-border)] p-3 font-data text-sm sm:grid-cols-3">
           <div><dt class="text-[var(--color-muted)]">Protein</dt><dd data-optimization-target-protein>{formatNumber(selectedDiet.aggregateMacros.protein)}g</dd></div>
           <div><dt class="text-[var(--color-muted)]">Carbohydrates</dt><dd data-optimization-target-carbohydrates>{formatNumber(selectedDiet.aggregateMacros.carbohydrates)}g</dd></div>
@@ -112,7 +142,7 @@
         <div class="grid gap-3 sm:max-w-xs">
           <label class="grid gap-1 text-sm" for="optimization-tolerance">
             Tolerance (%)
-            <input id="optimization-tolerance" class="rounded border border-[#E0E0E0] bg-white px-3 py-2 font-data text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" max="100" step="0.1" value={tolerancePercent} oninput={updateTolerance} disabled={!executionAllowed || busy} />
+            <input id="optimization-tolerance" class="h-8 rounded border border-[var(--color-border)] bg-transparent px-2 font-data text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0" max="100" step="0.1" value={tolerancePercent} oninput={updateTolerance} disabled={!executionAllowed || busy} />
           </label>
         </div>
       </fieldset>
@@ -172,10 +202,7 @@
 
     {#if optimizationState.alternatives.length > 0}
       <section class="grid gap-3" aria-labelledby="optimization-results-title" data-optimization-results>
-        <div class="grid gap-1">
-          <h3 id="optimization-results-title" class="font-data text-xs uppercase text-[var(--color-muted)]">Validated alternatives</h3>
-          <p class="text-sm text-[var(--color-muted)]">{optimizationState.alternatives.length} {optimizationState.alternatives.length === 1 ? "alternative" : "alternatives"} found.</p>
-        </div>
+        <p id="optimization-results-title" class="text-sm text-[var(--color-muted)]">{optimizationState.alternatives.length} {optimizationState.alternatives.length === 1 ? "alternative" : "alternatives"} found.</p>
         <ol class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {#each optimizationState.alternatives as alternative, index}
             <li class="grid gap-3 rounded border border-[var(--color-border)] p-3" data-optimization-alternative={index + 1}>
@@ -189,9 +216,24 @@
               <p class="text-xs text-[var(--color-muted)]">Similarity {Math.round(alternative.similarityScore * 100)}%</p>
               <ul class="grid gap-1 border-t border-[var(--color-border)] pt-2 text-xs text-[var(--color-muted)]" aria-label={`Meals in alternative ${index + 1}`}>
                 {#each alternative.meals as meal}
-                  <li>{meal.mealId} · {formatNumber(meal.quantity)} {meal.unit}</li>
+                  <li><span class="text-[var(--color-text)]">{meal.name}</span> · {formatNumber(meal.quantity)} {meal.unit}</li>
                 {/each}
               </ul>
+              <div class="mt-auto grid gap-2">
+                <button
+                  type="button"
+                  class="justify-self-start rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] disabled:cursor-not-allowed"
+                  onclick={() => void saveAlternative(index)}
+                  disabled={!executionAllowed || savingAlternativeIndex !== null || $dailyDietStore.mutation !== "idle"}
+                  data-optimization-save={index + 1}
+                >{savingAlternativeIndex === index ? "Saving…" : "Save"}</button>
+                {#if alternativeSaveNames[index]}
+                  <p class="text-xs text-[var(--color-muted)]" role="status" data-optimization-save-success={index + 1}>Saved as {alternativeSaveNames[index]}.</p>
+                {/if}
+                {#if alternativeSaveErrors[index]}
+                  <p class="text-xs text-[var(--color-error)]" role="alert" data-optimization-save-error={index + 1}>{alternativeSaveErrors[index]}</p>
+                {/if}
+              </div>
             </li>
           {/each}
         </ol>

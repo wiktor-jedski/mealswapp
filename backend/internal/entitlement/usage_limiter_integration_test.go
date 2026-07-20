@@ -3,7 +3,6 @@ package entitlement
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -11,12 +10,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/wiktor-jedski/mealswapp/backend/internal/migrations"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/testdatabase"
 )
-
-// Implements DESIGN-007 UsageLimiter PostgreSQL integration fixture.
-const usageLimiterTestDatabaseURL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
 
 // TestUsageLimiterPostgresConcurrentSeparateInstancesCannotExceedPersistedLimit verifies atomic persisted free-tier enforcement.
 // Implements DESIGN-007 UsageLimiter.
@@ -105,41 +101,11 @@ func TestUsageLimiterPostgresConcurrentSeparateInstancesCannotExceedPersistedLim
 // Implements DESIGN-007 UsageLimiter.
 func openUsageLimiterTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-
-	databaseURL := os.Getenv("MEALSWAPP_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = usageLimiterTestDatabaseURL
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if _, err := pool.Exec(ctx, "SELECT pg_advisory_lock(9010101)"); err != nil {
-		pool.Close()
-		t.Fatalf("acquire usage limiter test database lock: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), "SELECT pg_advisory_unlock(9010101)")
-	})
-
 	migrationDir, err := filepath.Abs("../../../database/migrations")
 	if err != nil {
-		pool.Close()
 		t.Fatalf("resolve migration dir: %v", err)
 	}
-	if err := migrations.Run(ctx, pool, "up", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("apply migrations up: %v", err)
-	}
-
-	t.Cleanup(pool.Close)
-	return pool
+	return testdatabase.Reset(t, migrationDir)
 }
 
 // createUsageLimiterUser inserts one encrypted user for UsageLimiter integration tests.

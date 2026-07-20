@@ -3,6 +3,7 @@
   import {
     searchStore,
     substitutionState,
+    setMode,
     setQuery,
     submitSearch,
     addSubstitutionInput,
@@ -11,7 +12,7 @@
   } from "../stores/search";
   import { sidebarStore } from "../stores/sidebar";
   import type {
-    FoodObject,
+    DailyDiet,
     SearchMode,
     SearchRejection,
     RankedAutocomplete
@@ -19,8 +20,9 @@
   import SidebarComponent from "./SidebarComponent.svelte";
   import SearchModes from "./SearchModes.svelte";
   import AutocompleteDropdown from "./AutocompleteDropdown.svelte";
+  import SavedDailyDietSearch from "./SavedDailyDietSearch.svelte";
   import SubstitutionInputs from "./SubstitutionInputs.svelte";
-  import DailyDietCollection, { type DailyDietMealSelection } from "./DailyDietCollection.svelte";
+  import DailyDietCollection, { type DailyDietEditSelection } from "./DailyDietCollection.svelte";
   import DailyDietControls from "./DailyDietControls.svelte";
   import SearchResults from "./SearchResults.svelte";
   import OfflineBanner from "./OfflineBanner.svelte";
@@ -43,7 +45,8 @@
   import { preferencesStore } from "../stores/preferences";
   import { resolveSearchEntitlement } from "../search-entitlement";
   import { displayUnitForBasis } from "../units";
-  import { clearDailyDietState } from "../stores/daily-diet";
+  import { clearDailyDietState, dailyDietStore, selectDailyDiet } from "../stores/daily-diet";
+  import { parseShellRoute, searchRoute, shellViewRoute, type ShellView } from "../shell-routing";
 
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, entitlement gate, autocomplete search bar, mode-specific controls, results, offline status, and DESIGN-018 login auth surface.
 
@@ -53,19 +56,18 @@
 
   let { oauthCallbackReturn = false }: Props = $props();
 
-  type ShellView = "search" | "subscription" | "privacy" | "terms";
+  const startupRoute = parseShellRoute(window.location.href);
+  if (startupRoute.view === "search") {
+    setMode(startupRoute.mode);
+  }
 
   /** Structured Daily Diet Alternative rejection lifted from the 422 SearchRejection envelope by SearchResults. */
   let rejection = $state<SearchRejection | null>(null);
 
-  /** Hydrated autocomplete meals queued for the Daily Diet draft editor. */
-  let dailyDietSelections = $state<DailyDietMealSelection[]>([]);
-  let dailyDietSelectionError = $state<string | null>(null);
-  let dailyDietSelectionKey = 0;
-  let dailyDietSelectionsUserId = $state<string | null>(null);
+  /** Saved Daily Diet selection queued for the editor; the key allows selecting the same diet again. */
+  let dailyDietEditSelection = $state<DailyDietEditSelection | null>(null);
+  let dailyDietEditSelectionKey = 0;
   let dailyDietStateUserId = $state<string | null>(null);
-  let dailyDietSelectionGeneration = 0;
-  const dailyDietHydrationControllers = new Set<AbortController>();
 
   /** True while an explicit submitted search request is fetching results. */
   let searchInFlight = $state(false);
@@ -74,29 +76,20 @@
   const searchPlaceholders: Record<SearchMode, string> = {
     catalog: "Search foods, meals, or ingredients…",
     substitution: "Search a food to add as a substitution target…",
-    daily_diet: "Search meals to add to your day…",
-    daily_diet_alternative: "Search within a saved daily diet or paste its ID…"
+    daily_diet: "Search saved Daily Diets by name…",
+    daily_diet_alternative: "Search saved Daily Diets by name…"
   };
 
   /** Active mode mirrored from the store for shell-level conditional rendering and focus keys. */
   let activeMode = $derived($searchStore.mode);
 
-  $effect(() => {
-    if (activeMode !== "daily_diet" && (dailyDietSelections.length > 0 || dailyDietSelectionError !== null || dailyDietHydrationControllers.size > 0)) {
-      clearIdentityOwnedDailyDietSelections();
-    }
-  });
-
   $effect.pre(() => {
     const authenticatedUserId = $authSessionStore.status === "authenticated"
       ? $authSessionStore.userId ?? null
       : null;
-    if (dailyDietSelectionsUserId !== authenticatedUserId) {
-      clearIdentityOwnedDailyDietSelections();
-      dailyDietSelectionsUserId = authenticatedUserId;
-    }
     if (dailyDietStateUserId !== authenticatedUserId) {
       clearDailyDietState();
+      dailyDietEditSelection = null;
       dailyDietStateUserId = authenticatedUserId;
     }
   });
@@ -119,7 +112,7 @@
   let authSurfaceMode = $state<"login" | "register">("login");
 
   /** Active authenticated shell surface; search store state is preserved while the subscription view is open. */
-  let activeView = $state<ShellView>(initialShellView());
+  let activeView = $state<ShellView>(startupRoute.view);
 
   /** Guards one direct subscription-route attempt after session probing resolves. */
   let guardedInitialSubscriptionRoute = $state(false);
@@ -149,16 +142,23 @@
   });
 
   $effect(() => {
-    if ($authSessionStore.status !== "authenticated" && activeView === "subscription") {
+    if (["anonymous", "expired", "locked", "error"].includes($authSessionStore.status) && activeView === "subscription") {
       activeView = "search";
+      replaceBrowserRoute(searchRoute($searchStore.mode));
     }
   });
 
   $effect(() => {
-    if (!guardedInitialSubscriptionRoute && initialShellView() === "subscription" && !authenticating()) {
+    if (!guardedInitialSubscriptionRoute && startupRoute.view === "subscription" && !authenticating()) {
       guardedInitialSubscriptionRoute = true;
-      openSubscriptionView();
+      openSubscriptionView(true);
     }
+  });
+
+  $effect(() => {
+    const onPopState = () => applyBrowserRoute();
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   });
 
   // Anonymous entitlement failures remain recoverable so Catalog Search can continue without a session.
@@ -173,20 +173,17 @@
    * suggestion's food object id; otherwise commits the selected suggestion label as the search.
    */
   function onAutocompleteSelect(item: RankedAutocomplete): void {
-    if (activeMode === "daily_diet") {
-      if (entitlementDecision.canExecute && $authSessionStore.status === "authenticated" && $authSessionStore.hasVerifiedLoginMethod === true) {
-        void hydrateDailyDietMeal(item);
-      }
-    } else if (activeMode === "substitution") {
+    if (activeMode === "substitution") {
       addSubstitutionInput(
         {
           foodObjectId: item.itemId,
+          foodObjectType: item.objectType,
           quantity: 100,
           unit: $preferencesStore.unitSystem === "imperial" ? "oz" : "g"
         },
         item.label
       );
-      void hydrateSubstitutionInput(item.itemId);
+      void hydrateSubstitutionInput(item.itemId, item.objectType);
       setQuery("");
     } else {
       setQuery(item.label);
@@ -194,55 +191,27 @@
     }
   }
 
-  /** Hydrates one autocomplete-selected meal before it enters the server-owned Daily Diet request. */
-  async function hydrateDailyDietMeal(item: RankedAutocomplete): Promise<void> {
-    const initiatingUserId = $authSessionStore.status === "authenticated"
-      ? $authSessionStore.userId ?? null
-      : null;
-    if (initiatingUserId === null) return;
+  /** Opens a user-owned saved Daily Diet in the editor. */
+  function editDailyDiet(diet: DailyDiet): void {
+    dailyDietEditSelection = { key: ++dailyDietEditSelectionKey, diet };
+  }
 
-    const initiatingGeneration = dailyDietSelectionGeneration;
-    const controller = new AbortController();
-    dailyDietHydrationControllers.add(controller);
-    dailyDietSelectionError = null;
-    try {
-      const meal: FoodObject = await fetchFoodObject(item.itemId, controller.signal);
-      if (!dailyDietHydrationIsCurrent(initiatingUserId, initiatingGeneration, controller)) return;
-      dailyDietSelections = [...dailyDietSelections, { key: ++dailyDietSelectionKey, item: meal }];
-      setQuery("");
-    } catch {
-      if (!dailyDietHydrationIsCurrent(initiatingUserId, initiatingGeneration, controller)) return;
-      dailyDietSelectionError = "That meal could not be added. Please try again.";
-    } finally {
-      dailyDietHydrationControllers.delete(controller);
+  /** Routes a saved-diet autocomplete choice to the active mode's editor or alternative workflow. */
+  function chooseSavedDailyDiet(diet: DailyDiet): void {
+    if (activeMode === "daily_diet_alternative") {
+      selectDailyDiet(diet.id);
+      return;
     }
-  }
-
-  /** Rejects hydration continuations no longer owned by their initiating identity and mode. */
-  function dailyDietHydrationIsCurrent(userId: string, generation: number, controller: AbortController): boolean {
-    return !controller.signal.aborted
-      && generation === dailyDietSelectionGeneration
-      && activeMode === "daily_diet"
-      && $authSessionStore.status === "authenticated"
-      && $authSessionStore.userId === userId;
-  }
-
-  /** Clears hydrated Daily Diet selections owned by a previous authenticated identity. */
-  function clearIdentityOwnedDailyDietSelections(): void {
-    dailyDietSelectionGeneration += 1;
-    for (const controller of dailyDietHydrationControllers) controller.abort();
-    dailyDietHydrationControllers.clear();
-    dailyDietSelections = [];
-    dailyDietSelectionError = null;
+    editDailyDiet(diet);
   }
 
   /**
    * Hydrates autocomplete-selected Substitution Inputs with rich FoodObject display data.
    * Failures are intentionally silent because the fallback label card remains usable.
    */
-  async function hydrateSubstitutionInput(foodObjectId: string): Promise<void> {
+  async function hydrateSubstitutionInput(foodObjectId: string, foodObjectType: "food_item" | "meal"): Promise<void> {
     try {
-      const item = await fetchFoodObject(foodObjectId, new AbortController().signal);
+      const item = await fetchFoodObject(foodObjectId, new AbortController().signal, foodObjectType);
       setSubstitutionInputItem(item);
       updateSubstitutionInput(foodObjectId, {
         unit: displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)
@@ -269,20 +238,6 @@
     }).allowed;
   }
 
-  /** Chooses the billing surface for hosted-checkout return routes and explicit subscription links. */
-  function initialShellView(): ShellView {
-    const path = window.location.pathname;
-    if (path === "/privacy") {
-      return "privacy";
-    }
-    if (path === "/terms") {
-      return "terms";
-    }
-    return path === "/subscription" || path === "/billing/success" || path === "/billing/cancel"
-      ? "subscription"
-      : "search";
-  }
-
   /** True while startup auth probing or an auth mutation is still resolving. */
   function authenticating(): boolean {
     return $authSessionStore.status === "unknown" || $authSessionStore.status === "authenticating";
@@ -291,25 +246,29 @@
   /** Returns to the primary SearchView without clearing query, mode, inputs, or results cache state. */
   function openSearchView(): void {
     activeView = "search";
+    pushBrowserRoute(searchRoute($searchStore.mode));
   }
 
   /** Opens the placeholder Privacy Policy view without clearing SearchView state. */
   function openPrivacyView(): void {
     activeView = "privacy";
+    pushBrowserRoute(shellViewRoute("privacy"));
   }
 
   /** Opens the placeholder Terms of Service view without clearing SearchView state. */
   function openTermsView(): void {
     activeView = "terms";
+    pushBrowserRoute(shellViewRoute("terms"));
   }
 
   /** Opens the authenticated Subscription view only after DESIGN-018 guard approval. */
-  function openSubscriptionView(): void {
+  function openSubscriptionView(preserveCurrentURL = false): void {
     const decision = requestProtectedAction($authSessionStore, {
       kind: "account",
       label: "Open Subscription",
       continueAfterAuth: async () => {
         activeView = "subscription";
+        if (!preserveCurrentURL) pushBrowserRoute(shellViewRoute("subscription"));
       }
     });
     if (decision.reason === "expired") {
@@ -317,6 +276,40 @@
     }
     if (decision.allowed) {
       activeView = "subscription";
+      if (!preserveCurrentURL) pushBrowserRoute(shellViewRoute("subscription"));
+    }
+  }
+
+  /** Selects a Search mode and records it for refresh and Back/Forward restoration. */
+  function selectSearchMode(mode: SearchMode): void {
+    setMode(mode);
+    activeView = "search";
+    pushBrowserRoute(searchRoute(mode));
+  }
+
+  /** Restores the shell surface and Search mode from browser Back/Forward navigation. */
+  function applyBrowserRoute(): void {
+    const route = parseShellRoute(window.location.href);
+    if (route.view === "search") {
+      setMode(route.mode);
+      activeView = "search";
+      return;
+    }
+    activeView = route.view;
+    if (route.view === "subscription" && !authenticating()) {
+      openSubscriptionView(true);
+    }
+  }
+
+  function pushBrowserRoute(route: string): void {
+    if (`${window.location.pathname}${window.location.search}` !== route) {
+      window.history.pushState(null, "", route);
+    }
+  }
+
+  function replaceBrowserRoute(route: string): void {
+    if (`${window.location.pathname}${window.location.search}` !== route) {
+      window.history.replaceState(null, "", route);
     }
   }
 
@@ -324,7 +317,7 @@
   async function signOut(): Promise<void> {
     try {
       await logoutCurrentSession();
-      activeView = "search";
+      openSearchView();
     } catch {
       // Logout failures are already reflected through the DESIGN-018 AuthSessionStore error projection.
     }
@@ -385,7 +378,7 @@
         </section>
       {:else}
         <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
-        <SearchModes />
+        <SearchModes onModeChange={selectSearchMode} />
 
         {#if entitlementDecision.usageText}
           <p class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-data text-sm text-[var(--color-muted)]" role="status" data-entitlement-usage>
@@ -399,16 +392,25 @@
           </div>
         {/if}
 
-        <AutocompleteDropdown
-          query={$searchStore.query}
-          placeholder={searchPlaceholders[activeMode]}
-          focusKey={activeMode}
-          searching={searchInFlight}
-          selectFirstOnEnter={activeMode === "substitution" || activeMode === "daily_diet"}
-          onQueryInput={setQuery}
-          onSubmit={onAutocompleteSubmit}
-          onSelect={onAutocompleteSelect}
-        />
+        {#if activeMode === "daily_diet" || activeMode === "daily_diet_alternative"}
+          <SavedDailyDietSearch
+            diets={$dailyDietStore.collections}
+            loading={$dailyDietStore.status === "loading"}
+            focusKey={activeMode}
+            onSelect={chooseSavedDailyDiet}
+          />
+        {:else}
+          <AutocompleteDropdown
+            query={$searchStore.query}
+            placeholder={searchPlaceholders[activeMode]}
+            focusKey={activeMode}
+            searching={searchInFlight}
+            selectFirstOnEnter={activeMode === "substitution"}
+            onQueryInput={setQuery}
+            onSubmit={onAutocompleteSubmit}
+            onSelect={onAutocompleteSelect}
+          />
+        {/if}
 
         {#if activeMode === "substitution"}
           <SubstitutionInputs executionAllowed={entitlementDecision.canExecute} entitlementFeedback={entitlementDecision.feedback} />
@@ -419,8 +421,8 @@
             userId={$authSessionStore.userId ?? null}
             executionAllowed={entitlementDecision.canExecute}
             entitlementFeedback={entitlementDecision.feedback}
-            selections={dailyDietSelections}
-            selectionError={dailyDietSelectionError}
+            selectedDiet={dailyDietEditSelection}
+            onEditDiet={editDailyDiet}
             onSignIn={() => {
               requestProtectedAction($authSessionStore, {
                 kind: "saved_data",

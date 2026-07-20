@@ -5,9 +5,6 @@
 
   // Implements DESIGN-001 ResultsGrid container: stable card layout, pagination controls, image fallback, and similarity badges.
 
-  /** Maximum number of result cards rendered per page (deterministic Phase 04 page size of 10). */
-  const PAGE_SIZE = 10;
-
   let {
     results = [],
     similarityMetadata = [],
@@ -19,9 +16,10 @@
     loading = false,
     totalCount = 0,
     page = 1,
+    pageSize = 10,
     onPageChange = () => {}
   }: {
-    /** Search result items for the current page; the grid never renders more than PAGE_SIZE cards. */
+    /** Search result items for the current page; rendering is capped by `pageSize`. */
     results?: FoodObject[];
     /** Similarity metadata rows matched to result items by `itemId`. */
     similarityMetadata?: SimilarityMetadata[];
@@ -41,15 +39,17 @@
     totalCount?: number;
     /** Current one-based page index. */
     page?: number;
+    /** Maximum result cards per page for the active search mode. */
+    pageSize?: number;
     /** Called with the next page index when the user clicks Previous or Next. */
     onPageChange?: (page: number) => void;
   } = $props();
 
-  /** Cards rendered for the current page, capped at PAGE_SIZE so no page renders more than 10 items. */
-  let pagedResults = $derived(results.slice(0, PAGE_SIZE));
+  /** Cards rendered for the current page, capped to the active mode's server page size. */
+  let pagedResults = $derived(results.slice(0, pageSize));
 
   /** Total page count derived from totalCount and the fixed page size, with a minimum of one page. */
-  let totalPages = $derived(Math.max(1, Math.ceil(totalCount / PAGE_SIZE)));
+  let totalPages = $derived(Math.max(1, Math.ceil(totalCount / pageSize)));
 
   /** Previous button is disabled on page one. */
   let hasPrev = $derived(page > 1);

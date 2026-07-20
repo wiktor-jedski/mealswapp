@@ -29,6 +29,7 @@
 8. For failed invoice payment or cancelled subscription events, mark entitlement as `past_due` or `cancelled` without deleting history.
 9. Trial tracker creates one 7-day trial on first social login and auto-downgrades expired trials to free.
 10. Hourly reconciliation queries Stripe for active subscriptions and fixes local entitlement drift.
+11. Hosted checkout returns to `/subscription?checkout={success|cancel}`; the frontend consumes that state once, refreshes entitlement, and replaces the browser URL with canonical `/subscription`.
 
 ### 3. State Management & Error Handling
 - `free_active`: limited usage and single-item mode only.

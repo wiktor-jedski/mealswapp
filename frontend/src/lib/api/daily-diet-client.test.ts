@@ -44,10 +44,10 @@ const originalFetch = globalThis.fetch;
 const fetchMock = new FetchMock();
 const dietId = "00000000-0000-0000-0000-000000000001";
 const entryId = "00000000-0000-0000-0000-000000000002";
-const mealId = "00000000-0000-0000-0000-000000000003";
+const foodObjectId = "00000000-0000-0000-0000-000000000003";
 const createRequest: DailyDietCreateRequest = {
 	name: "Training day",
-	entries: [{ mealId, quantity: 100, unit: "g", position: 0 }]
+	entries: [{ foodObjectId, foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }]
 };
 
 afterEach(() => {
@@ -63,7 +63,7 @@ function diet(overrides: Partial<DailyDiet> = {}): DailyDiet {
 	return {
 		id: dietId,
 		name: "Training day",
-		entries: [{ id: entryId, mealId, quantity: 100, unit: "g", position: 0 }],
+		entries: [{ id: entryId, foodObjectId, foodObjectType: "meal", quantity: 100, unit: "g", position: 0 }],
 		aggregateMacros: { protein: 20, carbohydrates: 30, fat: 10, calories: 290 },
 		createdAt: "2026-07-11T00:00:00Z",
 		updatedAt: "2026-07-11T00:00:00.123+02:00",
@@ -158,7 +158,7 @@ test("rejects malformed UUIDs and dates", async () => {
 	globalThis.fetch = fetchMock.fetch;
 	for (const data of [
 		diet({ id: "diet-1" }),
-		diet({ entries: [{ ...diet().entries[0]!, mealId: "MEAL" }] }),
+		diet({ entries: [{ ...diet().entries[0]!, foodObjectId: "MEAL" }] }),
 		diet({ createdAt: "yesterday" }),
 		diet({ updatedAt: "2026-02-30T00:00:00Z" })
 	]) fetchMock.enqueue(jsonResponse(200, itemEnvelope(data)));

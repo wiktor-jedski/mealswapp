@@ -74,6 +74,7 @@ type autocompleteResponseDTO struct {
 // Implements DESIGN-002 SearchController.
 type foodObjectDTO struct {
 	ID                  string                     `json:"id"`
+	ObjectType          string                     `json:"objectType"`
 	Name                string                     `json:"name"`
 	PhysicalState       string                     `json:"physicalState"`
 	ImageURL            string                     `json:"imageUrl"`
@@ -118,6 +119,7 @@ type autocompleteItemDTO struct {
 	LevenshteinDistance int    `json:"levenshteinDistance"`
 	Length              int    `json:"length"`
 	Rank                int    `json:"rank"`
+	ObjectType          string `json:"objectType"`
 }
 
 // similarityMetadataDTO is one public similarity display metadata entry.
@@ -383,7 +385,7 @@ func ParseSearchRequest(ctx *fiber.Ctx) (search.SearchRequest, error) {
 // Implements DESIGN-002 SearchController.
 func searchResponseData(response search.SearchResponse) searchResponseDTO {
 	return searchResponseDTO{
-		Items:              foodItemsData(response.Items),
+		Items:              foodItemsData(response.Items, response.ItemTypes),
 		TotalCount:         response.TotalCount,
 		Page:               response.Page,
 		SimilarityScores:   response.SimilarityScores,
@@ -408,17 +410,23 @@ func autocompleteResponseData(response search.AutocompleteResponse) autocomplete
 func autocompleteItemsData(items []search.RankedAutocomplete) []autocompleteItemDTO {
 	data := make([]autocompleteItemDTO, 0, len(items))
 	for _, item := range items {
-		data = append(data, autocompleteItemDTO{ItemID: item.ItemID, Label: item.Label, ExactMatch: item.ExactMatch, LevenshteinDistance: item.LevenshteinDistance, Length: item.Length, Rank: item.Rank})
+		data = append(data, autocompleteItemDTO{ItemID: item.ItemID, Label: item.Label, ExactMatch: item.ExactMatch, LevenshteinDistance: item.LevenshteinDistance, Length: item.Length, Rank: item.Rank, ObjectType: string(item.ObjectType)})
 	}
 	return data
 }
 
 // foodItemsData maps repository food entities to response items.
 // Implements DESIGN-002 SearchController.
-func foodItemsData(items []repository.FoodItemEntity) []foodObjectDTO {
+func foodItemsData(items []repository.FoodItemEntity, itemTypes []repository.FoodObjectType) []foodObjectDTO {
 	data := make([]foodObjectDTO, 0, len(items))
-	for _, item := range items {
-		data = append(data, foodItemData(item))
+	for index, item := range items {
+		objectType := repository.FoodObjectTypeFoodItem
+		if index < len(itemTypes) && itemTypes[index] != "" {
+			objectType = itemTypes[index]
+		}
+		mapped := foodItemData(item)
+		mapped.ObjectType = string(objectType)
+		data = append(data, mapped)
 	}
 	return data
 }
@@ -428,6 +436,7 @@ func foodItemsData(items []repository.FoodItemEntity) []foodObjectDTO {
 func foodItemData(item repository.FoodItemEntity) foodObjectDTO {
 	return foodObjectDTO{
 		ID:                  item.ID.String(),
+		ObjectType:          string(repository.FoodObjectTypeFoodItem),
 		Name:                item.Name,
 		PhysicalState:       string(item.PhysicalState),
 		ImageURL:            item.ImageURL,

@@ -19,7 +19,9 @@ test("submits generated optimization fields for the selected saved diet", () => 
 });
 
 test("renders saved-diet macro targets as read-only server-derived values", () => {
-	expect(source).toContain("Server-derived target macros");
+	expect(source).toContain("Target Macros");
+	expect(source).not.toContain("Optimize this Daily Diet");
+	expect(source).not.toContain("Server-derived target macros");
 	expect(source).toContain("selectedDiet.aggregateMacros.protein");
 	expect(source).toContain("selectedDiet.aggregateMacros.carbohydrates");
 	expect(source).toContain("selectedDiet.aggregateMacros.fat");
@@ -51,8 +53,27 @@ test("renders at most the controller's three alternatives with labelled macros a
 	expect(source).toContain("alternative.macros.fat");
 	expect(source).toContain("alternative.macros.calories");
 	expect(source).toContain("alternative.meals");
+	expect(source).toContain("meal.name");
+	expect(source).not.toContain("meal.mealId}");
 	expect(source).toContain("Math.round(alternative.similarityScore * 100)");
 	expect(source).toContain("Similarity");
+});
+
+test("saves each result card as a numbered Daily Diet through the shared mutation flow", () => {
+	expect(source).toContain("saveAlternativeDiet(");
+	expect(source).toContain("selectedDiet.name");
+	expect(source).toContain("index + 1");
+	expect(source).toContain("createDailyDiet");
+	expect(source).toContain("data-optimization-save={index + 1}");
+	expect(source).toContain('savingAlternativeIndex === index ? "Saving…" : "Save"');
+	expect(source).toContain("Saved as {alternativeSaveNames[index]}.");
+	expect(source).toContain('class="justify-self-start rounded bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-on-primary)]');
+});
+
+test("uses the shared dark numeric input style and omits the redundant results label", () => {
+	expect(source).toContain("border-[var(--color-border)] bg-transparent");
+	expect(source).not.toContain("bg-white");
+	expect(source).not.toContain("Validated alternatives");
 });
 
 test("keeps retry keyboard-operable, uses visible focus styles, and resets on diet changes", () => {

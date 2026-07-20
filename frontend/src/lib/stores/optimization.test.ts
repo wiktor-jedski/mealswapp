@@ -39,7 +39,7 @@ function completed(jobId = "job-1"): OptimizationJobData {
 		createdAt: "2026-07-11T00:00:00Z",
 		startedAt: "2026-07-11T00:00:01Z",
 		finishedAt: "2026-07-11T00:00:02Z",
-		alternatives: [{ meals: [{ mealId: "meal-1", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
+		alternatives: [{ meals: [{ mealId: "meal-1", name: "Chicken Breast", quantity: 100, unit: "g", position: 0 }], macros: { protein: 40, carbohydrates: 80, fat: 20, calories: 640 }, similarityScore: 0.8 }]
 	};
 }
 

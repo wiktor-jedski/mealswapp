@@ -8,7 +8,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -21,17 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/migrations"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/testdatabase"
 )
-
-const testDatabaseURL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
-
-// Implements DESIGN-005 RepositoryInterfaces integration fixtures.
-//
-//go:embed sql/testdata/advisory_lock.sql
-var testAdvisoryLockSQL string
-
-//go:embed sql/testdata/advisory_unlock.sql
-var testAdvisoryUnlockSQL string
 
 //go:embed sql/testdata/user_create.sql
 var testUserCreateSQL string
@@ -86,45 +76,11 @@ var testInvalidLiquidWithoutDensityKindCreateSQL string
 
 func openRepositoryTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-
-	databaseURL := os.Getenv("MEALSWAPP_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = testDatabaseURL
-	}
-
-	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		t.Skipf("postgres unavailable: %v", err)
-	}
-	if _, err := pool.Exec(ctx, testAdvisoryLockSQL); err != nil {
-		pool.Close()
-		t.Fatalf("acquire repository test database lock: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), testAdvisoryUnlockSQL)
-	})
-
 	migrationDir, err := filepath.Abs("../../../database/migrations")
 	if err != nil {
-		pool.Close()
 		t.Fatalf("resolve migration dir: %v", err)
 	}
-	if err := migrations.Run(ctx, pool, "down", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("reset migrations down: %v", err)
-	}
-	if err := migrations.Run(ctx, pool, "up", migrationDir); err != nil {
-		pool.Close()
-		t.Fatalf("apply migrations up: %v", err)
-	}
-
-	t.Cleanup(pool.Close)
-	return pool
+	return testdatabase.Reset(t, migrationDir)
 }
 
 func createRepositoryUser(t *testing.T, ctx context.Context, db *pgxpool.Pool, email string) uuid.UUID {
@@ -1345,6 +1301,7 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 	ctx := context.Background()
 	savedRepo := NewPostgresSavedDataRepository(db)
 	mealRepo := NewPostgresMealRepository(db)
+	foodRepo := NewPostgresFoodItemRepository(db)
 	userID := createRepositoryUser(t, ctx, db, "saved-diet@example.test")
 	otherUserID := createRepositoryUser(t, ctx, db, "other-saved-diet@example.test")
 
@@ -1356,6 +1313,10 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create meal B: %v", err)
 	}
+	foodItem, err := foodRepo.Create(ctx, FoodItemEntity{Name: "Diet Food Item", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{Carbohydrates: 10}})
+	if err != nil {
+		t.Fatalf("create Food Item: %v", err)
+	}
 
 	dietID, err := savedRepo.Create(ctx, userID, SavedDiet{
 		Name: "  Training Day  ",
@@ -1366,6 +1327,12 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
+	}
+	if _, err := savedRepo.Create(ctx, userID, SavedDiet{
+		Name:    "training day",
+		Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 100, Unit: "g", Position: 0}},
+	}); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("duplicate normalized name Create() error = %v, want conflict", err)
 	}
 
 	diet, err := savedRepo.Get(ctx, userID, dietID)
@@ -1381,6 +1348,12 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 	diets, err := savedRepo.List(ctx, otherUserID)
 	if err != nil || len(diets) != 0 {
 		t.Fatalf("cross-user List() diets=%#v error=%v, want empty", diets, err)
+	}
+	if _, err := savedRepo.Create(ctx, otherUserID, SavedDiet{
+		Name:    "Training Day",
+		Entries: []SavedDietMealEntry{{MealID: mealA, Quantity: 100, Unit: "g", Position: 0}},
+	}); err != nil {
+		t.Fatalf("same name for another user Create() error = %v", err)
 	}
 
 	var savedDietItemCount int
@@ -1401,11 +1374,11 @@ func TestPostgresSavedDietRepository(t *testing.T) {
 	if err := savedRepo.Replace(ctx, otherUserID, SavedDiet{ID: dietID, Name: "Nope"}); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("cross-user Replace() error = %v, want not found", err)
 	}
-	if err := savedRepo.Replace(ctx, userID, SavedDiet{ID: dietID, Name: "Rest Day", Entries: []SavedDietMealEntry{{MealID: mealB, Quantity: 1.5, Unit: "fl_oz", Position: 0}}}); err != nil {
+	if err := savedRepo.Replace(ctx, userID, SavedDiet{ID: dietID, Name: "Rest Day", Entries: []SavedDietMealEntry{{FoodObjectID: foodItem, FoodObjectType: FoodObjectTypeFoodItem, Quantity: 50, Unit: "g", Position: 0}, {MealID: mealB, Quantity: 1.5, Unit: "fl_oz", Position: 1}}}); err != nil {
 		t.Fatalf("valid Replace() error = %v", err)
 	}
 	diet, err = savedRepo.Get(ctx, userID, dietID)
-	if err != nil || diet.Name != "Rest Day" || len(diet.Entries) != 1 || diet.Entries[0].Unit != "fl_oz" {
+	if err != nil || diet.Name != "Rest Day" || len(diet.Entries) != 2 || diet.Entries[0].FoodObjectID != foodItem || diet.Entries[0].FoodObjectType != FoodObjectTypeFoodItem || diet.Entries[1].Unit != "fl_oz" {
 		t.Fatalf("replaced diet=%#v error=%v", diet, err)
 	}
 

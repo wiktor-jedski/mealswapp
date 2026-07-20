@@ -325,6 +325,11 @@ def validate_phase07_capacity_tests() -> None:
 	run(["python3", "-m", "unittest", "scripts/test_verify_optimization_capacity.py"])
 
 
+def validate_start_dev_process_tests() -> None:
+	# Implements DESIGN-010 RouteHandler local development process lifecycle gate.
+	run(["python3", "-m", "unittest", "scripts/test_start_dev.py"])
+
+
 def validate_stripe_webhook_tests() -> None:
 	# Implements DESIGN-007 SubscriptionController Stripe webhook aggregate gate.
 	run([
@@ -395,6 +400,7 @@ TRACEABLE_FILES = {
 	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py", "scripts/verify-phase02-uat.py", "scripts/verify-phase03-uat.py",
 	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
+	"scripts/dev-processes.sh", "scripts/start-dev.sh", "scripts/test_start_dev.py",
 	"scripts/verify-clp-worker-image.sh",
 }
 SKIP_TRACEABILITY_NAMES = {"bun.lock", "go.mod", "go.sum"}
@@ -492,6 +498,7 @@ def main() -> int:
 	# Implements DESIGN-010 RouteHandler contract and backend quality gates.
 	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
 	validate_phase07_capacity_tests()
+	validate_start_dev_process_tests()
 	run(["go", "vet", "./..."], BACKEND)
 	run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)
 	validate_stripe_webhook_tests()
