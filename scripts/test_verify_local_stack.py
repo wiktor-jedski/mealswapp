@@ -67,6 +67,10 @@ class LocalStackDatabaseIsolationTests(unittest.TestCase):
         self.assertIn("Clp-releases.1.17.11-x86_64-ubuntu24-gcc1330-static.tar.gz", workflow)
         self.assertIn("105ce8684ae95412259b24743895f3be6fb642248052e424cf00939dbd57631c", workflow)
         self.assertIn("MEALSWAPP_CLP_EXECUTABLE", workflow)
+        for dependency in ("libblas3", "libgfortran5", "liblapack3", "libstdc++6", "zlib1g"):
+            self.assertIn(dependency, workflow)
+        self.assertIn("clp_version_output=", workflow)
+        self.assertIn('printf \'%s\\n\' "$clp_version_output"', workflow)
 
 
 if __name__ == "__main__":
