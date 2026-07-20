@@ -48,6 +48,8 @@ func Open(t testing.TB) *pgxpool.Pool {
 	return pool
 }
 
+// configuredURL returns the isolated integration-test database connection string.
+// Implements DESIGN-005 RepositoryInterfaces test persistence isolation.
 func configuredURL() string {
 	if configured := os.Getenv(EnvironmentVariable); configured != "" {
 		return configured

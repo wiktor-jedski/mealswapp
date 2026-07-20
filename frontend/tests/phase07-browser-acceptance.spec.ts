@@ -174,7 +174,7 @@ function acknowledgement(): OptimizationJobAcknowledgementEnvelope {
 
 function alternative(mealId: string, calories: number, similarityScore: number): OptimizationAlternative {
 	return {
-		meals: [{ mealId, quantity: 100, unit: "g", position: 0 }],
+		meals: [{ mealId, name: mealId === APPLE_ID ? "Apple" : "Oats", quantity: 100, unit: "g", position: 0 }],
 		macros: { protein: 31, carbohydrates: 82, fat: 7.2, calories },
 		similarityScore
 	};
@@ -393,7 +393,7 @@ test("paid fixture completes the keyboard-only meal selection, save, polling, al
 	await page.keyboard.press("Enter");
 	await expect(page.locator("[data-optimization-skeleton]")).toBeVisible();
 	await expect(page.locator("[data-optimization-alternative]")).toHaveCount(3);
-	await expect(page.locator("[data-optimization-results]")).toContainText("Validated alternatives");
+	await expect(page.locator("[data-optimization-results]")).toContainText("3 alternatives found.");
 	await expect(page.getByRole("button", { name: "Generate fresh alternatives" })).toBeVisible();
 
 	expect(runtime.submissions).toEqual([{

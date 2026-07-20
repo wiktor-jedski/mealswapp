@@ -149,7 +149,7 @@ function job(status: "queued" | "processing" | "completed" | "failed", code?: "s
 			...base,
 			startedAt: "2026-07-18T00:00:01Z",
 			finishedAt: "2026-07-18T00:00:02Z",
-			alternatives: [{ meals: [{ mealId: ALT_ID, quantity: 120, unit: "g", position: 0 }], macros: { protein: 45, carbohydrates: 90, fat: 12, calories: 648 }, similarityScore: 0.91 }]
+			alternatives: [{ meals: [{ mealId: ALT_ID, name: "Alternative meal", quantity: 120, unit: "g", position: 0 }], macros: { protein: 45, carbohydrates: 90, fat: 12, calories: 648 }, similarityScore: 0.91 }]
 		}
 	};
 }

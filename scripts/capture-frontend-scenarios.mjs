@@ -296,8 +296,8 @@ async function assertTask233SafeState(page) {
     throw new Error("Task 233 screenshot contains stale loading or error state");
   }
   const dietSummary = page.locator(`[data-saved-daily-diet="${TASK_233_DIET_ID}"], [data-daily-diet-choice="${TASK_233_DIET_ID}"]`);
-  if (await dietSummary.count() !== 1 || !/^2 meals\b/m.test(await dietSummary.innerText())) {
-    throw new Error("Task 233 screenshot does not show the required two-meal Daily Diet");
+  if (await dietSummary.count() !== 1 || !/^2 (?:items|meals)\b/m.test(await dietSummary.innerText())) {
+    throw new Error("Task 233 screenshot does not show the required two-item Daily Diet");
   }
 }
 
@@ -317,7 +317,7 @@ function assertTask233FixtureSafe() {
   if (entitlement.status !== "active" || (entitlement.tier === "trial" && (trialExpiry === null || !Number.isFinite(trialExpiry) || trialExpiry <= now))) {
     throw new Error("Task 233 fixture entitlement is expired or invalid");
   }
-  if (diet.entries.length !== 2 || new Set(diet.entries.map((entry) => entry.mealId)).size !== 2) {
+  if (diet.entries.length !== 2 || new Set(diet.entries.map((entry) => entry.foodObjectId)).size !== 2) {
     throw new Error("Task 233 fixture must contain exactly two distinct meals");
   }
 }
@@ -360,8 +360,8 @@ function task233Diet() {
     id: TASK_233_DIET_ID,
     name: "Task 233 training day",
     entries: [
-      { id: TASK_233_ENTRY_ID, mealId: TASK_233_MEAL_ID, quantity: 150, unit: "g", position: 0 },
-      { id: TASK_233_SECOND_ENTRY_ID, mealId: TASK_233_SECOND_MEAL_ID, quantity: 100, unit: "g", position: 1 }
+      { id: TASK_233_ENTRY_ID, foodObjectId: TASK_233_MEAL_ID, foodObjectType: "meal", quantity: 150, unit: "g", position: 0 },
+      { id: TASK_233_SECOND_ENTRY_ID, foodObjectId: TASK_233_SECOND_MEAL_ID, foodObjectType: "meal", quantity: 100, unit: "g", position: 1 }
     ],
     aggregateMacros: { protein: 45, carbohydrates: 90, fat: 12, calories: 648 },
     createdAt: "2026-07-18T00:00:00Z",
@@ -383,8 +383,8 @@ function task233CompletedJob() {
       finishedAt: "2026-07-18T00:00:02Z",
       alternatives: [{
         meals: [
-          { mealId: TASK_233_MEAL_ID, quantity: 120, unit: "g", position: 0 },
-          { mealId: TASK_233_SECOND_MEAL_ID, quantity: 100, unit: "g", position: 1 }
+          { mealId: TASK_233_MEAL_ID, name: "Task 233 protein bowl", quantity: 120, unit: "g", position: 0 },
+          { mealId: TASK_233_SECOND_MEAL_ID, name: "Task 233 oat side", quantity: 100, unit: "g", position: 1 }
         ],
         macros: { protein: 45, carbohydrates: 90, fat: 12, calories: 648 },
         similarityScore: 0.91

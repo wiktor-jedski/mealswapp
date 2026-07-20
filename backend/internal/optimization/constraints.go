@@ -471,6 +471,8 @@ func originalMealIDs(diet repository.SavedDiet) map[uuid.UUID]struct{} {
 	return result
 }
 
+// originalFoodItemIDs indexes source Food Items that cannot become generated Meal alternatives.
+// Implements DESIGN-004 ConstraintBuilder.
 func originalFoodItemIDs(diet repository.SavedDiet) map[uuid.UUID]struct{} {
 	result := make(map[uuid.UUID]struct{})
 	for _, entry := range diet.Entries {

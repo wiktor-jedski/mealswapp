@@ -17,7 +17,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
-DATABASE_URL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp?sslmode=disable"
+# Destructive migration verification must never target the development database.
+# Implements DESIGN-005 RepositoryInterfaces isolated integration-test persistence.
+DATABASE_URL = "postgres://mealswapp:mealswapp@localhost:5432/mealswapp_test?sslmode=disable"
 REDIS_URL = "redis://localhost:6379/0"
 COMPOSE_SERVICES = ("postgres", "redis")
 HEALTH_ENDPOINTS = ("/health", "/ready", "/api/v1/health", "/api/v1/ready")

@@ -170,6 +170,8 @@ func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs
 	return calculation, warnings, nil
 }
 
+// similarityCalculationCoversTargets reports whether cached results account for every current candidate.
+// Implements DESIGN-003 CosineSimilarityCalculator and DESIGN-011 RedisCache.
 func similarityCalculationCoversTargets(calculation SimilarityCalculation, targets []TargetMacroVector) bool {
 	covered := make(map[uuid.UUID]struct{}, len(calculation.Results)+len(calculation.Diagnostics))
 	for _, result := range calculation.Results {
@@ -193,6 +195,8 @@ type substitutionSource struct {
 	summary *SubstitutionSourceSummary
 }
 
+// substitutionSourceObject carries one Food Item or Meal source's replacement attributes.
+// Implements DESIGN-002 SearchController.
 type substitutionSourceObject struct {
 	physicalState repository.PhysicalState
 	macros        repository.MacroValues
@@ -288,13 +292,15 @@ func sourceBaseQuantity(input SubstitutionInput, physicalState repository.Physic
 	return quantity, baseUnit, err
 }
 
-// excludeSubstitutionSources removes input Food Objects from substitute candidates.
+// substitutionObjectCandidate preserves Food Item-compatible ranking data and its object type.
 // Implements DESIGN-002 SearchController.
 type substitutionObjectCandidate struct {
 	item       repository.FoodItemEntity
 	objectType repository.FoodObjectType
 }
 
+// loadCandidateObjects loads all eligible Food Items and Meals for substitution ranking.
+// Implements DESIGN-002 SearchController and DESIGN-005 RepositoryInterfaces.
 func (s *SubstitutionService) loadCandidateObjects(ctx context.Context, query repository.RepositoryQuery) ([]substitutionObjectCandidate, error) {
 	query.Offset = 0
 	query.Limit = PageSize
@@ -334,6 +340,8 @@ func (s *SubstitutionService) loadCandidateObjects(ctx context.Context, query re
 	return candidates, nil
 }
 
+// mealSubstitutionCandidate adapts a Meal into the shared substitution ranking shape.
+// Implements DESIGN-002 SearchController.
 func mealSubstitutionCandidate(meal repository.MealEntity) substitutionObjectCandidate {
 	item := repository.FoodItemEntity{
 		ID: meal.ID, Name: meal.Name, PhysicalState: meal.PhysicalState,
@@ -351,6 +359,8 @@ func mealSubstitutionCandidate(meal repository.MealEntity) substitutionObjectCan
 	return substitutionObjectCandidate{item: item, objectType: repository.FoodObjectTypeMeal}
 }
 
+// excludeSubstitutionSources removes input Food Objects from substitute candidates.
+// Implements DESIGN-002 SearchController.
 func excludeSubstitutionSources(items []substitutionObjectCandidate, inputs []SubstitutionInput) []substitutionObjectCandidate {
 	sourceIDs := make(map[uuid.UUID]struct{}, len(inputs))
 	for _, input := range inputs {
@@ -447,6 +457,8 @@ func rankSubstitutionCandidates(items []substitutionObjectCandidate, results []S
 	return response
 }
 
+// paginateRankedSubstitutions applies the compact substitution-specific page size.
+// Implements DESIGN-002 PaginationHandler.
 func paginateRankedSubstitutions(response rankedSubstitutionResponse, page int) rankedSubstitutionResponse {
 	offset := (max(page, 1) - 1) * SubstitutionPageSize
 	if offset >= len(response.items) {

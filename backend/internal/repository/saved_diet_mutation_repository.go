@@ -281,6 +281,8 @@ func createSavedDietSnapshot(ctx context.Context, db transactionalExecutor, clai
 	return ensureSavedDietItem(ctx, db, claim.UserID, claim.Diet.ID)
 }
 
+// savedDietEntryFoodObject resolves a persisted entry's canonical Food Object identity.
+// Implements DESIGN-008 SavedDataRepository.
 func savedDietEntryFoodObject(entry SavedDietMealEntry) (uuid.UUID, FoodObjectType) {
 	if entry.FoodObjectID != uuid.Nil {
 		return entry.FoodObjectID, entry.FoodObjectType
@@ -288,6 +290,8 @@ func savedDietEntryFoodObject(entry SavedDietMealEntry) (uuid.UUID, FoodObjectTy
 	return entry.MealID, FoodObjectTypeMeal
 }
 
+// responseEntryFoodObject resolves an idempotent response entry's canonical Food Object identity.
+// Implements DESIGN-008 SavedDataRepository.
 func responseEntryFoodObject(entry DailyDietCreateResponseEntry) (uuid.UUID, FoodObjectType) {
 	if entry.FoodObjectID != uuid.Nil {
 		return entry.FoodObjectID, entry.FoodObjectType

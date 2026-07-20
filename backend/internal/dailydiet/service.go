@@ -47,6 +47,7 @@ type FoodObjectQuantity struct {
 }
 
 // MealQuantity preserves source compatibility for internal Meal-only callers.
+// Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
 type MealQuantity = FoodObjectQuantity
 
 // CreateRequest contains only client-editable saved-diet fields.
@@ -363,6 +364,8 @@ func (s *Service) project(ctx context.Context, diet repository.SavedDiet) (Daily
 	return DailyDiet{ID: diet.ID, Name: diet.Name, Entries: entries, AggregateMacros: projection, CreatedAt: diet.CreatedAt, UpdatedAt: diet.UpdatedAt}, nil
 }
 
+// repositoryEntryFoodObject resolves legacy Meal-only rows into the canonical Food Object identity.
+// Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
 func repositoryEntryFoodObject(entry repository.SavedDietMealEntry) (uuid.UUID, repository.FoodObjectType) {
 	if entry.FoodObjectID != uuid.Nil {
 		return entry.FoodObjectID, entry.FoodObjectType
@@ -402,6 +405,8 @@ func normalizeRequest(name string, entries []FoodObjectQuantity) (string, error)
 	return name, nil
 }
 
+// normalizeFoodObjectEntries upgrades internal Meal-only aliases to canonical Food Object entries.
+// Implements DESIGN-008 SavedDataRepository daily-diet collection contract.
 func normalizeFoodObjectEntries(entries []FoodObjectQuantity) []FoodObjectQuantity {
 	result := append([]FoodObjectQuantity(nil), entries...)
 	for index := range result {

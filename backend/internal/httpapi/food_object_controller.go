@@ -15,6 +15,8 @@ type FoodObjectLookup interface {
 	GetByID(context.Context, uuid.UUID, repository.RepositoryContext) (repository.FoodItemEntity, error)
 }
 
+// MealObjectLookup defines public Meal detail lookup for Food Object hydration.
+// Implements DESIGN-002 SearchController.
 type MealObjectLookup interface {
 	GetByID(context.Context, uuid.UUID, repository.RepositoryContext) (repository.MealEntity, error)
 }
@@ -80,6 +82,8 @@ func (c *FoodObjectController) GetFoodObject(ctx *fiber.Ctx) error {
 	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: data})
 }
 
+// mealObjectData projects one repository Meal into the shared Food Object DTO.
+// Implements DESIGN-002 SearchController.
 func mealObjectData(meal repository.MealEntity) foodObjectDTO {
 	foodCategories := make([]repository.ClassificationEntity, 0, len(meal.Classifications))
 	culinaryRoles := make([]repository.ClassificationEntity, 0, len(meal.Classifications))
