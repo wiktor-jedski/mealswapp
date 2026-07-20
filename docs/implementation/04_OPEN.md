@@ -461,6 +461,12 @@ condition. No unowned or disposition-less Phase 07 entry remains.
 
 ## Phase 08
 
+### Assumptions
+
+- Accepted for planning: items manually created by an administrator are global curated `food_items` with no user owner. They remain distinct from authenticated users' private custom items, which use the dedicated owner-scoped persistence model introduced in Phase 08.
+- Accepted for planning: destructive deletion of a Food Category or Culinary Role that is referenced by an active food or meal is blocked with a conflict response. Phase 08 does not silently detach, replace, or cascade an in-use classification.
+- Accepted for planning: Phase 08 user administration is limited to privacy-minimized user lookup and the already documented admin-triggered retry of permanent, unknown, or exhausted account-deletion failures. Role mutation, password access, session impersonation, and arbitrary account editing are outside the phase because no requirement or design contract defines them.
+
 ### Actions needed
 
 - **OPEN (carried from Phase 03; owner: Phase 08 backend maintainer):** add an explicit user-owned custom food-item persistence model before enabling custom-item export or deletion. Define ownership predicates, isolation from globally curated food items, export inclusion, account-deletion cleanup, authorization tests, and migration/repository evidence. The Phase 03 export must keep `customItems` empty until this action is implemented.
