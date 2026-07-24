@@ -46,6 +46,7 @@ func (r *substitutionMealRepositoryStub) Search(_ context.Context, _ repository.
 
 type similarityCacheStub struct {
 	calculation SimilarityCalculation
+	token       SimilarityCalculationCacheToken
 	hit         bool
 	getErr      error
 	setErr      error
@@ -55,18 +56,19 @@ type similarityCacheStub struct {
 	setInputs   []SubstitutionInput
 }
 
-func (c *similarityCacheStub) GetSimilarityCalculation(_ context.Context, inputs []SubstitutionInput) (SimilarityCalculation, bool, error) {
+func (c *similarityCacheStub) GetSimilarityCalculation(_ context.Context, inputs []SubstitutionInput) (SimilarityCalculation, bool, SimilarityCalculationCacheToken, error) {
 	c.gets++
 	c.getInputs = slices.Clone(inputs)
-	return c.calculation, c.hit, c.getErr
+	return c.calculation, c.hit, c.token, c.getErr
 }
 
-func (c *similarityCacheStub) SetSimilarityCalculation(_ context.Context, inputs []SubstitutionInput, calculation SimilarityCalculation) error {
+func (c *similarityCacheStub) SetSimilarityCalculation(_ context.Context, inputs []SubstitutionInput, calculation SimilarityCalculation, token SimilarityCalculationCacheToken) (bool, error) {
 	c.sets++
 	c.setInputs = slices.Clone(inputs)
 	c.calculation = calculation
+	c.token = token
 	c.hit = true
-	return c.setErr
+	return c.setErr == nil, c.setErr
 }
 
 func (r *substitutionRepositoryStub) GetByID(_ context.Context, id uuid.UUID, _ repository.RepositoryContext) (repository.FoodItemEntity, error) {

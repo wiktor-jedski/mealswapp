@@ -3,13 +3,18 @@ package userdata
 // Implements DESIGN-008 DataExporter verification.
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"math"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
@@ -23,8 +28,71 @@ type memoryExportRepository struct {
 	errAt   string
 }
 
+func TestEncodeCSVCustomItemsEmptyAndNonemptyExact(t *testing.T) {
+	userID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	itemID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	base := ExportBundle{User: ExportUser{UserID: userID, Email: "a@example.test", UnitSystem: repository.UnitSystemMetric, ThemePreference: "system"}}
+	tests := []struct {
+		name  string
+		items []customitem.Item
+		rows  [][]string
+	}{
+		{name: "empty", rows: [][]string{{"customItems", "count", "0"}}},
+		{name: "nonempty", items: []customitem.Item{{ID: itemID, Name: "Tofu", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 1}, Micros: repository.MicroValues{}, FoodCategories: []customitem.ClassificationSummary{{ID: uuid.New(), Name: "Child", Kind: repository.ClassificationKindFoodCategory}}, CulinaryRoles: []customitem.ClassificationSummary{}}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			bundle := base
+			bundle.CustomItems = test.items
+			actual, err := encodeCSV(bundle)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rows := [][]string{
+				{"section", "field", "value"},
+				{"user", "userId", userID.String()},
+				{"user", "email", "a@example.test"},
+				{"user", "displayName", ""},
+				{"user", "unitSystem", "metric"},
+				{"user", "themePreference", "system"},
+			}
+			rows = append(rows, test.rows...)
+			for _, item := range test.items {
+				payload, err := json.Marshal(item)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rows = append(rows, []string{"customItems", item.ID.String(), string(payload)})
+			}
+			var expected bytes.Buffer
+			writer := csv.NewWriter(&expected)
+			writer.WriteAll(rows)
+			if !bytes.Equal(actual, expected.Bytes()) {
+				t.Fatalf("CSV bytes = %q, want %q", actual, expected.Bytes())
+			}
+			if strings.Contains(string(actual), "parentId") {
+				t.Fatalf("CSV leaked classification hierarchy: %s", actual)
+			}
+		})
+	}
+	if _, err := encodeCSV(ExportBundle{CustomItems: []customitem.Item{{MacrosPer100: repository.MacroValues{Protein: math.NaN()}}}}); err == nil {
+		t.Fatal("invalid custom item CSV projection accepted")
+	}
+}
+
 type memoryExportDiets struct {
 	diets []repository.SavedDiet
+}
+
+type memoryExportCustomItems struct {
+	items  []customitem.Item
+	userID uuid.UUID
+	err    error
+}
+
+func (r *memoryExportCustomItems) List(_ context.Context, userID uuid.UUID) ([]customitem.Item, error) {
+	r.userID = userID
+	return r.items, r.err
 }
 
 func (r memoryExportDiets) Create(context.Context, uuid.UUID, repository.SavedDiet) (uuid.UUID, error) {
@@ -123,7 +191,13 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	}
 	dietID := uuid.New()
 	diets := memoryExportDiets{diets: []repository.SavedDiet{{ID: dietID, UserID: userID, Name: "Training Day", Entries: []repository.SavedDietMealEntry{{MealID: uuid.New(), Position: 0}}}}}
-	service := NewExportService(repo, repo, repo, repo, repo, encryption, diets)
+	customID := uuid.New()
+	customs := &memoryExportCustomItems{items: []customitem.Item{{
+		ID: customID, Name: "Private tofu", PhysicalState: repository.PhysicalStateSolid,
+		MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 2, Fat: 4}, Micros: repository.MicroValues{"Sodium": 3},
+		FoodCategories: []customitem.ClassificationSummary{{ID: uuid.New(), Name: "Child", Kind: repository.ClassificationKindFoodCategory}},
+	}}}
+	service := NewExportService(repo, repo, repo, repo, repo, encryption, diets).WithCustomItems(customs)
 	payload, err := service.BuildExport(ctx, userID, "json")
 	if err != nil {
 		t.Fatalf("BuildExport(json) error = %v", err)
@@ -132,8 +206,11 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if err := json.Unmarshal(payload.Body, &bundle); err != nil {
 		t.Fatalf("decode export json: %v", err)
 	}
-	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.SavedDiets) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 0 {
+	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.SavedDiets) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 1 || bundle.CustomItems[0].ID != customID || bundle.CustomItems[0].Name != "Private tofu" || customs.userID != userID {
 		t.Fatalf("json bundle = %#v", bundle)
+	}
+	if strings.Contains(string(payload.Body), "ownerId") || strings.Contains(string(payload.Body), "parentId") || strings.Contains(string(payload.Body), "global") {
+		t.Fatalf("JSON export leaked ownership/global data: %s", payload.Body)
 	}
 	var rawBundle map[string]any
 	if err := json.Unmarshal(payload.Body, &rawBundle); err != nil {
@@ -146,8 +223,25 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildExport(csv) error = %v", err)
 	}
-	if !strings.Contains(string(csvPayload.Body), "history,search,tomato") || !strings.Contains(string(csvPayload.Body), "savedDiets,Training Day,"+dietID.String()) || !strings.Contains(string(csvPayload.Body), "customItems,count,0") {
+	if !strings.Contains(string(csvPayload.Body), "history,search,tomato") || !strings.Contains(string(csvPayload.Body), "savedDiets,Training Day,"+dietID.String()) {
 		t.Fatalf("csv body = %s", csvPayload.Body)
+	}
+	rows, err := csv.NewReader(strings.NewReader(string(csvPayload.Body))).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundCustom := false
+	for _, row := range rows {
+		if len(row) == 3 && row[0] == "customItems" && row[1] == customID.String() {
+			var exported customitem.Item
+			if err := json.Unmarshal([]byte(row[2]), &exported); err != nil || !reflect.DeepEqual(exported, bundle.CustomItems[0]) {
+				t.Fatalf("CSV custom item = %#v err=%v", exported, err)
+			}
+			foundCustom = true
+		}
+	}
+	if !foundCustom || strings.Contains(string(csvPayload.Body), "ownerId") || strings.Contains(string(csvPayload.Body), "parentId") || strings.Contains(string(csvPayload.Body), "global") {
+		t.Fatalf("CSV custom item missing or leaked data: %s", csvPayload.Body)
 	}
 	if _, err := service.BuildExport(ctx, userID, "xml"); err == nil {
 		t.Fatal("BuildExport() accepted unsupported format")

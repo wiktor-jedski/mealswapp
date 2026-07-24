@@ -206,6 +206,12 @@ func (r *PostgresFoodItemRepository) Delete(ctx context.Context, id uuid.UUID) e
 // validateFoodItem checks food item fields before persistence.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) validateFoodItem(ctx context.Context, item FoodItemEntity) error {
+	return validateFoodItemWithExecutor(ctx, r.db, item)
+}
+
+// validateFoodItemWithExecutor applies global-item invariants inside an existing transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func validateFoodItemWithExecutor(ctx context.Context, db sqlExecutor, item FoodItemEntity) error {
 	if item.Name == "" {
 		return validationError("food item name is required")
 	}
@@ -221,24 +227,30 @@ func (r *PostgresFoodItemRepository) validateFoodItem(ctx context.Context, item 
 	if err := validateFoodDensity(item); err != nil {
 		return err
 	}
-	if err := r.validateFoodClassifications(ctx, item.FoodCategories, ClassificationKindFoodCategory); err != nil {
+	if err := validateFoodClassificationsWithExecutor(ctx, db, item.FoodCategories, ClassificationKindFoodCategory); err != nil {
 		return err
 	}
-	if err := r.validateFoodClassifications(ctx, item.CulinaryRoles, ClassificationKindCulinaryRole); err != nil {
+	if err := validateFoodClassificationsWithExecutor(ctx, db, item.CulinaryRoles, ClassificationKindCulinaryRole); err != nil {
 		return err
 	}
-	return r.validateMicronutrients(ctx, item.Micros)
+	return validateMicronutrientsWithExecutor(ctx, db, item.Micros)
 }
 
 // validateFoodClassifications verifies that food item classifications exist with the required kinds.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) validateFoodClassifications(ctx context.Context, classifications []ClassificationEntity, kind ClassificationKind) error {
+	return validateFoodClassificationsWithExecutor(ctx, r.db, classifications, kind)
+}
+
+// validateFoodClassificationsWithExecutor validates global classification identity in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 ClassificationEntity.
+func validateFoodClassificationsWithExecutor(ctx context.Context, db sqlExecutor, classifications []ClassificationEntity, kind ClassificationKind) error {
 	for _, classification := range classifications {
 		if classification.ID == uuid.Nil {
 			return validationError("classification id is required")
 		}
 		var exists bool
-		err := r.db.QueryRow(ctx, foodValidateClassificationSQL, classification.ID, string(kind)).Scan(&exists)
+		err := db.QueryRow(ctx, foodValidateClassificationSQL, classification.ID, string(kind)).Scan(&exists)
 		if err != nil {
 			return mapPostgresError(err, "validate food classification")
 		}
@@ -252,7 +264,13 @@ func (r *PostgresFoodItemRepository) validateFoodClassifications(ctx context.Con
 // validateMicronutrients verifies that micronutrient keys are active vocabulary entries.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context, micros MicroValues) error {
-	repo := NewPostgresMicronutrientVocabularyRepository(r.db)
+	return validateMicronutrientsWithExecutor(ctx, r.db, micros)
+}
+
+// validateMicronutrientsWithExecutor validates active keys in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 MicronutrientVocabulary.
+func validateMicronutrientsWithExecutor(ctx context.Context, db sqlExecutor, micros MicroValues) error {
+	repo := NewPostgresMicronutrientVocabularyRepository(db)
 	entries, err := repo.ListActive(ctx)
 	if err != nil {
 		return err
@@ -263,11 +281,17 @@ func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context,
 // replaceFoodClassifications replaces persisted classification associations for a food item.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) replaceFoodClassifications(ctx context.Context, foodID uuid.UUID, foodCategories []ClassificationEntity, culinaryRoles []ClassificationEntity) error {
-	if _, err := r.db.Exec(ctx, foodClearClassificationsSQL, foodID); err != nil {
+	return replaceFoodClassificationsWithExecutor(ctx, r.db, foodID, foodCategories, culinaryRoles)
+}
+
+// replaceFoodClassificationsWithExecutor replaces global assignments in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func replaceFoodClassificationsWithExecutor(ctx context.Context, db sqlExecutor, foodID uuid.UUID, foodCategories []ClassificationEntity, culinaryRoles []ClassificationEntity) error {
+	if _, err := db.Exec(ctx, foodClearClassificationsSQL, foodID); err != nil {
 		return mapPostgresError(err, "clear food classifications")
 	}
 	for _, classification := range append(foodCategories, culinaryRoles...) {
-		if _, err := r.db.Exec(ctx, foodAttachClassificationSQL, foodID, classification.ID); err != nil {
+		if _, err := db.Exec(ctx, foodAttachClassificationSQL, foodID, classification.ID); err != nil {
 			return mapPostgresError(err, "replace food classifications")
 		}
 	}
@@ -277,7 +301,13 @@ func (r *PostgresFoodItemRepository) replaceFoodClassifications(ctx context.Cont
 // getFoodByID loads one food item using the provided SQL executor.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) getFoodByID(ctx context.Context, id uuid.UUID, includeDeleted bool) (FoodItemEntity, error) {
-	row := r.db.QueryRow(ctx, foodGetByIDSQL, id, includeDeleted)
+	return getFoodByIDWithExecutor(ctx, r.db, id, includeDeleted)
+}
+
+// getFoodByIDWithExecutor loads one global item in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func getFoodByIDWithExecutor(ctx context.Context, db sqlExecutor, id uuid.UUID, includeDeleted bool) (FoodItemEntity, error) {
+	row := db.QueryRow(ctx, foodGetByIDSQL, id, includeDeleted)
 	item, err := scanFoodItem(row)
 	if err != nil {
 		if IsKind(err, ErrorKindValidation) {
@@ -291,7 +321,13 @@ func (r *PostgresFoodItemRepository) getFoodByID(ctx context.Context, id uuid.UU
 // hydrateFoodClassifications loads classification IDs onto food item entities.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) hydrateFoodClassifications(ctx context.Context, item *FoodItemEntity) error {
-	rows, err := r.db.Query(ctx, foodListClassificationsSQL, item.ID)
+	return hydrateFoodClassificationsWithExecutor(ctx, r.db, item)
+}
+
+// hydrateFoodClassificationsWithExecutor loads global assignments in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func hydrateFoodClassificationsWithExecutor(ctx context.Context, db sqlExecutor, item *FoodItemEntity) error {
+	rows, err := db.Query(ctx, foodListClassificationsSQL, item.ID)
 	if err != nil {
 		return mapPostgresError(err, "load food classifications")
 	}
@@ -409,6 +445,9 @@ func validateFoodDensity(item FoodItemEntity) error {
 	}
 	if item.DensitySourceKind != "imported" && item.DensitySourceKind != "manual" && item.DensitySourceKind != "estimated" {
 		return validationError("density source kind is invalid")
+	}
+	if item.DensitySourceKind == "imported" && ((item.DensitySourceProvider != "usda" && item.DensitySourceProvider != "openfoodfacts") || item.DensitySourceFoodID == "") {
+		return validationError("imported density requires trusted provider evidence")
 	}
 	return nil
 }

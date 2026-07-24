@@ -106,14 +106,14 @@ type countingSearchCache struct {
 	sets int
 }
 
-func (c *countingSearchCache) GetSearchResponse(context.Context, search.SearchRequest) (search.SearchResponse, bool, error) {
+func (c *countingSearchCache) GetSearchResponse(context.Context, search.SearchRequest) (search.SearchResponse, bool, search.SearchResponseCacheToken, error) {
 	c.gets++
-	return search.SearchResponse{}, false, nil
+	return search.SearchResponse{}, false, search.SearchResponseCacheToken{}, nil
 }
 
-func (c *countingSearchCache) SetSearchResponse(context.Context, search.SearchRequest, search.SearchResponse) error {
+func (c *countingSearchCache) SetSearchResponse(context.Context, search.SearchRequest, search.SearchResponse, search.SearchResponseCacheToken) (bool, error) {
 	c.sets++
-	return nil
+	return true, nil
 }
 
 type composedSearchGateRepository struct {
@@ -137,26 +137,26 @@ type composedSearchGateCache struct {
 	store map[string]search.SearchResponse
 }
 
-func (c *composedSearchGateCache) GetSearchResponse(_ context.Context, req search.SearchRequest) (search.SearchResponse, bool, error) {
+func (c *composedSearchGateCache) GetSearchResponse(_ context.Context, req search.SearchRequest) (search.SearchResponse, bool, search.SearchResponseCacheToken, error) {
 	c.gets++
 	if c.store == nil {
 		c.store = map[string]search.SearchResponse{}
 	}
 	cached, ok := c.store[composedSearchGateCacheKey(req)]
 	if !ok {
-		return search.SearchResponse{}, false, nil
+		return search.SearchResponse{}, false, search.SearchResponseCacheToken{}, nil
 	}
 	cached.Cache = &search.CacheMetadata{Status: search.CacheStatusHit, Namespace: "search", SchemaVersion: "search-response-v3", TTLSeconds: 300}
-	return cached, true, nil
+	return cached, true, search.SearchResponseCacheToken{}, nil
 }
 
-func (c *composedSearchGateCache) SetSearchResponse(_ context.Context, req search.SearchRequest, response search.SearchResponse) error {
+func (c *composedSearchGateCache) SetSearchResponse(_ context.Context, req search.SearchRequest, response search.SearchResponse, _ search.SearchResponseCacheToken) (bool, error) {
 	c.sets++
 	if c.store == nil {
 		c.store = map[string]search.SearchResponse{}
 	}
 	c.store[composedSearchGateCacheKey(req)] = response
-	return nil
+	return true, nil
 }
 
 func (c *composedSearchGateCache) SearchResponseCacheMetadata(search.SearchRequest, search.CacheStatus) *search.CacheMetadata {

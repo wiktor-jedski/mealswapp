@@ -1,13 +1,19 @@
--- Implements DESIGN-015 DataRetentionPolicy request query.
-WITH existing AS (
+-- Implements DESIGN-008 AccountDeleter and DESIGN-015 DataRetentionPolicy request lockout query.
+WITH locked_user AS MATERIALIZED (
+    UPDATE users
+    SET deletion_requested_at = coalesce(deletion_requested_at, now()),
+        updated_at = now()
+    WHERE id = $1
+    RETURNING id
+), existing AS (
     SELECT id, user_id, status, requested_at, completed_at, coalesce(failure_reason, '') AS failure_reason,
            coalesce(failure_category, '') AS failure_category, retry_count, next_attempt_at, receipt_id, receipt_issued_at
     FROM data_deletion_requests
-    WHERE user_id = $1 AND status IN ('pending', 'processing')
+    WHERE user_id = (SELECT id FROM locked_user) AND status IN ('pending', 'processing')
     LIMIT 1
 ), inserted AS (
     INSERT INTO data_deletion_requests (user_id, status)
-    SELECT $1, 'pending'
+    SELECT id, 'pending' FROM locked_user
     WHERE NOT EXISTS (SELECT 1 FROM existing)
     RETURNING id, user_id, status, requested_at, completed_at, coalesce(failure_reason, '') AS failure_reason,
               coalesce(failure_category, '') AS failure_category, retry_count, next_attempt_at, receipt_id, receipt_issued_at

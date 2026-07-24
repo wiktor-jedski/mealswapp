@@ -10,6 +10,7 @@ test("parses top-level, search-mode, and billing-return routes", () => {
 	expect(parseShellRoute("/billing/cancel?plan=annual")).toEqual({ view: "subscription", mode: "catalog", billingReturn: "cancel" });
 	expect(parseShellRoute("/privacy").view).toBe("privacy");
 	expect(parseShellRoute("/terms").view).toBe("terms");
+	expect(parseShellRoute("/admin").view).toBe("administration");
 });
 
 // Implements DESIGN-001 SearchView canonical SPA URL generation verification.
@@ -18,6 +19,7 @@ test("generates clean view URLs and mode-preserving Search URLs", () => {
 	expect(searchRoute("substitution")).toBe("/?mode=substitution");
 	expect(shellViewRoute("search", "daily_diet_alternative")).toBe("/?mode=daily_diet_alternative");
 	expect(shellViewRoute("subscription")).toBe("/subscription");
+	expect(shellViewRoute("administration")).toBe("/admin");
 	expect(shellViewRoute("privacy")).toBe("/privacy");
 	expect(shellViewRoute("terms")).toBe("/terms");
 });

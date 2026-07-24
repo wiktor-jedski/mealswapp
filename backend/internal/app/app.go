@@ -15,9 +15,13 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/compliance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/dailydiet"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/dataimporter"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/entitlement"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/externaldata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/itemcurator"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/queue"
@@ -25,6 +29,8 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/subscription"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/tagmanager"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/useradmin"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/userdata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
 )
@@ -38,6 +44,14 @@ func New(deps httpapi.Dependencies) (*fiber.App, error) {
 // NewProduction composes the Phase 03 API routes with PostgreSQL-backed services.
 // Implements DESIGN-010 RouteHandler and DESIGN-006 AuthController production bootstrap.
 func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Client, telemetry observability.JSONSink) (*fiber.App, error) {
+	return newProduction(cfg, pg, redisClient, telemetry, nil)
+}
+
+// newProduction permits deterministic provider-boundary integration tests while
+// keeping production provider configuration owned by NewProduction.
+// Implements DESIGN-009 ExternalSearchProxy and DESIGN-012 provider composition.
+func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Client, telemetry observability.JSONSink, providerOverride *externaldata.ProviderSet) (*fiber.App, error) {
+	adminExternalTelemetry := observability.NewAdminExternalTelemetry(telemetry, telemetry)
 	keys, err := newLocalKeyLoader(cfg.Environment)
 	if err != nil {
 		return nil, err
@@ -69,16 +83,58 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	savedRepo := repository.NewPostgresSavedDataRepository(pg)
 	idempotencyRepo := repository.NewPostgresCheckoutIdempotencyRepository(pg)
 	foodRepo := repository.NewPostgresFoodItemRepository(pg)
+	customFoodRepo := repository.NewPostgresCustomFoodItemRepository(pg)
+	customItemService := customitem.NewService(customFoodRepo).WithTelemetry(adminExternalTelemetry)
 	mealRepo := repository.NewPostgresMealRepository(pg)
+	classificationGeneration := cache.NewClassificationGeneration(redisClient)
+	filterOptions := search.NewFilterOptionService(repository.NewPostgresClassificationRepository(pg), repository.NewPostgresAllergenVocabularyRepository(pg))
+	if redisClient != nil {
+		filterOptions = search.NewVersionedFilterOptionService(repository.NewPostgresClassificationRepository(pg), repository.NewPostgresAllergenVocabularyRepository(pg), classificationGeneration)
+	}
+	classificationService := tagmanager.NewService(repository.NewPostgresClassificationRepository(pg))
+	classificationController := httpapi.NewClassificationAdminController(
+		classificationService,
+		func(tx repository.AdminMutationExecutor) repository.ClassificationAdminRepository {
+			return repository.NewPostgresClassificationRepository(tx)
+		},
+		httpapi.NewCurationRequestValidator(adminExternalTelemetry),
+		cache.NewClassificationInvalidator(filterOptions, redisClient),
+	)
+	adminAudit := repository.NewPostgresAdminImportAuditRepository(pg)
+	manualItems := itemcurator.NewService(repository.NewPostgresManualFoodItemRepository(pg))
+	curatedImports := dataimporter.NewService(adminAudit).WithTelemetry(adminExternalTelemetry)
+	adminUserService := useradmin.NewService(repository.NewPostgresAdminUserRepository(pg), adminAudit, encryption, digests)
+	adminUserController := httpapi.NewUserAdminController(adminUserService)
 	dailyDietService := dailydiet.NewService(savedRepo, mealRepo, foodRepo)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
+	adminRepo := repository.NewPostgresAdminImportAuditRepository(pg)
+	providers := externaldata.ProviderSet{}
+	if providerOverride != nil {
+		providers = *providerOverride
+	} else {
+		if apiKey, keyErr := externaldata.LoadUSDAAPIKey(); keyErr == nil {
+			providers.USDA, err = externaldata.NewUSDAClient(externaldata.USDAConfig{APIKey: apiKey, Logs: adminExternalTelemetry})
+			if err != nil {
+				return nil, err
+			}
+		}
+		providers.OpenFoodFacts, err = externaldata.NewOpenFoodFactsClient(externaldata.OpenFoodFactsConfig{CallerID: "Mealswapp/0.1 (https://mealsw.app)", Logs: adminExternalTelemetry})
+		if err != nil {
+			return nil, err
+		}
+	}
+	externalSearch := externaldata.NewExternalSearchProxy(
+		providers,
+		externaldata.NewRateLimitHandler(nil, nil).WithTelemetry(adminExternalTelemetry),
+		externaldata.NewDataNormalizer(repository.NewPostgresMicronutrientVocabularyRepository(pg)).WithTelemetry(adminExternalTelemetry),
+	)
 	var searchResponseCache search.SearchResponseCache
 	var similarityCache search.SimilarityCalculationCache
 	var redisStore cache.RedisStore
 	if redisClient != nil {
 		redisStore = cache.GoRedisStore{Client: redisClient}
-		searchResponseCache = cache.SearchResponseStore{Store: redisStore}
-		similarityCache = cache.SearchResponseStore{Store: redisStore}
+		searchResponseCache = cache.SearchResponseStore{Store: redisStore, Generation: classificationGeneration}
+		similarityCache = cache.SearchResponseStore{Store: redisStore, Generation: classificationGeneration}
 	}
 	userDataService := userdata.NewService(savedRepo, identities, savedRepo, encryption)
 	oauthGateway := NewGoogleOAuthGateway(cfg.OAuth)
@@ -107,9 +163,10 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		workerPing = worker.OptimizationWorkerPing(redisClient)
 	}
 	controllers := []httpapi.Controller{
+		httpapi.NewAdminController(adminRepo).WithExternalSearch(externalSearch, adminExternalTelemetry),
 		httpapi.NewAuthController(authService, sessionManager).WithLogSink(telemetry),
 		httpapi.NewOAuthController(authService, oauthGateway, sessionManager),
-		httpapi.NewProfileController(profile.NewService(identities, encryption), dailyDietService),
+		httpapi.NewProfileController(profile.NewService(identities, encryption), dailyDietService).WithCustomItems(customItemService),
 		httpapi.NewSearchController(search.NewSearchDispatcher(
 			search.NewCatalogService(foodRepo, searchResponseCache),
 			search.NewSubstitutionService(foodRepo, searchResponseCache, similarityCache).WithMealRepository(mealRepo),
@@ -118,10 +175,11 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			cache:   redisStore,
 			ttl:     cache.DefaultAutocompleteTTL,
 		}).WithSearchHistoryAppender(userDataService).WithSearchUsageGate(usageLimiter),
+		httpapi.NewFilterOptionController(filterOptions),
 		httpapi.NewFoodObjectController(foodRepo, mealRepo),
 		httpapi.NewUserDataController(userDataService),
 		httpapi.NewOptimizationController(optimizationJobs, optimizationQueue, savedRepo, entitlementManager, idempotencyRepo, optimizationAdmission).WithTelemetry(optimizationTelemetry),
-		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption, savedRepo)),
+		httpapi.NewExportController(userdata.NewExportService(identities, identities, savedRepo, identities, complianceRepo, encryption, savedRepo).WithCustomItems(customItemService)),
 		httpapi.NewAccountDeletionController(userdata.NewAccountDeletionService(complianceRepo, sessions, identities, redisCachePurger{client: redisClient}), sessionManager),
 		httpapi.NewDisclaimerController(compliance.NewDisclaimerService(nil)),
 		httpapi.NewSubscriptionController(
@@ -129,6 +187,9 @@ func NewProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			entitlement.NewStatusService(entitlements, entitlements),
 		).WithBillingRedirectOrigin(cfg.FrontendOrigin).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
 		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
+		httpapi.NewAdminController(adminAudit, append(classificationController.AdminRoutes(), adminUserController.AdminRoutes()...)...).WithTelemetry(adminExternalTelemetry),
+		httpapi.NewManualItemAdminController(adminAudit, manualItems).WithTelemetry(adminExternalTelemetry),
+		httpapi.NewCuratedImportAdminController(adminAudit, curatedImports, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),
 	}
 	routes := []httpapi.RouteDefinition{}
 	for _, controller := range controllers {
@@ -293,11 +354,8 @@ type redisCachePurger struct {
 // Implements DESIGN-008 AccountDeleter compile-time cache purge contract.
 var _ userdata.CachePurger = redisCachePurger{}
 
-// PurgeUser deletes the current user cache prefix best-effort.
+// PurgeUser deletes every key in the current user's cache namespace.
 // Implements DESIGN-008 AccountDeleter.
 func (p redisCachePurger) PurgeUser(ctx context.Context, userID uuid.UUID) error {
-	if p.client == nil {
-		return nil
-	}
-	return p.client.Del(ctx, "user:"+userID.String()).Err()
+	return cache.NewUserPurger(p.client).PurgeUser(ctx, userID)
 }

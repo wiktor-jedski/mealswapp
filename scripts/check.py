@@ -7,6 +7,7 @@ import subprocess
 import sys
 import os
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 OPEN_POINTS = ROOT / "docs" / "implementation" / "04_OPEN.md"
+PHASE08_COVERAGE_PROFILE = BACKEND / "phase08-coverage.out"
 
 reqs = """[SW-REQ-001]
 [SW-REQ-002]
@@ -136,6 +138,13 @@ def validate_go_coverage() -> str:
 	result = run_env(["go", "tool", "cover", "-func=coverage.out"], BACKEND, capture=True)
 	print(result.stdout, end="")
 	validate_phase07_go_coverage(result.stdout)
+	print("+ go test ./internal/... -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out")
+	run_env(
+		["go", "test", "./internal/...", "-p", "1", "-count=1", "-coverpkg=./internal/...", "-coverprofile=phase08-coverage.out"],
+		BACKEND,
+		extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/12"},
+	)
+	validate_phase08_go_coverage(PHASE08_COVERAGE_PROFILE.read_text(encoding="utf-8"))
 	return result.stdout
 
 
@@ -150,31 +159,263 @@ def validate_frontend_coverage() -> str:
 	if len(columns) < 3 or columns[1] != "100.00" or columns[2] != "100.00":
 		validate_documented_frontend_coverage_deviations(coverage_output, all_files)
 	validate_phase07_frontend_coverage(coverage_output)
+	validate_phase08_frontend_coverage(coverage_output)
 	return coverage_output
 
 
 def validate_documented_frontend_coverage_deviations(coverage_output: str, all_files: str) -> None:
 	# Implements DESIGN-014 MetricsCollector documented coverage-deviation gate.
-	open_points = OPEN_POINTS.read_text(encoding="utf-8")
-	undocumented = []
-	for line in coverage_output.splitlines():
-		stripped = line.strip()
-		if not stripped.startswith("src/"):
-			continue
-		columns = [part.strip() for part in stripped.split("|")]
-		if len(columns) < 3:
-			continue
-		path, funcs, lines = columns[:3]
-		if funcs != "100.00" or lines != "100.00":
-			if path not in open_points:
-				undocumented.append(f"{path} ({funcs}% funcs, {lines}% lines)")
-	if undocumented:
-		raise SystemExit(
-			"Frontend coverage below 100% without documented deviations: "
-			+ ", ".join(undocumented)
-			+ f"; aggregate row: {all_files}"
-		)
+	validate_frontend_exception_contract(coverage_output, OPEN_POINTS.read_text(encoding="utf-8"))
 	print(f"Frontend coverage below 100% with documented deviations: {all_files}")
+
+
+PHASE08_GO_SOURCES = {
+	"internal/app/app.go",
+	"internal/cache/classification_generation.go",
+	"internal/cache/classification_invalidator.go",
+	"internal/cache/search_cache.go",
+	"internal/cache/user_purger.go",
+	"internal/curation/validation.go",
+	"internal/customitem/service.go",
+	"internal/dataimporter/service.go",
+	"internal/deletionworker/account_deletion.go",
+	"internal/externaldata/normalizer.go",
+	"internal/externaldata/openfoodfacts.go",
+	"internal/externaldata/rate_limit.go",
+	"internal/externaldata/search_proxy.go",
+	"internal/externaldata/usda.go",
+	"internal/httpapi/admin_controller.go",
+	"internal/httpapi/auth_controller.go",
+	"internal/httpapi/classification_admin_controller.go",
+	"internal/httpapi/curation_validation.go",
+	"internal/httpapi/custom_item_controller.go",
+	"internal/httpapi/external_search_controller.go",
+	"internal/httpapi/filter_option_controller.go",
+	"internal/httpapi/import_controller.go",
+	"internal/httpapi/manual_item_controller.go",
+	"internal/httpapi/profile_controller.go",
+	"internal/httpapi/router.go",
+	"internal/httpapi/search_validation.go",
+	"internal/httpapi/user_admin_controller.go",
+	"internal/itemcurator/service.go",
+	"internal/observability/admin_external.go",
+	"internal/repository/admin_user_repository.go",
+	"internal/repository/allergen_vocabulary_repository.go",
+	"internal/repository/classification_repository.go",
+	"internal/repository/compliance_repository.go",
+	"internal/repository/curated_import_repository.go",
+	"internal/repository/custom_food_repository.go",
+	"internal/repository/errors.go",
+	"internal/repository/food_repository.go",
+	"internal/repository/manual_food_repository.go",
+	"internal/repository/postgres.go",
+	"internal/search/catalog_service.go",
+	"internal/search/filter_options.go",
+	"internal/search/substitution_service.go",
+	"internal/security/normalizer.go",
+	"internal/tagmanager/service.go",
+	"internal/useradmin/service.go",
+	"internal/userdata/deletion.go",
+	"internal/userdata/export.go",
+}
+PHASE08_FRONTEND_SOURCES = {
+	"src/lib/admin-access.ts",
+	"src/lib/admin-workflows.ts",
+	"src/lib/api/account-data-client.ts",
+	"src/lib/api/admin-client.ts",
+	"src/lib/api/external-admin-client.ts",
+	"src/lib/api/filter-options-client.ts",
+	"src/lib/api/generated.ts",
+	"src/lib/shell-routing.ts",
+	"src/lib/substitution-filter-options.ts",
+}
+BACKEND_EXCEPTION_REASONS = {
+	"B1": "Defensive dependency, encoder, or claim-corruption branch; evidence: focused unit and HTTP error-path suites.",
+	"B2": "Repeated safe repository or HTTP error mapping; evidence: repository, HTTP, and live integration suites.",
+	"B3": "Configuration, cache, or wiring fallback; evidence: aggregate bootstrap and live-dependency suites.",
+	"B4": "Instrumentation-only path; evidence: observability unit and load suites.",
+}
+FRONTEND_EXCEPTION_REASONS = {
+	"F1": "Bun emits no stable line range or only callback instrumentation; evidence: focused unit and browser suites.",
+	"F2": "Function instrumentation only; evidence: focused unit and browser suites.",
+	"F3": "Generated unreachable fallback; evidence: generated-contract drift and client suites.",
+	"F4": "Defensive decoder, transport, or browser-dependency fallback; evidence: focused client and browser suites.",
+	"F5": "Bounded guard, impossible-state projection, or formatting fallback; evidence: focused state and component suites.",
+}
+
+
+@dataclass(frozen=True)
+class GoCoverage:
+	covered: int
+	total: int
+	uncovered: str
+
+
+@dataclass(frozen=True)
+class FrontendCoverage:
+	functions: str
+	lines: str
+	uncovered: str
+
+
+def phase_section(document: str, phase: str) -> str:
+	match = re.search(rf"(?ms)^## {re.escape(phase)}\s*$.*?(?=^## |\Z)", document)
+	if not match:
+		raise SystemExit(f"Coverage contract is missing the {phase} section.")
+	return match.group(0)
+
+
+def marked_contract(section: str, name: str) -> str:
+	match = re.search(
+		rf"(?s)<!-- {re.escape(name)}:start -->(.*?)<!-- {re.escape(name)}:end -->",
+		section,
+	)
+	if not match:
+		raise SystemExit(f"Coverage contract is missing or malformed: {name}.")
+	return match.group(1)
+
+
+def parse_go_profile(profile: str) -> dict[str, GoCoverage]:
+	blocks: dict[tuple[str, str, str, int], bool] = {}
+	for line in profile.splitlines()[1:]:
+		match = re.fullmatch(r"\S+/backend/(internal/\S+?):(\d+\.\d+),(\d+\.\d+)\s+(\d+)\s+(\d+)", line.strip())
+		if not match:
+			raise SystemExit(f"Malformed Go coverage profile row: {line}")
+		path, start, end, statements, count = match.groups()
+		key = (path, start, end, int(statements))
+		blocks[key] = blocks.get(key, False) or int(count) > 0
+	rows: dict[str, GoCoverage] = {}
+	for path in sorted({key[0] for key in blocks}):
+		file_blocks = [(key, covered) for key, covered in blocks.items() if key[0] == path]
+		total = sum(key[3] for key, _ in file_blocks)
+		covered = sum(key[3] for key, hit in file_blocks if hit)
+		uncovered = ",".join(f"{key[1]}-{key[2]}" for key, hit in file_blocks if not hit)
+		rows[path] = GoCoverage(covered, total, uncovered or "-")
+	return rows
+
+
+def parse_frontend_coverage(coverage_output: str) -> dict[str, FrontendCoverage]:
+	rows = {}
+	for line in coverage_output.splitlines():
+		columns = [part.strip() for part in line.strip().split("|")]
+		if len(columns) >= 3 and columns[0].startswith("src/"):
+			rows[columns[0]] = FrontendCoverage(columns[1], columns[2], columns[3] if len(columns) > 3 and columns[3] else "-")
+	return rows
+
+
+def parse_reason_catalog(contract: str, reasons: dict[str, str]) -> None:
+	for reason_id, reason in reasons.items():
+		if f"- `{reason_id}` — {reason}" not in contract:
+			raise SystemExit(f"Coverage contract has a missing or unjustified reason {reason_id}.")
+
+
+def parse_backend_exceptions(contract: str) -> dict[str, tuple[GoCoverage, str]]:
+	rows = {}
+	for line in contract.splitlines():
+		if not line.lstrip().startswith("| `internal/"):
+			continue
+		columns = [part.strip() for part in line.strip().strip("|").split("|")]
+		if len(columns) != 5:
+			raise SystemExit(f"Malformed Phase 08 backend coverage exception row: {line}")
+		path = columns[0].strip("`")
+		count_match = re.fullmatch(r"`(\d+)/(\d+)`", columns[1])
+		coverage_match = re.fullmatch(r"`(\d+\.\d)%`", columns[2])
+		ranges_match = re.fullmatch(r"`([^`]+)`", columns[3])
+		reason_match = re.fullmatch(r"`(B[1-4])`", columns[4])
+		if not all((count_match, coverage_match, ranges_match, reason_match)):
+			raise SystemExit(f"Malformed Phase 08 backend coverage exception row: {line}")
+		covered, total = map(int, count_match.groups())
+		expected_percent = f"{covered / total * 100:.1f}"
+		if coverage_match.group(1) != expected_percent:
+			raise SystemExit(f"Malformed Phase 08 backend percentage for {path}: expected {expected_percent}%.")
+		if path in rows:
+			raise SystemExit(f"Duplicate Phase 08 backend coverage exception row: {path}.")
+		rows[path] = (GoCoverage(covered, total, ranges_match.group(1)), reason_match.group(1))
+	return rows
+
+
+def parse_frontend_exceptions(contract: str) -> dict[str, tuple[str, FrontendCoverage, str]]:
+	rows = {}
+	for line in contract.splitlines():
+		if not line.lstrip().startswith("| `src/"):
+			continue
+		columns = [part.strip() for part in line.strip().strip("|").split("|")]
+		if len(columns) != 6:
+			raise SystemExit(f"Malformed frontend coverage exception row: {line}")
+		path = columns[0].strip("`")
+		phase = columns[1]
+		funcs = columns[2].removesuffix("%")
+		lines = columns[3].removesuffix("%")
+		uncovered = columns[4].strip("`")
+		reason = columns[5].strip("`")
+		if not re.fullmatch(r"\d+\.\d{2}", funcs) or not re.fullmatch(r"\d+\.\d{2}", lines) or reason not in FRONTEND_EXCEPTION_REASONS:
+			raise SystemExit(f"Malformed frontend coverage exception row: {line}")
+		if path in rows:
+			raise SystemExit(f"Duplicate frontend coverage exception row: {path}.")
+		rows[path] = (phase, FrontendCoverage(funcs, lines, uncovered), reason)
+	return rows
+
+
+def validate_phase08_go_coverage(profile: str, document: str | None = None) -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 08 statement/range exception gate.
+	section = phase_section(document if document is not None else OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+	contract = marked_contract(section, "phase08-backend-coverage-contract")
+	parse_reason_catalog(contract, BACKEND_EXCEPTION_REASONS)
+	measured = parse_go_profile(profile)
+	missing_sources = sorted(PHASE08_GO_SOURCES - measured.keys())
+	if missing_sources:
+		raise SystemExit("Phase 08 Go coverage is missing runtime sources: " + ", ".join(missing_sources))
+	measured = {path: measured[path] for path in PHASE08_GO_SOURCES}
+	below = {path: row for path, row in measured.items() if row.covered != row.total}
+	documented = parse_backend_exceptions(contract)
+	if documented.keys() != below.keys():
+		missing = sorted(below.keys() - documented.keys())
+		over_broad = sorted(documented.keys() - below.keys())
+		raise SystemExit(f"Phase 08 Go exceptions do not match measured below-100 sources; missing={missing}, over-broad={over_broad}.")
+	for path, actual in below.items():
+		if documented[path][0] != actual:
+			raise SystemExit(f"Phase 08 Go exception is stale for {path}: documented={documented[path][0]}, measured={actual}.")
+	covered = sum(row.covered for row in measured.values())
+	total = sum(row.total for row in measured.values())
+	summary = f"Measured Phase 08 scope: `{covered}/{total}` statements (`{covered / total * 100:.1f}%`)."
+	if summary not in contract:
+		raise SystemExit(f"Phase 08 Go exception summary is stale or malformed; expected: {summary}")
+	print(f"Phase 08 Go coverage below 100% with exact measured exceptions: {covered}/{total} ({covered / total * 100:.1f}%).")
+
+
+def validate_frontend_exception_contract(coverage_output: str, document: str) -> None:
+	section = phase_section(document, "Phase 08")
+	contract = marked_contract(section, "frontend-coverage-contract")
+	parse_reason_catalog(contract, FRONTEND_EXCEPTION_REASONS)
+	measured = parse_frontend_coverage(coverage_output)
+	below = {path: row for path, row in measured.items() if row.functions != "100.00" or row.lines != "100.00"}
+	documented = parse_frontend_exceptions(contract)
+	if documented.keys() != below.keys():
+		missing = sorted(below.keys() - documented.keys())
+		over_broad = sorted(documented.keys() - below.keys())
+		raise SystemExit(f"Frontend exceptions do not match measured below-100 rows; missing={missing}, over-broad={over_broad}.")
+	for path, actual in below.items():
+		if documented[path][1] != actual:
+			raise SystemExit(f"Frontend exception is stale for {path}: documented={documented[path][1]}, measured={actual}.")
+
+
+def validate_phase08_frontend_coverage(coverage_output: str, document: str | None = None) -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 08 semantic frontend exception gate.
+	section = phase_section(document if document is not None else OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+	contract = marked_contract(section, "frontend-coverage-contract")
+	measured = parse_frontend_coverage(coverage_output)
+	missing = sorted(PHASE08_FRONTEND_SOURCES - measured.keys())
+	if missing:
+		raise SystemExit("Phase 08 frontend coverage is missing source rows: " + ", ".join(missing))
+	documented = parse_frontend_exceptions(contract)
+	for path in PHASE08_FRONTEND_SOURCES:
+		actual = measured[path]
+		below = actual.functions != "100.00" or actual.lines != "100.00"
+		if below and (path not in documented or documented[path][0] != "Phase 08"):
+			raise SystemExit(f"Phase 08 frontend exception is missing or not phase-bound for {path}.")
+		if not below and path in documented:
+			raise SystemExit(f"Phase 08 frontend exception is over-broad for fully covered source {path}.")
+	print("Phase 08 frontend coverage has exact phase-bound measured exceptions.")
 
 
 PHASE07_GO_PACKAGES = {
@@ -330,6 +571,11 @@ def validate_start_dev_process_tests() -> None:
 	run(["python3", "-m", "unittest", "scripts/test_start_dev.py"])
 
 
+def validate_coverage_contract_tests() -> None:
+	# Implements DESIGN-014 MetricsCollector deterministic coverage-contract regression gate.
+	run(["python3", "-m", "unittest", "scripts/test_check_coverage.py"])
+
+
 def validate_local_stack_database_isolation_tests() -> None:
 	# Implements DESIGN-005 RepositoryInterfaces isolated local-stack migration gate.
 	run(["python3", "-m", "unittest", "scripts/test_verify_local_stack.py"])
@@ -406,6 +652,7 @@ TRACEABLE_FILES = {
 	"scripts/verify-local-stack.py", "scripts/verify-phase02-uat.py", "scripts/verify-phase03-uat.py",
 	"scripts/test_verify_local_stack.py",
 	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
+	"scripts/test_check_coverage.py",
 	"scripts/dev-processes.sh", "scripts/start-dev.sh", "scripts/test_start_dev.py",
 	"scripts/verify-clp-worker-image.sh",
 }
@@ -504,6 +751,7 @@ def main() -> int:
 	# Implements DESIGN-010 RouteHandler contract and backend quality gates.
 	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
 	validate_phase07_capacity_tests()
+	validate_coverage_contract_tests()
 	validate_start_dev_process_tests()
 	validate_local_stack_database_isolation_tests()
 	run(["go", "vet", "./..."], BACKEND)

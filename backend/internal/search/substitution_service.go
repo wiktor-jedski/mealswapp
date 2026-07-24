@@ -68,11 +68,14 @@ func (s *SubstitutionService) Search(ctx context.Context, req SearchRequest) (Se
 	normalizedReq.Page = normalizedPage(req.Page)
 
 	cacheWarnings := []string{}
+	var cacheToken SearchResponseCacheToken
 	if s.cache != nil {
-		if cached, hit, err := s.cache.GetSearchResponse(ctx, normalizedReq); err == nil && hit {
+		if cached, hit, token, err := s.cache.GetSearchResponse(ctx, normalizedReq); err == nil && hit {
 			return cached, nil
 		} else if err != nil {
 			cacheWarnings = append(cacheWarnings, WarningCacheUnavailable)
+		} else {
+			cacheToken = token
 		}
 	}
 
@@ -82,9 +85,9 @@ func (s *SubstitutionService) Search(ctx context.Context, req SearchRequest) (Se
 	}
 	response.Warnings = append(response.Warnings, cacheWarnings...)
 	if response.Rejection == nil && s.cache != nil {
-		if err := s.cache.SetSearchResponse(ctx, normalizedReq, responseWithoutCache(response)); err != nil {
+		if stored, err := s.cache.SetSearchResponse(ctx, normalizedReq, responseWithoutCache(response), cacheToken); err != nil {
 			response.Warnings = appendWarningOnce(response.Warnings, WarningCacheUnavailable)
-		} else {
+		} else if stored {
 			response.Cache = searchResponseCacheMetadata(s.cache, normalizedReq, CacheStatusMiss)
 		}
 	}
@@ -147,13 +150,17 @@ func (s *SubstitutionService) loadSubstitutions(ctx context.Context, parsed Pars
 // Implements DESIGN-003 CosineSimilarityCalculator and DESIGN-011 RedisCache.
 func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs []SubstitutionInput, req ComparisonRequest) (SimilarityCalculation, []string, error) {
 	warnings := []string{}
+	var token SimilarityCalculationCacheToken
 	if s.similarityCache != nil {
-		if cached, hit, err := s.similarityCache.GetSimilarityCalculation(ctx, inputs); err == nil && hit {
+		if cached, hit, cacheToken, err := s.similarityCache.GetSimilarityCalculation(ctx, inputs); err == nil && hit {
 			if similarityCalculationCoversTargets(cached, req.Targets) {
 				return cached, warnings, nil
 			}
+			token = cacheToken
 		} else if err != nil {
 			warnings = append(warnings, WarningCacheUnavailable)
+		} else {
+			token = cacheToken
 		}
 	}
 
@@ -163,7 +170,7 @@ func (s *SubstitutionService) compareMacrosWithCache(ctx context.Context, inputs
 	}
 	calculation := SimilarityCalculation{Results: results, Diagnostics: diagnostics}
 	if s.similarityCache != nil {
-		if err := s.similarityCache.SetSimilarityCalculation(ctx, inputs, calculation); err != nil {
+		if _, err := s.similarityCache.SetSimilarityCalculation(ctx, inputs, calculation, token); err != nil {
 			warnings = appendWarningOnce(warnings, WarningCacheUnavailable)
 		}
 	}

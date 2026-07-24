@@ -2,11 +2,16 @@ package security
 
 import (
 	"errors"
+	"net"
 	"net/mail"
+	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // InputField identifies a supported field-specific normalization rule.
@@ -43,6 +48,24 @@ const (
 	InputFieldSubstitutionUnit InputField = "substitution_unit"
 	// InputFieldDailyDietID selects daily-diet identifier validation.
 	InputFieldDailyDietID InputField = "daily_diet_id"
+	// InputFieldCurationItemName selects an administrator-authored item name.
+	InputFieldCurationItemName InputField = "curation_item_name"
+	// InputFieldCurationClassificationName selects an administrator-authored classification name.
+	InputFieldCurationClassificationName InputField = "curation_classification_name"
+	// InputFieldExternalQuery selects an external food-provider search query.
+	InputFieldExternalQuery InputField = "external_query"
+	// InputFieldCurationProvider selects a supported food-data provider.
+	InputFieldCurationProvider InputField = "curation_provider"
+	// InputFieldExternalProvider selects one or all supported food-data providers.
+	InputFieldExternalProvider InputField = "external_provider"
+	// InputFieldProviderIdentifier selects an external provider record identifier.
+	InputFieldProviderIdentifier InputField = "provider_identifier"
+	// InputFieldImageURL selects a public HTTPS image URL.
+	InputFieldImageURL InputField = "image_url"
+	// InputFieldServingUnit selects a canonical curation serving unit.
+	InputFieldServingUnit InputField = "serving_unit"
+	// InputFieldProviderText selects bounded display text supplied by a food-data provider.
+	InputFieldProviderText InputField = "provider_text"
 )
 
 // Implements DESIGN-015 ConsentManager version identifier validation.
@@ -50,9 +73,15 @@ var consentVersionPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{1,63}
 
 // Implements DESIGN-002 SearchController and DESIGN-013 InputNormalizer bounds.
 const (
-	MaxSearchQueryLength       = 200
-	MaxAutocompleteQueryLength = 120
-	MaxSearchPage              = 10000
+	MaxSearchQueryLength        = 200
+	MaxAutocompleteQueryLength  = 120
+	MaxSearchPage               = 10000
+	MaxCurationItemNameLength   = 200
+	MaxClassificationNameLength = 120
+	MaxExternalQueryLength      = 200
+	MaxProviderIdentifierLength = 200
+	MaxImageURLLength           = 2048
+	MaxProviderTextLength       = 1000
 )
 
 // Implements DESIGN-002 FilterProcessor and DESIGN-013 InputNormalizer supported search filter kind tokens.
@@ -104,6 +133,24 @@ func NormalizeInput(field InputField, value string) (NormalizationResult, error)
 		return normalizeSubstitutionUnit(value)
 	case InputFieldDailyDietID:
 		return normalizeDailyDietID(value)
+	case InputFieldCurationItemName:
+		return normalizeCurationName(value, MaxCurationItemNameLength, "item name")
+	case InputFieldCurationClassificationName:
+		return normalizeCurationName(value, MaxClassificationNameLength, "classification name")
+	case InputFieldExternalQuery:
+		return normalizeVisibleText(value, MaxExternalQueryLength, "external query", true)
+	case InputFieldCurationProvider:
+		return normalizeCurationProvider(value, false)
+	case InputFieldExternalProvider:
+		return normalizeCurationProvider(value, true)
+	case InputFieldProviderIdentifier:
+		return normalizeProviderIdentifier(value)
+	case InputFieldImageURL:
+		return normalizeImageURL(value)
+	case InputFieldServingUnit:
+		return normalizeServingUnit(value)
+	case InputFieldProviderText:
+		return normalizeVisibleText(value, MaxProviderTextLength, "provider text", false)
 	default:
 		return NormalizationResult{}, errors.New("unsupported input field")
 	}
@@ -387,4 +434,178 @@ func normalizeDailyDietID(value string) (NormalizationResult, error) {
 		result.Violations = []string{"daily_diet_id_normalized"}
 	}
 	return result, nil
+}
+
+// normalizeCurationName applies NFC and whitespace normalization to administrator-authored names.
+// Implements DESIGN-013 InputNormalizer curation name validation.
+func normalizeCurationName(value string, maxRunes int, label string) (NormalizationResult, error) {
+	result, err := normalizeVisibleText(value, maxRunes, label, true)
+	if err != nil {
+		return NormalizationResult{}, err
+	}
+	for _, r := range result.Value {
+		if unicode.IsLetter(r) || unicode.IsMark(r) || unicode.IsDigit(r) || unicode.IsSpace(r) || unicode.IsPunct(r) {
+			continue
+		}
+		return NormalizationResult{}, errors.New(label + " contains invalid characters")
+	}
+	return result, nil
+}
+
+// normalizeVisibleText applies NFC and whitespace normalization and rejects control characters.
+// Implements DESIGN-013 InputNormalizer curation text validation.
+func normalizeVisibleText(value string, maxRunes int, label string, required bool) (NormalizationResult, error) {
+	if !utf8.ValidString(value) {
+		return NormalizationResult{}, errors.New(label + " is invalid UTF-8")
+	}
+	for _, r := range value {
+		if isDisallowedControl(r) {
+			return NormalizationResult{}, errors.New(label + " contains invalid characters")
+		}
+	}
+	normalized := strings.Join(strings.Fields(norm.NFC.String(value)), " ")
+	if required && normalized == "" {
+		return NormalizationResult{}, errors.New(label + " is required")
+	}
+	if utf8.RuneCountInString(normalized) > maxRunes {
+		return NormalizationResult{}, errors.New(label + " is too long")
+	}
+	result := NormalizationResult{Value: normalized, Changed: normalized != value}
+	if result.Changed {
+		result.Violations = []string{"unicode_or_whitespace_normalized"}
+	}
+	return result, nil
+}
+
+// normalizeCurationProvider maps supported provider spellings to stable identifiers.
+// Implements DESIGN-012 USDAClient and OpenFoodFactsClient and DESIGN-013 InputNormalizer.
+func normalizeCurationProvider(value string, allowAll bool) (NormalizationResult, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch strings.NewReplacer("-", "_", " ", "_").Replace(normalized) {
+	case "usda":
+		normalized = "usda"
+	case "openfoodfacts", "open_food_facts":
+		normalized = "openfoodfacts"
+	case "all":
+		if !allowAll {
+			return NormalizationResult{}, errors.New("curation provider is unsupported")
+		}
+		normalized = "all"
+	default:
+		return NormalizationResult{}, errors.New("curation provider is unsupported")
+	}
+	result := NormalizationResult{Value: normalized, Changed: normalized != value}
+	if result.Changed {
+		result.Violations = []string{"provider_normalized"}
+	}
+	return result, nil
+}
+
+// normalizeProviderIdentifier bounds provider record identifiers to an injection-safe token alphabet.
+// Implements DESIGN-012 DataNormalizer and DESIGN-013 InputNormalizer.
+func normalizeProviderIdentifier(value string) (NormalizationResult, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" || utf8.RuneCountInString(trimmed) > MaxProviderIdentifierLength {
+		return NormalizationResult{}, errors.New("provider identifier is invalid")
+	}
+	for _, r := range trimmed {
+		if r > unicode.MaxASCII || !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("._:/-", r) {
+			return NormalizationResult{}, errors.New("provider identifier contains invalid characters")
+		}
+	}
+	result := NormalizationResult{Value: trimmed, Changed: trimmed != value}
+	if result.Changed {
+		result.Violations = []string{"whitespace_trimmed"}
+	}
+	return result, nil
+}
+
+// normalizeImageURL accepts only absolute public HTTPS URLs without credentials or fragments.
+// Implements DESIGN-009 ItemCurator and DESIGN-013 InputNormalizer safe image URL validation.
+func normalizeImageURL(value string) (NormalizationResult, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return NormalizationResult{Value: "", Changed: trimmed != value}, nil
+	}
+	if len(trimmed) > MaxImageURLLength {
+		return NormalizationResult{}, errors.New("image URL is too long")
+	}
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || strings.ContainsRune(trimmed, '#') {
+		return NormalizationResult{}, errors.New("image URL is unsafe")
+	}
+	host := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return NormalizationResult{}, errors.New("image URL is unsafe")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+			return NormalizationResult{}, errors.New("image URL is unsafe")
+		}
+	} else if !strings.ContainsRune(host, '.') || strings.Trim(host, "0123456789.") == "" {
+		return NormalizationResult{}, errors.New("image URL is unsafe")
+	}
+	for _, r := range host {
+		if r > unicode.MaxASCII || !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '-' {
+			return NormalizationResult{}, errors.New("image URL is unsafe")
+		}
+	}
+	if port := parsed.Port(); port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return NormalizationResult{}, errors.New("image URL is unsafe")
+		}
+	}
+	decodedPath, pathErr := url.PathUnescape(parsed.EscapedPath())
+	decodedQuery, queryErr := url.QueryUnescape(parsed.RawQuery)
+	if pathErr != nil || queryErr != nil || containsControl(decodedPath) || containsControl(decodedQuery) {
+		return NormalizationResult{}, errors.New("image URL is unsafe")
+	}
+	result := NormalizationResult{Value: trimmed, Changed: trimmed != value}
+	if result.Changed {
+		result.Violations = []string{"whitespace_trimmed"}
+	}
+	return result, nil
+}
+
+// normalizeServingUnit maps supported curation aliases to repository unit tokens.
+// Implements DESIGN-012 DataNormalizer and DESIGN-013 InputNormalizer.
+func normalizeServingUnit(value string) (NormalizationResult, error) {
+	alias := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+	switch alias {
+	case "g", "gram", "grams":
+		alias = "g"
+	case "ml", "milliliter", "milliliters", "millilitre", "millilitres":
+		alias = "ml"
+	case "oz", "ounce", "ounces":
+		alias = "oz"
+	case "fl oz", "fl_oz", "fluid ounce", "fluid ounces":
+		alias = "fl_oz"
+	case "serving", "servings", "portion", "portions":
+		alias = "serving"
+	default:
+		return NormalizationResult{}, errors.New("serving unit is unsupported")
+	}
+	result := NormalizationResult{Value: alias, Changed: alias != value}
+	if result.Changed {
+		result.Violations = []string{"unit_normalized"}
+	}
+	return result, nil
+}
+
+// containsControl reports whether decoded URL data contains log- or protocol-control characters.
+// Implements DESIGN-013 InputNormalizer safe image URL validation.
+func containsControl(value string) bool {
+	for _, r := range value {
+		if isDisallowedControl(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// isDisallowedControl includes Unicode format controls such as bidi overrides.
+// Implements DESIGN-013 InputNormalizer control-character rejection.
+func isDisallowedControl(r rune) bool {
+	return unicode.IsControl(r) || unicode.Is(unicode.Cf, r)
 }

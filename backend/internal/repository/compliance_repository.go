@@ -3,7 +3,10 @@ package repository
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,7 +92,8 @@ var adminAuditListForEntitySQL string
 // PostgresComplianceRepository persists consent and deletion workflow records.
 // Implements DESIGN-015 DataRetentionPolicy.
 type PostgresComplianceRepository struct {
-	db transactionalExecutor
+	db                    transactionalExecutor
+	deletionLeaseDuration time.Duration
 }
 
 // Implements DESIGN-015 ConsentManager compile-time repository contract.
@@ -101,7 +105,16 @@ var _ DeletionRequestRepository = (*PostgresComplianceRepository)(nil)
 // NewPostgresComplianceRepository creates a PostgreSQL-backed compliance repository.
 // Implements DESIGN-015 DataRetentionPolicy.
 func NewPostgresComplianceRepository(db transactionalExecutor) *PostgresComplianceRepository {
-	return &PostgresComplianceRepository{db: db}
+	return &PostgresComplianceRepository{db: db, deletionLeaseDuration: 5 * time.Minute}
+}
+
+// WithDeletionLeaseDuration sets the processing lease used by deletion workers.
+// Implements DESIGN-015 DataRetentionPolicy guarded worker execution.
+func (r *PostgresComplianceRepository) WithDeletionLeaseDuration(duration time.Duration) *PostgresComplianceRepository {
+	if duration > 0 {
+		r.deletionLeaseDuration = duration
+	}
+	return r
 }
 
 // RecordConsent stores one accepted privacy and terms version.
@@ -233,7 +246,7 @@ func (r *PostgresComplianceRepository) ClaimDeletionRequests(ctx context.Context
 	if limit <= 0 {
 		limit = 1
 	}
-	rows, err := r.db.Query(ctx, deletionClaimSQL, now, limit)
+	rows, err := r.db.Query(ctx, deletionClaimSQL, now, limit, r.deletionLeaseDuration.Milliseconds())
 	if err != nil {
 		return nil, mapPostgresError(err, "claim deletion requests")
 	}
@@ -254,15 +267,15 @@ func (r *PostgresComplianceRepository) ClaimDeletionRequests(ctx context.Context
 
 // RecordDeletionFailure stores sanitized failure category and retry metadata.
 // Implements DESIGN-015 DataRetentionPolicy.
-func (r *PostgresComplianceRepository) RecordDeletionFailure(ctx context.Context, requestID uuid.UUID, category string, note string, nextAttemptAt *time.Time) error {
-	if requestID == uuid.Nil {
-		return validationError("request id is required")
+func (r *PostgresComplianceRepository) RecordDeletionFailure(ctx context.Context, requestID uuid.UUID, leaseExpiresAt time.Time, category string, note string, nextAttemptAt *time.Time) error {
+	if requestID == uuid.Nil || leaseExpiresAt.IsZero() {
+		return validationError("request id and processing lease are required")
 	}
 	if category != "transient" && category != "permanent" && category != "unknown" {
 		return validationError("failure category is invalid")
 	}
 	var id uuid.UUID
-	err := r.db.QueryRow(ctx, deletionFailSQL, requestID, category, note, nextAttemptAt).Scan(&id)
+	err := r.db.QueryRow(ctx, deletionFailSQL, requestID, leaseExpiresAt, category, note, nextAttemptAt).Scan(&id)
 	if err != nil {
 		return mapPostgresError(err, "record deletion failure")
 	}
@@ -275,12 +288,12 @@ func (r *PostgresComplianceRepository) RecordDeletionFailure(ctx context.Context
 
 // CompleteDeletionRequest stores a pseudonymous deletion receipt.
 // Implements DESIGN-015 DataRetentionPolicy.
-func (r *PostgresComplianceRepository) CompleteDeletionRequest(ctx context.Context, requestID uuid.UUID, receiptID uuid.UUID, completedAt time.Time) error {
-	if requestID == uuid.Nil || receiptID == uuid.Nil {
-		return validationError("request and receipt ids are required")
+func (r *PostgresComplianceRepository) CompleteDeletionRequest(ctx context.Context, requestID uuid.UUID, leaseExpiresAt time.Time, receiptID uuid.UUID, completedAt time.Time) error {
+	if requestID == uuid.Nil || leaseExpiresAt.IsZero() || receiptID == uuid.Nil {
+		return validationError("request, processing lease, and receipt ids are required")
 	}
 	var id uuid.UUID
-	err := r.db.QueryRow(ctx, deletionCompleteSQL, requestID, receiptID, completedAt).Scan(&id)
+	err := r.db.QueryRow(ctx, deletionCompleteSQL, requestID, leaseExpiresAt, receiptID, completedAt).Scan(&id)
 	if err != nil {
 		return mapPostgresError(err, "complete deletion request")
 	}
@@ -300,8 +313,14 @@ type PostgresAdminImportAuditRepository struct {
 // Implements DESIGN-009 AdminController compile-time repository contract.
 var _ AdminAuditRepository = (*PostgresAdminImportAuditRepository)(nil)
 
+// Implements DESIGN-009 AdminController compile-time transactional audit contract.
+var _ AdminMutationAuditRepository = (*PostgresAdminImportAuditRepository)(nil)
+
 // Implements DESIGN-009 DataImporter compile-time repository contract.
 var _ CuratedImportRepository = (*PostgresAdminImportAuditRepository)(nil)
+
+// Implements DESIGN-009 DataImporter compile-time transactional confirmation contract.
+var _ CuratedImportConfirmationRepository = (*PostgresAdminImportAuditRepository)(nil)
 
 // NewPostgresAdminImportAuditRepository creates a PostgreSQL-backed admin repository.
 // Implements DESIGN-009 AdminController.
@@ -336,11 +355,20 @@ func (r *PostgresAdminImportAuditRepository) FindCuratedImport(ctx context.Conte
 // PersistAuditEntry stores one admin audit record.
 // Implements DESIGN-009 AdminController.
 func (r *PostgresAdminImportAuditRepository) PersistAuditEntry(ctx context.Context, entry AdminAuditEntry) (uuid.UUID, error) {
+	var err error
+	entry.Before, err = sanitizeAdminAuditSnapshot(entry.EntityType, entry.Action, entry.Before)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	entry.After, err = sanitizeAdminAuditSnapshot(entry.EntityType, entry.Action, entry.After)
+	if err != nil {
+		return uuid.Nil, err
+	}
 	if err := validateAdminAuditEntry(entry); err != nil {
 		return uuid.Nil, err
 	}
 	var id uuid.UUID
-	err := r.db.QueryRow(ctx, adminAuditInsertSQL, entry.AdminUserID, entry.Action, entry.EntityType, entry.EntityID, nullableJSONPayload(entry.Before), nullableJSONPayload(entry.After), entry.RequestID).Scan(&id)
+	err = r.db.QueryRow(ctx, adminAuditInsertSQL, entry.AdminUserID, entry.Action, entry.EntityType, entry.EntityID, nullableJSONPayload(entry.Before), nullableJSONPayload(entry.After), entry.RequestID).Scan(&id)
 	if err != nil {
 		return uuid.Nil, mapPostgresError(err, "persist admin audit")
 	}
@@ -359,6 +387,35 @@ func (r *PostgresAdminImportAuditRepository) WithAudit(ctx context.Context, entr
 		}
 		_, err := NewPostgresAdminImportAuditRepository(db).PersistAuditEntry(ctx, entry)
 		return err
+	})
+}
+
+// WithMutationAudit commits mutation-derived state and its immutable gateway audit metadata together.
+// Implements DESIGN-009 AdminController fail-closed transactional audit boundary.
+func (r *PostgresAdminImportAuditRepository) WithMutationAudit(ctx context.Context, entry AdminAuditEntry, fn func(AdminMutationExecutor) (AdminAuditChanges, error)) error {
+	if fn == nil {
+		return validationError("admin audit mutation is required")
+	}
+	if entry.EntityID != nil || len(entry.Before) != 0 || len(entry.After) != 0 {
+		return validationError("gateway admin audit seed contains mutation-derived fields")
+	}
+	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		changes, err := fn(db)
+		if err != nil {
+			return err
+		}
+		if changes.Replayed {
+			if changes.EntityID != nil || len(changes.Before) != 0 || len(changes.After) != 0 {
+				return validationError("replayed admin mutation cannot contain audit changes")
+			}
+			return nil
+		}
+		entry.EntityID, entry.Before, entry.After = changes.EntityID, changes.Before, changes.After
+		_, err = NewPostgresAdminImportAuditRepository(db).PersistAuditEntry(ctx, entry)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrAdminAuditPersistence, err)
+		}
+		return nil
 	})
 }
 
@@ -484,13 +541,145 @@ func validateAdminAuditEntry(entry AdminAuditEntry) error {
 	if strings.TrimSpace(entry.Action) == "" || strings.TrimSpace(entry.EntityType) == "" {
 		return validationError("audit action and entity type are required")
 	}
-	if entry.Before != nil && !json.Valid(entry.Before) {
-		return validationError("before snapshot must be valid json")
+	if _, err := sanitizeAdminAuditSnapshot(entry.EntityType, entry.Action, entry.Before); err != nil {
+		return err
 	}
-	if entry.After != nil && !json.Valid(entry.After) {
-		return validationError("after snapshot must be valid json")
+	if _, err := sanitizeAdminAuditSnapshot(entry.EntityType, entry.Action, entry.After); err != nil {
+		return err
 	}
 	return nil
+}
+
+// Implements DESIGN-009 AdminController bounded audit snapshots.
+const maxAdminAuditSnapshotBytes = 4096
+
+// adminAuditSnapshotRule permits either a boolean flag or one fixed code set.
+// Implements DESIGN-009 AdminController typed audit metadata schemas.
+type adminAuditSnapshotRule struct {
+	boolean bool
+	values  map[string]struct{}
+	format  string
+}
+
+// Implements DESIGN-009 AdminController typed audit metadata schemas.
+var adminAuditSnapshotSchemas = map[string]map[string]adminAuditSnapshotRule{
+	"fixture\x00fixture.update": {
+		"active":  {boolean: true},
+		"deleted": {boolean: true},
+		"status":  {values: map[string]struct{}{"draft": {}, "published": {}}},
+	},
+	"food_item\x00update_food": {
+		"status": {values: map[string]struct{}{"conflict": {}, "draft": {}, "imported": {}, "rejected": {}}},
+	},
+	"food_item\x00manual_create": {
+		"active":        {boolean: true},
+		"physicalState": {values: map[string]struct{}{"solid": {}, "liquid": {}}},
+	},
+	"food_item\x00manual_update": {
+		"active":        {boolean: true},
+		"physicalState": {values: map[string]struct{}{"solid": {}, "liquid": {}}},
+	},
+	"food_item\x00manual_delete": {
+		"active":        {boolean: true},
+		"deleted":       {boolean: true},
+		"physicalState": {values: map[string]struct{}{"solid": {}, "liquid": {}}},
+	},
+	"food_item\x00import_food": {
+		"physicalState": {values: map[string]struct{}{"solid": {}, "liquid": {}}},
+		"status":        {values: map[string]struct{}{"imported": {}}},
+	},
+	"deletion_request\x00retry_deletion": {
+		"failureCategory": {values: map[string]struct{}{"permanent": {}, "transient": {}, "unknown": {}}},
+		"status":          {values: map[string]struct{}{"failed": {}, "pending": {}}},
+	},
+	"classification\x00classification.create": classificationAuditSnapshotSchema(),
+	"classification\x00classification.update": classificationAuditSnapshotSchema(),
+	"classification\x00classification.delete": classificationAuditSnapshotSchema(),
+}
+
+// classificationAuditSnapshotSchema permits identity-safe classification change metadata.
+// Implements DESIGN-009 TagManager audit snapshots.
+func classificationAuditSnapshotSchema() map[string]adminAuditSnapshotRule {
+	return map[string]adminAuditSnapshotRule{
+		"active":     {boolean: true},
+		"deleted":    {boolean: true},
+		"kind":       {values: map[string]struct{}{string(ClassificationKindFoodCategory): {}, string(ClassificationKindCulinaryRole): {}}},
+		"nameDigest": {format: "sha256"},
+		"parentId":   {format: "uuid"},
+	}
+}
+
+// sanitizeAdminAuditSnapshot canonicalizes bounded metadata for an explicit entity/action schema.
+// Implements DESIGN-009 AdminController privacy-safe audit snapshots.
+func sanitizeAdminAuditSnapshot(entityType string, action string, snapshot []byte) ([]byte, error) {
+	if len(snapshot) == 0 {
+		return nil, nil
+	}
+	if len(snapshot) > maxAdminAuditSnapshotBytes {
+		return nil, validationError("admin audit snapshot exceeds size limit")
+	}
+	fields := make(map[string]any)
+	if err := json.Unmarshal(snapshot, &fields); err != nil {
+		return nil, validationError("admin audit snapshot must be a json object")
+	}
+	schema := adminAuditSnapshotSchemas[entityType+"\x00"+action]
+	for key, value := range fields {
+		rule, allowed := schema[key]
+		if !allowed {
+			return nil, validationError("admin audit snapshot contains a forbidden field")
+		}
+		if rule.boolean {
+			if _, valid := value.(bool); !valid {
+				return nil, validationError("admin audit snapshot contains an invalid boolean")
+			}
+			continue
+		}
+		text, valid := value.(string)
+		if !valid {
+			return nil, validationError("admin audit snapshot contains an invalid code")
+		}
+		if rule.format == "uuid" {
+			if _, err := uuid.Parse(text); err != nil {
+				return nil, validationError("admin audit snapshot contains an invalid uuid")
+			}
+			continue
+		}
+		if rule.format == "sha256" {
+			if len(text) != 64 {
+				return nil, validationError("admin audit snapshot contains an invalid digest")
+			}
+			if _, err := hex.DecodeString(text); err != nil {
+				return nil, validationError("admin audit snapshot contains an invalid digest")
+			}
+			continue
+		}
+		if _, valid := rule.values[text]; !valid {
+			return nil, validationError("admin audit snapshot contains an invalid code")
+		}
+	}
+	var canonical strings.Builder
+	canonical.Grow(len(snapshot))
+	canonical.WriteByte('{')
+	first := true
+	for _, key := range []string{"active", "deleted", "failureCategory", "kind", "nameDigest", "parentId", "physicalState", "status"} {
+		value, present := fields[key]
+		if !present {
+			continue
+		}
+		if !first {
+			canonical.WriteByte(',')
+		}
+		first = false
+		canonical.WriteString(strconv.Quote(key))
+		canonical.WriteByte(':')
+		if boolean, ok := value.(bool); ok {
+			canonical.WriteString(strconv.FormatBool(boolean))
+		} else {
+			canonical.WriteString(strconv.Quote(value.(string)))
+		}
+	}
+	canonical.WriteByte('}')
+	return []byte(canonical.String()), nil
 }
 
 // normalizedJSONPayload replaces an empty JSON payload with an empty object.

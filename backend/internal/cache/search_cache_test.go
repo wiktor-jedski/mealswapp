@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -265,22 +266,49 @@ func TestGetOrLoadSearchResponseAttachesHitMissMetadataAndStoresWithTTL(t *testi
 	}
 }
 
+// Implements DESIGN-009 TagManager and DESIGN-011 RedisCache in-flight invalidation verification.
+func TestInFlightSearchMissCannotRepopulateAfterClassificationInvalidation(t *testing.T) {
+	ctx := context.Background()
+	store := &memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}
+	generation := &controlledClassificationGeneration{store: store}
+	responseStore := SearchResponseStore{Store: store, Generation: generation}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	req := searchRequest(nil)
+	repository := &blockingCatalogRepository{started: started, release: release}
+
+	go func() {
+		_, err := search.NewCatalogService(repository, responseStore).Search(ctx, req)
+		done <- err
+	}()
+	<-started
+	generation.Advance()
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("in-flight search error = %v", err)
+	}
+	if _, hit, _, err := responseStore.GetSearchResponse(ctx, req); err != nil || hit {
+		t.Fatalf("stale cache read hit=%v err=%v", hit, err)
+	}
+}
+
 func TestSearchResponseStoreGetSetUsesDefaultTTLAndStripsTransientMetadata(t *testing.T) {
 	ctx := context.Background()
 	store := &memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}
 	responseStore := SearchResponseStore{Store: store}
 	req := searchRequest(nil)
-	key := BuildSearchCacheKey(req)
+	key := searchCacheKeyForGeneration(BuildSearchCacheKey(req), 0)
 
-	miss, hit, err := responseStore.GetSearchResponse(ctx, req)
+	miss, hit, token, err := responseStore.GetSearchResponse(ctx, req)
 	if err != nil || hit || miss.Cache != nil {
 		t.Fatalf("initial get hit=%v err=%v response=%+v", hit, err, miss)
 	}
-	if err := responseStore.SetSearchResponse(ctx, req, search.SearchResponse{
+	if stored, err := responseStore.SetSearchResponse(ctx, req, search.SearchResponse{
 		TotalCount: 4,
 		Page:       1,
 		Cache:      &search.CacheMetadata{Status: search.CacheStatusMiss, Namespace: "search", SchemaVersion: SearchSchemaVersion, TTLSeconds: 300},
-	}); err != nil {
+	}, token); err != nil || !stored {
 		t.Fatalf("SetSearchResponse() error = %v", err)
 	}
 	if store.ttls[key.String()] != DefaultSearchTTL {
@@ -290,7 +318,7 @@ func TestSearchResponseStoreGetSetUsesDefaultTTLAndStripsTransientMetadata(t *te
 		t.Fatalf("stored response included transient cache metadata: %s", store.values[key.String()])
 	}
 
-	got, hit, err := responseStore.GetSearchResponse(ctx, req)
+	got, hit, _, err := responseStore.GetSearchResponse(ctx, req)
 	if err != nil || !hit {
 		t.Fatalf("cached get hit=%v err=%v", hit, err)
 	}
@@ -312,18 +340,19 @@ func TestSearchResponseStoreSimilarityCalculationUsesNamespaceSchemaAndTTL(t *te
 		Results:     []search.SimilarityResult{{ItemID: uuid.MustParse("88888888-8888-4888-8888-888888888888"), Score: 0.91}},
 		Diagnostics: []search.SimilarityDiagnostic{{ItemID: uuid.MustParse("99999999-9999-4999-8999-999999999999"), Code: "below_threshold"}},
 	}
-	key := BuildSimilarityCacheKey(inputs)
+	key := similarityCacheKeyForGeneration(BuildSimilarityCacheKey(inputs), 0)
 
-	if err := responseStore.SetSimilarityCalculation(ctx, inputs, calculation); err != nil {
+	stored, err := responseStore.SetSimilarityCalculation(ctx, inputs, calculation, search.SimilarityCalculationCacheToken{})
+	if err != nil || !stored {
 		t.Fatalf("SetSimilarityCalculation() error = %v", err)
 	}
-	if key.Namespace != RedisNamespaceSimilarity || key.Version != SimilaritySchemaVersion {
+	if key.Namespace != RedisNamespaceSimilarity || key.Version != SimilaritySchemaVersion+"-food-data-0" {
 		t.Fatalf("similarity key = %+v", key)
 	}
 	if store.ttls[key.String()] != 42*time.Second {
 		t.Fatalf("ttl = %v, want 42s", store.ttls[key.String()])
 	}
-	got, hit, err := responseStore.GetSimilarityCalculation(ctx, inputs)
+	got, hit, _, err := responseStore.GetSimilarityCalculation(ctx, inputs)
 	if err != nil || !hit {
 		t.Fatalf("GetSimilarityCalculation() hit=%v err=%v", hit, err)
 	}
@@ -499,6 +528,44 @@ func (s *memoryStore) Set(_ context.Context, key string, value string, ttl time.
 
 type failingStore struct {
 	err error
+}
+
+type blockingCatalogRepository struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *blockingCatalogRepository) Search(context.Context, repository.RepositoryQuery) ([]repository.FoodItemEntity, int, error) {
+	close(r.started)
+	<-r.release
+	return []repository.FoodItemEntity{{Name: "Old label", PhysicalState: repository.PhysicalStateSolid}}, 1, nil
+}
+
+type controlledClassificationGeneration struct {
+	mu         sync.Mutex
+	generation uint64
+	store      RedisStore
+}
+
+func (g *controlledClassificationGeneration) Current(context.Context) (uint64, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.generation, nil
+}
+
+func (g *controlledClassificationGeneration) Advance() {
+	g.mu.Lock()
+	g.generation++
+	g.mu.Unlock()
+}
+
+func (g *controlledClassificationGeneration) SetIfCurrent(ctx context.Context, generation uint64, key, value string, ttl time.Duration) (bool, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.generation != generation {
+		return false, nil
+	}
+	return true, g.store.Set(ctx, key, value, ttl)
 }
 
 func (s failingStore) Get(context.Context, string) (string, error) {

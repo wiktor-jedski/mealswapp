@@ -20,6 +20,7 @@
 - `interface MicroValues { [canonicalKey: string]: number | undefined }`
 - `interface MicronutrientVocabularyEntry { key: string; displayName: string; unit: string; active: boolean }`
 - `interface FoodItemEntity { id: UUID; name: string; physicalState: PhysicalState; prepTimeMinutes: number; averageUnitWeightGrams?: number; averageServingVolumeMilliliters?: number; densityGramsPerMilliliter: number when liquid; densitySourceProvider?: string; densitySourceFoodId?: string; densitySourceKind: "imported" | "manual" | "estimated" when liquid; macrosPer100: MacroValues; micros: MicroValues; foodCategories: ClassificationEntity[]; culinaryRoles: ClassificationEntity[]; imageUrl?: string }`
+- `interface CustomFoodItemEntity extends FoodItemEntity { ownerId: UUID }`; private items use dedicated persistence and are never stored in or implicitly merged with the global curated `food_items` catalog.
 - `interface MealEntity { id: UUID; type: "single" | "composite"; name: string; recipeItems?: RecipeIngredientEntity[]; physicalState: PhysicalState; prepTimeMinutes: number; averageUnitWeightGrams?: number; macrosPer100: MacroValues; normalizedMacrosAvailable: boolean }`
 - `interface RecipeIngredientEntity { foodItemId: UUID; quantity: number; unit: string }`
 - `interface ClassificationEntity { id: UUID; name: string; kind: "food_category" | "culinary_role"; parentId?: UUID }`
@@ -40,6 +41,8 @@
 12. Maintain indexes for item name, food_category classifications, culinary_role classifications, micronutrient vocabulary keys, and common filter columns.
 13. Return domain entities with normalized macros, validated micronutrients, and hydrated classification lists for callers.
 14. Apply meal-search `LIMIT` and `OFFSET` in SQL after a filter-equivalent count query; hydrate only IDs in the requested page so iterative consumers never rehydrate earlier pages.
+15. Require a non-null owner for every custom food item and include that owner in every custom-item read, update, and delete predicate. An ID owned by another user returns `not_found`, without disclosing its existence.
+16. Custom-item names are unique, after trimming and case folding, among one owner's active custom items. Different owners and the global curated catalog may use the same name; soft deletion releases the owner's active-name reservation.
 
 ### 3. State Management & Error Handling
 - `not_found`: repository returns typed not-found errors; controllers map to 404.
@@ -52,6 +55,7 @@
 
 ### 4. Component Interfaces
 - `type FoodItemRepository interface { GetByID(ctx context.Context, id UUID, rc RepositoryContext) (FoodItemEntity, error); Search(ctx context.Context, q RepositoryQuery) ([]FoodItemEntity, int, error); Create(ctx context.Context, item FoodItemEntity) (UUID, error); Update(ctx context.Context, item FoodItemEntity) error; Delete(ctx context.Context, id UUID) error }`
+- `type CustomFoodItemRepository interface { GetByID(ctx context.Context, ownerId UUID, id UUID, rc RepositoryContext) (CustomFoodItemEntity, error); Create(ctx context.Context, item CustomFoodItemEntity) (UUID, error); Update(ctx context.Context, item CustomFoodItemEntity) error; Delete(ctx context.Context, ownerId UUID, id UUID) error }`
 - `type MealRepository interface { GetByID(ctx context.Context, id UUID, rc RepositoryContext) (MealEntity, error); Search(ctx context.Context, q RepositoryQuery) ([]MealEntity, int, error); CalculateMacros(ctx context.Context, mealID UUID) (MacroValues, error); Create(ctx context.Context, meal MealEntity) (UUID, error); Update(ctx context.Context, meal MealEntity) error; Delete(ctx context.Context, id UUID) error }`
 - `type ClassificationRepository interface { List(ctx context.Context, kind string) ([]ClassificationEntity, error); Upsert(ctx context.Context, classification ClassificationEntity) (UUID, error); IsInUse(ctx context.Context, id UUID) (bool, error); SoftDelete(ctx context.Context, id UUID) error }`
 - `type MicronutrientVocabularyRepository interface { ListActive(ctx context.Context) ([]MicronutrientVocabularyEntry, error); IsAllowed(ctx context.Context, key string) (bool, error); Upsert(ctx context.Context, entry MicronutrientVocabularyEntry) error }`

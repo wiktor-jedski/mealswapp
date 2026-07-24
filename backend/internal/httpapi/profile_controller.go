@@ -20,8 +20,9 @@ type ProfileService interface {
 // ProfileController owns profile and preference routes.
 // Implements DESIGN-008 ProfileController.
 type ProfileController struct {
-	service   ProfileService
-	dailyDiet DailyDietService
+	service     ProfileService
+	dailyDiet   DailyDietService
+	customItems CustomItemService
 }
 
 // Implements DESIGN-008 ProfileController compile-time route controller contract.
@@ -35,6 +36,13 @@ func NewProfileController(service ProfileService, dailyDietServices ...DailyDiet
 		controller.dailyDiet = dailyDietServices[0]
 	}
 	return controller
+}
+
+// WithCustomItems attaches authenticated custom-item behavior.
+// Implements DESIGN-008 ProfileController custom-item routes.
+func (c *ProfileController) WithCustomItems(service CustomItemService) *ProfileController {
+	c.customItems = service
+	return c
 }
 
 // Routes returns authenticated profile routes.
@@ -53,6 +61,10 @@ func (c *ProfileController) Routes() []RouteDefinition {
 			return validateDailyDietBody(ctx)
 		}, Handler: c.ReplaceDailyDiet},
 		{Method: fiber.MethodDelete, Path: "/daily-diets/:dietId", RequiresAuth: true, RequiresCSRF: true, Validate: ValidatePath("dietId", validateDailyDietID), Handler: c.DeleteDailyDiet},
+		{Method: fiber.MethodPost, Path: "/custom-items", RequiresAuth: true, RequiresCSRF: true, Validate: validateCustomItemCreate, Handler: c.CreateCustomItem},
+		{Method: fiber.MethodGet, Path: "/custom-items/:itemId", RequiresAuth: true, Validate: ValidatePath("itemId", validateCustomItemID), Handler: c.GetCustomItem},
+		{Method: fiber.MethodPut, Path: "/custom-items/:itemId", RequiresAuth: true, RequiresCSRF: true, Validate: validateCustomItemUpdate, Handler: c.UpdateCustomItem},
+		{Method: fiber.MethodDelete, Path: "/custom-items/:itemId", RequiresAuth: true, RequiresCSRF: true, Validate: ValidatePath("itemId", validateCustomItemID), Handler: c.DeleteCustomItem},
 	}
 }
 

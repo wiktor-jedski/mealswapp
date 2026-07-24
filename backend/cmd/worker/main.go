@@ -10,10 +10,13 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/database"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/deletionworker"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/optimization"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/userdata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/worker"
+	"golang.org/x/sync/errgroup"
 )
 
 // main starts the background worker process.
@@ -55,9 +58,22 @@ func main() {
 	})
 	processor := worker.NewOptimizationProcessor(store, inputs, solver).WithTelemetry(telemetry)
 	processor.WithAdmissionGate(worker.NewRedisOptimizationAdmissionGate(redisClient, worker.OptimizationAdmissionConfig{}))
+	deletionService := userdata.NewAccountDeletionService(
+		repository.NewPostgresComplianceRepository(pg),
+		repository.NewPostgresSessionRepository(pg),
+		repository.NewPostgresEncryptedIdentityRepository(pg),
+		cache.NewUserPurger(redisClient),
+	)
 	// Compose the complete processor at the dedicated worker boundary; the API
 	// process never runs optimization synchronously.
-	if err := worker.RunWithProcessorAndTelemetry(ctx, cfg, redisClient, processor.ProcessOptimizationJob, telemetry, processor.Terminal); err != nil {
+	group, workerCtx := errgroup.WithContext(ctx)
+	group.Go(func() error {
+		return worker.RunWithProcessorAndTelemetry(workerCtx, cfg, redisClient, processor.ProcessOptimizationJob, telemetry, processor.Terminal)
+	})
+	group.Go(func() error {
+		return deletionworker.RunAccountDeletionProcessor(workerCtx, deletionService, 0, 0, telemetrySink)
+	})
+	if err := group.Wait(); err != nil {
 		log.Fatalf("worker stopped: %v", err)
 	}
 }

@@ -3,6 +3,7 @@
 # Implements DESIGN-001 SearchView and DESIGN-004 JobStatusTracker response-contract drift verification.
 
 import importlib.util
+import re
 import unittest
 from pathlib import Path
 
@@ -17,6 +18,102 @@ SPEC.loader.exec_module(GENERATOR)
 
 
 class OperationResponseDriftTest(unittest.TestCase):
+	def test_phase08_routes_security_statuses_and_safe_dtos_match_generated_types(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		self.assertEqual(GENERATOR.phase08_contract_mismatches(source), [])
+		generated = GENERATOR.generated_contract(source)
+		for symbol in (
+			"ErrorEnvelope",
+			*GENERATOR.PHASE08_SUCCESS_ENVELOPES,
+			"CuratedImportRequest",
+		):
+			self.assertRegex(generated, rf"export (?:interface|type) {symbol}\b")
+		for forbidden in ("rawPayload", "auditSnapshot", "ownerId", "passwordHash", "accessToken"):
+			self.assertNotIn(forbidden, generated)
+
+	def test_phase08_security_or_warning_drift_is_rejected(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		custom_post = GENERATOR.operation_block(source, "/api/v1/custom-items", "post") or ""
+		without_csrf = source.replace(custom_post, custom_post.replace("          csrfHeader: []\n", "", 1), 1)
+		self.assertTrue(any("csrfHeader" in item for item in GENERATOR.phase08_contract_mismatches(without_csrf)))
+		unbounded_warning = source.replace("              maxItems: 4\n", "", 1)
+		self.assertTrue(any("warning" in item.lower() for item in GENERATOR.phase08_contract_mismatches(unbounded_warning)))
+
+	def test_phase08_classification_names_match_runtime_normalization(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		for schema in ("AdminClassificationRequest", "AdminClassification"):
+			block = GENERATOR.schema_block(source, schema) or ""
+			self.assertIn(GENERATOR.ADMIN_CLASSIFICATION_NAME_RULE, block)
+
+	def test_phase08_classification_name_drift_is_rejected(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		for schema in ("AdminClassificationRequest", "AdminClassification"):
+			block = GENERATOR.schema_block(source, schema) or ""
+			for mutation in (
+				GENERATOR.ADMIN_CLASSIFICATION_NAME_RULE.replace("maxLength: 120", "maxLength: 121"),
+				GENERATOR.ADMIN_CLASSIFICATION_NAME_RULE.replace("          description:", "          x-description:"),
+			):
+				with self.subTest(schema=schema, mutation=mutation):
+					mutated = source.replace(block, block.replace(GENERATOR.ADMIN_CLASSIFICATION_NAME_RULE, mutation, 1), 1)
+					mismatches = GENERATOR.phase08_contract_mismatches(mutated)
+					self.assertTrue(any(schema in mismatch for mismatch in mismatches), mismatches)
+
+	def test_phase08_generated_success_envelopes_are_strict(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		generated = GENERATOR.generated_contract(source)
+		self.assertIn('export interface OkEnvelope<TData> {\n\tstatus: "ok";\n\trequestId: string;\n\tdata: TData;\n}', generated)
+		for alias in GENERATOR.PHASE08_SUCCESS_ENVELOPES:
+			self.assertRegex(generated, rf"export type {alias} = OkEnvelope<")
+			self.assertNotRegex(generated, rf"export type {alias} = Envelope<")
+
+	def test_phase08_source_success_envelopes_cannot_be_weakened(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		for schema in GENERATOR.PHASE08_SUCCESS_ENVELOPES:
+			block = GENERATOR.schema_block(source, schema)
+			self.assertIsNotNone(block)
+			for rule, mutation in (
+				("object type", block.replace("      type: object\n", "      type: string\n", 1)),
+				("closed object", block.replace("      additionalProperties: false\n", "      additionalProperties: true\n", 1)),
+				("required data", block.replace("      required: [status, requestId, data]\n", "      required: [status, requestId]\n", 1)),
+				("status const ok", block.replace("          const: ok\n", "          enum: [ok]\n", 1)),
+				("data property", block.replace("        data:\n", "        payload:\n", 1)),
+			):
+				with self.subTest(schema=schema, rule=rule):
+					self.assertNotEqual(mutation, block, f"{schema} lacks the expected {rule} source rule")
+					mutated = source.replace(f"    {schema}:\n{block}", f"    {schema}:\n{mutation}", 1)
+					mismatches = GENERATOR.phase08_contract_mismatches(mutated)
+					self.assertTrue(any(schema in mismatch for mismatch in mismatches), mismatches)
+
+			without_schema = source.replace(f"    {schema}:\n{block}", "", 1)
+			with self.subTest(schema=schema, rule="schema exists"):
+				mismatches = GENERATOR.phase08_contract_mismatches(without_schema)
+				self.assertTrue(any(schema in mismatch for mismatch in mismatches), mismatches)
+
+	def test_custom_item_name_and_classification_contracts_match_generated_types(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		self.assertEqual(GENERATOR.custom_item_contract_mismatches(source), [])
+		generated = GENERATOR.generated_contract(source)
+		self.assertIn("export interface CustomItem extends CustomItemRequest", generated)
+		classification = generated[generated.index("export interface ClassificationSummary"):generated.index("export interface CustomItemRequest")]
+		self.assertNotIn("parentId", classification)
+		fields = GENERATOR.schema_block(source, "CustomItemFields") or ""
+		name = fields[fields.index("        name:"):fields.index("        physicalState:")]
+		pattern = re.search(r"pattern: '([^']+)'", name)
+		self.assertIsNotNone(pattern)
+		self.assertIsNotNone(re.fullmatch(pattern.group(1), " Tofu "))
+		self.assertIsNone(re.fullmatch(pattern.group(1), "   "))
+		self.assertIsNone(re.fullmatch(pattern.group(1), "bad\x00name"))
+
+	def test_custom_item_name_or_parent_projection_drift_is_rejected(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		name_pattern = GENERATOR.CUSTOM_ITEM_NAME_RULE.splitlines(keepends=True)[-1]
+		without_name_pattern = source.replace(name_pattern, "", 1)
+		self.assertTrue(any("name" in item for item in GENERATOR.custom_item_contract_mismatches(without_name_pattern)))
+		kind = "        kind:\n          type: string\n          enum: [food_category, culinary_role]\n"
+		prefix, suffix = source.rsplit(kind, 1)
+		mutated = prefix + kind + "        parentId:\n          type: string\n" + suffix
+		self.assertTrue(any("properties" in item for item in GENERATOR.custom_item_contract_mismatches(mutated)))
+
 	def test_runtime_error_contract_matches_generated_type_policy(self) -> None:
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
 		self.assertEqual(GENERATOR.app_error_contract_mismatches(source), [])

@@ -1,0 +1,18 @@
+{
+  "workers": 24,
+  "iterations": 32,
+  "forbidden": [
+    "raw-query-canary",
+    "Private Person Name",
+    "private@example.test",
+    "user-id-canary",
+    "item-id-canary",
+    "idempotency-key-canary",
+    "https://private.example.test/item",
+    "raw-payload-canary",
+    "provider-secret-canary",
+    "before-snapshot-canary",
+    "after-snapshot-canary",
+    "audit database failure canary"
+  ]
+}

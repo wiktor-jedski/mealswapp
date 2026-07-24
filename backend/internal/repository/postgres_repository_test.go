@@ -882,7 +882,7 @@ func TestPostgresFoodItemRepositoryRequiresLiquidDensity(t *testing.T) {
 			MacrosPer100:              MacroValues{},
 		}
 		if kind == "imported" {
-			item.DensitySourceProvider = "fixture"
+			item.DensitySourceProvider = "usda"
 			item.DensitySourceFoodID = "liquid-" + kind
 		}
 		id, err := foodRepo.Create(ctx, item)
@@ -2370,8 +2370,8 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 		Action:      "update_food",
 		EntityType:  "food_item",
 		EntityID:    &foodID,
-		Before:      []byte(`{"name":"Old"}`),
-		After:       []byte(`{"name":"Imported Pear"}`),
+		Before:      []byte(`{"status":"draft"}`),
+		After:       []byte(`{"status":"imported"}`),
 		RequestID:   "req-1",
 	})
 	if err != nil {
@@ -2402,6 +2402,23 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 	}
 	if exists {
 		t.Fatalf("mutation committed despite audit failure")
+	}
+
+	transactionalRollbackName := "Transactional Audit Rollback Pear"
+	err = adminRepo.WithMutationAudit(ctx, AdminAuditEntry{
+		AdminUserID: adminID, Action: "", EntityType: "food_item", RequestID: "task-247-rollback", CreatedAt: time.Now(),
+	}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+		_, mutationErr := tx.Exec(ctx, testFoodNameFixtureCreateSQL, transactionalRollbackName)
+		return AdminAuditChanges{After: []byte(`{"status":"imported"}`)}, mutationErr
+	})
+	if !errors.Is(err, ErrAdminAuditPersistence) {
+		t.Fatalf("WithMutationAudit() invalid audit error = %v, want audit persistence failure", err)
+	}
+	if err := db.QueryRow(ctx, testFoodExistsByNameSQL, transactionalRollbackName).Scan(&exists); err != nil {
+		t.Fatalf("check transactional audit rollback: %v", err)
+	}
+	if exists {
+		t.Fatalf("transactional mutation committed despite audit persistence failure")
 	}
 }
 
@@ -2474,8 +2491,9 @@ func TestPostgresComplianceRepositoryDeletionHardening(t *testing.T) {
 	if len(claimed) != 2 || claimed[0].Status != "processing" || claimed[1].Status != "processing" {
 		t.Fatalf("claimed = %#v", claimed)
 	}
+	initialLeases := map[uuid.UUID]time.Time{claimed[0].ID: *claimed[0].NextAttemptAt, claimed[1].ID: *claimed[1].NextAttemptAt}
 	nextAttempt := now.Add(time.Hour)
-	if err := repo.RecordDeletionFailure(ctx, first.ID, "transient", "database temporarily unavailable", &nextAttempt); err != nil {
+	if err := repo.RecordDeletionFailure(ctx, first.ID, initialLeases[first.ID], "transient", "database temporarily unavailable", &nextAttempt); err != nil {
 		t.Fatalf("RecordDeletionFailure() transient error = %v", err)
 	}
 	claimed, err = repo.ClaimDeletionRequests(ctx, now, 2)
@@ -2489,11 +2507,27 @@ func TestPostgresComplianceRepositoryDeletionHardening(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimDeletionRequests() retry error = %v", err)
 	}
-	if len(claimed) != 1 || claimed[0].ID != first.ID || claimed[0].RetryCount != 1 {
+	if len(claimed) != 2 {
 		t.Fatalf("retry claim = %#v", claimed)
 	}
-	if err := repo.RecordDeletionFailure(ctx, first.ID, "permanent", "provider policy", nil); err != nil {
+	var retriedFirst, recoveredSecond bool
+	for _, request := range claimed {
+		retriedFirst = retriedFirst || request.ID == first.ID && request.RetryCount == 1
+		recoveredSecond = recoveredSecond || request.ID == second.ID && request.RetryCount == 0
+	}
+	if !retriedFirst || !recoveredSecond {
+		t.Fatalf("retry/recovery claim = %#v", claimed)
+	}
+	retryLeases := map[uuid.UUID]time.Time{claimed[0].ID: *claimed[0].NextAttemptAt, claimed[1].ID: *claimed[1].NextAttemptAt}
+	if err := repo.RecordDeletionFailure(ctx, first.ID, retryLeases[first.ID], "permanent", "provider policy", nil); err != nil {
 		t.Fatalf("RecordDeletionFailure() permanent error = %v", err)
+	}
+	receiptID := uuid.New()
+	if err := repo.CompleteDeletionRequest(ctx, second.ID, initialLeases[second.ID], uuid.New(), now); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("expired lease completion error=%v, want not found", err)
+	}
+	if err := repo.CompleteDeletionRequest(ctx, second.ID, retryLeases[second.ID], receiptID, now); err != nil {
+		t.Fatalf("CompleteDeletionRequest() error = %v", err)
 	}
 	claimed, err = repo.ClaimDeletionRequests(ctx, nextAttempt.Add(2*time.Hour), 2)
 	if err != nil {
@@ -2501,10 +2535,6 @@ func TestPostgresComplianceRepositoryDeletionHardening(t *testing.T) {
 	}
 	if len(claimed) != 0 {
 		t.Fatalf("permanent failure was retryable: %#v", claimed)
-	}
-	receiptID := uuid.New()
-	if err := repo.CompleteDeletionRequest(ctx, second.ID, receiptID, now); err != nil {
-		t.Fatalf("CompleteDeletionRequest() error = %v", err)
 	}
 	var storedReceipt uuid.UUID
 	var storedUserID *uuid.UUID
@@ -2705,6 +2735,20 @@ func TestPostgresComplianceAndAdminRepositoryValidationAndErrors(t *testing.T) {
 	}
 	if err := adminRepo.WithAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food"}, func(sqlExecutor) error { return queryErr }); !errors.Is(err, queryErr) {
 		t.Fatalf("WithAudit() mutation error = %v, want raw query error", err)
+	}
+	if err := adminRepo.WithMutationAudit(ctx, AdminAuditEntry{}, nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("WithMutationAudit() nil mutation error = %v, want validation", err)
+	}
+	if err := adminRepo.WithMutationAudit(ctx, AdminAuditEntry{Before: []byte(`{}`)}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
+		return AdminAuditChanges{}, nil
+	}); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("WithMutationAudit() prefilled changes error = %v, want validation", err)
+	}
+	adminRepo = NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{})
+	if err := adminRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food", RequestID: "req"}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
+		return AdminAuditChanges{}, queryErr
+	}); !errors.Is(err, queryErr) {
+		t.Fatalf("WithMutationAudit() mutation error = %v, want raw query error", err)
 	}
 	if _, err := adminRepo.ListAuditForEntity(ctx, "", entityID); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("ListAuditForEntity() validation error = %v, want validation", err)
@@ -3367,6 +3411,7 @@ func TestMapPostgresError(t *testing.T) {
 		{code: "23514", kind: ErrorKindValidation},
 		{code: "22001", kind: ErrorKindValidation},
 		{code: "22003", kind: ErrorKindValidation},
+		{code: "22021", kind: ErrorKindValidation},
 		{code: "22P02", kind: ErrorKindValidation},
 		{code: "40001", kind: ErrorKindRetryable},
 		{code: "40P01", kind: ErrorKindRetryable},

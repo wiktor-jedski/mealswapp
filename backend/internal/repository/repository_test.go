@@ -242,10 +242,10 @@ func (contractDeletionRequestRepository) ListDeletionAudit(context.Context, uuid
 func (contractDeletionRequestRepository) ClaimDeletionRequests(context.Context, time.Time, int) ([]DataDeletionRequest, error) {
 	return nil, nil
 }
-func (contractDeletionRequestRepository) RecordDeletionFailure(context.Context, uuid.UUID, string, string, *time.Time) error {
+func (contractDeletionRequestRepository) RecordDeletionFailure(context.Context, uuid.UUID, time.Time, string, string, *time.Time) error {
 	return nil
 }
-func (contractDeletionRequestRepository) CompleteDeletionRequest(context.Context, uuid.UUID, uuid.UUID, time.Time) error {
+func (contractDeletionRequestRepository) CompleteDeletionRequest(context.Context, uuid.UUID, time.Time, uuid.UUID, time.Time) error {
 	return nil
 }
 
@@ -599,6 +599,7 @@ func TestValidateFoodDensity(t *testing.T) {
 		{name: "solid liquid metadata", item: FoodItemEntity{PhysicalState: PhysicalStateSolid, DensityGramsPerMilliliter: 1}},
 		{name: "provenance without density", item: FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensitySourceKind: "manual"}},
 		{name: "invalid provenance kind", item: FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "guessed"}},
+		{name: "imported without trusted evidence", item: FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "imported"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -608,7 +609,11 @@ func TestValidateFoodDensity(t *testing.T) {
 		})
 	}
 	for _, kind := range []string{"imported", "manual", "estimated"} {
-		if err := validateFoodDensity(FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: kind}); err != nil {
+		item := FoodItemEntity{PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: kind}
+		if kind == "imported" {
+			item.DensitySourceProvider, item.DensitySourceFoodID = "usda", "density-record"
+		}
+		if err := validateFoodDensity(item); err != nil {
 			t.Fatalf("validateFoodDensity() kind %q error = %v", kind, err)
 		}
 	}

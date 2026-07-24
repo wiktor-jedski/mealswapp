@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { searchStore, substitutionState, removeSubstitutionInput, requestSubstitutionSearch, setFilters, updateSubstitutionInput } from "../stores/search";
-  import type { ClassificationSummary, FoodObject, SearchFilter, SearchFilterKind, SubstitutionInput, SubstitutionUnit } from "../api/generated";
+  import type { ClassificationSummary, FilterOption, FoodObject, SearchFilter, SearchFilterKind, SubstitutionInput, SubstitutionUnit } from "../api/generated";
+  import { fetchSubstitutionFilterOptions } from "../api/filter-options-client";
+  import { substitutionFilterOptions, type SubstitutionFilterOption } from "../substitution-filter-options";
   import { preferencesStore } from "../stores/preferences";
   import type { UnitSystem } from "../stores/preferences";
   import {
@@ -27,136 +30,19 @@
     entitlementFeedback?: string | null;
   } = $props();
 
-  type SubstitutionFilterOption = SearchFilter & {
-    label: string;
-    description: string;
-    searchText: string;
-  };
-
   let includeFilterQuery = $state("");
   let excludeFilterQuery = $state("");
   let includeFilterOpen = $state(false);
   let excludeFilterOpen = $state(false);
 
-  const physicalFilterOptions: Omit<SubstitutionFilterOption, "include">[] = [
-    {
-      filterId: "solid",
-      kind: "physical_state",
-      label: "Solid foods",
-      description: "Physical state",
-      searchText: "solid food physical state"
-    },
-    {
-      filterId: "liquid",
-      kind: "physical_state",
-      label: "Liquids",
-      description: "Physical state",
-      searchText: "liquid drink fluid physical state"
-    }
-  ];
-
-  const exclusionFilterOptions: SubstitutionFilterOption[] = [
-    {
-      filterId: "dairy",
-      kind: "allergen",
-      include: false,
-      label: "Dairy",
-      description: "Exclude dairy-containing foods",
-      searchText: "dairy milk lactose allergen"
-    },
-    {
-      filterId: "gluten",
-      kind: "allergen",
-      include: false,
-      label: "Gluten",
-      description: "Exclude gluten-containing foods",
-      searchText: "gluten wheat rye barley allergen"
-    },
-    {
-      filterId: "peanut",
-      kind: "allergen",
-      include: false,
-      label: "Peanut",
-      description: "Exclude peanut-containing foods",
-      searchText: "peanut allergen nut"
-    },
-    {
-      filterId: "tree_nut",
-      kind: "allergen",
-      include: false,
-      label: "Tree nuts",
-      description: "Exclude tree-nut-containing foods",
-      searchText: "tree nut almond cashew walnut allergen"
-    },
-    {
-      filterId: "egg",
-      kind: "allergen",
-      include: false,
-      label: "Egg",
-      description: "Exclude egg-containing foods",
-      searchText: "egg allergen"
-    },
-    {
-      filterId: "meat",
-      kind: "allergen",
-      include: false,
-      label: "Meat",
-      description: "Exclude meat-containing foods",
-      searchText: "meat vegetarian animal"
-    },
-    {
-      filterId: "dairy_free",
-      kind: "dietary_preset",
-      include: false,
-      label: "Dairy-free",
-      description: "Dietary preset",
-      searchText: "dairy free lactose preset"
-    },
-    {
-      filterId: "gluten_free",
-      kind: "dietary_preset",
-      include: false,
-      label: "Gluten-free",
-      description: "Dietary preset",
-      searchText: "gluten free wheat preset"
-    },
-    {
-      filterId: "nut_free",
-      kind: "dietary_preset",
-      include: false,
-      label: "Nut-free",
-      description: "Dietary preset",
-      searchText: "nut free peanut tree nut preset"
-    },
-    {
-      filterId: "vegan",
-      kind: "dietary_preset",
-      include: false,
-      label: "Vegan",
-      description: "Dietary preset",
-      searchText: "vegan dairy egg animal product preset"
-    },
-    {
-      filterId: "vegetarian",
-      kind: "dietary_preset",
-      include: false,
-      label: "Vegetarian",
-      description: "Dietary preset",
-      searchText: "vegetarian meat preset"
-    }
-  ];
+  let backendFilterOptions = $state<FilterOption[]>([]);
+  let filterOptionsStatus = $state<"loading" | "ready" | "empty" | "error">("loading");
+  let filterOptionsRequest = 0;
+  let filterOptionsAbort: AbortController | null = null;
 
   let selectedItems = $derived(Object.values($substitutionState?.substitutionInputItems ?? {}));
-  let classificationFilterOptions = $derived(selectedItems.flatMap(classificationOptionsFromItem));
-  let includeFilterOptions = $derived(dedupeFilterOptions([
-    ...classificationFilterOptions.map((option) => ({ ...option, include: true })),
-    ...physicalFilterOptions.map((option) => ({ ...option, include: true }))
-  ]));
-  let excludeFilterOptions = $derived(dedupeFilterOptions([
-    ...exclusionFilterOptions,
-    ...classificationFilterOptions.map((option) => ({ ...option, include: false })),
-    ...physicalFilterOptions.map((option) => ({ ...option, include: false }))
-  ]));
+  let includeFilterOptions = $derived(substitutionFilterOptions(backendFilterOptions, selectedItems, true));
+  let excludeFilterOptions = $derived(substitutionFilterOptions(backendFilterOptions, selectedItems, false));
   let visibleIncludeOptions = $derived(visibleFilterOptions(includeFilterOptions, includeFilterQuery));
   let visibleExcludeOptions = $derived(visibleFilterOptions(excludeFilterOptions, excludeFilterQuery));
   let activeIncludeFilters = $derived($searchStore.filters.filter((filter) => filter.include));
@@ -168,6 +54,34 @@
       $substitutionState?.substitutionInputItems ?? {}
     );
   });
+
+  onMount(() => {
+    void loadFilterOptions();
+    const refresh = () => void loadFilterOptions(true);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      filterOptionsAbort?.abort();
+    };
+  });
+
+  /** Refreshes backend policy; sequence + abort guards prevent stale responses winning. */
+  async function loadFilterOptions(retainCurrent = false): Promise<void> {
+    const request = ++filterOptionsRequest;
+    filterOptionsAbort?.abort();
+    const controller = new AbortController();
+    filterOptionsAbort = controller;
+    if (!retainCurrent || backendFilterOptions.length === 0) filterOptionsStatus = "loading";
+    try {
+      const options = await fetchSubstitutionFilterOptions(controller.signal);
+      if (request !== filterOptionsRequest) return;
+      backendFilterOptions = options;
+      filterOptionsStatus = options.length === 0 ? "empty" : "ready";
+    } catch {
+      if (request !== filterOptionsRequest || controller.signal.aborted) return;
+      filterOptionsStatus = "error";
+    }
+  }
 
   /** Guards NaN/empty quantity edits so only finite values reach the store. */
   function onRowQuantityInput(foodObjectId: string, event: Event): void {
@@ -184,6 +98,12 @@
   }
 
   function onFilterOptionMouseDown(option: SubstitutionFilterOption, event: MouseEvent): void {
+    event.preventDefault();
+    addSubstitutionFilter(option);
+  }
+
+  function onFilterOptionKeydown(option: SubstitutionFilterOption, event: KeyboardEvent): void {
+    if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     addSubstitutionFilter(option);
   }
@@ -239,28 +159,6 @@
     return category ? category.name.charAt(0).toUpperCase() : item.name.charAt(0).toUpperCase();
   }
 
-  function classificationOptionsFromItem(item: FoodObject): Omit<SubstitutionFilterOption, "include">[] {
-    return item.classifications.map((classification) => ({
-      filterId: classification.id,
-      kind: classification.kind,
-      label: classification.name,
-      description: classification.kind === "food_category" ? "Food category" : "Culinary role",
-      searchText: `${classification.name} ${classification.kind.replace("_", " ")}`
-    }));
-  }
-
-  function dedupeFilterOptions(options: SubstitutionFilterOption[]): SubstitutionFilterOption[] {
-    const seen = new Set<string>();
-    return options.filter((option) => {
-      const key = filterKey(option);
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    });
-  }
-
   function visibleFilterOptions(options: SubstitutionFilterOption[], query: string): SubstitutionFilterOption[] {
     const normalizedQuery = query.trim().toLowerCase();
     const activeKeys = new Set($searchStore.filters.map(filterKey));
@@ -287,15 +185,11 @@
   }
 
   function filterLabel(filter: SearchFilter): string {
-    return [...includeFilterOptions, ...excludeFilterOptions].find((option) => sameFilter(option, filter))?.label ?? humanizeFilterId(filter.filterId);
+    return [...includeFilterOptions, ...excludeFilterOptions].find((option) => sameFilter(option, filter))?.label ?? filter.filterId;
   }
 
   function filterDescription(filter: SearchFilter): string {
     return [...includeFilterOptions, ...excludeFilterOptions].find((option) => sameFilter(option, filter))?.description ?? filterKindLabel(filter.kind);
-  }
-
-  function humanizeFilterId(filterId: string): string {
-    return filterId.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   function filterKindLabel(kind: SearchFilterKind): string {
@@ -459,6 +353,16 @@
 
   {#if ($substitutionState?.substitutionInputs.length ?? 0) > 0}
   <div class="grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3" aria-label="Substitution filters" data-substitution-filters>
+    {#if filterOptionsStatus === "loading"}
+      <p class="text-sm text-[var(--color-muted)]" role="status" data-filter-options-loading>Loading filter options…</p>
+    {:else if filterOptionsStatus === "empty"}
+      <p class="text-sm text-[var(--color-muted)]" role="status" data-filter-options-empty>No additional filter options are available. Selected-item classifications remain available.</p>
+    {:else if filterOptionsStatus === "error"}
+      <div class="flex flex-wrap items-center gap-2" role="alert" data-filter-options-error>
+        <p class="text-sm text-[var(--color-muted)]">Filter options are temporarily unavailable. Selected-item classifications remain available.</p>
+        <button type="button" class="rounded border border-[var(--color-border)] px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => loadFilterOptions()}>Retry filter options</button>
+      </div>
+    {/if}
     <div class="grid gap-3 md:grid-cols-2">
       <div class="relative grid gap-1">
         <label class="text-xs font-medium text-[var(--color-muted)]" for="substitution-include-filter">Must include</label>
@@ -492,6 +396,7 @@
                   role="option"
                   aria-selected="false"
                   onmousedown={(event) => onFilterOptionMouseDown(option, event)}
+                  onkeydown={(event) => onFilterOptionKeydown(option, event)}
                 >
                   <span>{option.label}</span>
                   <span class="text-xs text-[var(--color-muted)]">{option.description}</span>
@@ -536,6 +441,7 @@
                   role="option"
                   aria-selected="false"
                   onmousedown={(event) => onFilterOptionMouseDown(option, event)}
+                  onkeydown={(event) => onFilterOptionKeydown(option, event)}
                 >
                   <span>{option.label}</span>
                   <span class="text-xs text-[var(--color-muted)]">{option.description}</span>

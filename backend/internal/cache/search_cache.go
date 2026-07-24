@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,29 +69,63 @@ type RedisStore interface {
 // Implements DESIGN-002 SearchController and DESIGN-011 RedisCache.
 type SearchResponseStore struct {
 	Store         RedisStore
+	Generation    SearchResponseGeneration
 	TTL           time.Duration
 	SimilarityTTL time.Duration
 }
 
+// SearchResponseGeneration guards classification-derived cache writes across instances.
+// Implements DESIGN-011 RedisCache shared generation versioning.
+type SearchResponseGeneration interface {
+	Current(context.Context) (uint64, error)
+	SetIfCurrent(context.Context, uint64, string, string, time.Duration) (bool, error)
+}
+
 // GetSearchResponse reads one cached SearchResponse.
 // Implements DESIGN-011 RedisCache cache-hit behavior.
-func (s SearchResponseStore) GetSearchResponse(ctx context.Context, req search.SearchRequest) (search.SearchResponse, bool, error) {
+func (s SearchResponseStore) GetSearchResponse(ctx context.Context, req search.SearchRequest) (search.SearchResponse, bool, search.SearchResponseCacheToken, error) {
 	ttl := s.ttl()
-	key := BuildSearchCacheKey(req)
+	var generation uint64
+	var err error
+	if s.Generation != nil {
+		generation, err = s.Generation.Current(ctx)
+	}
+	token := search.SearchResponseCacheToken{ClassificationGeneration: generation}
+	if err != nil {
+		return search.SearchResponse{}, false, token, err
+	}
+	key := searchCacheKeyForGeneration(BuildSearchCacheKey(req), generation)
 	response, hit, err := GetRedis[search.SearchResponse](ctx, s.Store, key)
 	if err != nil || !hit {
-		return response, hit, err
+		return response, hit, token, err
 	}
-	response.Cache = cacheMetadataPtr(key, search.CacheStatusHit, ttl)
-	return response, true, nil
+	response.Cache = cacheMetadataPtr(BuildSearchCacheKey(req), search.CacheStatusHit, ttl)
+	return response, true, token, nil
 }
 
 // SetSearchResponse stores one successful SearchResponse.
 // Implements DESIGN-011 RedisCache cache-miss persistence behavior.
-func (s SearchResponseStore) SetSearchResponse(ctx context.Context, req search.SearchRequest, response search.SearchResponse) error {
+func (s SearchResponseStore) SetSearchResponse(ctx context.Context, req search.SearchRequest, response search.SearchResponse, token search.SearchResponseCacheToken) (bool, error) {
+	if s.Store == nil {
+		return false, nil
+	}
 	ttl := s.ttl()
-	key := BuildSearchCacheKey(req)
-	return SetRedis(ctx, s.Store, key, responseWithoutCacheMetadata(response), ttl)
+	key := searchCacheKeyForGeneration(BuildSearchCacheKey(req), token.ClassificationGeneration)
+	payload, err := json.Marshal(responseWithoutCacheMetadata(response))
+	if err != nil {
+		return false, err
+	}
+	if s.Generation == nil {
+		return true, s.Store.Set(ctx, key.String(), string(payload), ttl)
+	}
+	return s.Generation.SetIfCurrent(ctx, token.ClassificationGeneration, key.String(), string(payload), ttl)
+}
+
+// searchCacheKeyForGeneration isolates entries invalidated by classification mutations.
+// Implements DESIGN-011 RedisCache shared generation versioning.
+func searchCacheKeyForGeneration(key RedisCacheKey, generation uint64) RedisCacheKey {
+	key.Version += "-classification-" + strconv.FormatUint(generation, 10)
+	return key
 }
 
 // SearchResponseCacheMetadata returns response metadata for a search cache request.
@@ -102,16 +137,42 @@ func (s SearchResponseStore) SearchResponseCacheMetadata(req search.SearchReques
 
 // GetSimilarityCalculation reads one cached Substitution Search macro comparison payload.
 // Implements DESIGN-011 RedisCache similarity calculation cache-hit behavior.
-func (s SearchResponseStore) GetSimilarityCalculation(ctx context.Context, inputs []search.SubstitutionInput) (search.SimilarityCalculation, bool, error) {
-	key := BuildSimilarityCacheKey(inputs)
-	return GetRedis[search.SimilarityCalculation](ctx, s.Store, key)
+func (s SearchResponseStore) GetSimilarityCalculation(ctx context.Context, inputs []search.SubstitutionInput) (search.SimilarityCalculation, bool, search.SimilarityCalculationCacheToken, error) {
+	var generation uint64
+	var err error
+	if s.Generation != nil {
+		generation, err = s.Generation.Current(ctx)
+	}
+	token := search.SimilarityCalculationCacheToken{FoodDataGeneration: generation}
+	if err != nil {
+		return search.SimilarityCalculation{}, false, token, err
+	}
+	calculation, hit, err := GetRedis[search.SimilarityCalculation](ctx, s.Store, similarityCacheKeyForGeneration(BuildSimilarityCacheKey(inputs), generation))
+	return calculation, hit, token, err
 }
 
 // SetSimilarityCalculation stores one successful Substitution Search macro comparison payload.
 // Implements DESIGN-011 RedisCache similarity calculation cache-miss persistence behavior.
-func (s SearchResponseStore) SetSimilarityCalculation(ctx context.Context, inputs []search.SubstitutionInput, calculation search.SimilarityCalculation) error {
-	key := BuildSimilarityCacheKey(inputs)
-	return SetRedis(ctx, s.Store, key, calculation, s.similarityTTL())
+func (s SearchResponseStore) SetSimilarityCalculation(ctx context.Context, inputs []search.SubstitutionInput, calculation search.SimilarityCalculation, token search.SimilarityCalculationCacheToken) (bool, error) {
+	key := similarityCacheKeyForGeneration(BuildSimilarityCacheKey(inputs), token.FoodDataGeneration)
+	if s.Store == nil {
+		return false, nil
+	}
+	payload, err := json.Marshal(calculation)
+	if err != nil {
+		return false, err
+	}
+	if s.Generation == nil {
+		return true, s.Store.Set(ctx, key.String(), string(payload), s.similarityTTL())
+	}
+	return s.Generation.SetIfCurrent(ctx, token.FoodDataGeneration, key.String(), string(payload), s.similarityTTL())
+}
+
+// similarityCacheKeyForGeneration isolates calculations after any catalog food mutation.
+// Implements DESIGN-011 RedisCache shared food-data generation.
+func similarityCacheKeyForGeneration(key RedisCacheKey, generation uint64) RedisCacheKey {
+	key.Version += "-food-data-" + strconv.FormatUint(generation, 10)
+	return key
 }
 
 // SimilarityCalculationCacheMetadata returns response metadata for a similarity cache request.
@@ -157,6 +218,18 @@ func (s GoRedisStore) Set(ctx context.Context, key string, value string, ttl tim
 	return s.Client.Set(ctx, key, value, ttl).Err()
 }
 
+// Current returns the classification generation used by guarded helper writes.
+// Implements DESIGN-011 RedisCache shared generation versioning.
+func (s GoRedisStore) Current(ctx context.Context) (uint64, error) {
+	return (ClassificationGeneration{client: s.Client}).Current(ctx)
+}
+
+// SetIfCurrent prevents helper loads from writing across classification invalidation.
+// Implements DESIGN-011 RedisCache guarded cache-miss persistence.
+func (s GoRedisStore) SetIfCurrent(ctx context.Context, generation uint64, key, value string, ttl time.Duration) (bool, error) {
+	return (ClassificationGeneration{client: s.Client}).SetIfCurrent(ctx, generation, key, value, ttl)
+}
+
 // GetRedis retrieves a typed value from Redis. Redis misses and Redis failures are non-fatal.
 // Implements DESIGN-011 RedisCache get behavior and redis_down fallback.
 func GetRedis[T any](ctx context.Context, store RedisStore, key RedisCacheKey) (T, bool, error) {
@@ -194,18 +267,37 @@ func SetRedis[T any](ctx context.Context, store RedisStore, key RedisCacheKey, v
 // GetOrLoadSearchResponse returns cached search results or falls back to the source loader.
 // Implements DESIGN-011 RedisCache cache-hit, cache-miss, and redis_down fallback behavior.
 func GetOrLoadSearchResponse(ctx context.Context, store RedisStore, req search.SearchRequest, ttl time.Duration, load func(context.Context) (search.SearchResponse, error)) (search.SearchResponse, error) {
-	key := BuildSearchCacheKey(req)
-	if cached, hit, err := GetRedis[search.SearchResponse](ctx, store, key); err == nil && hit {
-		cached.Cache = cacheMetadataPtr(key, search.CacheStatusHit, ttl)
-		return cached, nil
+	metadataKey := BuildSearchCacheKey(req)
+	key := metadataKey
+	var generation uint64
+	guard, guarded := store.(SearchResponseGeneration)
+	generationReady := !guarded
+	if guarded {
+		if current, err := guard.Current(ctx); err == nil {
+			generation = current
+			key = searchCacheKeyForGeneration(key, generation)
+			generationReady = true
+		}
+	}
+	if generationReady {
+		if cached, hit, err := GetRedis[search.SearchResponse](ctx, store, key); err == nil && hit {
+			cached.Cache = cacheMetadataPtr(metadataKey, search.CacheStatusHit, ttl)
+			return cached, nil
+		}
 	}
 
 	response, err := load(ctx)
 	if err != nil {
 		return response, err
 	}
-	response.Cache = cacheMetadataPtr(key, search.CacheStatusMiss, ttl)
-	_ = SetRedis(ctx, store, key, responseWithoutCacheMetadata(response), ttl)
+	response.Cache = cacheMetadataPtr(metadataKey, search.CacheStatusMiss, ttl)
+	if guarded && generationReady {
+		if payload, marshalErr := json.Marshal(responseWithoutCacheMetadata(response)); marshalErr == nil {
+			_, _ = guard.SetIfCurrent(ctx, generation, key.String(), string(payload), ttl)
+		}
+	} else {
+		_ = SetRedis(ctx, store, key, responseWithoutCacheMetadata(response), ttl)
+	}
 	return response, nil
 }
 

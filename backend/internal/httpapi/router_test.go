@@ -36,15 +36,26 @@ func (failingAuditSink) Audit(context.Context, security.AuditLogEntry) error {
 	return errors.New("audit down")
 }
 
-type failingObservabilitySink struct{}
-
-func (failingObservabilitySink) Log(context.Context, observability.LogEvent) error {
-	return errors.New("log down")
+type failingObservabilitySink struct {
+	logErr    error
+	metricErr error
 }
 
-func (failingObservabilitySink) RecordMetric(context.Context, observability.MetricPoint) error {
-	return errors.New("metric down")
+func (s failingObservabilitySink) Log(context.Context, observability.LogEvent) error {
+	return s.logErr
 }
+
+func (s failingObservabilitySink) RecordMetric(context.Context, observability.MetricPoint) error {
+	return s.metricErr
+}
+
+type secretFailingStorage struct{ secret string }
+
+func (s secretFailingStorage) Get(string) ([]byte, error)              { return nil, errors.New(s.secret) }
+func (s secretFailingStorage) Set(string, []byte, time.Duration) error { return errors.New(s.secret) }
+func (s secretFailingStorage) Delete(string) error                     { return errors.New(s.secret) }
+func (s secretFailingStorage) Reset() error                            { return errors.New(s.secret) }
+func (s secretFailingStorage) Close() error                            { return errors.New(s.secret) }
 
 type failingStorage struct{}
 
@@ -101,6 +112,12 @@ func (r *httpSessionRepository) RevokeSessionFamily(context.Context, uuid.UUID) 
 func (r *httpSessionRepository) RevokeUserSessions(context.Context, uuid.UUID) error  { return nil }
 
 func testJWTAuth(t *testing.T, cfg config.Config, userID uuid.UUID, mutate func(*repository.UserSession)) (*JWTAuthenticator, []*http.Cookie) {
+	return testJWTAuthRole(t, cfg, userID, string(repository.UserRoleUser), mutate)
+}
+
+// testJWTAuthRole creates a verified cookie session with server-signed role claims.
+// Implements DESIGN-006 JWTManager and DESIGN-009 AdminController test boundary.
+func testJWTAuthRole(t *testing.T, cfg config.Config, userID uuid.UUID, role string, mutate func(*repository.UserSession)) (*JWTAuthenticator, []*http.Cookie) {
 	t.Helper()
 	if userID == uuid.Nil {
 		userID = uuid.New()
@@ -114,7 +131,7 @@ func testJWTAuth(t *testing.T, cfg config.Config, userID uuid.UUID, mutate func(
 		mutate(&session)
 	}
 	manager := auth.NewJWTManager(httpSigningKeys{active: "jwt-v1", entries: map[string][]byte{"jwt-v1": []byte("11111111111111111111111111111111")}})
-	accessToken, err := manager.CreateAccessToken(context.Background(), auth.AccessTokenClaims{UserID: userID, Role: "user", HasVerifiedLoginMethod: true, SessionID: sessionID, RefreshFamilyID: familyID, ExpiresAt: session.AccessExpiresAt})
+	accessToken, err := manager.CreateAccessToken(context.Background(), auth.AccessTokenClaims{UserID: userID, Role: role, HasVerifiedLoginMethod: true, SessionID: sessionID, RefreshFamilyID: familyID, ExpiresAt: session.AccessExpiresAt})
 	if err != nil {
 		t.Fatalf("CreateAccessToken() error = %v", err)
 	}
@@ -305,21 +322,105 @@ func TestReadinessReportsWorkerDegradation(t *testing.T) {
 }
 
 func TestObservabilitySinkFailureUsesStderrFallback(t *testing.T) {
-	var fallback bytes.Buffer
-	previous := observabilityFallbackWriter
-	observabilityFallbackWriter = &fallback
-	t.Cleanup(func() { observabilityFallbackWriter = previous })
+	tests := []struct {
+		name         string
+		dependencies func(error) Dependencies
+		message      string
+	}{
+		{
+			name: "log failure",
+			dependencies: func(secretErr error) Dependencies {
+				return Dependencies{Config: testConfig(), Logs: failingObservabilitySink{logErr: secretErr}}
+			},
+			message: "observability log sink failure",
+		},
+		{
+			name: "metric failure",
+			dependencies: func(secretErr error) Dependencies {
+				return Dependencies{Config: testConfig(), Metrics: failingObservabilitySink{metricErr: secretErr}}
+			},
+			message: "observability metric sink failure",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const secret = "provider-token=router-secret"
+			var fallback bytes.Buffer
+			previous := observabilityFallbackWriter
+			observabilityFallbackWriter = &fallback
+			t.Cleanup(func() { observabilityFallbackWriter = previous })
 
-	sink := failingObservabilitySink{}
-	app := mustNewRouter(t, Dependencies{Config: testConfig(), Logs: sink, Metrics: sink})
-	resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/health", nil))
-	if err != nil {
-		t.Fatal(err)
+			app := mustNewRouter(t, tt.dependencies(errors.New("sink failure: "+secret)))
+			resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/health", nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+			if output := fallback.String(); !strings.Contains(output, tt.message) || strings.Contains(output, secret) || strings.Contains(output, "provider") || strings.Contains(output, "token") {
+				t.Fatalf("fallback output = %q", output)
+			}
+		})
 	}
-	resp.Body.Close()
-	if output := fallback.String(); !strings.Contains(output, "observability log sink failure: log down") || !strings.Contains(output, "observability metric sink failure: metric down") {
-		t.Fatalf("fallback output = %q", output)
-	}
+}
+
+func TestAuthWarningAndRefreshCleanupDoNotExposeErrors(t *testing.T) {
+	const (
+		cleanupSecret = "refresh-token=cleanup-secret"
+		sinkSecret    = "provider-api-key=warning-secret"
+	)
+
+	t.Run("warning sink failure", func(t *testing.T) {
+		var fallback bytes.Buffer
+		previous := observabilityFallbackWriter
+		observabilityFallbackWriter = &fallback
+		t.Cleanup(func() { observabilityFallbackWriter = previous })
+
+		app := fiber.New()
+		app.Get("/", func(ctx *fiber.Ctx) error {
+			(&AuthController{logs: failingObservabilitySink{logErr: errors.New(sinkSecret)}}).warn(ctx)
+			return ctx.SendStatus(fiber.StatusNoContent)
+		})
+		resp, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if output := fallback.String(); output != "observability log sink failure\n" || strings.Contains(output, sinkSecret) || strings.Contains(output, "provider-api-key") {
+			t.Fatalf("fallback output = %q", output)
+		}
+	})
+
+	t.Run("refresh cookie cleanup", func(t *testing.T) {
+		cfg := testConfig()
+		csrf := NewCSRFManager(cfg, nil)
+		csrf.sessionStore.Storage = secretFailingStorage{secret: cleanupSecret}
+		logs := &observability.MemorySink{}
+		service := &fakeAuthService{refreshErr: auth.ErrTokenReuseDetected}
+		controller := NewAuthController(service, NewAuthSessionManager(cfg, csrf)).WithLogSink(logs)
+		app := mustNewRouter(t, Dependencies{Config: cfg, CSRF: csrf, Routes: controller.Routes()})
+		req := httptest.NewRequest(fiber.MethodPost, "/api/v1/auth/refresh", nil)
+		req.AddCookie(&http.Cookie{Name: cfg.Account.RefreshCookieName, Value: "reused"})
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := decodeEnvelope(t, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != fiber.StatusUnauthorized || body.Error == nil || body.Error.Code != "token_reuse_detected" {
+			t.Fatalf("refresh response = %d %+v", resp.StatusCode, body)
+		}
+		responseEncoded, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(logs.Logs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(logs.Logs) != 1 || logs.Logs[0].Message != "auth_refresh_cookie_clear_failed" || len(logs.Logs[0].Fields) != 0 || bytes.Contains(responseEncoded, []byte(cleanupSecret)) || bytes.Contains(encoded, []byte(cleanupSecret)) || bytes.Contains(encoded, []byte("refresh-token")) {
+			t.Fatalf("cleanup response = %s logs = %s", responseEncoded, encoded)
+		}
+	})
 }
 
 func TestCORSTLSAndNotFoundErrors(t *testing.T) {

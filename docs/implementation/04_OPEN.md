@@ -463,14 +463,97 @@ condition. No unowned or disposition-less Phase 07 entry remains.
 
 ### Assumptions
 
-- Accepted for planning: items manually created by an administrator are global curated `food_items` with no user owner. They remain distinct from authenticated users' private custom items, which use the dedicated owner-scoped persistence model introduced in Phase 08.
-- Accepted for planning: destructive deletion of a Food Category or Culinary Role that is referenced by an active food or meal is blocked with a conflict response. Phase 08 does not silently detach, replace, or cascade an in-use classification.
-- Accepted for planning: Phase 08 user administration is limited to privacy-minimized user lookup and the already documented admin-triggered retry of permanent, unknown, or exhausted account-deletion failures. Role mutation, password access, session impersonation, and arbitrary account editing are outside the phase because no requirement or design contract defines them.
+- **CONFIRMED (Task 262, 2026-07-22):** administrator-authored items persist as global ownerless `food_items`, while authenticated users' private custom items use mandatory owner-scoped persistence. Task 250 CRUD/isolation tests and Tasks 238-240 persistence, route, export, and erasure integration tests pass in the aggregate and race gates.
+- **CONFIRMED (Task 262, 2026-07-22):** deletion of an in-use Food Category or Culinary Role returns a conflict and does not detach, replace, or cascade references. Task 251 repository/service/HTTP invalidation and in-use tests pass in the aggregate and race gates.
+- **CONFIRMED (Task 262, 2026-07-22):** user administration exposes only the privacy-minimized lookup and legal deletion-retry transition. Task 252 service/HTTP/PostgreSQL tests prove bounded projections, fail-closed authorization, legal-state enforcement, concurrent single-claim behavior, and audit persistence; no role mutation, password access, impersonation, or arbitrary editing surface exists.
+
+### Testing coverage deviations
+
+- **SUPERSEDED (Task 262, 2026-07-22):** the Task 239 repair exception and Task 250 open deviation were remeasured after all Phase 08 implementation and integration work. Their current results are included in the aggregate backend exception below; neither provisional measurement remains an open action.
+- **ACCEPTED EXCEPTION (Task 262, measured 2026-07-22; owner: Phase 08 backend maintainer):** `go test -p 1 -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out ./internal/...` passes and measures the changed Phase 08 Go runtime scope at `93.4%` (`4,523/4,841` statements) after deduplicating cross-package profile blocks by source range. The repository aggregate package profile is `87.4%`; direct package totals include `cache 90.1%`, `curation 90.3%`, `customitem 90.9%`, `dataimporter 88.3%`, `deletionworker 100.0%`, `externaldata 99.8%`, `httpapi 87.3%`, `itemcurator 74.7%`, `observability 85.6%`, `repository 86.5%`, `search 96.5%`, `security 99.7%`, `tagmanager 100.0%`, `useradmin 93.8%`, and `userdata 97.2%`. Exact changed-file statement counts and uncovered profile ranges are recorded below and in `docs/implementation/preparations/task-262.md`. Uncovered statements are defensive dependency/encoder/claim corruption branches, repeated repository/HTTP error mappings, configuration/wiring fallbacks, and instrumentation-only paths; all task acceptance behaviors are exercised by unit, live PostgreSQL/Redis, HTTP, race, SWE.5, and browser suites. No authorization, ownership, private/global isolation, CSRF, idempotency/replay, validation, parameterized persistence, transaction-plus-audit rollback, provider bound/degradation, deletion, invalidation, sanitized observability, or search visibility behavior is waived.
+- **ACCEPTED EXCEPTION (Task 262, measured 2026-07-22; owner: Phase 08 frontend maintainer):** `bun test --coverage` passes with `526` tests, `2,456` expectations, and `All files | 95.46% funcs | 96.06% lines`. Phase 08 runtime rows are `src/lib/admin-access.ts` (`100.00% funcs, 100.00% lines`), `src/lib/admin-workflows.ts` (`90.91% funcs, 98.51% lines`; Bun reports no stable uncovered-line range), `src/lib/api/account-data-client.ts` (`100.00% funcs, 98.00% lines`; Bun reports no stable uncovered-line range), `src/lib/api/admin-client.ts` (`97.22% funcs, 100.00% lines`; function instrumentation only), `src/lib/api/external-admin-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/filter-options-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/generated.ts` (`100.00% funcs, 98.98% lines`, generated fallback line `185`), `src/lib/shell-routing.ts` (`100.00% funcs, 100.00% lines`), `src/lib/substitution-filter-options.ts` (`100.00% funcs, 100.00% lines`), and Svelte components that do not emit Bun coverage rows. Component tests plus the full Playwright/axe desktop/mobile suite cover administration, import, conflict/retry, private export/deletion, dynamic filters, authorization, modal focus containment, responsive themes, and degraded paths. No generated-contract decoding, admin fail-closed state, authoritative refresh, destructive confirmation, accessibility, or browser workflow is waived.
+
+The following machine-checked contracts are the precise current evidence behind those accepted exceptions. `scripts/check.py` derives the backend rows from the deduplicated cross-package profile, derives frontend rows from Bun's current report, rejects missing or additional exceptions, and requires every metric, uncovered location, phase owner, and justification ID to match.
+
+<!-- phase08-backend-coverage-contract:start -->
+
+Measured Phase 08 scope: `4523/4841` statements (`93.4%`).
+
+| Runtime file | Covered/statements | Coverage | Exact uncovered statement blocks | Justification |
+|---|---:|---:|---|---|
+| `internal/app/app.go` | `109/115` | `94.8%` | `97.86-99.4,115.69-117.18,117.18-119.5,122.17-124.4,157.4-161.10` | `B3` |
+| `internal/cache/classification_generation.go` | `14/18` | `77.8%` | `53.21-55.3,60.16-62.3,69.21-71.3,78.33-80.3` | `B3` |
+| `internal/cache/classification_invalidator.go` | `23/26` | `88.5%` | `48.54-49.23,49.23-51.5,52.4-52.10` | `B3` |
+| `internal/cache/search_cache.go` | `152/167` | `91.0%` | `94.16-96.3,109.20-111.3,115.16-117.3,147.16-149.3,158.20-160.3,162.16-164.3,223.68-225.2,229.128-231.2,275.13-276.53,276.53-280.4,294.32-295.101,295.101-297.4,490.65-492.4` | `B3` |
+| `internal/curation/validation.go` | `88/93` | `94.6%` | `145.132-147.4,150.130-152.4,155.120-157.4,171.64-174.3` | `B1` |
+| `internal/customitem/service.go` | `153/165` | `92.7%` | `114.24-116.3,118.73-120.3,129.16-131.3,153.32-155.3,170.32-172.3,174.16-176.3,190.32-192.3,207.16-209.3,243.10-244.17,293.70-295.3,368.16-370.3,395.26-397.4` | `B1` |
+| `internal/dataimporter/service.go` | `68/77` | `88.3%` | `94.68-96.3,99.16-101.3,143.22-145.4,146.20-148.4,160.62-161.29,170.43-172.3,194.23-196.3,198.107-200.4,209.16-211.3` | `B1` |
+| `internal/externaldata/rate_limit.go` | `184/186` | `98.9%` | `348.14-350.3,398.46-400.3` | `B4` |
+| `internal/httpapi/auth_controller.go` | `94/103` | `91.3%` | `78.92-80.3,95.92-97.3,104.115-106.3,107.66-109.3,123.92-125.3,136.84-138.3,149.88-151.3,165.66-167.3,233.19-235.3` | `B2` |
+| `internal/httpapi/classification_admin_controller.go` | `58/77` | `75.3%` | `55.66-57.3,64.49-66.3,74.16-76.3,78.16-80.3,88.16-90.3,92.9-94.3,100.16-102.3,110.16-112.3,114.9-116.3,118.16-120.3,122.16-124.3,126.16-128.3,136.16-138.3,144.16-146.3,148.16-150.3,159.36-161.3,168.49-170.3,178.34-180.3,188.108-190.3` | `B2` |
+| `internal/httpapi/curation_validation.go` | `99/108` | `91.7%` | `122.37-124.3,149.65-151.3,159.54-161.3,168.57-170.3,198.16-200.3,210.18-212.5,214.11-216.5,227.49-229.5,231.10-232.71` | `B1` |
+| `internal/httpapi/custom_item_controller.go` | `99/125` | `79.2%` | `30.9-32.3,33.26-35.3,37.16-39.3,53.9-55.3,57.16-59.3,60.26-62.3,74.9-76.3,78.16-80.3,81.26-83.3,85.16-87.3,89.16-91.3,99.9-101.3,103.16-105.3,106.26-108.3,109.85-111.3,119.73-121.3,128.67-130.3,150.59-152.3,153.65-155.3,178.65-180.4,225.2-225.44,232.34-234.3,242.34-244.3,268.43-270.2,276.59-277.159,286.10-287.13` | `B2` |
+| `internal/httpapi/import_controller.go` | `45/55` | `81.8%` | `56.16-58.3,59.34-61.3,63.9-65.3,67.16-69.3,99.57-101.3,108.59-110.3,134.61-135.192,142.131-143.35,144.10-145.13,151.46-153.2` | `B2` |
+| `internal/httpapi/manual_item_controller.go` | `65/88` | `73.9%` | `48.16-50.3,51.34-53.3,55.16-57.3,79.16-81.3,82.34-84.3,86.16-88.3,96.16-98.3,99.34-101.3,103.16-105.3,107.16-109.3,119.16-121.3,122.34-124.3,126.16-128.3,138.73-140.3,147.67-149.3,173.2-174.38,188.34-190.3,219.43-221.2,227.60-228.159,231.60-232.126,235.131-236.143,237.10-238.13` | `B2` |
+| `internal/httpapi/profile_controller.go` | `34/36` | `94.4%` | `58.68-60.5,97.16-99.3` | `B2` |
+| `internal/httpapi/router.go` | `228/233` | `97.9%` | `192.9-194.3,313.17-315.4,426.24-428.5,432.23-434.4,502.41-503.53` | `B3` |
+| `internal/httpapi/search_validation.go` | `189/193` | `97.9%` | `396.33-398.102,398.102-400.5,415.94-417.3` | `B1` |
+| `internal/httpapi/user_admin_controller.go` | `64/79` | `81.0%` | `49.16-51.3,52.22-54.3,56.9-58.3,60.16-62.3,64.28-66.3,74.16-76.3,77.22-79.3,82.41-84.3,89.123-91.3,126.35-128.4,160.46-161.132,162.62-163.36,166.171-167.36,168.10-169.13,181.42-183.2` | `B2` |
+| `internal/itemcurator/service.go` | `59/79` | `74.7%` | `93.25-95.3,97.73-99.3,104.45-106.3,108.16-110.3,121.66-123.3,130.20-132.3,133.32-135.3,146.20-148.3,150.16-152.3,153.45-155.3,157.16-159.3,160.74-162.3,164.16-166.3,173.20-175.3,176.45-178.3,180.16-182.3,183.52-185.3,193.16-195.3,231.19-233.3,245.44-247.2` | `B1` |
+| `internal/observability/admin_external.go` | `99/102` | `97.1%` | `63.17-65.3,235.115-237.4,248.10-249.35` | `B4` |
+| `internal/repository/admin_user_repository.go` | `45/55` | `81.8%` | `60.16-62.3,67.17-69.4,72.35-74.3,81.62-83.3,100.33-102.4,106.67-108.4,126.214-128.3,129.82-131.29,131.29-133.4` | `B2` |
+| `internal/repository/classification_repository.go` | `58/65` | `89.2%` | `73.36-75.3,99.20-101.3,110.78-112.3,120.77-122.3,153.48-155.3,156.85-158.3,200.165-202.3` | `B2` |
+| `internal/repository/compliance_repository.go` | `272/274` | `99.3%` | `642.46-644.5,651.52-653.5` | `B2` |
+| `internal/repository/curated_import_repository.go` | `98/129` | `76.0%` | `64.69-66.3,79.126-81.3,88.102-90.4,93.37-95.3,111.24-113.4,116.184-118.4,119.43-121.4,123.23-125.4,128.36-130.3,134.149-136.3,140.19-142.3,144.16-146.3,157.99-159.3,163.58-165.3,171.73-173.4,177.17-179.4,182.16-184.3,188.16-190.3,192.137-194.3,195.33-197.3,205.563-207.3,208.117-210.3,218.16-220.3,221.32-223.3,254.82-256.3,264.95-266.3,291.47-293.3,307.48-309.3,311.117-313.3,314.163-316.3,318.35-320.3` | `B2` |
+| `internal/repository/custom_food_repository.go` | `135/154` | `87.7%` | `108.25-110.3,112.16-114.3,118.17-121.4,124.35-127.3,132.62-134.4,144.69-146.3,156.18-158.5,164.18-166.5,170.43-172.4,180.106-182.4,211.30-213.3,228.137-230.3,253.141-255.3,262.68-264.3,265.110-267.3,269.35-271.3,272.19-274.3` | `B2` |
+| `internal/repository/food_repository.go` | `199/200` | `99.5%` | `241.158-243.2` | `B2` |
+| `internal/repository/manual_food_repository.go` | `63/86` | `73.3%` | `45.20-47.3,54.20-56.3,63.69-65.3,73.17-75.4,77.62-79.4,81.17-83.4,86.42-88.3,90.16-92.3,96.105-98.3,105.25-107.3,108.68-110.3,112.16-114.3,115.32-117.3,124.20-126.3,128.16-130.3,131.32-133.3,147.117-149.3,160.79-162.3,185.140-187.3,194.35-196.3,197.110-199.3,201.35-203.3,204.19-206.3` | `B2` |
+| `internal/search/filter_options.go` | `79/80` | `98.8%` | `98.70-100.3` | `B1` |
+| `internal/search/substitution_service.go` | `211/225` | `93.8%` | `60.16-62.3,159.4-159.22,187.53-189.3,191.43-193.4,266.30-268.4,270.17-272.4,275.72-277.5,318.28-321.17,321.17-323.4,334.16-336.3,340.17-342.4,471.35-473.3` | `B1` |
+| `internal/useradmin/service.go` | `61/65` | `93.8%` | `115.81-117.3,123.16-125.3,133.17-135.4,195.17-197.4` | `B1` |
+| `internal/userdata/export.go` | `93/98` | `94.9%` | `108.17-110.4,114.16-116.3,169.17-171.4,176.17-178.4,243.39-245.3` | `B1` |
+
+- `B1` — Defensive dependency, encoder, or claim-corruption branch; evidence: focused unit and HTTP error-path suites.
+- `B2` — Repeated safe repository or HTTP error mapping; evidence: repository, HTTP, and live integration suites.
+- `B3` — Configuration, cache, or wiring fallback; evidence: aggregate bootstrap and live-dependency suites.
+- `B4` — Instrumentation-only path; evidence: observability unit and load suites.
+
+<!-- phase08-backend-coverage-contract:end -->
+
+<!-- frontend-coverage-contract:start -->
+
+| Runtime row | Owning phase | Functions | Lines | Uncovered lines | Justification |
+|---|---|---:|---:|---|---|
+| `src/lib/admin-workflows.ts` | Phase 08 | 90.91% | 98.51% | `-` | `F1` |
+| `src/lib/alternative-diet-save.ts` | Phase 07.01 | 100.00% | 95.56% | `57-58` | `F5` |
+| `src/lib/api/account-data-client.ts` | Phase 08 | 100.00% | 98.00% | `-` | `F1` |
+| `src/lib/api/admin-client.ts` | Phase 08 | 97.22% | 100.00% | `-` | `F2` |
+| `src/lib/api/auth-client.ts` | Phase 06.01 | 88.89% | 81.31% | `224-233,237-250,255-269` | `F4` |
+| `src/lib/api/daily-diet-client.ts` | Phase 07 | 95.83% | 95.26% | `292-302` | `F4` |
+| `src/lib/api/entitlement-client.ts` | Phase 06 | 88.24% | 79.03% | `248-257,275-287,292-306` | `F4` |
+| `src/lib/api/generated.ts` | Phase 08 | 100.00% | 98.98% | `185` | `F3` |
+| `src/lib/api/optimization-client.ts` | Phase 07 | 97.83% | 95.05% | `235-245` | `F4` |
+| `src/lib/components/oauth-entry-point.ts` | Phase 06.01 | 71.43% | 85.94% | `27,49,68,79,83-84,95,98-99` | `F4` |
+| `src/lib/components/register-controller.ts` | Phase 06.01 | 83.33% | 90.70% | `57,88,116,152,163,167,202-207` | `F4` |
+| `src/lib/search-entitlement.ts` | Phase 06 | 100.00% | 84.62% | `65-66,70,94-98` | `F4` |
+| `src/lib/stores/auth-session.ts` | Phase 06.01 | 100.00% | 95.38% | `158-159,210-212,264,282` | `F4` |
+| `src/lib/stores/daily-diet.ts` | Phase 07 | 98.31% | 99.55% | `-` | `F1` |
+| `src/lib/stores/optimization.ts` | Phase 07 | 98.00% | 100.00% | `-` | `F2` |
+| `src/lib/stores/search.ts` | Phase 07 | 84.48% | 94.72% | `92,99,104,109,198,268-274,301,328` | `F5` |
+| `src/lib/units.ts` | Phase 07 | 55.56% | 77.27% | `54,63-64,88,106-107,125-128` | `F5` |
+
+- `F1` — Bun emits no stable line range or only callback instrumentation; evidence: focused unit and browser suites.
+- `F2` — Function instrumentation only; evidence: focused unit and browser suites.
+- `F3` — Generated unreachable fallback; evidence: generated-contract drift and client suites.
+- `F4` — Defensive decoder, transport, or browser-dependency fallback; evidence: focused client and browser suites.
+- `F5` — Bounded guard, impossible-state projection, or formatting fallback; evidence: focused state and component suites.
+
+<!-- frontend-coverage-contract:end -->
 
 ### Actions needed
 
-- **OPEN (carried from Phase 03; owner: Phase 08 backend maintainer):** add an explicit user-owned custom food-item persistence model before enabling custom-item export or deletion. Define ownership predicates, isolation from globally curated food items, export inclusion, account-deletion cleanup, authorization tests, and migration/repository evidence. The Phase 03 export must keep `customItems` empty until this action is implemented.
-- **OPEN (carried from Phase 05; owner: Phase 08 API/frontend maintainer):** replace hardcoded substitution allergen, dietary-preset, and physical-state filter options with a backend-owned filter-option contract backed by persisted classification/allergen vocabularies and backend-defined dietary-preset policy. Regenerate frontend types and cover classification administration, localization-sensitive rendering, and fallback behavior before closing this action.
+- **CLOSED (Task 262, 2026-07-22; owner: Phase 08 backend maintainer):** Tasks 238-240 added migrations `000025`/`000026`, mandatory owner-scoped custom-item repositories and routes, idempotent creation, export inclusion, deletion lockout/cleanup/cache purge, and owner/global isolation. Repository, HTTP, export, erasure, aggregate, and race suites pass.
+- **CLOSED (Task 262, 2026-07-22; owner: Phase 08 API/frontend maintainer):** Tasks 241, 251, 253, and 257 added persisted classification/allergen vocabularies, backend dietary/physical-state policy, `/api/v1/search/filter-options`, generated frontend contracts, cache invalidation, localized-label-ready ordering, stale-request protection, and safe degraded UI. Source assertions, unit/component/browser tests, type drift, aggregate, and race suites pass.
 
 ## Phase 09
 

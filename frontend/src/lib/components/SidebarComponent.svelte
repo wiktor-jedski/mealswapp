@@ -12,6 +12,7 @@
   import { preferencesStore, setUnitSystem } from "../stores/preferences";
   import { authSessionStore, clearAuthSession } from "../stores/auth-session";
   import { buildAuthGuardDecision } from "../stores/auth-surface";
+  import { resolveAdminAccess } from "../admin-access";
   import type {
     SavedItem,
     SavedItemsEnvelope,
@@ -25,9 +26,10 @@
   // Implements DESIGN-018 AuthenticatedActionGuard sidebar protected actions through AuthSessionStore.
 
   interface Props {
-    activeView?: "search" | "subscription" | "privacy" | "terms";
+    activeView?: "search" | "subscription" | "administration" | "privacy" | "terms";
     onNavigateSearch?: () => void;
     onNavigateSubscription?: () => void;
+    onNavigateAdministration?: () => void;
     onNavigatePrivacy?: () => void;
     onNavigateTerms?: () => void;
     onSignIn?: () => void;
@@ -38,6 +40,7 @@
     activeView = "search",
     onNavigateSearch = () => undefined,
     onNavigateSubscription = () => undefined,
+    onNavigateAdministration = () => undefined,
     onNavigatePrivacy = () => undefined,
     onNavigateTerms = () => undefined,
     onSignIn = () => undefined,
@@ -71,6 +74,8 @@
   let loadedForUserId = $state<string | null>(null);
   let authenticating = $derived($authSessionStore.status === "unknown" || $authSessionStore.status === "authenticating");
   let authenticated = $derived(sidebarProtectedActionsAllowed());
+  /** Fail-closed Administration visibility shared with the route guard. */
+  let administrationAllowed = $derived(resolveAdminAccess($authSessionStore) === "allowed");
 
   onMount(() => {
     initSidebar();
@@ -184,12 +189,14 @@
     setMobileOpen(false);
   }
 
-  /** Navigates between authenticated top-level Search and Subscription views while closing the mobile drawer. */
-  function onSidebarNavigationSelect(view: "search" | "subscription"): void {
+  /** Navigates between authenticated top-level Search, Subscription, and Administration views while closing the mobile drawer. */
+  function onSidebarNavigationSelect(view: "search" | "subscription" | "administration"): void {
     if (view === "search") {
       onNavigateSearch();
-    } else {
+    } else if (view === "subscription") {
       onNavigateSubscription();
+    } else {
+      onNavigateAdministration();
     }
     setMobileOpen(false);
   }
@@ -365,6 +372,18 @@
           >
             Subscription
           </button>
+          {#if administrationAllowed}
+            <!-- Implements DESIGN-009 UserAdminPanel admin-only navigation visibility from the authenticated session role. -->
+            <button
+              type="button"
+              class="w-full rounded border px-3 py-2 text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {activeView === 'administration' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-muted)]'}"
+              aria-current={activeView === "administration" ? "page" : undefined}
+              onclick={() => onSidebarNavigationSelect("administration")}
+              data-sidebar-nav-administration
+            >
+              Administration
+            </button>
+          {/if}
         </nav>
 
         <!-- Implements DESIGN-001 SidebarComponent authenticated search history list loaded from generated Phase 03 contracts. -->

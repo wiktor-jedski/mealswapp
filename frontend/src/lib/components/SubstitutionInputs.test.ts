@@ -61,14 +61,22 @@ test("declares include and exclude substitution filter comboboxes with removable
 
 // Implements DESIGN-001 SearchView substitution filter option verification.
 test("maps user-facing substitution filters to backend filter kinds", () => {
-	expect(source).toContain('filterId: "dairy"');
-	expect(source).toContain('kind: "allergen"');
-	expect(source).toContain('filterId: "dairy_free"');
-	expect(source).toContain('kind: "dietary_preset"');
-	expect(source).toContain('filterId: "solid"');
-	expect(source).toContain('kind: "physical_state"');
-	expect(source).toContain('classification.kind === "food_category"');
-	expect(source).toContain('classification.kind === "food_category" ? "Food category" : "Culinary role"');
+	expect(source).toContain("fetchSubstitutionFilterOptions");
+	expect(source).toContain("substitutionFilterOptions(backendFilterOptions, selectedItems, true)");
+	expect(source).toContain("substitutionFilterOptions(backendFilterOptions, selectedItems, false)");
+	expect(source).not.toMatch(/filterId:\s*["'](?:solid|liquid|dairy|gluten|vegan|vegetarian)/);
+});
+
+// Implements DESIGN-001 SearchView recoverable dynamic filter inventory verification.
+test("refreshes dynamic options safely and exposes loading, empty, error, and retry states", () => {
+	expect(source).toContain('window.addEventListener("focus", refresh)');
+	expect(source).toContain("filterOptionsAbort?.abort()");
+	expect(source).toContain("request !== filterOptionsRequest");
+	expect(source).toContain("data-filter-options-loading");
+	expect(source).toContain("data-filter-options-empty");
+	expect(source).toContain("data-filter-options-error");
+	expect(source).toContain("Retry filter options");
+	expect(countOccurrences(source, "onFilterOptionKeydown(option, event)")).toBe(2);
 });
 
 // Implements DESIGN-001 SearchView Substitution Input removal and update verification.

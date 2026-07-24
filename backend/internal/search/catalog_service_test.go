@@ -41,24 +41,24 @@ type searchCacheEntry struct {
 
 type searchCacheWithoutMetadata struct{}
 
-func (searchCacheWithoutMetadata) GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, error) {
-	return SearchResponse{}, false, nil
+func (searchCacheWithoutMetadata) GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, SearchResponseCacheToken, error) {
+	return SearchResponse{}, false, SearchResponseCacheToken{}, nil
 }
 
-func (searchCacheWithoutMetadata) SetSearchResponse(context.Context, SearchRequest, SearchResponse) error {
-	return nil
+func (searchCacheWithoutMetadata) SetSearchResponse(context.Context, SearchRequest, SearchResponse, SearchResponseCacheToken) (bool, error) {
+	return true, nil
 }
 
-func (c *searchCacheStub) GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, error) {
+func (c *searchCacheStub) GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, SearchResponseCacheToken, error) {
 	c.gets++
-	return c.response.value, c.hit, c.getErr
+	return c.response.value, c.hit, SearchResponseCacheToken{}, c.getErr
 }
 
-func (c *searchCacheStub) SetSearchResponse(_ context.Context, req SearchRequest, response SearchResponse) error {
+func (c *searchCacheStub) SetSearchResponse(_ context.Context, req SearchRequest, response SearchResponse, _ SearchResponseCacheToken) (bool, error) {
 	c.sets++
 	c.setReq = req
 	c.response.value = response
-	return c.setErr
+	return c.setErr == nil, c.setErr
 }
 
 func (c *searchCacheStub) SearchResponseCacheMetadata(SearchRequest, CacheStatus) *CacheMetadata {

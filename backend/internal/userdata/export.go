@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
@@ -20,13 +21,20 @@ type ExportIdentityRepository interface {
 // ExportService builds account export payloads.
 // Implements DESIGN-008 DataExporter.
 type ExportService struct {
-	identity   ExportIdentityRepository
-	profiles   repository.EncryptedUserProfileRepository
-	saved      repository.SavedItemRepository
-	history    repository.EncryptedSearchHistoryRepository
-	consent    repository.ConsentRepository
-	encryption *security.EncryptionService
-	diets      repository.DailyDietRepository
+	identity    ExportIdentityRepository
+	profiles    repository.EncryptedUserProfileRepository
+	saved       repository.SavedItemRepository
+	history     repository.EncryptedSearchHistoryRepository
+	consent     repository.ConsentRepository
+	encryption  *security.EncryptionService
+	diets       repository.DailyDietRepository
+	customItems CustomItemExporter
+}
+
+// CustomItemExporter loads API-safe private items for one authenticated owner.
+// Implements DESIGN-008 DataExporter owner-scoped custom-item export.
+type CustomItemExporter interface {
+	List(context.Context, uuid.UUID) ([]customitem.Item, error)
 }
 
 // NewExportService creates account export behavior.
@@ -37,6 +45,13 @@ func NewExportService(identity ExportIdentityRepository, profiles repository.Enc
 		dietRepository = diets[0]
 	}
 	return &ExportService{identity: identity, profiles: profiles, saved: saved, history: history, consent: consent, encryption: encryption, diets: dietRepository}
+}
+
+// WithCustomItems attaches the owner-scoped custom-item export source.
+// Implements DESIGN-008 DataExporter owner-scoped custom-item export.
+func (s *ExportService) WithCustomItems(items CustomItemExporter) *ExportService {
+	s.customItems = items
+	return s
 }
 
 // ExportPayload is a serialized account export response.
@@ -56,7 +71,7 @@ type ExportBundle struct {
 	SavedItems  []repository.SavedItem `json:"savedItems"`
 	SavedDiets  []repository.SavedDiet `json:"savedDiets"`
 	History     []SearchHistoryEntry   `json:"history"`
-	CustomItems []ExportCustomItem     `json:"customItems"`
+	CustomItems []customitem.Item      `json:"customItems"`
 }
 
 // ExportUser contains decrypted user/profile fields for export.
@@ -77,12 +92,6 @@ type ExportConsent struct {
 	TermsVersion         string `json:"termsVersion"`
 }
 
-// ExportCustomItem reserves a typed user-owned custom item export contract.
-// Implements DESIGN-008 DataExporter.
-type ExportCustomItem struct {
-	ID string `json:"id"`
-}
-
 // BuildExport serializes account data as JSON or CSV.
 // Implements DESIGN-008 DataExporter.
 func (s *ExportService) BuildExport(ctx context.Context, userID uuid.UUID, format string) (ExportPayload, error) {
@@ -101,7 +110,10 @@ func (s *ExportService) BuildExport(ctx context.Context, userID uuid.UUID, forma
 		}
 		return ExportPayload{Format: "json", ContentType: "application/json", Filename: "mealswapp-export.json", Body: body}, nil
 	}
-	body := encodeCSV(bundle)
+	body, err := encodeCSV(bundle)
+	if err != nil {
+		return ExportPayload{}, err
+	}
 	return ExportPayload{Format: "csv", ContentType: "text/csv", Filename: "mealswapp-export.csv", Body: body}, nil
 }
 
@@ -158,13 +170,20 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 			return ExportBundle{}, err
 		}
 	}
+	customItems := []customitem.Item{}
+	if s.customItems != nil {
+		customItems, err = s.customItems.List(ctx, userID)
+		if err != nil {
+			return ExportBundle{}, err
+		}
+	}
 	role := user.Role
 	if role == "" {
 		role = repository.UserRoleUser
 	}
 	return ExportBundle{
 		User:    ExportUser{UserID: userID, Email: email, Role: role, DisplayName: displayName, UnitSystem: profile.UnitSystem, ThemePreference: profile.ThemePreference},
-		Consent: consent, SavedItems: saved, SavedDiets: diets, History: history, CustomItems: []ExportCustomItem{},
+		Consent: consent, SavedItems: saved, SavedDiets: diets, History: history, CustomItems: customItems,
 	}, nil
 }
 
@@ -180,7 +199,7 @@ func decryptField(ctx context.Context, encryption *security.EncryptionService, f
 
 // encodeCSV writes separate CSV sections into one downloadable file.
 // Implements DESIGN-008 DataExporter.
-func encodeCSV(bundle ExportBundle) []byte {
+func encodeCSV(bundle ExportBundle) ([]byte, error) {
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 	rows := [][]string{
@@ -210,8 +229,19 @@ func encodeCSV(bundle ExportBundle) []byte {
 	for _, record := range bundle.Consent {
 		rows = append(rows, []string{"consent", record.PrivacyPolicyVersion, record.TermsVersion})
 	}
-	// placeholder for user-owned custom items in the future
-	rows = append(rows, []string{"customItems", "count", "0"})
-	_ = writer.WriteAll(rows)
-	return buf.Bytes()
+	if len(bundle.CustomItems) == 0 {
+		rows = append(rows, []string{"customItems", "count", "0"})
+	}
+	for _, item := range bundle.CustomItems {
+		payload, err := json.Marshal(item)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, []string{"customItems", item.ID.String(), string(payload)})
+	}
+	writer.WriteAll(rows)
+	if err := writer.Error(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

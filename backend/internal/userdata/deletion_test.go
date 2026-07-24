@@ -36,12 +36,12 @@ func (r *memoryDeletionRepository) ListDeletionAudit(context.Context, uuid.UUID)
 func (r *memoryDeletionRepository) ClaimDeletionRequests(context.Context, time.Time, int) ([]repository.DataDeletionRequest, error) {
 	return r.claimed, r.claimErr
 }
-func (r *memoryDeletionRepository) RecordDeletionFailure(_ context.Context, _ uuid.UUID, category string, note string, nextAttemptAt *time.Time) error {
+func (r *memoryDeletionRepository) RecordDeletionFailure(_ context.Context, _ uuid.UUID, _ time.Time, category string, note string, nextAttemptAt *time.Time) error {
 	r.failures = append(r.failures, category+":"+note)
 	r.nextRetry = nextAttemptAt
 	return r.failureErr
 }
-func (r *memoryDeletionRepository) CompleteDeletionRequest(_ context.Context, _ uuid.UUID, receiptID uuid.UUID, _ time.Time) error {
+func (r *memoryDeletionRepository) CompleteDeletionRequest(_ context.Context, _ uuid.UUID, _ time.Time, receiptID uuid.UUID, _ time.Time) error {
 	r.completed = receiptID
 	return r.completeErr
 }
@@ -83,6 +83,12 @@ type memoryCachePurger struct {
 
 func (p memoryCachePurger) PurgeUser(context.Context, uuid.UUID) error { return p.err }
 
+type memoryCanceledCachePurger struct{}
+
+func (memoryCanceledCachePurger) PurgeUser(context.Context, uuid.UUID) error {
+	return context.Canceled
+}
+
 // TestAccountDeletionService verifies DESIGN-008 AccountDeleter service behavior.
 func TestAccountDeletionService(t *testing.T) {
 	ctx := context.Background()
@@ -97,18 +103,32 @@ func TestAccountDeletionService(t *testing.T) {
 	if err != nil || request.ID != requestID || sessions.revoked != userID {
 		t.Fatalf("RequestDeletion() request=%#v err=%v revoked=%s", request, err, sessions.revoked)
 	}
+	leaseExpiresAt := time.Now().Add(time.Minute)
+	request.NextAttemptAt = &leaseExpiresAt
 	if err := service.ExecuteDeletion(ctx, request, receiptID, time.Now()); err != nil {
 		t.Fatalf("ExecuteDeletion() error = %v", err)
 	}
 	if accounts.deleted != userID || requests.completed != receiptID {
 		t.Fatalf("execution deleted=%s completed=%s", accounts.deleted, requests.completed)
 	}
-	failingCache := NewAccountDeletionService(requests, sessions, accounts, memoryCachePurger{err: errors.New("cache down")})
-	if err := failingCache.ExecuteDeletion(ctx, request, uuid.New(), time.Now()); err != nil {
-		t.Fatalf("ExecuteDeletion() cache failure path error = %v", err)
+	missingLease := request
+	missingLease.NextAttemptAt = nil
+	if err := service.ExecuteDeletion(ctx, missingLease, uuid.New(), time.Now()); !repository.IsKind(err, repository.ErrorKindValidation) {
+		t.Fatalf("ExecuteDeletion() missing lease error = %v", err)
 	}
-	if len(requests.failures) == 0 || requests.failures[len(requests.failures)-1] != "transient:cache_purge_failed" {
-		t.Fatalf("cache failure metadata = %#v", requests.failures)
+	expiredLease := time.Now().Add(-time.Second)
+	expired := request
+	expired.NextAttemptAt = &expiredLease
+	if err := service.ExecuteDeletion(ctx, expired, uuid.New(), time.Now()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ExecuteDeletion() expired lease error = %v", err)
+	}
+	failingCache := NewAccountDeletionService(requests, sessions, accounts, memoryCachePurger{err: errors.New("cache down")})
+	if err := failingCache.ExecuteDeletion(ctx, request, uuid.New(), time.Now()); !repository.IsKind(err, repository.ErrorKindRetryable) {
+		t.Fatalf("ExecuteDeletion() cache failure path error = %v, want retryable", err)
+	}
+	canceledCache := NewAccountDeletionService(requests, sessions, accounts, memoryCanceledCachePurger{})
+	if err := canceledCache.ExecuteDeletion(ctx, request, uuid.New(), time.Now()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("ExecuteDeletion() canceled cache error = %v", err)
 	}
 }
 
@@ -116,8 +136,9 @@ func TestAccountDeletionService(t *testing.T) {
 func TestAccountDeletionServiceProcessesClaimedWork(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 6, 7, 12, 0, 0, 0, time.UTC)
+	leaseExpiresAt := time.Now().Add(time.Minute)
 	userID := uuid.New()
-	request := repository.DataDeletionRequest{ID: uuid.New(), UserID: userID, Status: "processing", RetryCount: 1}
+	request := repository.DataDeletionRequest{ID: uuid.New(), UserID: userID, Status: "processing", RetryCount: 1, NextAttemptAt: &leaseExpiresAt}
 	requests := &memoryDeletionRepository{claimed: []repository.DataDeletionRequest{request}}
 	accounts := &memoryAccountDeletionRepository{err: repository.NewError(repository.ErrorKindRetryable, "temporary", nil)}
 	service := NewAccountDeletionService(requests, &memoryDeletionSessions{}, accounts, nil)
@@ -132,7 +153,7 @@ func TestAccountDeletionServiceProcessesClaimedWork(t *testing.T) {
 		t.Fatalf("next retry = %v", requests.nextRetry)
 	}
 
-	requests.claimed = []repository.DataDeletionRequest{{ID: uuid.New(), Status: "processing"}}
+	requests.claimed = []repository.DataDeletionRequest{{ID: uuid.New(), Status: "processing", NextAttemptAt: &leaseExpiresAt}}
 	requests.failures = nil
 	requests.nextRetry = nil
 	accounts.err = nil
@@ -147,8 +168,9 @@ func TestAccountDeletionServiceProcessesClaimedWork(t *testing.T) {
 func TestAccountDeletionServicePropagatesFailuresAndClassifiesRetries(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 6, 18, 12, 0, 0, 0, time.UTC)
+	leaseExpiresAt := time.Now().Add(time.Minute)
 	userID := uuid.New()
-	request := repository.DataDeletionRequest{ID: uuid.New(), UserID: userID, RetryCount: 2}
+	request := repository.DataDeletionRequest{ID: uuid.New(), UserID: userID, RetryCount: 2, NextAttemptAt: &leaseExpiresAt}
 	wantErr := errors.New("failed")
 
 	service := NewAccountDeletionService(&memoryDeletionRepository{requestErr: wantErr}, &memoryDeletionSessions{}, &memoryAccountDeletionRepository{}, nil)
@@ -168,8 +190,13 @@ func TestAccountDeletionServicePropagatesFailuresAndClassifiesRetries(t *testing
 	if _, err := service.ProcessDueDeletionRequests(ctx, time.Time{}, 1); !errors.Is(err, wantErr) {
 		t.Fatalf("claim error = %v", err)
 	}
+	requests = &memoryDeletionRepository{claimed: []repository.DataDeletionRequest{{ID: uuid.New()}}}
+	service = NewAccountDeletionService(requests, &memoryDeletionSessions{}, &memoryAccountDeletionRepository{}, nil)
+	if _, err := service.ProcessDueDeletionRequests(ctx, now, 1); !repository.IsKind(err, repository.ErrorKindValidation) {
+		t.Fatalf("missing processing lease error = %v", err)
+	}
 
-	requests = &memoryDeletionRepository{claimed: []repository.DataDeletionRequest{{ID: uuid.New()}}, failureErr: wantErr}
+	requests = &memoryDeletionRepository{claimed: []repository.DataDeletionRequest{{ID: uuid.New(), NextAttemptAt: &leaseExpiresAt}}, failureErr: wantErr}
 	service = NewAccountDeletionService(requests, &memoryDeletionSessions{}, &memoryAccountDeletionRepository{}, nil)
 	if _, err := service.ProcessDueDeletionRequests(ctx, now, 1); !errors.Is(err, wantErr) {
 		t.Fatalf("missing-user record error = %v", err)
