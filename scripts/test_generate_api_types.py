@@ -139,7 +139,8 @@ class OperationResponseDriftTest(unittest.TestCase):
 			self.assertNotIn(f'| "{non_terminal}"', failure_block)
 		self.assertIn("enum: [failed_validation, solver_timeout, solver_infeasible, worker_crash]", source)
 		self.assertIn("multipleOf: 0.0001", source)
-		self.assertIn("Quantity-weighted Jaccard similarity", source)
+		self.assertIn("Cosine similarity between the original saved diet and alternative aggregate protein, carbohydrate, and fat vectors", source)
+		self.assertNotIn("Quantity-weighted Jaccard similarity", source)
 
 	def test_deliberate_optimization_decoder_contract_drift_is_rejected(self) -> None:
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")

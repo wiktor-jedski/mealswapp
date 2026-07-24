@@ -82,9 +82,16 @@ func TestAdminAuditSnapshotsRejectUnsafeOrUnboundedData(t *testing.T) {
 	if err := validateAdminAuditEntry(classification); err != nil {
 		t.Fatalf("safe classification metadata rejected: %v", err)
 	}
-	classification.After = []byte(`{"active":true,"deleted":false,"kind":"food_category","nameDigest":"not-a-digest","parentId":"not-a-uuid"}`)
-	if err := validateAdminAuditEntry(classification); !IsKind(err, ErrorKindValidation) {
-		t.Fatalf("invalid classification metadata error = %v", err)
+	invalidClassificationSnapshots := [][]byte{
+		[]byte(`{"parentId":"not-a-uuid"}`),
+		[]byte(`{"nameDigest":"not-a-digest"}`),
+		[]byte(`{"nameDigest":"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}`),
+	}
+	for _, snapshot := range invalidClassificationSnapshots {
+		classification.After = snapshot
+		if err := validateAdminAuditEntry(classification); !IsKind(err, ErrorKindValidation) {
+			t.Fatalf("invalid classification metadata %s error = %v, want validation", snapshot, err)
+		}
 	}
 }
 

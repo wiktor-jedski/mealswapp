@@ -2,7 +2,7 @@
 
 ## Acceptance status
 
-Phase 08 implementation evidence and aggregate automated verification are available for project-owner acceptance. Tasks 238-262, including Task 258, are recorded as `PASSED`; Task 263 is currently `PREPARED`. This task is limited to preparing acceptance documentation and must not edit or reconcile statuses in `docs/implementation/02_TASK_LIST.md`.
+Tasks 238-263 are recorded as `PASSED`, including the Task 263 acceptance-documentation deliverable. The aggregate evidence below records the earlier passing gate. A later 2026-07-24 review opened Phase 08 remediation actions in `docs/implementation/04_OPEN.md`; final Phase 08 acceptance is therefore pending their implementation and a fresh aggregate verification run.
 
 Project-owner checks in this document have **not** been claimed as executed. Record each result in the checklist below. Accept Phase 08 only when every required check passes or the owner explicitly records a deviation.
 
@@ -20,7 +20,7 @@ Phase 08 implements the restricted administration and external-data boundaries d
 - generated OpenAPI clients and responsive Administration Panel workflows for external import, manual item/classification/user administration, private export/deletion, and dynamic substitution filters;
 - privacy-safe metrics/logging and SWE.5 integration obligations across authentication, providers, PostgreSQL, Redis, generated clients, Svelte, browser workflows, export/deletion, search, and audit persistence.
 
-No Phase 08 assumption or action remains open in `docs/implementation/04_OPEN.md`. The accepted backend/frontend coverage exceptions are precise, machine-checked, and do not waive any acceptance behavior.
+The confirmed Phase 08 assumptions and accepted backend/frontend coverage exceptions remain recorded in `docs/implementation/04_OPEN.md`. Post-gate review actions dated 2026-07-24 remain there as the authoritative remediation list; the existing machine-checked exceptions do not waive those findings or any acceptance behavior.
 
 ## Traceability
 
@@ -89,9 +89,9 @@ The authoritative SWE.5 mappings are `docs/testing/integration/ARCH-009-obligati
 
 ## Automated verification and evidence
 
-### Task 262 aggregate evidence
+### Historical Task 262 aggregate evidence
 
-The following commands and results are recorded by the final Task 262 preparation and embodied in `08_PHASE_REPORT.html`. They are not represented as newly rerun by Task 263.
+The following commands and results are recorded by the final Task 262 preparation and embodied in `08_PHASE_REPORT.html`. They are not represented as newly rerun by Task 263 or after the 2026-07-24 review, and must be refreshed after the review actions are implemented.
 
 | Command | Recorded result |
 |---|---|
@@ -111,7 +111,7 @@ The following commands and results are recorded by the final Task 262 preparatio
 | `bash scripts/verify-task-261-ui.sh` | PASS on immediate rerun and ten-run repetition after one disclosed non-reproducing CSRF-shaped 403; 11/11 successful post-investigation runs. |
 | `git diff --check` | PASS. |
 
-Task 262 also records one unrelated pre-existing failure in `python3 scripts/test_generate_api_types.py`: 23/24 tests pass and one Phase 07 wording assertion expects an older optimization phrase. Current OpenAPI lint, generated-output drift, frontend typecheck/build/tests, and all Phase 08 contracts pass. This is not a Phase 08 acceptance waiver.
+Task 262 historically recorded one unrelated failure in `python3 scripts/test_generate_api_types.py`: 23/24 tests passed because one Phase 07 assertion expected obsolete Jaccard wording. On 2026-07-24 that assertion was aligned with the authoritative cosine-similarity contract; a fresh focused run passed all 24 tests and `bun run check:api-types` reported generated types current. The complete aggregate gate still requires a fresh run after all post-review remediation.
 
 ### Task 263 commands
 
@@ -180,10 +180,11 @@ The exact authoritative exceptions are under Phase 08 in `docs/implementation/04
 
 Accept Phase 08 when:
 
-1. UAT-08-01 through UAT-08-12 are checked as passing by the project owner;
-2. any environment-gated check is rerun in the intended acceptance environment or explicitly accepted with owner/date/reason;
-3. no open defect compromises authorization, privacy, audit atomicity, idempotency, provider safety, accessibility, or search/auth regression behavior; and
-4. accepted coverage exceptions remain exactly as recorded and validators still pass.
+1. every 2026-07-24 Phase 08 review action in `docs/implementation/04_OPEN.md` is implemented or has a dated owner-approved disposition, and the aggregate verification has been rerun;
+2. UAT-08-01 through UAT-08-12 are checked as passing by the project owner;
+3. any environment-gated check is rerun in the intended acceptance environment or explicitly accepted with owner/date/reason;
+4. no open defect compromises authorization, privacy, audit atomicity, idempotency, provider safety, accessibility, or search/auth regression behavior; and
+5. accepted coverage exceptions remain exactly as recorded and validators still pass.
 
 Decision: ☐ Accepted  ☐ Rejected  ☐ Accepted with recorded deviations
 
