@@ -21,16 +21,24 @@ type ManualItemService interface {
 	Delete(context.Context, repository.AdminMutationExecutor, uuid.UUID) (itemcurator.MutationResult, error)
 }
 
+// ManualItemCacheInvalidator makes committed global-item changes visible to cached searches.
+// Implements DESIGN-009 ItemCurator immediate Catalog and Substitution Search visibility.
+type ManualItemCacheInvalidator interface{ Invalidate() }
+
 // ManualItemController handles the ItemCurator-specific admin route actions.
 // Implements DESIGN-009 ItemCurator.
 type ManualItemController struct {
-	service ManualItemService
+	service     ManualItemService
+	invalidator ManualItemCacheInvalidator
 }
 
 // NewManualItemAdminController composes manual item routes with the secure admin gateway.
 // Implements DESIGN-009 AdminController and ItemCurator.
-func NewManualItemAdminController(audit repository.AdminMutationAuditRepository, service ManualItemService) *AdminController {
+func NewManualItemAdminController(audit repository.AdminMutationAuditRepository, service ManualItemService, invalidators ...ManualItemCacheInvalidator) *AdminController {
 	items := &ManualItemController{service: service}
+	if len(invalidators) > 0 {
+		items.invalidator = invalidators[0]
+	}
 	readLimit := RateLimitRule{Scope: "user", MaxRequests: 120, WindowSeconds: 60}
 	mutationLimit := RateLimitRule{Scope: "user", MaxRequests: 30, WindowSeconds: 60}
 	return NewAdminController(audit,
@@ -69,6 +77,11 @@ func (c *ManualItemController) Create(ctx *fiber.Ctx, tx repository.AdminMutatio
 			}
 			return repository.AdminAuditChanges{EntityID: &id, After: manualItemAuditSnapshot(result.Item, true, false)}
 		}(),
+		AfterCommit: func() {
+			if !result.Replayed && c.invalidator != nil {
+				c.invalidator.Invalidate()
+			}
+		},
 	}, nil
 }
 
@@ -109,7 +122,7 @@ func (c *ManualItemController) Update(ctx *fiber.Ctx, tx repository.AdminMutatio
 	}
 	return AdminMutationResult{Data: manualItemData(result.After), Audit: repository.AdminAuditChanges{
 		EntityID: &id, Before: manualItemAuditSnapshot(result.Before, true, false), After: manualItemAuditSnapshot(result.After, true, false),
-	}}, nil
+	}, AfterCommit: c.invalidate}, nil
 }
 
 // Delete soft-deletes one active global food item.
@@ -128,7 +141,15 @@ func (c *ManualItemController) Delete(ctx *fiber.Ctx, tx repository.AdminMutatio
 	}
 	return AdminMutationResult{HTTPStatus: fiber.StatusNoContent, Audit: repository.AdminAuditChanges{
 		EntityID: &id, Before: manualItemAuditSnapshot(result.Before, true, false), After: manualItemAuditSnapshot(result.Before, false, true),
-	}}, nil
+	}, AfterCommit: c.invalidate}, nil
+}
+
+// invalidate advances the shared food-data generation after the audited transaction commits.
+// Implements DESIGN-009 ItemCurator post-commit cache invalidation.
+func (c *ManualItemController) invalidate() {
+	if c.invalidator != nil {
+		c.invalidator.Invalidate()
+	}
 }
 
 // validateManualItemCreate enforces a durable key and strict global-item body.

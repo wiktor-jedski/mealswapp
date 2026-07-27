@@ -28,5 +28,5 @@
 - *Alternative Considered:* Server-Side Rendering (SSR) with hydration
 - *Trade-off:* SPA provides better offline capability (SW-REQ-087, SW-REQ-088) and reduces server load. SSR would improve initial load SEO but adds server complexity and breaks offline-first design. Since Mealswapp is an authenticated app (not SEO-critical), SPA is superior.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

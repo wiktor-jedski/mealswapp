@@ -12,13 +12,16 @@ import type {
 
 // Implements DESIGN-009 AdminController generated-contract client for ItemCurator, TagManager, and UserAdminPanel.
 
+/** Supported global classification hierarchies managed by the administrator. */
 export type ClassificationKind = AdminClassification["kind"];
 
+/** Optional request controls shared by administration mutations. */
 export interface AdminMutationOptions {
 	csrfToken?: string;
 	signal?: AbortSignal;
 }
 
+/** Safe normalized failure returned by an administration API call. */
 export class AdminClientError extends Error {
 	constructor(readonly status: number, readonly appError: AppError) {
 		super(appError.message);
@@ -96,6 +99,7 @@ export async function retryAdminDeletion(userId: string, requestId: string, opti
 	if (!exact(data, ["requestId", "status"]) || data.requestId !== requestId || data.status !== "pending") throw malformed(response.status);
 }
 
+/** Injectable administration operations for item, classification, and user workflows. */
 export interface AdminApi {
 	getItem: typeof getAdminItem;
 	createItem: typeof createAdminItem;
@@ -109,6 +113,7 @@ export interface AdminApi {
 	retryDeletion: typeof retryAdminDeletion;
 }
 
+/** The administration API operations exposed to the UserAdminPanel. */
 export const adminApi: AdminApi = {
 	getItem: getAdminItem,
 	createItem: createAdminItem,

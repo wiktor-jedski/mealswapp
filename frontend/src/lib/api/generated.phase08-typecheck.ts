@@ -16,6 +16,7 @@ type IsStrictOk<T> = T extends { status: "ok"; requestId: string; data: unknown 
 type IsAssignable<TSource, TTarget> = TSource extends TTarget ? true : false;
 
 // Implements DESIGN-009 AdminController strict generated success-envelope verification.
+/** Compile-time assertions that Phase 08 success envelopes retain their strict generated shape. */
 export type Phase08SuccessEnvelopeTypeChecks = [
 	Assert<IsStrictOk<CustomItemEnvelope>>,
 	Assert<IsStrictOk<FilterOptionsEnvelope>>,

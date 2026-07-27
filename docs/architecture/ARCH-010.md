@@ -28,5 +28,5 @@
 - *Alternative Considered:* Dedicated API gateway service (Kong, AWS API Gateway)
 - *Trade-off:* Application-level gateway reduces infrastructure complexity and latency for current scale. Dedicated gateway would provide advanced features (API keys, analytics) but adds operational overhead. For 1000 concurrent users (SW-REQ-082), application-level gateway is sufficient and simpler to deploy.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

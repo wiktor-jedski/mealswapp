@@ -148,6 +148,14 @@ PHASE08_SUCCESS_ENVELOPES = (
 	"AdminDeletionRetryEnvelope",
 )
 
+ADMINISTRATION_DESCRIPTION_SCHEMAS = (
+	"AdminItemRequest",
+	"AdminItem",
+	"AdminClassificationRequest",
+	"AdminClassification",
+	"AdminUser",
+)
+
 ADMIN_CLASSIFICATION_NAME_RULE = (
 	"        name:\n"
 	"          type: string\n"
@@ -1868,8 +1876,10 @@ export interface CuratedImportResult {
 export type CuratedImportEnvelope = OkEnvelope<CuratedImportResult>;
 
 // Implements DESIGN-009 ItemCurator ownerless global item boundaries.
+/** @openapi-description AdminItemRequest */
 export type AdminItemRequest = CustomItemRequest;
 
+/** @openapi-description AdminItem */
 export interface AdminItem extends AdminItemRequest {
 	id: string;
 	prepTimeMinutes: number;
@@ -1880,11 +1890,13 @@ export interface AdminItem extends AdminItemRequest {
 export type AdminItemEnvelope = OkEnvelope<AdminItem>;
 
 // Implements DESIGN-009 TagManager administration hierarchy boundary.
+/** @openapi-description AdminClassificationRequest */
 export interface AdminClassificationRequest {
 	name: string;
 	parentId?: string | null;
 }
 
+/** @openapi-description AdminClassification */
 export interface AdminClassification {
 	id: string;
 	name: string;
@@ -1904,6 +1916,7 @@ export interface AdminDeletionSummary {
 	requestedAt: string;
 }
 
+/** @openapi-description AdminUser */
 export interface AdminUser {
 	id: string;
 	email: string;
@@ -2038,7 +2051,7 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 
 
 def generated_contract(source: str) -> str:
-	"""Render shared quantity enums from the OpenAPI source of truth."""
+	"""Render shared quantity enums and administration TSDoc from OpenAPI."""
 	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 4:
 		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
 	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
@@ -2048,7 +2061,35 @@ def generated_contract(source: str) -> str:
 	if units != ["g", "ml", "oz", "fl_oz"]:
 		raise ValueError(f"unexpected canonical quantity units: {units}")
 	quantity_type = " | ".join(json.dumps(unit) for unit in units)
-	return GENERATED.replace('export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";', f"export type CanonicalQuantityUnit = {quantity_type};")
+	generated = GENERATED.replace('export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";', f"export type CanonicalQuantityUnit = {quantity_type};")
+	for schema in ADMINISTRATION_DESCRIPTION_SCHEMAS:
+		description = administration_schema_description(source, schema)
+		generated = generated.replace(f"/** @openapi-description {schema} */", f"/** {description} */")
+	return generated
+
+
+def administration_schema_description(source: str, schema: str) -> str:
+	"""Return one concise administration schema description from OpenAPI."""
+	block = schema_block(source, schema) or ""
+	match = re.search(r"(?m)^      description: (.+)$", block)
+	if match is None or "*/" in match.group(1):
+		raise ValueError(f"OpenAPI {schema} requires a valid single-line description")
+	return match.group(1)
+
+
+def administration_description_mismatches(source: str, generated: str) -> list[str]:
+	"""Ensure generated administration TSDoc remains sourced from OpenAPI descriptions."""
+	mismatches = []
+	for schema in ADMINISTRATION_DESCRIPTION_SCHEMAS:
+		try:
+			description = administration_schema_description(source, schema)
+		except ValueError as error:
+			mismatches.append(str(error))
+			continue
+		declaration = rf"/\*\* {re.escape(description)} \*/\nexport (?:interface|type) {re.escape(schema)}\b"
+		if re.search(declaration, generated) is None:
+			mismatches.append(f"{schema} generated TSDoc is missing or drifted")
+	return mismatches
 
 
 def main() -> int:
@@ -2088,6 +2129,10 @@ def main() -> int:
 		generated = generated_contract(source)
 	except ValueError as error:
 		print(error)
+		return 1
+	description_mismatches = administration_description_mismatches(source, generated)
+	if description_mismatches:
+		print("OpenAPI administration TSDoc drift:\n" + "\n".join(description_mismatches))
 		return 1
 	if args.check:
 		if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:

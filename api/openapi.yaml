@@ -1953,6 +1953,7 @@ components:
           $ref: "#/components/schemas/AdminItem"
     # Implements DESIGN-009 TagManager administration-only hierarchy contract.
     AdminClassificationRequest:
+      description: Global classification name and optional parent used by administrator mutations.
       type: object
       additionalProperties: false
       required: [name]
@@ -1966,6 +1967,7 @@ components:
           type: [string, "null"]
           format: uuid
     AdminClassification:
+      description: One global classification hierarchy node without audit state.
       type: object
       additionalProperties: false
       required: [id, name, kind]
@@ -2043,6 +2045,7 @@ components:
           type: string
           format: date-time
     AdminUser:
+      description: Privacy-minimized administrator user projection without credentials or private account data.
       type: object
       additionalProperties: false
       required: [id, email, emailVerified, createdAt]

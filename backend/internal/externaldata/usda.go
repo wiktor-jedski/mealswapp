@@ -21,12 +21,15 @@ import (
 
 // Implements DESIGN-012 USDAClient defensive provider bounds.
 const (
+	// USDAAPIKeyEnvironment names the process environment variable containing the USDA API key.
 	USDAAPIKeyEnvironment = "MEALSWAPP_USDA_API_KEY"
-	DefaultUSDAEndpoint   = "https://api.nal.usda.gov/fdc/v1/foods/search"
-	MaxUSDAPageSize       = 200
-	defaultUSDADeadline   = 5 * time.Second
-	defaultUSDABodyLimit  = int64(2 << 20)
-	maxUSDABodyLimit      = defaultUSDABodyLimit
+	// DefaultUSDAEndpoint is the production FoodData Central search endpoint.
+	DefaultUSDAEndpoint = "https://api.nal.usda.gov/fdc/v1/foods/search"
+	// MaxUSDAPageSize is the largest accepted USDA result page.
+	MaxUSDAPageSize      = 200
+	defaultUSDADeadline  = 5 * time.Second
+	defaultUSDABodyLimit = int64(2 << 20)
+	maxUSDABodyLimit     = defaultUSDABodyLimit
 )
 
 // ExternalSearchQuery is the provider-neutral, one-based search request.
@@ -68,15 +71,24 @@ type ProviderErrorCode string
 
 // Implements DESIGN-012 USDAClient provider status mapping.
 const (
-	ProviderErrorInvalidInput     ProviderErrorCode = "invalid_input"
-	ProviderErrorNotConfigured    ProviderErrorCode = "not_configured"
-	ProviderErrorRejected         ProviderErrorCode = "provider_rejected"
-	ProviderErrorRateLimited      ProviderErrorCode = "provider_rate_limited"
-	ProviderErrorUnavailable      ProviderErrorCode = "provider_unavailable"
-	ProviderErrorInvalidPayload   ProviderErrorCode = "invalid_external_payload"
+	// ProviderErrorInvalidInput identifies a rejected local provider request.
+	ProviderErrorInvalidInput ProviderErrorCode = "invalid_input"
+	// ProviderErrorNotConfigured identifies missing provider configuration.
+	ProviderErrorNotConfigured ProviderErrorCode = "not_configured"
+	// ProviderErrorRejected identifies a request rejected by the provider.
+	ProviderErrorRejected ProviderErrorCode = "provider_rejected"
+	// ProviderErrorRateLimited identifies provider quota exhaustion.
+	ProviderErrorRateLimited ProviderErrorCode = "provider_rate_limited"
+	// ProviderErrorUnavailable identifies a temporarily unavailable provider.
+	ProviderErrorUnavailable ProviderErrorCode = "provider_unavailable"
+	// ProviderErrorInvalidPayload identifies a malformed provider response.
+	ProviderErrorInvalidPayload ProviderErrorCode = "invalid_external_payload"
+	// ProviderErrorResponseTooLarge identifies a response exceeding the configured bound.
 	ProviderErrorResponseTooLarge ProviderErrorCode = "provider_response_too_large"
-	ProviderErrorTimeout          ProviderErrorCode = "timeout"
-	ProviderErrorCanceled         ProviderErrorCode = "canceled"
+	// ProviderErrorTimeout identifies a provider request deadline.
+	ProviderErrorTimeout ProviderErrorCode = "timeout"
+	// ProviderErrorCanceled identifies caller cancellation.
+	ProviderErrorCanceled ProviderErrorCode = "canceled"
 )
 
 // ProviderError reports bounded diagnostics without URLs, credentials, or payloads.

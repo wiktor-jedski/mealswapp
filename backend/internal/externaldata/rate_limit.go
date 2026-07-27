@@ -17,10 +17,15 @@ import (
 
 // Implements DESIGN-012 RateLimitHandler provider quota tracking and retry orchestration.
 const (
-	MaxProviderRetries    = 3
-	WarningRateLimited    = "provider_rate_limited"
-	WarningUnavailable    = "provider_unavailable"
-	WarningTimeout        = "timeout"
+	// MaxProviderRetries is the maximum retry count for a provider call.
+	MaxProviderRetries = 3
+	// WarningRateLimited identifies provider quota exhaustion.
+	WarningRateLimited = "provider_rate_limited"
+	// WarningUnavailable identifies provider unavailability.
+	WarningUnavailable = "provider_unavailable"
+	// WarningTimeout identifies a provider deadline.
+	WarningTimeout = "timeout"
+	// WarningRetryExhausted identifies a provider call that used its retry budget.
 	WarningRetryExhausted = "retry_exhausted"
 )
 

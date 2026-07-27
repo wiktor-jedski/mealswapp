@@ -10,8 +10,8 @@ test("covers provider selection, pagination, and all safe external states", () =
 	expect(source).toContain('value="usda"');
 	expect(source).toContain('value="openfoodfacts"');
 	expect(source).toContain('value="all"');
-	expect(source).toContain("runSearch(page - 1)");
-	expect(source).toContain("runSearch(page + 1)");
+	expect(source).toContain("requestSearch(page - 1)");
+	expect(source).toContain("requestSearch(page + 1)");
 	for (const state of ["loading", "empty", "error"]) expect(source).toContain(`searchState === "${state}"`);
 	expect(source).toContain('"empty" : "results"');
 	expect(source).toContain("providerWarningLabels");
@@ -38,7 +38,9 @@ test("provides editable drafts, normalization warnings, density, and classificat
 
 test("keeps one idempotency key through conflict and ambiguous retry paths", () => {
 	expect(source.match(/createImportIdempotencyKey\(\)/g)?.length).toBe(2);
-	expect(source).toContain("importCuratedItem({ ...draft, confirmNameConflict }, importKey)");
+	expect(source).toContain("importCuratedItem(draftSnapshot, keySnapshot)");
+	expect(source).toContain("const draftSnapshot = snapshotDraft(draft, confirmNameConflict)");
+	expect(source).toContain("const keySnapshot = importKey");
 	expect(source).toContain('error.appError.code === "name_conflict_confirmation_required"');
 	expect(source).toContain('importState = "blockedConflict"');
 	expect(source).toContain('importState = "ambiguous"');
@@ -46,6 +48,28 @@ test("keeps one idempotency key through conflict and ambiguous retry paths", () 
 	expect(source).toContain("Start a fresh import attempt");
 	expect(source).toContain("Retry import safely");
 	expect(source).toContain("submitImport(importConfirmNameConflict)");
+});
+
+test("owns deferred imports and explicit draft-to-search transitions", () => {
+	expect(source).toContain("const ownershipToken = ++importOwnershipToken");
+	expect(source.match(/ownershipToken !== importOwnershipToken/g)?.length).toBe(2);
+	expect(source).toContain("function invalidateImportOwnership()");
+	expect(source).toContain("invalidateImportOwnership();");
+	expect(source).toContain("resetCompletedDraft();");
+	expect(source).toContain("resetCuration();");
+	expect(source).toContain("pendingSearch = request");
+	expect(source).toContain("Keep editing");
+	expect(source).toContain("Discard draft and search");
+	expect(source).toContain('role="alertdialog"');
+	expect(source).toContain('aria-describedby="draft-search-description"');
+	expect(source).toContain("handleDraftBoundaryKeydown");
+	expect(source).toContain("use:openDraftBoundary");
+	expect(source).toContain("node.showModal()");
+	expect(source).toContain("document.addEventListener(\"focusin\", recoverFocus)");
+	expect(source).toContain("inert={pendingSearch ? true : undefined}");
+	expect(source).toContain('disabled={importState === "importing"}');
+	expect(source).toContain('disabled={searchState === "loading" || importState === "importing"}');
+	expect(source).toContain('<fieldset class="grid gap-4" disabled={importState === "importing"}>');
 });
 
 test("offers a keyboard-native local-search handoff after import", () => {

@@ -16,8 +16,10 @@ import (
 
 // Implements DESIGN-009 ItemCurator idempotency errors.
 var (
+	// ErrMissingIdempotencyKey indicates a create request without an idempotency key.
 	ErrMissingIdempotencyKey = errors.New("idempotency key is required")
-	ErrIdempotencyConflict   = errors.New("idempotency key reused with different body")
+	// ErrIdempotencyConflict indicates reuse of an idempotency key with a different request.
+	ErrIdempotencyConflict = errors.New("idempotency key reused with different body")
 )
 
 // Request contains administrator-editable global food-item fields.

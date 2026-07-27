@@ -1242,8 +1242,10 @@ export interface CuratedImportResult {
 export type CuratedImportEnvelope = OkEnvelope<CuratedImportResult>;
 
 // Implements DESIGN-009 ItemCurator ownerless global item boundaries.
+/** Ownerless global item fields. userId and ownerId are intentionally unsupported. */
 export type AdminItemRequest = CustomItemRequest;
 
+/** Ownerless global item projection without private ownership or audit state. */
 export interface AdminItem extends AdminItemRequest {
 	id: string;
 	prepTimeMinutes: number;
@@ -1254,11 +1256,13 @@ export interface AdminItem extends AdminItemRequest {
 export type AdminItemEnvelope = OkEnvelope<AdminItem>;
 
 // Implements DESIGN-009 TagManager administration hierarchy boundary.
+/** Global classification name and optional parent used by administrator mutations. */
 export interface AdminClassificationRequest {
 	name: string;
 	parentId?: string | null;
 }
 
+/** One global classification hierarchy node without audit state. */
 export interface AdminClassification {
 	id: string;
 	name: string;
@@ -1278,6 +1282,7 @@ export interface AdminDeletionSummary {
 	requestedAt: string;
 }
 
+/** Privacy-minimized administrator user projection without credentials or private account data. */
 export interface AdminUser {
 	id: string;
 	email: string;

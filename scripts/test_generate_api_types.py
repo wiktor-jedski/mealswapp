@@ -28,8 +28,33 @@ class OperationResponseDriftTest(unittest.TestCase):
 			"CuratedImportRequest",
 		):
 			self.assertRegex(generated, rf"export (?:interface|type) {symbol}\b")
-		for forbidden in ("rawPayload", "auditSnapshot", "ownerId", "passwordHash", "accessToken"):
+		for forbidden in ("rawPayload", "auditSnapshot", "passwordHash", "accessToken"):
 			self.assertNotIn(forbidden, generated)
+		self.assertNotIn("\n\townerId:", generated)
+		self.assertEqual(GENERATOR.administration_description_mismatches(source, generated), [])
+		changed_description = "One regenerated ownerless administration item."
+		mutated = source.replace(
+			"      description: Ownerless global item projection without private ownership or audit state.\n",
+			f"      description: {changed_description}\n",
+			1,
+		)
+		self.assertIn(f"/** {changed_description} */\nexport interface AdminItem", GENERATOR.generated_contract(mutated))
+		for index, first_schema in enumerate(GENERATOR.ADMINISTRATION_DESCRIPTION_SCHEMAS):
+			for second_schema in GENERATOR.ADMINISTRATION_DESCRIPTION_SCHEMAS[index + 1:]:
+				with self.subTest(swapped=(first_schema, second_schema)):
+					first_description = GENERATOR.administration_schema_description(source, first_schema)
+					second_description = GENERATOR.administration_schema_description(source, second_schema)
+					swapped = generated.replace(f"/** {first_description} */", "/** __SWAPPED_DESCRIPTION__ */", 1)
+					swapped = swapped.replace(f"/** {second_description} */", f"/** {first_description} */", 1)
+					swapped = swapped.replace("/** __SWAPPED_DESCRIPTION__ */", f"/** {second_description} */", 1)
+					self.assertEqual(
+						GENERATOR.administration_description_mismatches(source, swapped),
+						[
+							f"{schema} generated TSDoc is missing or drifted"
+							for schema in GENERATOR.ADMINISTRATION_DESCRIPTION_SCHEMAS
+							if schema in (first_schema, second_schema)
+						],
+					)
 
 	def test_phase08_security_or_warning_drift_is_rejected(self) -> None:
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")

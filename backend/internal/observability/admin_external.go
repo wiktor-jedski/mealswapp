@@ -7,13 +7,21 @@ import (
 
 // Implements DESIGN-014 MetricsCollector names for Phase 08 administration and external data.
 const (
-	MetricExternalProviderCalls       = "external_provider_calls_total"
-	MetricExternalProviderLatency     = "external_provider_latency_seconds"
-	MetricExternalProviderRetries     = "external_provider_retries_total"
-	MetricExternalProviderQuota       = "external_provider_quota_total"
-	MetricExternalNormalization       = "external_normalization_warnings_total"
-	MetricAdminImportOutcomes         = "admin_import_outcomes_total"
-	MetricAdminMutationOutcomes       = "admin_mutation_outcomes_total"
+	// MetricExternalProviderCalls counts external provider call outcomes.
+	MetricExternalProviderCalls = "external_provider_calls_total"
+	// MetricExternalProviderLatency records external provider call latency.
+	MetricExternalProviderLatency = "external_provider_latency_seconds"
+	// MetricExternalProviderRetries counts external provider retry outcomes.
+	MetricExternalProviderRetries = "external_provider_retries_total"
+	// MetricExternalProviderQuota counts bounded external provider quota states.
+	MetricExternalProviderQuota = "external_provider_quota_total"
+	// MetricExternalNormalization counts external normalization warnings.
+	MetricExternalNormalization = "external_normalization_warnings_total"
+	// MetricAdminImportOutcomes counts curated import outcomes.
+	MetricAdminImportOutcomes = "admin_import_outcomes_total"
+	// MetricAdminMutationOutcomes counts administrative mutation outcomes.
+	MetricAdminMutationOutcomes = "admin_mutation_outcomes_total"
+	// MetricCustomItemLifecycleOutcomes counts custom-item lifecycle outcomes.
 	MetricCustomItemLifecycleOutcomes = "custom_item_lifecycle_outcomes_total"
 	adminExternalTelemetryTimeout     = 100 * time.Millisecond
 )

@@ -72,5 +72,5 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* MongoDB document store for flexible food item schema
 - *Trade-off:* Relational model ensures data integrity for macronutrient calculations and enforces consistent schema across all items (critical for SW-REQ-033). Recipe composition with foreign keys prevents orphaned ingredients. PostgreSQL JSONB columns can handle variable micronutrient fields while maintaining relational benefits.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

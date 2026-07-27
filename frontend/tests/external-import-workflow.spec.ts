@@ -10,7 +10,7 @@ import type {
   SearchResponseEnvelope
 } from "../src/lib/api/generated";
 
-// Implements DESIGN-009 ExternalSearchProxy, ItemCurator, and DataImporter browser verification for task 255.
+// Implements DESIGN-009 ExternalSearchProxy, ItemCurator, and DataImporter browser verification for tasks 255 and 266.
 
 const candidate: ExternalCandidate = {
   provider: "usda",
@@ -71,6 +71,20 @@ function externalEnvelope(provider: "usda" | "openfoodfacts" | "all", page: numb
       warnings: provider === "all" ? [{ provider: "openfoodfacts", code: "timeout", message: "timeout" }] : [],
       page
     }
+  };
+}
+
+function lifecycleEnvelope(query: string): ExternalSearchEnvelope {
+  const current = {
+    ...candidate,
+    externalId: "usda-current-266",
+    name: query === "replacement" ? "Replacement candidate" : "Current lifecycle candidate",
+    physicalState: "solid" as const,
+    warnings: [] as ExternalCandidate["warnings"]
+  };
+  return {
+    ...externalEnvelope("usda", 1),
+    data: { candidates: [{ ...candidate, name: "Deferred lifecycle candidate", warnings: [] }, current], warnings: [], page: 1 }
   };
 }
 
@@ -252,6 +266,232 @@ test("ignores a stale external search response after a newer query wins", async 
   await expect(workflow.getByText("Current candidate")).toBeVisible();
   releaseFirst();
   await expect(workflow.getByText("Stale candidate")).toHaveCount(0);
+});
+
+// Verifies IT-ARCH-009-010 and IT-ARCH-012-004, ARCH-009, ARCH-012,
+// DESIGN-009 ExternalSearchProxy/DataImporter, DESIGN-012 RateLimitHandler,
+// and SW-REQ-055.
+for (const outcome of ["success", "conflict", "ambiguity", "failure"] as const) {
+  test(`ignores a superseded import ${outcome} without overwriting the active draft`, async ({ page }) => {
+    await stubAdminShell(page);
+    await page.route(/\/api\/v1\/admin\/external-search\?.*$/, (route) => json(route, 200, lifecycleEnvelope("initial")));
+    let releaseImport!: () => void;
+    let markImportStarted!: () => void;
+    const importRelease = new Promise<void>((resolve) => { releaseImport = resolve; });
+    const importStarted = new Promise<void>((resolve) => { markImportStarted = resolve; });
+    await page.route(/\/api\/v1\/admin\/imports$/, async (route) => {
+      markImportStarted();
+      await importRelease;
+      if (outcome === "success") return json(route, 201, importEnvelope());
+      if (outcome === "conflict") return json(route, 409, { status: "error", requestId: "conflict-266", error: { category: "validation", code: "name_conflict_confirmation_required", message: "superseded conflict", retryable: false } });
+      if (outcome === "ambiguity") return route.abort("connectionreset");
+      return json(route, 503, { status: "error", requestId: "failure-266", error: { category: "dependency", code: "external_source_unavailable", message: "superseded failure", retryable: true } });
+    });
+    await page.goto("/admin");
+    const workflow = page.locator("[data-external-import-workflow]");
+    await workflow.getByLabel("External food search").fill("initial");
+    await workflow.getByRole("button", { name: "Search", exact: true }).click();
+    await workflow.getByRole("article").filter({ hasText: "Deferred lifecycle candidate" }).getByRole("button", { name: "Curate" }).click();
+    await workflow.getByLabel("Density (g/ml)").fill("1.01");
+    await workflow.getByRole("button", { name: "Import curated item" }).click();
+    await importStarted;
+
+    const currentButton = workflow.getByRole("article").filter({ hasText: "Current lifecycle candidate" }).getByRole("button", { name: "Curate" });
+    await expect(currentButton).toBeDisabled();
+    await currentButton.evaluate((button) => {
+      (button as HTMLButtonElement).disabled = false;
+      (button as HTMLButtonElement).click();
+    });
+    await expect(workflow.getByLabel("Name")).toHaveValue("Current lifecycle candidate");
+
+    const completion = outcome === "ambiguity"
+      ? page.waitForEvent("requestfailed", (request) => request.url().endsWith("/api/v1/admin/imports"))
+      : page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/imports"));
+    releaseImport();
+    await completion;
+    await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+
+    await expect(workflow.getByLabel("Name")).toHaveValue("Current lifecycle candidate");
+    await expect(workflow.locator("[data-import-result], [data-import-conflict], [data-import-blocked-conflict], [data-import-error]")).toHaveCount(0);
+    await expect(workflow.getByRole("button", { name: "Import curated item" })).toBeEnabled();
+    await expect(workflow).not.toContainText("superseded");
+  });
+}
+
+// Verifies IT-ARCH-009-010 and IT-ARCH-012-004, ARCH-009, ARCH-012,
+// DESIGN-009 ExternalSearchProxy/DataImporter, and SW-REQ-055.
+test("disables incompatible controls during import and starts a completed workflow without a draft warning", async ({ page }) => {
+  await stubAdminShell(page);
+  await page.route(/\/api\/v1\/admin\/external-search\?.*$/, (route) => {
+    const query = new URL(route.request().url()).searchParams.get("query") ?? "";
+    return json(route, 200, lifecycleEnvelope(query));
+  });
+  let releaseImport!: () => void;
+  let markImportStarted!: () => void;
+  const importRelease = new Promise<void>((resolve) => { releaseImport = resolve; });
+  const importStarted = new Promise<void>((resolve) => { markImportStarted = resolve; });
+  await page.route(/\/api\/v1\/admin\/imports$/, async (route) => {
+    markImportStarted();
+    await importRelease;
+    return json(route, 201, importEnvelope());
+  });
+  await page.goto("/admin");
+  const workflow = page.locator("[data-external-import-workflow]");
+  await workflow.getByLabel("External food search").fill("initial");
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await workflow.getByRole("article").filter({ hasText: "Deferred lifecycle candidate" }).getByRole("button", { name: "Curate" }).click();
+  const draft = workflow.locator("[data-curation-draft]");
+  await draft.getByLabel("Density (g/ml)").fill("1.01");
+  await draft.getByRole("button", { name: "Import curated item" }).click();
+  await importStarted;
+
+  await expect(workflow.getByLabel("External food search")).toBeDisabled();
+  await expect(workflow.getByLabel("Provider")).toBeDisabled();
+  await expect(workflow.getByRole("button", { name: "Search", exact: true })).toBeDisabled();
+  await expect(workflow.getByRole("button", { name: "Next" })).toBeDisabled();
+  await expect(workflow.getByRole("button", { name: "Curate" }).first()).toBeDisabled();
+  await expect(draft.getByLabel("Name")).toBeDisabled();
+  await expect(draft.getByLabel("Physical state")).toBeDisabled();
+  await expect(draft.getByLabel("Density (g/ml)")).toBeDisabled();
+  await expect(draft.getByLabel("Fruit")).toBeDisabled();
+  await expect(draft.getByRole("button", { name: "Importing…" })).toBeDisabled();
+
+  const completion = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/imports"));
+  releaseImport();
+  await completion;
+  await expect(workflow.locator("[data-import-result]")).toBeVisible();
+  await expect(draft).toHaveCount(0);
+
+  await workflow.getByLabel("External food search").fill("replacement");
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(workflow.locator("[data-draft-search-boundary]")).toHaveCount(0);
+  await expect(workflow.locator("[data-import-result]")).toHaveCount(0);
+  await expect(workflow.getByText("Replacement candidate")).toBeVisible();
+});
+
+// Verifies IT-ARCH-009-010 and IT-ARCH-012-004, ARCH-009, ARCH-012,
+// DESIGN-009 ExternalSearchProxy/DataImporter, and SW-REQ-055.
+test("keeps or discards an unsaved draft explicitly and invalidates discarded import ownership", async ({ page }) => {
+  await stubAdminShell(page);
+  let searches = 0;
+  await page.route(/\/api\/v1\/admin\/external-search\?.*$/, (route) => {
+    searches += 1;
+    const query = new URL(route.request().url()).searchParams.get("query") ?? "";
+    return json(route, 200, lifecycleEnvelope(query));
+  });
+  let releaseImport!: () => void;
+  let markImportStarted!: () => void;
+  const importRelease = new Promise<void>((resolve) => { releaseImport = resolve; });
+  const importStarted = new Promise<void>((resolve) => { markImportStarted = resolve; });
+  await page.route(/\/api\/v1\/admin\/imports$/, async (route) => {
+    markImportStarted();
+    await importRelease;
+    return json(route, 201, importEnvelope());
+  });
+  await page.goto("/admin");
+  const workflow = page.locator("[data-external-import-workflow]");
+  const search = workflow.getByLabel("External food search");
+  await search.fill("initial");
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await workflow.getByRole("article").filter({ hasText: "Deferred lifecycle candidate" }).getByRole("button", { name: "Curate" }).click();
+  const draft = workflow.locator("[data-curation-draft]");
+  await draft.getByLabel("Name").fill("Unsaved administrator draft");
+  await draft.getByLabel("Density (g/ml)").fill("1.01");
+  await search.fill("replacement");
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+
+  const boundary = workflow.locator("[data-draft-search-boundary]");
+  const boundaryBackground = workflow.locator("[data-draft-search-background]");
+  const backgroundCandidate = workflow.getByRole("article").filter({ hasText: "Current lifecycle candidate" }).getByRole("button", { name: "Curate" });
+  await expect(boundary).toHaveAttribute("role", "alertdialog");
+  await expect(boundary).toHaveAttribute("aria-modal", "true");
+  await expect(boundaryBackground).toHaveAttribute("inert", "");
+  await expect(boundary.getByRole("button", { name: "Keep editing" })).toBeFocused();
+  let backgroundActivationBlocked = false;
+  try {
+    await backgroundCandidate.click({ timeout: 750 });
+  } catch {
+    backgroundActivationBlocked = true;
+  }
+  expect(backgroundActivationBlocked).toBe(true);
+  await expect(boundary).toBeVisible();
+  await expect(draft.getByLabel("Name")).toHaveValue("Unsaved administrator draft");
+  await search.evaluate((input) => input.focus());
+  await expect(boundary.getByRole("button", { name: "Keep editing" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(boundary.getByRole("button", { name: "Discard draft and search" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(boundary.getByRole("button", { name: "Keep editing" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(boundary).toHaveCount(0);
+  await expect(draft.getByLabel("Name")).toHaveValue("Unsaved administrator draft");
+  await expect(draft.getByLabel("Name")).toBeFocused();
+  expect(searches).toBe(1);
+
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(boundary.getByRole("button", { name: "Keep editing" })).toBeFocused();
+  await boundary.getByRole("button", { name: "Keep editing" }).press("Enter");
+  await expect(draft.getByLabel("Name")).toHaveValue("Unsaved administrator draft");
+  await expect(draft.getByLabel("Name")).toBeFocused();
+  expect(searches).toBe(1);
+
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await draft.evaluate((form) => form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true })));
+  await importStarted;
+  const discard = boundary.getByRole("button", { name: "Discard draft and search" });
+  await discard.focus();
+  await discard.press("Enter");
+  await expect(workflow.getByText("Replacement candidate")).toBeVisible();
+  await expect(draft).toHaveCount(0);
+  expect(searches).toBe(2);
+
+  const completion = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/imports"));
+  releaseImport();
+  await completion;
+  await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+  await expect(workflow.locator("[data-import-result], [data-import-conflict], [data-import-blocked-conflict], [data-import-error]")).toHaveCount(0);
+  await expect(workflow.getByText("Replacement candidate")).toBeVisible();
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(axe.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical")).toEqual([]);
+});
+
+// Verifies IT-ARCH-009-010 and IT-ARCH-012-004, ARCH-009, ARCH-012,
+// DESIGN-009 UserAdminPanel/ExternalSearchProxy, and SW-REQ-054/SW-REQ-055.
+test("restores visible focus after discarding from pagination or a disappearing refresh action", async ({ page }) => {
+  await stubAdminShell(page);
+  await page.route(/\/api\/v1\/admin\/external-search\?.*$/, (route) => {
+    const url = new URL(route.request().url());
+    const result = lifecycleEnvelope(url.searchParams.get("query") ?? "");
+    result.data.page = Number(url.searchParams.get("page"));
+    return json(route, 200, result);
+  });
+  await page.route(/\/api\/v1\/admin\/imports$/, (route) => json(route, 409, {
+    status: "error",
+    requestId: "provider-conflict",
+    error: { category: "conflict", code: "provider_identity_conflict", message: "Refresh provider data.", retryable: false }
+  }));
+  await page.goto("/admin");
+
+  const workflow = page.locator("[data-external-import-workflow]");
+  const search = workflow.getByLabel("External food search");
+  const boundary = workflow.locator("[data-draft-search-boundary]");
+  await search.fill("initial");
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await workflow.getByRole("article").filter({ hasText: "Deferred lifecycle candidate" }).getByRole("button", { name: "Curate" }).click();
+
+  await workflow.getByRole("button", { name: "Next" }).click();
+  await boundary.getByRole("button", { name: "Discard draft and search" }).click();
+  await expect(workflow.getByText("Page 2")).toBeVisible();
+  await expect(search).toBeFocused();
+
+  await workflow.getByRole("article").filter({ hasText: "Deferred lifecycle candidate" }).getByRole("button", { name: "Curate" }).click();
+  const draft = workflow.locator("[data-curation-draft]");
+  await draft.getByLabel("Density (g/ml)").fill("1");
+  await draft.getByRole("button", { name: "Import curated item" }).click();
+  await workflow.getByRole("button", { name: "Refresh external results" }).click();
+  await boundary.getByRole("button", { name: "Discard draft and search" }).click();
+  await expect(workflow.locator("[data-external-results]")).toBeVisible();
+  await expect(search).toBeFocused();
 });
 
 // Verifies IT-ARCH-012-003, ARCH-012, DESIGN-012 RateLimitHandler, and SW-REQ-055.

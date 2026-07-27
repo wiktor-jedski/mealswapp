@@ -11,6 +11,7 @@ import type { CustomItem, ExportBundle } from "./generated";
 
 const MAX_EXPORT_BYTES = 1024 * 1024;
 
+/** Safe failure exposed by authenticated Account Export operations. */
 export class AccountDataClientError extends Error {
 	constructor(message = "Account data could not be refreshed. Try again.") {
 		super(message);
@@ -38,11 +39,13 @@ export async function deletePrivateCustomItem(itemId: string, signal?: AbortSign
 	if (response.status !== 204 || (await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
 }
 
+/** Injectable Account Export and private-item mutation operations. */
 export interface AccountDataApi {
 	loadExport: typeof loadAccountExport;
 	deleteCustomItem: typeof deletePrivateCustomItem;
 }
 
+/** Account Export operations exposed to the Administration Panel. */
 export const accountDataApi: AccountDataApi = { loadExport: loadAccountExport, deleteCustomItem: deletePrivateCustomItem };
 
 function assertCustomItemSummary(value: unknown): asserts value is CustomItem {

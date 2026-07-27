@@ -1214,7 +1214,7 @@ func main() {
 	}
 
 	log.Println("Starting Mealswapp Diet Optimization worker daemon...")
-	
+
 	// Channels setup for handling terminations smoothly
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -1423,20 +1423,20 @@ export default config;`,
                     === Running Unified Validation Checks ===
                     Checking design requirements tracing...
                     <span class="term-success">✔ python scripts/check.py passed (19/19 requirement IDs validated)</span>
-                    
+
                     Checking Go Backend...
                     go: vetting packages...
                     <span class="term-success">✔ go vet ./... - 0 warnings, 0 errors</span>
                     go: running unit tests...
                     ok      github.com/wiktor-jedski/mealswapp/cmd/server     0.035s  coverage: 100.0% of statements
                     ok      github.com/wiktor-jedski/mealswapp/internal/config 0.012s  coverage: 100.0% of statements
-                    
+
                     Checking Bun Svelte Frontend...
                     bun run: lint
                     <span class="term-success">✔ ESLint passed with zero warnings</span>
                     bun: running tests...
                     <span class="term-success">✔ Svelte layout render stores initialized</span>
-                    
+
                     === <span class="term-success">All Checks Passed Gracefully!</span> ===
                 </div>
             `;

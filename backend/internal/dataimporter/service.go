@@ -19,10 +19,14 @@ import (
 
 // Implements DESIGN-009 DataImporter stable conflict outcomes.
 var (
+	// ErrMissingIdempotencyKey indicates a provider-less import without an idempotency key.
 	ErrMissingIdempotencyKey = errors.New("idempotency key is required when provider identity is absent")
-	ErrIdempotencyConflict   = errors.New("idempotency key reused with different body")
-	ErrProviderConflict      = errors.New("provider identity conflicts with an existing import")
-	ErrNameConfirmation      = errors.New("normalized name conflict requires explicit confirmation")
+	// ErrIdempotencyConflict indicates reuse of an idempotency key with a different request.
+	ErrIdempotencyConflict = errors.New("idempotency key reused with different body")
+	// ErrProviderConflict indicates a provider identity already belongs to another import.
+	ErrProviderConflict = errors.New("provider identity conflicts with an existing import")
+	// ErrNameConfirmation indicates a normalized-name conflict awaiting explicit confirmation.
+	ErrNameConfirmation = errors.New("normalized name conflict requires explicit confirmation")
 )
 
 // Request is the editable curated draft plus confirmation metadata.

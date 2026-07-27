@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import scripts.check as check
+import scripts.generate_report as generate_report
 
 
 BACKEND_PATH = "internal/example/service.go"
@@ -107,6 +108,29 @@ class FrontendCoverageContractTests(unittest.TestCase):
 		with mock.patch.object(check, "PHASE08_FRONTEND_SOURCES", {FRONTEND_PATH}):
 			with self.assertRaisesRegex(SystemExit, "not phase-bound"):
 				check.validate_phase08_frontend_coverage(frontend_output(), document(frontend_rows=frontend_row(phase="Phase 07")))
+
+
+class CoverageReportTests(unittest.TestCase):
+	def test_phase08_summary_is_derived_from_the_machine_checked_contract(self) -> None:
+		html = generate_report.phase08_exception_html(
+			generate_report.parse_bun_coverage("All files | 95.46 | 96.06 |\n"),
+			document(backend_rows=backend_row(), frontend_rows=frontend_row()).replace(
+				"Measured Phase 08 scope: `0/1` statements (`0.0%`).",
+				"Measured Phase 08 scope: `4537/4849` statements (`93.6%`).",
+			),
+		)
+
+		self.assertIn("4,537/4,849 statements (93.6%)", html)
+		self.assertNotIn("4,523/4,841", html)
+
+	def test_frontend_summary_uses_current_aggregate_measurements(self) -> None:
+		html = generate_report.phase08_exception_html(
+			generate_report.parse_bun_coverage("All files | 80.00 | 70.00 |\n"),
+			document(backend_rows=backend_row(), frontend_rows=frontend_row()),
+		)
+
+		self.assertIn("80.00% functions and 70.00% lines", html)
+		self.assertNotIn("95.46% functions and 96.06% lines", html)
 
 
 class CheckOrchestrationTests(unittest.TestCase):

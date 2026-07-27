@@ -2,6 +2,7 @@ import type { AdminDeletionSummary, AdminItemRequest } from "./api/generated";
 
 // Implements DESIGN-009 ItemCurator and UserAdminPanel client validation without replacing server authority.
 
+/** Text-backed administration item form state before server-contract parsing. */
 export interface AdminItemForm {
 	name: string;
 	physicalState: "solid" | "liquid";

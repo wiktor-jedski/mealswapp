@@ -119,7 +119,7 @@ Container orchestration is not required as managed services handle scaling and a
 - *Alternative Considered:* Server-Side Rendering (SSR) with hydration
 - *Trade-off:* SPA provides better offline capability (SW-REQ-087, SW-REQ-088) and reduces server load. SSR would improve initial load SEO but adds server complexity and breaks offline-first design. Since Mealswapp is an authenticated app (not SEO-critical), SPA is superior.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -154,7 +154,7 @@ Container orchestration is not required as managed services handle scaling and a
 - *Alternative Considered:* Elasticsearch/Algolia for full-text search
 - *Trade-off:* Custom module provides precise control over ranking algorithm (SW-REQ-004) and cosine similarity integration. External search services would require synchronization overhead and may not support custom similarity scoring. For the current scale (1000 users), custom solution is more cost-effective and controllable.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -230,7 +230,7 @@ Container orchestration is not required as managed services handle scaling and a
 - *Alternative Considered:* Synchronous LP execution within API request lifecycle
 - *Trade-off:* Synchronous execution would block the Go Fiber event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently. The pure-Go child-process boundary avoids CGO and library ABI coupling while enforcing a hard deadline and bounded sanitized output.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -309,7 +309,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* MongoDB document store for flexible food item schema
 - *Trade-off:* Relational model ensures data integrity for macronutrient calculations and enforces consistent schema across all items (critical for SW-REQ-033). Recipe composition with foreign keys prevents orphaned ingredients. PostgreSQL JSONB columns can handle variable micronutrient fields while maintaining relational benefits.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -344,7 +344,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* Third-party auth service (Auth0, Firebase Auth)
 - *Trade-off:* Custom implementation provides full control over security requirements (SW-REQ-062, SW-REQ-063, SW-REQ-065) and avoids vendor lock-in. Third-party services simplify development but may not support exact lockout policies or cookie configurations required. For a subscription-based app with specific security needs, custom implementation ensures compliance.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -579,7 +579,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* Dedicated API gateway service (Kong, AWS API Gateway)
 - *Trade-off:* Application-level gateway reduces infrastructure complexity and latency for current scale. Dedicated gateway would provide advanced features (API keys, analytics) but adds operational overhead. For 1000 concurrent users (SW-REQ-082), application-level gateway is sufficient and simpler to deploy.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -616,7 +616,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* localStorage-only client caching without Service Worker
 - *Trade-off:* localStorage has a 5MB limit and cannot cache binary assets (images). SW-REQ-088 requires displaying "cached search results" offline, and SW-REQ-011 mandates images in results. Without Service Worker, offline mode would show broken image links, degrading UX. Service Worker enables full offline visual experience while localStorage handles structured query data within its size constraints.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -649,7 +649,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* Bulk data import with scheduled synchronization
 - *Trade-off:* On-demand fetching with curation (SW-REQ-055) ensures data quality and proper culinary_role tagging. Bulk import would populate database faster but with uncurated, potentially inconsistent data. Quality over quantity is critical for accurate similarity matching.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---
@@ -717,7 +717,7 @@ MicronutrientVocabularyEntry {               // SW-REQ-090
 - *Alternative Considered:* Distributed logging with per-service log files
 - *Trade-off:* Centralized logging enables correlation across services for debugging and security auditing (SW-REQ-084). Distributed logs would be simpler but make cross-service analysis difficult. Centralized approach is essential for maintaining 99.9% availability (SW-REQ-081) through proactive monitoring.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md
 
 ---

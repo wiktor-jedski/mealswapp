@@ -188,7 +188,7 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		).WithBillingRedirectOrigin(cfg.FrontendOrigin).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
 		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
 		httpapi.NewAdminController(adminAudit, append(classificationController.AdminRoutes(), adminUserController.AdminRoutes()...)...).WithTelemetry(adminExternalTelemetry),
-		httpapi.NewManualItemAdminController(adminAudit, manualItems).WithTelemetry(adminExternalTelemetry),
+		httpapi.NewManualItemAdminController(adminAudit, manualItems, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),
 		httpapi.NewCuratedImportAdminController(adminAudit, curatedImports, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),
 	}
 	routes := []httpapi.RouteDefinition{}

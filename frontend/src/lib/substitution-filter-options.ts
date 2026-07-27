@@ -2,6 +2,7 @@ import type { FilterOption, FoodObject, SearchFilter, SearchFilterKind } from ".
 
 // Implements DESIGN-001 SearchView dynamic substitution filter projection.
 
+/** Renderable substitution filter preserving generated request identity. */
 export type SubstitutionFilterOption = SearchFilter & {
 	label: string;
 	description: string;

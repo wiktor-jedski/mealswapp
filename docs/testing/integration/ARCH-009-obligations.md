@@ -10,10 +10,10 @@ This document defines the SWE.5 integration verification obligations for ARCH-00
 | --- | --- |
 | Architecture Component | ARCH-009 |
 | Name | Administration Module |
-| Source Documents | `docs/architecture/ARCH-009.md`, `docs/architecture/01_SOFT_ARCH_DESIGN.md`, `docs/design/DESIGN-009.md` |
+| Source Documents | `docs/architecture/ARCH-009.md`, `docs/architecture/01_SOFT_ARCH_DESIGN.md`, `docs/design/DESIGN-008.md`, `docs/design/DESIGN-009.md`, `docs/design/DESIGN-010.md`, `docs/design/DESIGN-011.md` |
 | Related Units | AdminController, ExternalSearchProxy, DataImporter, ItemCurator, TagManager, UserAdminPanel, authentication middleware, repositories, audit coordinator, search/filter consumers, generated clients, Administration Panel |
-| Collaborating Architecture | ARCH-001, ARCH-002, ARCH-005, ARCH-006, ARCH-008, ARCH-011, ARCH-012, ARCH-013, ARCH-015, ARCH-018 |
-| Related Requirements | SW-REQ-043, SW-REQ-054, SW-REQ-055, SW-REQ-056, SW-REQ-057, SW-REQ-072, SW-REQ-073, SW-REQ-090 |
+| Collaborating Architecture | ARCH-001, ARCH-002, ARCH-005, ARCH-006, ARCH-008, ARCH-010, ARCH-011, ARCH-012, ARCH-013, ARCH-015, ARCH-018 |
+| Related Requirements | SW-REQ-032, SW-REQ-043, SW-REQ-054, SW-REQ-055, SW-REQ-056, SW-REQ-057, SW-REQ-072, SW-REQ-073, SW-REQ-090 |
 
 ## IT-ARCH-009-001 Authenticated Administration Authorization and UI Isolation
 
@@ -380,22 +380,274 @@ Implemented by:
 
 Status: PASS.
 
+## IT-ARCH-009-008 Audited Manual Mutation to Cross-Instance Search Convergence
+
+### Intent
+
+Verify that committed manual global-item mutations cross the AdminController, ItemCurator, audited PostgreSQL transaction, post-commit cache invalidator, shared Redis generation, and independent Catalog/Substitution Search instances exactly once, while replay and rollback preserve the prior generation and visible state.
+
+### System Under Test
+
+ARCH-009 AdminController and ItemCurator collaboration with ARCH-005 persistence, DESIGN-011 CacheInvalidator, and ARCH-002 search consumers.
+
+### Real Components
+
+- Two independently composed production Fiber applications with authenticated admin routing and CSRF enforcement
+- ItemCurator, PostgreSQL manual-food/idempotency/audit repositories, and transaction coordinator
+- Redis shared generation, Catalog Search, and Substitution Search caches
+
+### Allowed Test Doubles
+
+- A PostgreSQL test trigger may reject the audit insert at the transaction boundary to force rollback.
+- The external network and browser are outside this backend obligation.
+
+### Trigger / Stimulus
+
+Prewarm Catalog and Substitution Search on one application instance; create, exactly replay, update, and delete a manual global item through another instance; force one audit failure after the mutation begins.
+
+### Expected Integrated Behavior
+
+1. Each committed create, update, and delete writes one audit and advances the shared generation exactly once.
+2. The peer instance immediately observes the created, renamed, and deleted state in both search modes.
+3. Exact replay returns the original identity without a second audit or generation advance.
+4. Audit failure rolls back food, idempotency, and audit state and does not advance generation or expose the rejected item.
+5. Failure envelopes and telemetry omit database and item diagnostics.
+
+### Required Evidence
+
+- Prewarmed Redis cache hits, generation values, HTTP identities/envelopes, exact PostgreSQL food/audit counts, and cross-instance Catalog/Substitution result names.
+
+### Requirement and Design Traceability
+
+- ARCH-009, ARCH-002, ARCH-005, ARCH-011
+- DESIGN-009 ItemCurator
+- DESIGN-011 CacheInvalidator and RedisCache
+- SW-REQ-056
+
+### Verification Status
+
+Implemented by:
+
+- `backend/internal/app/task271_backend_regression_integration_test.go::TestTask271ProductionBackendRegressionGate`
+- `backend/internal/cache/manual_item_generation_integration_test.go::TestManualItemGenerationLiveRedisRefreshesPeerCatalogAndSubstitutionSearch`
+
+Status: PASS.
+
+## IT-ARCH-009-009 Hostile Custom JSON Rejection Before Private-Item Dispatch
+
+### Intent
+
+Verify that authenticated private custom-item create and update requests cross the gateway's recursive JSON validation boundary before controller/service/repository dispatch, preserving owner state and safe envelopes for duplicate object members at every required nesting level.
+
+### System Under Test
+
+ARCH-009/private-item collaboration with ARCH-010 RequestValidator, authentication/CSRF middleware, the custom-item controller/service, PostgreSQL, and observability.
+
+### Real Components
+
+- Production Fiber router, cookie authentication, CSRF middleware, and DESIGN-010 RequestValidator
+- Custom-item controller/service and PostgreSQL repository
+- Production lifecycle telemetry sink
+
+### Allowed Test Doubles
+
+- A synchronized in-process writer captures production telemetry.
+- No request validator, controller, service, repository, or database collaborator is mocked.
+
+### Trigger / Stimulus
+
+An owner submits create and update bodies containing duplicate top-level `name`, nested `macrosPer100.protein`, and nested micronutrient keys.
+
+### Expected Integrated Behavior
+
+1. Every hostile body returns the stable `400 invalid_json` envelope.
+2. Validation occurs before custom-item service dispatch and persistence.
+3. Existing private-item ownership and content remain unchanged.
+4. Duplicate keys, values, and parser/database diagnostics do not reach the response.
+
+### Required Evidence
+
+- HTTP status/error/request ID, unchanged PostgreSQL row counts and names, unchanged lifecycle metric count, and secret-exclusion assertions.
+
+### Requirement and Design Traceability
+
+- ARCH-009, ARCH-010, ARCH-005, ARCH-006
+- DESIGN-010 RequestValidator
+- DESIGN-009 AdminController integration boundary
+- SW-REQ-032
+- SW-REQ-090
+
+### Verification Status
+
+Implemented by:
+
+- `backend/internal/app/task271_backend_regression_integration_test.go::TestTask271ProductionBackendRegressionGate`
+- `backend/internal/httpapi/custom_item_controller_test.go::TestProfileControllerCustomItemRejectsDuplicateJSONKeysBeforeService`
+
+Status: PASS.
+
+## IT-ARCH-009-010 Import Ownership, Draft Boundary, and Accessible Search Transition
+
+### Intent
+
+Verify that generated-client external search, curation, and import state have one monotonic owner, so late import outcomes cannot overwrite a newer draft and a new provider search crosses an explicit accessible keep/discard boundary.
+
+### System Under Test
+
+ARCH-009 ExternalSearchProxy, DataImporter, ItemCurator, generated client, and UserAdminPanel collaboration with ARCH-012.
+
+### Real Components
+
+- Generated administration contracts and client request builders
+- ExternalImportWorkflow state machine, rendered Svelte controls, and browser focus behavior
+- AdministrationPanel shell and theme/responsive behavior
+
+### Allowed Test Doubles
+
+- Browser HTTP interception may delay and deterministically complete provider/import requests at the external transport boundary.
+- Authentication and unrelated administration reads may use generated-envelope fixtures.
+
+### Trigger / Stimulus
+
+Delay an import, attempt incompatible actions, replace workflow ownership, complete with success/conflict/ambiguity/failure, and start a new provider search while an edited draft is active; choose keep, Escape, and discard by keyboard.
+
+### Expected Integrated Behavior
+
+1. Search, provider, pagination, candidate selection, draft editing, and import controls are disabled while import owns the workflow.
+2. Superseded completion cannot alter the current candidate, draft, result, message, or idempotency key.
+3. Keep and Escape preserve the draft and perform no search.
+4. Keyboard discard clears curation/import state, invalidates old ownership, performs the requested search, and ignores the late completion.
+5. Focus remains visible and contained, and axe reports no serious or critical violation.
+
+### Required Evidence
+
+- Disabled rendered controls, immutable draft values, absence of stale result/error states, search/import request counts and keys, modal/inert/focus assertions, keyboard outcomes, and axe results.
+
+### Requirement and Design Traceability
+
+- ARCH-009, ARCH-012, ARCH-001
+- DESIGN-009 ExternalSearchProxy, DataImporter, ItemCurator, and UserAdminPanel
+- DESIGN-012 RateLimitHandler provider boundary
+- SW-REQ-054
+- SW-REQ-055
+
+### Verification Status
+
+Implemented by:
+
+- `frontend/tests/external-import-workflow.spec.ts::ignores a superseded import <outcome> without overwriting the active draft`
+- `frontend/tests/external-import-workflow.spec.ts::disables incompatible controls during import and starts a completed workflow without a draft warning`
+- `frontend/tests/external-import-workflow.spec.ts::keeps or discards an unsaved draft explicitly and invalidates discarded import ownership`
+- `frontend/tests/external-import-workflow.spec.ts::restores visible focus after discarding from pagination or a disappearing refresh action`
+- `frontend/tests/task272-frontend-gate.spec.ts::administration regressions remain keyboard-safe, responsive, accessible, themed, and motion-reduced`
+
+Status: PASS.
+
+## IT-ARCH-009-011 Authoritative Account Export Failure and Recovery
+
+### Intent
+
+Verify that generated Account Export refresh and private-item deletion drive the Administration Panel only from current owner-safe export data, failing closed during loading/failure and recovering controls only after a later authoritative success.
+
+### System Under Test
+
+ARCH-009 UserAdminPanel collaboration with DESIGN-008 DataExporter, the generated account-data client, and private-item deletion.
+
+### Real Components
+
+- Generated account export and private-item deletion request builders
+- AdminPrivateData and AdministrationPanel rendered state machines
+- Browser keyboard, responsive, theme, reduced-motion, and accessibility paths
+
+### Allowed Test Doubles
+
+- Browser HTTP interception may supply owner-safe export snapshots and deterministic refresh failures at the backend transport boundary.
+- The failure fixture may include an illegal owner field to prove generated-client validation fails closed.
+
+### Trigger / Stimulus
+
+Load an export, begin refresh, return failure or an owner-bearing payload, retry successfully, accept deletion followed by failed verification, then complete a later deletion/refresh cycle.
+
+### Expected Integrated Behavior
+
+1. Loading and failure clear stale items, pending confirmation, success feedback, and destructive controls.
+2. An owner-bearing export fails closed without leaking the item or owner field.
+3. Accepted deletion followed by refresh failure reports verification-required state rather than complete success.
+4. Successful retry restores only current owner-safe items and controls.
+5. A complete deletion plus authoritative refresh is the only path that claims deletion success.
+6. Keyboard, responsive, theme, reduced-motion, and axe paths remain accessible.
+
+### Required Evidence
+
+- Rendered loading/error/success copy, stale/foreign item absence, delete-control counts, deletion request IDs, recovered item list, computed styles, focus/keyboard checks, and axe results.
+
+### Requirement and Design Traceability
+
+- ARCH-009, ARCH-008, ARCH-001
+- DESIGN-008 DataExporter
+- DESIGN-009 UserAdminPanel
+- SW-REQ-054
+- SW-REQ-072
+
+### Verification Status
+
+Implemented by:
+
+- `frontend/tests/admin-private-data.spec.ts::failed refresh clears loaded private objects and controls until an owner-free retry succeeds`
+- `frontend/tests/admin-private-data.spec.ts::accepted deletion reports verification-required failure and claims success only after a later complete cycle`
+- `frontend/tests/task272-frontend-gate.spec.ts::administration regressions remain keyboard-safe, responsive, accessible, themed, and motion-reduced`
+
+Status: PASS.
+
 ## Coverage Matrix
 
 | Required path | Obligations |
 | --- | --- |
-| Nominal | IT-ARCH-009-002, IT-ARCH-009-005, IT-ARCH-009-006, IT-ARCH-009-007 |
+| Nominal | IT-ARCH-009-002, IT-ARCH-009-005, IT-ARCH-009-006, IT-ARCH-009-007, IT-ARCH-009-008, IT-ARCH-009-010, IT-ARCH-009-011 |
 | Authorization | IT-ARCH-009-001, IT-ARCH-009-007 |
-| Isolation | IT-ARCH-009-001, IT-ARCH-009-004, IT-ARCH-009-006 |
-| Replay | IT-ARCH-009-003, IT-ARCH-009-006 |
+| Isolation | IT-ARCH-009-001, IT-ARCH-009-004, IT-ARCH-009-006, IT-ARCH-009-009, IT-ARCH-009-010, IT-ARCH-009-011 |
+| Replay | IT-ARCH-009-003, IT-ARCH-009-006, IT-ARCH-009-008 |
 | Conflict | IT-ARCH-009-003, IT-ARCH-009-005, IT-ARCH-009-007 |
-| Rollback | IT-ARCH-009-003, IT-ARCH-009-005, IT-ARCH-009-006 |
-| Provider | IT-ARCH-009-002 |
+| Rollback | IT-ARCH-009-003, IT-ARCH-009-005, IT-ARCH-009-006, IT-ARCH-009-008 |
+| Hostile JSON | IT-ARCH-009-009 |
+| Provider | IT-ARCH-009-002, IT-ARCH-009-010 |
 | Normalization | IT-ARCH-009-002, IT-ARCH-009-003 |
 | Deletion | IT-ARCH-009-004, IT-ARCH-009-006, IT-ARCH-009-007 |
-| Invalidation | IT-ARCH-009-005 |
-| UI | IT-ARCH-009-001 through IT-ARCH-009-007 |
-| Degraded | IT-ARCH-009-003, IT-ARCH-009-004, IT-ARCH-009-005, IT-ARCH-009-006, IT-ARCH-009-007 |
+| Draft discard | IT-ARCH-009-010 |
+| Export refresh failure/recovery | IT-ARCH-009-011 |
+| Invalidation | IT-ARCH-009-005, IT-ARCH-009-008 |
+| Cross-instance cache visibility | IT-ARCH-009-008 |
+| UI | IT-ARCH-009-001 through IT-ARCH-009-007, IT-ARCH-009-010, IT-ARCH-009-011 |
+| Accessible browser | IT-ARCH-009-001, IT-ARCH-009-005, IT-ARCH-009-006, IT-ARCH-009-007, IT-ARCH-009-010, IT-ARCH-009-011 |
+| Degraded | IT-ARCH-009-003, IT-ARCH-009-004, IT-ARCH-009-005, IT-ARCH-009-006, IT-ARCH-009-007, IT-ARCH-009-008, IT-ARCH-009-009, IT-ARCH-009-010, IT-ARCH-009-011 |
+
+## Phase 08.01 SWE.5 Checklist Execution
+
+The mandatory SWE.5 checklist was evaluated against every obligation and its cited tests. `A` = architecture/requirement behavior, `I` = at least two collaborating units and exchanged data, `R` = real components with doubles only at architecture boundaries, `B` = architectural sequence/state/data/failure/recovery, `E` = observable outcomes and side effects, `O` = bidirectional obligation/test traceability, `L` = no SWE.4-only leakage, and `C` = completion criteria. Nominal/failure/recovery are recorded separately as the recommended robustness check.
+
+| Obligation | A | I | R | B | E | Nominal | Failure | Recovery | O | L | C |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `IT-ARCH-009-001` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-002` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-003` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-004` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-005` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-006` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-007` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-008` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-009` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-010` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+| `IT-ARCH-009-011` | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS | PASS |
+
+### Checklist Evidence Notes
+
+- Sections 1–2: every obligation identifies ARCH/DESIGN/SW-REQ sources, a primary SUT, multiple collaborating units, exchanged data, and architecture-visible outcomes.
+- Section 3: PostgreSQL, Redis, production HTTP composition, generated clients, Svelte components, and Chromium are real where practical; doubles are limited to external HTTP, deterministic failure, telemetry capture, and browser transport boundaries.
+- Sections 4–5: assertions cover transaction order, shared generations, database rows, cache/search results, dispatch suppression, generated requests, workflow ownership, rendered state, focus, styles, and axe results rather than mock calls alone.
+- Section 6: nominal, failure, and recovery are represented across each obligation's evidence; IT-ARCH-009-009's recovery is the unchanged owner item followed by continued valid service operation.
+- Section 7: every obligation cites an implementing test, and the Phase 08.01 primary tests carry adjacent obligation, ARCH, DESIGN, and SW-REQ traces.
+- Section 8: validator-only and component-only tests are supporting evidence; no obligation is closed by one isolated function or mocked collaborator graph.
+- Final sanity question: replacing every collaborator except one with mocks removes the asserted PostgreSQL, Redis, production HTTP, generated-client, browser, or accessibility outcomes, so the primary tests would not pass.
 
 ## SWE.5 Completion Criteria
 

@@ -2,189 +2,191 @@
 
 ## Acceptance status
 
-Tasks 238-263 are recorded as `PASSED`, including the Task 263 acceptance-documentation deliverable. The aggregate evidence below records the earlier passing gate. A later 2026-07-24 review opened Phase 08 remediation actions in `docs/implementation/04_OPEN.md`; final Phase 08 acceptance is therefore pending their implementation and a fresh aggregate verification run.
+Phase 08 original delivery Tasks 238-263 and the Phase 08.01 post-review remediation Tasks 264-275 are traced below. Task 274 supplies the current passing aggregate report and refreshed screenshots after the remediation implementation. Task 275 refreshes this acceptance document and its preparation evidence; it does not change task-list status.
 
-Project-owner checks in this document have **not** been claimed as executed. Record each result in the checklist below. Accept Phase 08 only when every required check passes or the owner explicitly records a deviation.
+Project-owner acceptance has **not** been executed or claimed. Every checklist result and the final decision remain unchecked. Accept Phase 08 only after the project owner executes the checks in the intended acceptance environment and records every result.
 
 ## Phase recap
 
-Phase 08 implements the restricted administration and external-data boundaries described by ARCH-009 and ARCH-012:
+### Original Phase 08 delivery
 
-- mandatory owner-scoped private custom-food persistence, authenticated CRUD, retry-stable creation, JSON/CSV export, deletion lockout, erasure, and cache purge without exposing or deleting global curated food;
-- backend-owned substitution filter options from active classifications, allergens, dietary presets, and physical-state policy, with cache invalidation and safe frontend degradation;
-- typed curation normalization for names, provider identifiers, URLs, units, nutrition data, and provider text;
-- bounded USDA and OpenFoodFacts clients, per-provider quota/retry handling, partial success, safe diagnostics, canonical nutrient/unit normalization, explicit warnings, and evidence-based liquid density without a silent `1 ml = 1 g` assumption;
-- an authenticated admin gateway with server-derived role checks, CSRF/rate/validation ordering, privacy-safe request correlation, and transactionally atomic mutation-plus-audit behavior;
-- read-only external search followed by explicit editable import confirmation, natural-key/idempotency replay protection, conflict confirmation, and immediate local-search visibility;
-- manual global item CRUD, global Food Category/Culinary Role management, in-use safeguards, restricted privacy-minimized user lookup, and legal account-deletion retry;
-- generated OpenAPI clients and responsive Administration Panel workflows for external import, manual item/classification/user administration, private export/deletion, and dynamic substitution filters;
-- privacy-safe metrics/logging and SWE.5 integration obligations across authentication, providers, PostgreSQL, Redis, generated clients, Svelte, browser workflows, export/deletion, search, and audit persistence.
+Tasks 238-263 delivered the restricted administration and external-data boundaries described by `ARCH-009` and `ARCH-012`:
 
-The confirmed Phase 08 assumptions and accepted backend/frontend coverage exceptions remain recorded in `docs/implementation/04_OPEN.md`. Post-gate review actions dated 2026-07-24 remain there as the authoritative remediation list; the existing machine-checked exceptions do not waive those findings or any acceptance behavior.
+- owner-scoped private custom-food persistence, authenticated CRUD, retry-stable creation, JSON/CSV export, deletion lockout, erasure, and cache purge without exposing global curated food;
+- backend-owned substitution filters, typed curation normalization, bounded USDA/OpenFoodFacts clients, provider quota/retry handling, safe diagnostics, canonical units/nutrients, explicit warnings, and evidence-based liquid density;
+- an authenticated administrator gateway with server-derived role checks, CSRF/rate/validation ordering, privacy-safe correlation, and atomic mutation-plus-audit behavior;
+- read-only external search, editable import confirmation, idempotency/conflict handling, manual global item/classification/user administration, and immediate local-search visibility;
+- generated clients, responsive Administration Panel workflows, privacy-safe observability, and SWE.5 integration obligations across PostgreSQL, Redis, providers, generated clients, Svelte, and Chromium.
+
+### Phase 08.01 post-review remediation
+
+Tasks 264-275 add the final reviewed behavior and evidence:
+
+- committed manual-item create/update/delete invalidates shared Redis search generations exactly once after commit, while replay and failed/rolled-back mutations do not invalidate;
+- private custom-item create/update recursively rejects duplicate JSON members before typed decode or service dispatch;
+- each import attempt owns an immutable draft/idempotency snapshot, incompatible controls are disabled during import, stale completions cannot replace current state, and a new search explicitly keeps or discards an unsaved draft;
+- Account Export loading/failure clears stale private objects, success feedback, pending deletion state, and destructive controls until an authoritative owner-safe refresh succeeds;
+- administration destructive contrast, 200 ms transitions, reduced-motion opt-out, theme focus styling, and heading weights satisfy the approved visual/accessibility rules;
+- Phase 08 Go Doc and TSDoc are validated, including OpenAPI-derived generated-client documentation;
+- backend, frontend, browser, accessibility, SWE.5, coverage, report, screenshot, and acceptance-document evidence is rerun and refreshed.
+
+The exact accepted backend/frontend coverage dispositions and dated review-action decisions remain authoritative in `docs/implementation/04_OPEN.md`. They waive no acceptance behavior.
 
 ## Traceability
 
-### Architecture and design sources
+### Architecture, design, and requirements
 
 | Source | Phase 08 responsibility |
 |---|---|
-| `ARCH-009` / `DESIGN-009` | AdminController, ExternalSearchProxy, DataImporter, ItemCurator, TagManager, UserAdminPanel, non-admin denial, audit coordination, import/manual/classification/user workflows. |
-| `ARCH-012` / `DESIGN-012` | USDAClient, OpenFoodFactsClient, DataNormalizer, RateLimitHandler, bounded provider access, warnings, partial success, outage degradation. |
-| `DESIGN-005` | Private/global food-item separation, mandatory owner predicates, macro/micronutrient/unit/density/classification persistence invariants. |
-| `DESIGN-008` | Authenticated private-data routes, export bundle, deletion lockout, erasure, and cache-purge completion. |
-| `DESIGN-013` | Typed input normalization, CSRF/rate controls, parameterized persistence, metadata-only rejection logging, fail-closed sensitive audit behavior. |
-| `DESIGN-001` | SearchView dynamic-filter consumption, selected-item classification merging, stale-request protection, recoverable frontend state. |
-| `DESIGN-014` | Privacy-safe, low-cardinality provider/admin/custom-item metrics and structured logs. |
+| `ARCH-009` / `DESIGN-009` | AdminController, ExternalSearchProxy, DataImporter, ItemCurator, TagManager, UserAdminPanel, authorization, audit coordination, import ownership, and manual/classification/user workflows. |
+| `ARCH-012` / `DESIGN-012` | USDAClient, OpenFoodFactsClient, DataNormalizer, RateLimitHandler, bounded provider access, warning/partial-success behavior, and provider-to-curation integration. |
+| `DESIGN-001`, `DESIGN-002` | Dynamic substitution filters, selected-item classification merging, stale-response protection, and backend-owned filter semantics. |
+| `DESIGN-005` | Private/global item separation, owner predicates, persistence invariants, units, density, classifications, and micronutrients. |
+| `DESIGN-008` | DataExporter, owner-safe Account Export, private deletion, lockout, erasure, and cache-purge completion. |
+| `DESIGN-010` | RequestValidator ordering and recursive duplicate-JSON rejection before dispatch. |
+| `DESIGN-011` | Shared Redis generations, CacheInvalidator behavior, cross-instance visibility, and stale-write rejection. |
+| `DESIGN-013`, `DESIGN-014` | Typed normalization, safe error/audit behavior, and privacy-safe low-cardinality metrics/logging. |
+| `DESIGN-015`, `DESIGN-017` | Legal erasure transitions and sanitized error/retry behavior. |
+| `SW-REQ-019`, `SW-REQ-033`, `SW-REQ-043` | Classification filtering, standardized imported storage, and private-item owner isolation. |
+| `SW-REQ-054`–`SW-REQ-057` | Administrative access, external curation, manual global items, and classifications. |
+| `SW-REQ-072`, `SW-REQ-073` | Owner-scoped data portability and account erasure. |
+| `SW-REQ-084`, `SW-REQ-090` | Safe operational logging and canonical micronutrient nomenclature. |
 
-Supporting sources exercised by the task evidence include `DESIGN-002` filter semantics, `DESIGN-010` route-validation ordering, `DESIGN-015` erasure transitions, and `DESIGN-017` sanitized error/retry behavior.
+The authoritative SWE.5 mappings are [`ARCH-009-obligations.md`](../../testing/integration/ARCH-009-obligations.md) and [`ARCH-012-obligations.md`](../../testing/integration/ARCH-012-obligations.md). They trace the original obligations plus remediation obligations `IT-ARCH-009-008` through `IT-ARCH-009-011` and `IT-ARCH-012-004` to architecture, designs, requirements, and executable integration tests.
 
-### Requirement sources
-
-| Requirement | Phase 08 acceptance surface |
-|---|---|
-| `SW-REQ-019` | Persisted classification options propagate into substitution filtering. |
-| `SW-REQ-033` | Imported provider data is normalized before local persistence. |
-| `SW-REQ-043` | Private custom items remain visible only to their owner. |
-| `SW-REQ-054` | Administration Panel and APIs are restricted to verified administrators. |
-| `SW-REQ-055` | Administrators search USDA/OpenFoodFacts, edit candidates, classify them, and explicitly import them. |
-| `SW-REQ-056` | Administrators create, update, and delete global curated items. |
-| `SW-REQ-057` | Administrators manage global Food Categories and Culinary Roles. |
-| `SW-REQ-072` | JSON and CSV account exports include owner-scoped private custom items. |
-| `SW-REQ-073` | Account deletion removes PII/private custom items and supports only legal retry transitions. |
-| `SW-REQ-084` | Admin/provider/custom-item behavior emits privacy-safe operational logging and metrics. |
-| `SW-REQ-090` | Imported/manual micronutrient keys are validated against the canonical active vocabulary. |
-
-The authoritative SWE.5 mappings are `docs/testing/integration/ARCH-009-obligations.md` and `docs/testing/integration/ARCH-012-obligations.md`. Together they trace `IT-ARCH-009-001` through `IT-ARCH-009-007` and `IT-ARCH-012-001` through `IT-ARCH-012-003` to the architecture, designs, requirements, and executable tests.
-
-### Task 238-263 matrix
+### Original delivery tasks 238-263
 
 | Task | Delivered surface | Primary traceability | Acceptance evidence |
 |---:|---|---|---|
-| 238 | Owner-scoped private custom-item persistence and migration | DESIGN-005; SW-REQ-043, SW-REQ-090 | Repository/migration isolation, owner predicate, unit/density/micronutrient tests |
-| 239 | Authenticated private CRUD, create idempotency, JSON/CSV export | DESIGN-005, DESIGN-008; SW-REQ-043, SW-REQ-072, SW-REQ-090 | Service/HTTP/export replay and ownership tests |
-| 240 | Private-item account-erasure integration | DESIGN-008; SW-REQ-043, SW-REQ-073 | `TestTask240CustomItemErasureIntegration` |
-| 241 | Backend-owned substitution filter options | DESIGN-009; SW-REQ-019, SW-REQ-057 | Repository/service/HTTP ordering, empty/degraded, and invalidation tests |
-| 242 | Curation input normalization | DESIGN-009, DESIGN-013; SW-REQ-055, SW-REQ-056, SW-REQ-090 | Table-driven normalization and pre-dispatch HTTP validation tests |
-| 243 | USDA client | ARCH-012, DESIGN-012; SW-REQ-055 | Fake-server query/key/page/deadline/body/projection tests |
-| 244 | OpenFoodFacts client | ARCH-012, DESIGN-012; SW-REQ-033, SW-REQ-055 | Fake-server caller-ID/page/deadline/body/projection tests |
-| 245 | Provider quota, retry, and partial-success orchestration | ARCH-012, DESIGN-012; SW-REQ-055 | Deterministic clock/jitter, retry exhaustion, provider-isolation tests |
-| 246 | Provider food normalization, warnings, and density | DESIGN-005, DESIGN-012; SW-REQ-033, SW-REQ-055, SW-REQ-090 | Unit/nutrient/density/warning/vocabulary query-count tests |
-| 247 | Admin gateway, authorization, CSRF/rate boundary, atomic audit | ARCH-009, DESIGN-009, DESIGN-013; SW-REQ-054 | 401/403/admin, middleware-ordering, rollback, sanitized-envelope tests |
-| 248 | Read-only external-search proxy | ARCH-009/012, DESIGN-009/012; SW-REQ-055 | Provider selection, ordering, cancellation, outage, no-mutation tests |
+| 238 | Owner-scoped private custom-item persistence and migration | DESIGN-005; SW-REQ-043, SW-REQ-090 | Repository/migration isolation and persistence-invariant tests |
+| 239 | Authenticated private CRUD, idempotent create, JSON/CSV export | DESIGN-005, DESIGN-008; SW-REQ-043, SW-REQ-072 | Service/HTTP/export replay and ownership tests |
+| 240 | Private-item account-erasure integration | DESIGN-008; SW-REQ-043, SW-REQ-073 | Live erasure integration |
+| 241 | Backend-owned substitution filter options | DESIGN-009; SW-REQ-019, SW-REQ-057 | Repository/service/HTTP ordering, degradation, and invalidation tests |
+| 242 | Curation input normalization | DESIGN-009, DESIGN-013; SW-REQ-055, SW-REQ-056, SW-REQ-090 | Normalization and pre-dispatch validation tests |
+| 243 | USDA client | ARCH-012, DESIGN-012; SW-REQ-055 | Bounded fake-provider tests |
+| 244 | OpenFoodFacts client | ARCH-012, DESIGN-012; SW-REQ-033, SW-REQ-055 | Bounded fake-provider tests |
+| 245 | Provider quota, retry, and partial success | ARCH-012, DESIGN-012; SW-REQ-055 | Deterministic retry/quota/provider-isolation tests |
+| 246 | Provider normalization, warnings, and density | DESIGN-005, DESIGN-012; SW-REQ-033, SW-REQ-090 | Unit/nutrient/density/warning tests |
+| 247 | Admin gateway, authorization, middleware, atomic audit | ARCH-009, DESIGN-009, DESIGN-013; SW-REQ-054 | 401/403/admin, ordering, rollback, and safe-envelope tests |
+| 248 | Read-only external-search proxy | ARCH-009/012, DESIGN-009/012; SW-REQ-055 | Provider ordering, cancellation, outage, and no-mutation tests |
 | 249 | Transactional curated import and conflict/idempotency policy | DESIGN-009; SW-REQ-055, SW-REQ-090 | Import/replay/conflict/rollback/search-visibility tests |
-| 250 | Manual global item CRUD | DESIGN-005, DESIGN-009; SW-REQ-056, SW-REQ-090 | CRUD/replay/validation/audit/private-isolation/search tests |
-| 251 | Global classification CRUD and consumer invalidation | DESIGN-009; SW-REQ-019, SW-REQ-057 | CRUD/cycle/duplicate/in-use/audit/Redis/filter/search tests |
-| 252 | Restricted privacy-minimized user administration | DESIGN-009; SW-REQ-054, SW-REQ-073 | Projection, authorization, legal retry, concurrency, audit tests |
-| 253 | OpenAPI contract and generated Phase 08 clients | DESIGN-009; SW-REQ-043, SW-REQ-054-057, SW-REQ-072-073, SW-REQ-090 | Redocly lint, route/status review, generated-type drift |
-| 254 | Fail-closed Administration Panel shell | DESIGN-009; SW-REQ-054 | Store/component/browser role, direct-route, identity-reset, keyboard tests |
-| 255 | External search/import curation UI | DESIGN-009/012; SW-REQ-055, SW-REQ-090 | Component/Playwright provider, warning, conflict, retry, accessibility tests |
-| 256 | Manual item/classification/user administration UI | DESIGN-009; SW-REQ-054, SW-REQ-056-057, SW-REQ-073 | Component/Playwright CRUD, confirmation, refresh, audit-failure tests |
-| 257 | Dynamic substitution filter UI | DESIGN-001, DESIGN-009; SW-REQ-019, SW-REQ-057 | Source assertion, unit/component/browser ordering/invalidation/degraded tests |
-| 258 | Backend security/integration/functional gate | ARCH-009/012; Phase 08 requirement set | Live PostgreSQL/Redis/HTTP/race integration evidence |
-| 259 | Frontend functional/E2E/accessibility gate | DESIGN-009; Phase 08 requirement set | Typecheck/build, 526 unit tests, Playwright/axe desktop/mobile suites |
-| 260 | Admin/external-data observability gate | DESIGN-014; SW-REQ-043, SW-REQ-054-057, SW-REQ-072-073, SW-REQ-084, SW-REQ-090 | Deterministic metric/log and representative load fixtures |
-| 261 | SWE.5 integration verification | ARCH-009/012, DESIGN-009/012; SW-REQ-043, SW-REQ-054-057, SW-REQ-072-073, SW-REQ-090 | Ten passing architecture obligations and real provider/browser integrations |
-| 262 | Aggregate quality and exact coverage-exception gate | DESIGN-014; all Phase 08 sources | Passing aggregate report, exact coverage contracts, report/screenshots |
-| 263 | Acceptance documentation | DESIGN-009; all Phase 08 sources | This UAT, validator reruns, artifact hashes in `preparations/task-263.md` |
+| 250 | Manual global item CRUD | DESIGN-005, DESIGN-009; SW-REQ-056, SW-REQ-090 | CRUD/replay/validation/audit/isolation/search tests |
+| 251 | Global classification CRUD and consumer invalidation | DESIGN-009; SW-REQ-019, SW-REQ-057 | CRUD/cycle/in-use/audit/Redis/filter/search tests |
+| 252 | Restricted privacy-minimized user administration | DESIGN-009; SW-REQ-054, SW-REQ-073 | Projection, authorization, legal retry, concurrency, and audit tests |
+| 253 | OpenAPI contract and generated Phase 08 clients | DESIGN-009; Phase 08 API requirements | Redocly lint, route/status review, and generated-type drift |
+| 254 | Fail-closed Administration Panel shell | DESIGN-009; SW-REQ-054 | Store/component/browser role, reset, direct-route, and keyboard tests |
+| 255 | External search/import curation UI | DESIGN-009/012; SW-REQ-055, SW-REQ-090 | Component/Playwright provider, warning, conflict, retry, and accessibility tests |
+| 256 | Manual item/classification/user administration UI | DESIGN-009; SW-REQ-054, SW-REQ-056, SW-REQ-057, SW-REQ-073 | Component/Playwright CRUD, confirmation, refresh, and failure tests |
+| 257 | Dynamic substitution filter UI | DESIGN-001, DESIGN-009; SW-REQ-019, SW-REQ-057 | Unit/component/browser ordering, invalidation, and degradation tests |
+| 258 | Backend security/integration/functional gate | ARCH-009/012; Phase 08 requirements | Live PostgreSQL/Redis/HTTP/race evidence |
+| 259 | Frontend functional/E2E/accessibility gate | DESIGN-009; Phase 08 requirements | Typecheck/build/unit and desktop/mobile Playwright/axe |
+| 260 | Admin/external observability gate | DESIGN-014; SW-REQ-084 | Deterministic metrics/logging and load fixtures |
+| 261 | SWE.5 integration verification | ARCH-009/012 | Original architecture obligations and real integration paths |
+| 262 | Historical aggregate quality gate | DESIGN-014; all Phase 08 sources | Superseded as final evidence by the Task 274 aggregate refresh |
+| 263 | Historical acceptance documentation | DESIGN-009; all Phase 08 sources | Superseded as final evidence by this Task 275 refresh |
+
+### Post-review remediation tasks 264-275
+
+| Task | Remediation/evidence surface | Primary traceability | Current evidence |
+|---:|---|---|---|
+| 264 | Manual-item post-commit search-cache invalidation | DESIGN-009, DESIGN-011; SW-REQ-056 | Exactly-once/replay/failure tests and live peer Catalog/Substitution visibility |
+| 265 | Recursive duplicate JSON rejection for private custom items | DESIGN-010; SW-REQ-043, SW-REQ-090 | Create/update top-level/macro/micronutrient pre-dispatch rejection |
+| 266 | Import-attempt ownership and explicit draft keep/discard | DESIGN-009, DESIGN-012; SW-REQ-055 | Component/browser supersession, disabled-control, discard, focus, and retry-key tests |
+| 267 | Fail-closed authoritative Account Export refresh | DESIGN-008, DESIGN-009; SW-REQ-043, SW-REQ-072 | Loading/failure stale-state clearing, deletion verification, owner-safe retry |
+| 268 | Administration visual/accessibility compliance | DESIGN-009; SW-REQ-054 | Contrast, transition, reduced-motion, focus, heading, keyboard, responsive, and axe tests |
+| 269 | Exported backend Go Doc gate | DESIGN-009, DESIGN-012, DESIGN-014 | Identifier-led comment validator, formatting, tests, race, and vet |
+| 270 | Hand-written/generated frontend TSDoc gate | DESIGN-009 | TSDoc validator, 24 generator tests, type drift, typecheck, unit tests, and build |
+| 271 | Backend remediation regression gate | ARCH-009; DESIGN-005, DESIGN-008, DESIGN-010, DESIGN-011 | Production HTTP/PostgreSQL/Redis/race/security integration |
+| 272 | Frontend remediation regression gate | DESIGN-008, DESIGN-009 | 533 unit tests, focused component/browser matrix, production build, and frontend verifier |
+| 273 | SWE.5 remediation verification | ARCH-009, ARCH-012 | Obligations 008-011/004 and traced production/browser integration tests |
+| 274 | Current aggregate quality, coverage, report, and screenshots | DESIGN-014 | Passing aggregate report, 20 refreshed PNGs, exact machine-checked coverage |
+| 275 | Current acceptance evidence refresh | DESIGN-009 | This unchecked UAT, report/screenshot links, evidence-integrity checks, and `task-275.md` |
 
 ## Automated verification and evidence
 
-### Historical Task 262 aggregate evidence
+### Current post-review aggregate evidence
 
-The following commands and results are recorded by the final Task 262 preparation and embodied in `08_PHASE_REPORT.html`. They are not represented as newly rerun by Task 263 or after the 2026-07-24 review, and must be refreshed after the review actions are implemented.
+Task 274 ran the following current gate after the approved Phase 08.01 implementation. Exact output is recorded in [`task-274.md`](../preparations/task-274.md); Task 275 consumes it and does not represent the aggregate as newly rerun.
 
-| Command | Recorded result |
+| Command | Recorded current result |
 |---|---|
-| `python3 scripts/check.py --output docs/implementation/implemented/08_PHASE_REPORT.html` | PASS, exit 0; contract/traceability/task-list, OpenAPI, coverage-contract regressions, vet, vulnerability scan, local stack/migrations/API, backend test/race/coverage, frontend verification/type drift/typecheck/build/test/coverage, focused/full browser/axe, and report generation passed. |
-| `cd backend && go test ./... -p 1 -count=1` | PASS. |
-| `cd backend && go test -race ./... -p 1 -count=1` | PASS. |
-| `cd backend && MEALSWAPP_REDIS_URL=redis://localhost:6379/12 go test -p 1 -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out ./internal/...` | PASS; changed Phase 08 scope `4,523/4,841` (`93.4%`) after deduplicating cross-package source blocks. |
-| `cd backend && go vet ./...` | PASS. |
-| `cd backend && go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...` | PASS; zero called or imported vulnerabilities. |
-| `npx --no-install redocly lint api/openapi.yaml` | VALID with one accepted pre-existing warning for the intentional OAuth callback `302`-only response. |
-| `cd frontend && bun run check:api-types` | PASS; generated API types current. |
-| `cd frontend && bun run typecheck` | PASS. |
-| `cd frontend && bun run build` | PASS. |
-| `cd frontend && bun test` | PASS; 526 tests, 2,456 expectations, zero failures. |
-| `cd frontend && bun test --coverage` | PASS with accepted exact exceptions; aggregate `95.46%` functions and `96.06%` lines. |
-| `cd frontend && bun run test:e2e` | PASS; all 294 scheduled desktop/mobile Chromium cases completed without failure, with five intentionally environment-gated real-stack cases skipped in the report run. |
-| `bash scripts/verify-task-261-ui.sh` | PASS on immediate rerun and ten-run repetition after one disclosed non-reproducing CSRF-shaped 403; 11/11 successful post-investigation runs. |
-| `git diff --check` | PASS. |
+| `python3 scripts/check.py --output docs/implementation/implemented/08_PHASE_REPORT.html` | **PASS**, exit 0. Static, backend, frontend, and browser lanes passed; requirements `91/91`; browser `309/314` with five intentional configured skips and no failures. |
+| Aggregate backend `go test -race ./... -p 1 -count=1` | **PASS** across commands and packages, including live PostgreSQL/Redis integration. |
+| Aggregate `go vet ./...` and `govulncheck@v1.3.0 ./...` | **PASS**; no called-code vulnerability. |
+| Aggregate OpenAPI lint and generated-client drift | **PASS** with only the accepted OAuth callback `302`-only warning. |
+| `python3 -m unittest scripts/test_generate_api_types.py scripts/test_check_coverage.py` | **PASS**, 42 tests: all 24 generator tests and 18 coverage/report-contract tests. |
+| Frontend typecheck/build/unit/coverage | **PASS**; 219-module build; 533 tests and 2,789 expectations; `95.46%` functions and `96.06%` lines. |
+| Go Doc, TSDoc, task-list, and source traceability validators | **PASS**. |
+| Tracked-content whitespace scan and `git diff --check` | **PASS**. |
+| Final `python3 scripts/check.py --quick` | **PASS** after Task 274 evidence/report changes. |
 
-Task 262 historically recorded one unrelated failure in `python3 scripts/test_generate_api_types.py`: 23/24 tests passed because one Phase 07 assertion expected obsolete Jaccard wording. On 2026-07-24 that assertion was aligned with the authoritative cosine-similarity contract; a fresh focused run passed all 24 tests and `bun run check:api-types` reported generated types current. The complete aggregate gate still requires a fresh run after all post-review remediation.
+Focused dependency evidence additionally proves live cross-instance cache refresh, duplicate-key rejection before dispatch, import supersession/draft ownership, Account Export failure/recovery, reduced motion, keyboard focus, and zero serious/critical axe violations. See preparations for Tasks 271-273.
 
-### Task 263 commands
+### Report and refreshed screenshots
 
-Task 263 runs only documentation-relevant, non-mutating validation after creating this UAT and preparation record:
+- Current quality report: [`08_PHASE_REPORT.html`](08_PHASE_REPORT.html) — `QUALITY GATE PASSED`, current coverage tables, direct Go/Bun results, traceability, and refreshed visual evidence.
+- Screenshot directory: [`screenshots/`](screenshots/) — 20 valid Phase 08 report PNGs refreshed or byte-identically revalidated by Task 274.
+- Representative shell captures: [`08_PHASE_REPORT-desktop.png`](screenshots/08_PHASE_REPORT-desktop.png) and [`08_PHASE_REPORT-mobile.png`](screenshots/08_PHASE_REPORT-mobile.png).
+- Representative scenario captures: [`08_PHASE_REPORT-substitution-apple-oat-milk-desktop.png`](screenshots/08_PHASE_REPORT-substitution-apple-oat-milk-desktop.png), [`08_PHASE_REPORT-substitution-apple-oat-milk-mobile.png`](screenshots/08_PHASE_REPORT-substitution-apple-oat-milk-mobile.png), [`08_PHASE_REPORT-task-233-daily-diet-light-desktop.png`](screenshots/08_PHASE_REPORT-task-233-daily-diet-light-desktop.png), and [`08_PHASE_REPORT-task-233-daily-diet-light-mobile.png`](screenshots/08_PHASE_REPORT-task-233-daily-diet-light-mobile.png).
+- The report screenshots are automated visual-regression evidence. They are not represented as project-owner execution of the administration checks below.
 
-| Command | Expected/recorded result |
-|---|---|
-| `python3 scripts/validate-task-list.py` | PASS; 263 sequential tasks with ordered dependencies. |
-| `python3 scripts/validate-traceability.py` | PASS; requirements/design/source traceability and JSON sidecars valid. |
-| `git diff --check -- docs/implementation/implemented/08_PHASE_UAT.md docs/implementation/preparations/task-263.md` | PASS; no whitespace errors. |
+## Current coverage disposition
 
-Exact Task 263 command output and SHA-256 evidence are recorded in `docs/implementation/preparations/task-263.md`.
+The authoritative exact exceptions are under Phase 08 in `docs/implementation/04_OPEN.md` and are machine-checked by `scripts/check.py`.
 
-### Report and screenshots
-
-- Quality report: [`08_PHASE_REPORT.html`](08_PHASE_REPORT.html) — `QUALITY GATE PASSED`; requirements `91/91`, traceability, local stack, frontend verifier, backend/frontend coverage, and exact Phase 08 exceptions are embedded.
-- Screenshot directory: [`screenshots/`](screenshots/) — 20 desktop/mobile PNGs generated by the aggregate frontend verifier for authentication, catalog, substitution, subscription, Daily Diet, optimization, and responsive regression states.
-- Representative current-shell screenshots: [`08_PHASE_REPORT-desktop.png`](screenshots/08_PHASE_REPORT-desktop.png) and [`08_PHASE_REPORT-mobile.png`](screenshots/08_PHASE_REPORT-mobile.png).
-- Phase 08 admin-specific behavior is evidenced by the component/Playwright/axe suites and the real-stack Task 261 flow. The generic aggregate screenshot set is visual regression evidence; it is not mislabeled as proof that the project owner completed the admin checks below.
-
-## Coverage exceptions
-
-The exact authoritative exceptions are under Phase 08 in `docs/implementation/04_OPEN.md` and are machine-checked by `scripts/check.py`.
-
-- Backend changed Phase 08 runtime scope: `4,523/4,841` statements (`93.4%`). The exact 31 below-100 files and statement-block coordinates are categorized as defensive dependency/encoder/claim-corruption branches (`B1`), repeated safe repository/HTTP mappings (`B2`), configuration/cache/wiring fallbacks (`B3`), or instrumentation-only paths (`B4`).
-- Backend direct package totals include `deletionworker 100.0%`, `externaldata 99.8%`, `tagmanager 100.0%`, `userdata 97.2%`, `search 96.5%`, and the lower package totals precisely listed in `04_OPEN.md` and the report.
-- Frontend aggregate: `95.46%` functions and `96.06%` lines. Phase 08 exceptions are `admin-workflows.ts` (`90.91%` functions, `98.51%` lines), `account-data-client.ts` (`100.00%`, `98.00%`), `admin-client.ts` (`97.22%`, `100.00%`), and generated `generated.ts` fallback line 185 (`100.00%`, `98.98%`).
-- Svelte components do not emit Bun runtime rows; component tests and the Playwright/axe suites cover their behavior.
-- No authorization, ownership, private/global isolation, CSRF, idempotency/replay, validation, parameterized persistence, mutation-plus-audit rollback, provider bounding/degradation, erasure, invalidation, sanitized observability, accessibility, generated-contract decoding, or immediate search-visibility behavior is waived.
+- Backend direct repository aggregate: `87.5%`.
+- Machine-defined Phase 08 backend runtime scope: `4,537/4,849` statements (`93.6%`). Every below-100 file and statement coordinate is recorded under reason `B1`–`B4`; Task 274 added no runtime statement or broader exception.
+- Frontend aggregate: `95.46%` functions and `96.06%` lines. Current Phase 08 below-100 rows are `admin-workflows.ts`, `account-data-client.ts`, `admin-client.ts`, and generated `generated.ts` line 185 under reasons `F1`–`F3`.
+- Svelte components do not emit Bun coverage rows; their disposition is the passing focused component suite plus desktop/mobile Playwright/axe coverage.
+- No authorization, ownership, private/global isolation, CSRF, idempotency/replay, duplicate-key rejection, audit rollback, post-commit invalidation, cross-instance visibility, import ownership, Account Export fail-closed state, generated-contract drift, accessibility, or browser behavior is waived.
 
 ## Project-owner acceptance checks
 
 ### Preconditions
 
-1. Start PostgreSQL and Redis with `bash scripts/start-services.sh`.
-2. Apply migrations with `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/migrate up`.
-3. Start the API and frontend using the repository commands. Configure test USDA/OpenFoodFacts credentials or deterministic approved fixtures; do not use production secrets in screenshots or notes.
-4. Prepare three identities: one verified administrator, standard user A, and standard user B. Prepare one global curated item and one private custom item for each standard user.
-5. Capture request IDs and sanitized server logs for mutation/rollback checks. Never paste tokens, cookies, raw provider payloads, email plaintext, or idempotency keys into this document.
+1. Start PostgreSQL and Redis with `bash scripts/start-services.sh`, apply migrations, then start the API and frontend with repository-local caches.
+2. Use deterministic approved USDA/OpenFoodFacts fixtures or non-production credentials. Never record secrets, cookies, tokens, raw provider payloads, email plaintext, or idempotency keys.
+3. Prepare one verified administrator, standard users A and B, global curated items, and one private custom item per standard user.
+4. Use two API/frontend instances sharing PostgreSQL/Redis where a check requires cross-instance cache visibility.
+5. Capture only sanitized request IDs and diagnostics for failure checks.
 
 ### Acceptance checklist
 
 | ID | Check and steps | Accept criteria | Result |
 |---|---|---|---|
-| UAT-08-01 | **Non-admin denial.** As anonymous and user A, navigate directly to `/admin` and call representative admin read/mutation routes. Then sign in as admin. | Anonymous API calls return 401; authenticated non-admin calls return 403; no admin navigation/control/data is exposed; spoofed role/identity fields do not help; admin access succeeds. | ☐ |
-| UAT-08-02 | **External search/import.** As admin, search USDA, OpenFoodFacts, then both; change provider/page, select a candidate, edit name/macros/classifications, and confirm import. Search locally for the result. | Search is read-only before confirmation; bounded normalized candidates render; edits survive confirmation; one global ownerless item is imported and immediately searchable; no raw provider payload is shown. | ☐ |
-| UAT-08-03 | **Warnings and liquid density.** Choose an incomplete/suspicious liquid candidate. Inspect missing-data and suspicious-total warnings; correct physical state/density and import. | Warnings are clear and non-secret; suspicious liquid totals warn rather than automatically reject; import cannot silently assume `1 ml = 1 g`; density provenance is imported/manual/estimated and trusted USDA volume evidence is preferred when present. | ☐ |
-| UAT-08-04 | **Manual global CRUD.** Create a solid and liquid global item, view/update them, then soft-delete one. Try invalid macro, image, micronutrient, classification, and missing-density values. | Valid CRUD returns authoritative state; invalid writes fail safely; created/updated item is searchable; deleted item disappears; global items have no owner and private-item routes cannot expose them. | ☐ |
-| UAT-08-05 | **Classifications and filter propagation.** Create and rename a Food Category/Culinary Role, attach it to an item, try duplicate/cycle/in-use deletion, then remove use and delete. Open Substitution filters in a fresh and already-open client. | Duplicate/cycle/in-use actions fail without mutation; committed labels propagate after invalidation across clients; selected-item classifications merge once by ID; deletion removes the option; no hardcoded fallback invents policy. | ☐ |
-| UAT-08-06 | **Private custom-item isolation/export/erasure.** As users A and B create similarly named private items. Cross-read/update/delete IDs; export A as JSON and CSV; request A deletion, test write lockout, complete/retry erasure, and recheck B/global data. | Each user sees only own items; cross-user IDs disclose nothing; exports include exactly A's private item and no owner/global leakage; pending deletion blocks writes; completion removes A's private item/PII/session/cache while B and global records survive; receipt is pseudonymous. | ☐ |
-| UAT-08-07 | **Restricted user administration.** As admin perform bounded lookup and retry one eligible failed account deletion; try an ineligible state and concurrent retry. Inspect response/UI fields. | Only the approved privacy-minimized projection appears; one legal transition is claimed once and audited; illegal/concurrent repeats fail safely; no role mutation, password/token access, impersonation, arbitrary editing, or deletion internals are exposed. | ☐ |
-| UAT-08-08 | **Audit rollback.** Force audit persistence failure for import, manual item, and classification mutation fixtures; reload authoritative state and inspect request-correlated diagnostics. | Each mutation rolls back with no item/classification/import/idempotency success residue; UI shows no optimistic success; error/log correlation uses request ID and excludes PII, secrets, raw payloads, and before/after snapshots. | ☐ |
-| UAT-08-09 | **Provider degradation.** Exercise one-provider timeout/rate limit/unavailability, complete outage, quota reset, cancellation, and a stale response after a newer query. | Partial success keeps valid candidates plus bounded warnings; complete outage returns empty safe state; retries are bounded and isolated per provider; cancellation/stale responses do not replace newer state; safe retry recovers after reset. | ☐ |
-| UAT-08-10 | **Idempotent retry.** Simulate a lost response after private-item create, curated import, and manual global create; retry the same intent/key, then reuse the key with a changed normalized body and issue concurrent retries. | Exact retry returns one stable identity with one mutation/audit effect; changed-body reuse returns conflict; concurrent retries do not duplicate; deliberate new intent uses a new key; keys are not logged or stored in browser persistence. | ☐ |
-| UAT-08-11 | **Accessibility and responsive themes.** Complete admin shell, external import, CRUD, classification, user lookup/retry, private export/delete, confirmations, and dynamic filters using keyboard only on desktop/mobile in light/dark themes. Run axe. | Focus order and modal containment are correct; visible labels/errors/warnings are understandable; no clipping, stale unsafe state, or inaccessible destructive action; axe reports zero serious/critical violations in tested views. | ☐ |
-| UAT-08-12 | **Search/auth regression.** Verify anonymous Catalog Search, login/register/logout/session expiry, Catalog and Substitution search, dynamic filters, authenticated subscription route, Daily Diet, and optimization baseline views after admin activity and provider outage. | Anonymous catalog remains usable; auth/session state is fail-closed and resets on logout/account change; core search stays responsive and returns imported/updated but not deleted items; established non-admin workflows and saved state remain intact. | ☐ |
+| UAT-08-01 | **Non-admin denial.** As anonymous and user A, navigate directly to `/admin` and call representative admin routes; then sign in as admin. | Anonymous calls return 401, non-admin calls return 403, no restricted data/control is exposed, spoofed identity does not help, and verified-admin access succeeds. | ☐ |
+| UAT-08-02 | **External search/import.** Search USDA, OpenFoodFacts, then both; select/edit/classify/confirm a candidate and search locally. | Search is read-only before confirmation; normalized candidates/warnings render; exactly one global ownerless item is imported and immediately searchable. | ☐ |
+| UAT-08-03 | **Warnings and liquid density.** Curate incomplete/suspicious liquid data and correct physical state/density. | Warnings are safe and clear; no silent `1 ml = 1 g`; trusted volume evidence is preferred and density provenance is explicit. | ☐ |
+| UAT-08-04 | **Manual global CRUD.** Create/update/delete solid and liquid items and submit invalid nutrition/image/classification/density data. | Valid writes return authoritative ownerless state; invalid writes fail safely; create/update is searchable and delete removes it without exposing global items through private routes. | ☐ |
+| UAT-08-05 | **Classifications and filters.** Create/rename/attach classifications, exercise duplicate/cycle/in-use safeguards, then remove/delete and inspect fresh/already-open clients. | Invalid operations do not mutate; committed labels propagate; selected classifications merge once by ID; deletion removes options without invented frontend policy. | ☐ |
+| UAT-08-06 | **Private isolation/export/erasure.** Cross-read/update/delete users A/B items; export A; request deletion, test lockout, complete/retry erasure, and recheck B/global data. | Cross-owner access discloses nothing; exports contain only A's private data; erasure removes A's private/PII/session/cache data while B/global data survives. | ☐ |
+| UAT-08-07 | **Restricted user administration.** Perform bounded lookup and one legal deletion retry; try illegal and concurrent retry. | Only the privacy-minimized projection appears; one legal transition is claimed/audited once; no role/password/token/impersonation/arbitrary-edit surface exists. | ☐ |
+| UAT-08-08 | **Audit rollback.** Force audit persistence failure for import, manual item, and classification mutation fixtures. | Mutation/idempotency/audit state rolls back, UI claims no success, caches remain unchanged, and sanitized diagnostics contain no PII/secrets/raw payloads. | ☐ |
+| UAT-08-09 | **Provider degradation.** Exercise one-provider and complete outage, quota reset, cancellation, and stale response after a newer query. | Partial success is bounded; full outage is safe; retries are isolated/bounded; stale/cancelled results cannot replace current state; reset recovers. | ☐ |
+| UAT-08-10 | **Idempotent retry.** Simulate lost responses and concurrent retry for private create, curated import, and manual create; reuse a key with changed input. | Exact retry has one identity/effect; changed-body reuse conflicts; concurrent retries do not duplicate; keys are not logged or browser-persisted. | ☐ |
+| UAT-08-11 | **Manual-item cache visibility.** Prewarm Catalog and Substitution Search on instance B; create, rename, and delete through instance A; repeat an exact create and force validation/audit rollback. | Committed mutations become visible across both search modes without stale repopulation; each advances generation once; replay and every failed/rolled-back mutation advance it zero times. | ☐ |
+| UAT-08-12 | **Duplicate JSON rejection.** Send duplicate top-level, `macrosPer100`, and micronutrient keys to authenticated private create and update; then send valid bodies. | Each duplicate body returns safe `400 invalid_json` before dispatch/persistence with unchanged state; valid, unknown-field, required-field, CSRF, ownership, and replay behavior remains correct. | ☐ |
+| UAT-08-13 | **Import ownership and draft discard.** Delay an import, start a newer workflow, exercise success/conflict/ambiguity/failure completions, try controls while importing, and start a search with an unsaved draft using Keep editing and Discard draft and search. | Stale completion changes nothing; incompatible controls are disabled; Keep preserves draft/key; Discard clears state/ownership before search and ignores late completion; focus returns visibly; completed import resets without a needless warning. | ☐ |
+| UAT-08-14 | **Failed Account Export refresh.** Load private data, fail refresh, delete then fail authoritative refresh, and retry with owner-safe data. | Loading/failure hides stale objects and destructive controls; stale success/pending state is cleared; accepted deletion reports verification required; success is claimed only after refresh; retry restores current owner-free data. | ☐ |
+| UAT-08-15 | **Contrast, transitions, and reduced motion.** Inspect destructive confirmation in light/dark; activate all administration buttons normally and with reduced-motion preference. | Destructive text contrast is at least `4.5:1` (`4.83:1` light and `6.41:1` dark in automated evidence); buttons use 200 ms transitions normally and no transition under reduced motion. | ☐ |
+| UAT-08-16 | **Form focus and headings.** Keyboard through administration inputs/selects/textareas and inspect headings, labels, legends, statuses, and controls in both themes and mobile/desktop. | Controls use theme Surface, 1 px Border, and a visible 2 px Primary focus ring without clipping/hidden focus; only headings use Bold 700; semantic non-heading weights remain appropriate. | ☐ |
+| UAT-08-17 | **Accessibility and regression.** Complete admin workflows keyboard-only on desktop/mobile in light/dark, run axe, then verify auth, Catalog/Substitution, subscription, Daily Diet, and optimization baseline views. | Focus/modal behavior is correct; axe has zero serious/critical violations; no stale unsafe state or clipping; established auth/search/non-admin workflows remain intact. | ☐ |
 
 ## Known notes
 
-- The Redocly `operation-2xx-response` warning for the OAuth callback is accepted because that endpoint intentionally redirects with `302`; it is unrelated to Phase 08 admin contracts.
-- Task 262 observed one transient CSRF-shaped 403 in the real-stack Task 261 script. It did not reproduce in the immediate rerun or ten-run repetition (11/11 passes after investigation), and no implementation exception or unsafe retry was added. If UAT reproduces it, capture the request ID and reject acceptance pending diagnosis.
-- Five real-stack browser cases are intentionally environment-gated in the aggregate browser run; the dedicated real-stack Task 261 script supplies the cross-component evidence for private deletion and classification/filter publication.
-- Phase 09 still owns production infrastructure and cross-cutting hardening actions listed under its own section in `04_OPEN.md`; none is presented as completed by this phase.
+- Redocly retains one accepted warning because the OAuth callback intentionally has a `302` redirect and no `2XX`; it is unrelated to the Phase 08 admin contract.
+- Five Playwright cases are intentionally skipped by project/opt-in configuration in the aggregate run; the run has no failed browser case, and focused live/backend/browser dependency evidence covers the remediation paths.
+- Coverage remains below the aspirational 100% goal only through the exact machine-checked backend/frontend exceptions above.
+- Phase 09 owns production infrastructure and cross-cutting hardening actions listed in `04_OPEN.md`; none is claimed by Phase 08.
 
 ## Acceptance decision
 
-Accept Phase 08 when:
+Accept Phase 08 only when:
 
-1. every 2026-07-24 Phase 08 review action in `docs/implementation/04_OPEN.md` is implemented or has a dated owner-approved disposition, and the aggregate verification has been rerun;
-2. UAT-08-01 through UAT-08-12 are checked as passing by the project owner;
-3. any environment-gated check is rerun in the intended acceptance environment or explicitly accepted with owner/date/reason;
-4. no open defect compromises authorization, privacy, audit atomicity, idempotency, provider safety, accessibility, or search/auth regression behavior; and
-5. accepted coverage exceptions remain exactly as recorded and validators still pass.
+1. UAT-08-01 through UAT-08-17 are checked as passing by the project owner;
+2. any environment-gated check is rerun in the intended environment or explicitly accepted with owner/date/reason;
+3. no open defect compromises authorization, privacy, audit atomicity, idempotency, cache visibility, hostile-input rejection, import ownership, export safety, accessibility, or core regression behavior; and
+4. the current Task 274 aggregate evidence, exact coverage dispositions, report/screenshots, and Task 275 evidence-integrity validators remain valid.
 
 Decision: ☐ Accepted  ☐ Rejected  ☐ Accepted with recorded deviations
 

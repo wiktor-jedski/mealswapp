@@ -18,18 +18,18 @@
 <section class="grid min-w-0 gap-5" aria-labelledby="administration-panel-title" data-administration-panel>
   {#if access === "loading"}
     <div class="grid gap-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-5" role="status" aria-live="polite" data-admin-loading>
-      <h1 id="administration-panel-title" class="text-2xl font-semibold">Administration Panel</h1>
+      <h1 id="administration-panel-title" class="text-2xl font-bold">Administration Panel</h1>
       <p class="text-sm text-[var(--color-muted)]">Verifying administration access…</p>
     </div>
   {:else if access === "error"}
     <div class="grid gap-3 rounded border border-[var(--color-error)] bg-[var(--color-surface)] p-5" role="alert" data-admin-error>
-      <h1 id="administration-panel-title" class="text-2xl font-semibold">Administration Panel</h1>
+      <h1 id="administration-panel-title" class="text-2xl font-bold">Administration Panel</h1>
       <p>Administration access could not be verified. Refresh the page to try again.</p>
     </div>
   {:else}
     <header class="grid gap-2">
       <p class="font-data text-xs uppercase tracking-wide text-[var(--color-muted)]">Restricted workspace</p>
-      <h1 id="administration-panel-title" class="text-2xl font-semibold sm:text-3xl">Administration Panel</h1>
+      <h1 id="administration-panel-title" class="text-2xl font-bold sm:text-3xl">Administration Panel</h1>
       <p class="max-w-3xl text-sm leading-6 text-[var(--color-muted)]">
         Manage curated food data and restricted account operations from this workspace.
       </p>
@@ -37,15 +37,15 @@
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-admin-responsive-grid>
       <section class="grid gap-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 class="text-lg font-semibold">External data</h2>
+        <h2 class="text-lg font-bold">External data</h2>
         <p class="text-sm text-[var(--color-muted)]">Search and curate provider records.</p>
       </section>
       <section class="grid gap-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 class="text-lg font-semibold">Catalog management</h2>
+        <h2 class="text-lg font-bold">Catalog management</h2>
         <p class="text-sm text-[var(--color-muted)]">Maintain global items and classifications.</p>
       </section>
       <section class="grid gap-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:col-span-2 lg:col-span-1">
-        <h2 class="text-lg font-semibold">User administration</h2>
+        <h2 class="text-lg font-bold">User administration</h2>
         <p class="text-sm text-[var(--color-muted)]">Use restricted, privacy-minimized account actions.</p>
       </section>
     </div>

@@ -86,9 +86,9 @@ def parse_bun_coverage(output: str) -> dict:
     }
 
 
-def phase08_exception_html() -> str:
+def phase08_exception_html(bun_data: dict, open_points: str | None = None) -> str:
     # Implements DESIGN-014 MetricsCollector accepted-exception report provenance.
-    open_points = (ROOT / "docs" / "implementation" / "04_OPEN.md").read_text(encoding="utf-8")
+    open_points = open_points or (ROOT / "docs" / "implementation" / "04_OPEN.md").read_text(encoding="utf-8")
 
     def contract(name: str) -> str:
         match = re.search(rf"(?s)<!-- {re.escape(name)}:start -->(.*?)<!-- {re.escape(name)}:end -->", open_points)
@@ -96,8 +96,17 @@ def phase08_exception_html() -> str:
             raise ValueError(f"missing {name} in docs/implementation/04_OPEN.md")
         return match.group(1)
 
+    backend_contract = contract("phase08-backend-coverage-contract")
+    backend_summary = re.search(
+        r"Measured Phase 08 scope: `(\d+)/(\d+)` statements \(`([0-9.]+)%`\)\.",
+        backend_contract,
+    )
+    if not backend_summary:
+        raise ValueError("missing Phase 08 backend coverage summary in docs/implementation/04_OPEN.md")
+    backend_covered, backend_total, backend_percent = backend_summary.groups()
+
     backend_rows = []
-    for line in contract("phase08-backend-coverage-contract").splitlines():
+    for line in backend_contract.splitlines():
         if line.lstrip().startswith("| `internal/"):
             columns = [part.strip().strip("`") for part in line.strip().strip("|").split("|")]
             backend_rows.append("<tr>" + "".join(f"<td>{html.escape(value)}</td>" for value in columns) + "</tr>")
@@ -112,16 +121,16 @@ def phase08_exception_html() -> str:
     return f"""
         <div class="section-title" id="accepted-coverage-exceptions">Accepted Phase 08 Coverage Exceptions</div>
         <p>Quality-gate success includes exact semantic validation against current measured coverage. Missing, malformed, stale, over-broad, or unjustified exceptions fail the aggregate. The canonical rationale and evidence are in <code>docs/implementation/04_OPEN.md</code>.</p>
-        <p><strong>Backend measured scope:</strong> 4,523/4,841 statements (93.4%). Each row below records exact Go statement-block coordinates and a validated evidence category.</p>
+        <p><strong>Backend measured scope:</strong> {int(backend_covered):,}/{int(backend_total):,} statements ({backend_percent}%). Each row below records exact Go statement-block coordinates and a validated evidence category.</p>
         <div class="table-container"><table><thead><tr><th>Runtime file</th><th>Covered/statements</th><th>Coverage</th><th>Exact uncovered blocks</th><th>Reason</th></tr></thead><tbody>{''.join(backend_rows)}</tbody></table></div>
-        <p><strong>Frontend measured aggregate:</strong> 95.46% functions and 96.06% lines. Only current Phase 08 exceptions are shown below; the aggregate contract also validates every carried frontend exception semantically.</p>
+        <p><strong>Frontend measured aggregate:</strong> {html.escape(bun_data["total_funcs"])} functions and {html.escape(bun_data["total_lines"])} lines. Only current Phase 08 exceptions are shown below; the aggregate contract also validates every carried frontend exception semantically.</p>
         <div class="table-container"><table><thead><tr><th>Runtime row</th><th>Owning phase</th><th>Functions</th><th>Lines</th><th>Uncovered lines</th><th>Reason</th></tr></thead><tbody>{''.join(frontend_rows)}</tbody></table></div>
     """
 
 def build_html_report(go_raw: str, bun_raw: str, reqs_checked: int, reqs_total: int, output_path: str, screenshot_stem: str | None = None, design_implemented: dict[str, list[str]] | None = None, design_missing: dict[str, list[str]] | None = None, design_checked: int = 0, design_total: int = 0, design_aspects: dict[str, list[str]] | None = None) -> None:
     go_data = parse_go_coverage(go_raw)
     bun_data = parse_bun_coverage(bun_raw)
-    coverage_exceptions_html = phase08_exception_html()
+    coverage_exceptions_html = phase08_exception_html(bun_data)
 
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 

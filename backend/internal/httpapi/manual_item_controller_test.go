@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -20,6 +21,8 @@ import (
 type fakeManualItemService struct {
 	item      itemcurator.Item
 	createErr error
+	updateErr error
+	deleteErr error
 	calls     []string
 }
 
@@ -40,6 +43,9 @@ func (s *fakeManualItemService) Get(_ context.Context, _ uuid.UUID) (itemcurator
 
 func (s *fakeManualItemService) Update(_ context.Context, _ repository.AdminMutationExecutor, _ uuid.UUID, req itemcurator.Request) (itemcurator.MutationResult, error) {
 	s.calls = append(s.calls, "update")
+	if s.updateErr != nil {
+		return itemcurator.MutationResult{}, s.updateErr
+	}
 	after := s.item
 	after.Name = req.Name
 	return itemcurator.MutationResult{Before: s.item, After: after}, nil
@@ -47,7 +53,36 @@ func (s *fakeManualItemService) Update(_ context.Context, _ repository.AdminMuta
 
 func (s *fakeManualItemService) Delete(_ context.Context, _ repository.AdminMutationExecutor, _ uuid.UUID) (itemcurator.MutationResult, error) {
 	s.calls = append(s.calls, "delete")
+	if s.deleteErr != nil {
+		return itemcurator.MutationResult{}, s.deleteErr
+	}
 	return itemcurator.MutationResult{Before: s.item}, nil
+}
+
+type manualItemInvalidatorStub struct{ calls atomic.Int32 }
+
+func (s *manualItemInvalidatorStub) Invalidate() { s.calls.Add(1) }
+
+type manualItemAuditObserver struct {
+	invalidations *atomic.Int32
+	err           error
+}
+
+func (a *manualItemAuditObserver) WithMutationAudit(_ context.Context, _ repository.AdminAuditEntry, mutate func(repository.AdminMutationExecutor) (repository.AdminAuditChanges, error)) error {
+	changes, err := mutate(nil)
+	if err != nil {
+		return err
+	}
+	if a.invalidations.Load() != 0 {
+		return errors.New("manual item invalidation ran before transaction commit")
+	}
+	if a.err != nil {
+		return a.err
+	}
+	if changes.Replayed {
+		return nil
+	}
+	return nil
 }
 
 // TestManualItemAdminHTTPValidCRUDReplayAndAuditSnapshots verifies
@@ -59,19 +94,20 @@ func TestManualItemAdminHTTPValidCRUDReplayAndAuditSnapshots(t *testing.T) {
 	itemID := uuid.New()
 	service := &fakeManualItemService{item: itemcurator.Item{ID: itemID, Name: "Before", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}, Micros: repository.MicroValues{}, FoodCategories: []itemcurator.ClassificationSummary{}, CulinaryRoles: []itemcurator.ClassificationSummary{}}}
 	audit := &adminAuditCoordinator{}
-	controller := NewManualItemAdminController(audit, service)
+	invalidator := &manualItemInvalidatorStub{}
+	controller := NewManualItemAdminController(audit, service, invalidator)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Audit: &auditSink{}, Routes: controller.Routes()})
 	csrf, csrfCookies := fetchCSRFToken(t, app)
 	body := `{"name":"Manual tofu","physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
 
 	create := manualItemHTTPRequest(t, app, fiber.MethodPost, "/api/v1/admin/items", body, authCookies, csrfCookies, csrf, "create-key-0001")
-	if create.StatusCode != fiber.StatusCreated || audit.committed != 1 || len(audit.changes) != 1 || audit.changes[0].EntityID == nil || *audit.changes[0].EntityID != itemID || !strings.Contains(string(audit.changes[0].After), `"active":true`) {
-		t.Fatalf("create status=%d audit=%+v", create.StatusCode, audit)
+	if create.StatusCode != fiber.StatusCreated || audit.committed != 1 || invalidator.calls.Load() != 1 || len(audit.changes) != 1 || audit.changes[0].EntityID == nil || *audit.changes[0].EntityID != itemID || !strings.Contains(string(audit.changes[0].After), `"active":true`) {
+		t.Fatalf("create status=%d invalidations=%d audit=%+v", create.StatusCode, invalidator.calls.Load(), audit)
 	}
 	create.Body.Close()
 	replay := manualItemHTTPRequest(t, app, fiber.MethodPost, "/api/v1/admin/items", body, authCookies, csrfCookies, csrf, "replay-key-0001")
-	if replay.StatusCode != fiber.StatusCreated || audit.committed != 1 {
-		t.Fatalf("replay status=%d audit commits=%d", replay.StatusCode, audit.committed)
+	if replay.StatusCode != fiber.StatusCreated || audit.committed != 1 || invalidator.calls.Load() != 1 {
+		t.Fatalf("replay status=%d audit commits=%d invalidations=%d", replay.StatusCode, audit.committed, invalidator.calls.Load())
 	}
 	replay.Body.Close()
 	read := manualItemHTTPRequest(t, app, fiber.MethodGet, "/api/v1/admin/items/"+itemID.String(), "", authCookies, nil, "", "")
@@ -80,13 +116,13 @@ func TestManualItemAdminHTTPValidCRUDReplayAndAuditSnapshots(t *testing.T) {
 	}
 	read.Body.Close()
 	update := manualItemHTTPRequest(t, app, fiber.MethodPut, "/api/v1/admin/items/"+itemID.String(), strings.Replace(body, "Manual tofu", "Manual tempeh", 1), authCookies, csrfCookies, csrf, "")
-	if update.StatusCode != fiber.StatusOK || audit.committed != 2 || len(audit.changes[1].Before) == 0 || len(audit.changes[1].After) == 0 {
-		t.Fatalf("update status=%d audit=%+v", update.StatusCode, audit)
+	if update.StatusCode != fiber.StatusOK || audit.committed != 2 || invalidator.calls.Load() != 2 || len(audit.changes[1].Before) == 0 || len(audit.changes[1].After) == 0 {
+		t.Fatalf("update status=%d invalidations=%d audit=%+v", update.StatusCode, invalidator.calls.Load(), audit)
 	}
 	update.Body.Close()
 	deleted := manualItemHTTPRequest(t, app, fiber.MethodDelete, "/api/v1/admin/items/"+itemID.String(), "", authCookies, csrfCookies, csrf, "")
-	if deleted.StatusCode != fiber.StatusNoContent || audit.committed != 3 || !strings.Contains(string(audit.changes[2].After), `"deleted":true`) {
-		t.Fatalf("delete status=%d audit=%+v", deleted.StatusCode, audit)
+	if deleted.StatusCode != fiber.StatusNoContent || audit.committed != 3 || invalidator.calls.Load() != 3 || !strings.Contains(string(audit.changes[2].After), `"deleted":true`) {
+		t.Fatalf("delete status=%d invalidations=%d audit=%+v", deleted.StatusCode, invalidator.calls.Load(), audit)
 	}
 	deleted.Body.Close()
 }
@@ -95,7 +131,8 @@ func TestManualItemAdminHTTPRejectsConflictsDuplicatesInvalidFieldsAndOwnership(
 	cfg := testConfig()
 	authenticator, authCookies := testJWTAuthRole(t, cfg, uuid.New(), string(repository.UserRoleAdmin), nil)
 	service := &fakeManualItemService{item: itemcurator.Item{ID: uuid.New(), PhysicalState: repository.PhysicalStateSolid}}
-	controller := NewManualItemAdminController(&adminAuditCoordinator{}, service)
+	invalidator := &manualItemInvalidatorStub{}
+	controller := NewManualItemAdminController(&adminAuditCoordinator{}, service, invalidator)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Audit: &auditSink{}, Routes: controller.Routes()})
 	csrf, csrfCookies := fetchCSRFToken(t, app)
 	valid := `{"name":"Manual tofu","physicalState":"solid","macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
@@ -134,6 +171,53 @@ func TestManualItemAdminHTTPRejectsConflictsDuplicatesInvalidFieldsAndOwnership(
 		t.Fatalf("manual controller exposed private route: %d", privatePath.StatusCode)
 	}
 	privatePath.Body.Close()
+	if invalidator.calls.Load() != 0 {
+		t.Fatalf("failed manual item requests invalidated cache %d times", invalidator.calls.Load())
+	}
+}
+
+// TestManualItemInvalidationRunsOnlyAfterSuccessfulAuditCommit verifies DESIGN-009
+// ItemCurator post-commit invalidation and zero advancement for rolled-back mutations.
+func TestManualItemInvalidationRunsOnlyAfterSuccessfulAuditCommit(t *testing.T) {
+	cfg := testConfig()
+	authenticator, authCookies := testJWTAuthRole(t, cfg, uuid.New(), string(repository.UserRoleAdmin), nil)
+	itemID := uuid.New()
+	service := &fakeManualItemService{item: itemcurator.Item{ID: itemID, Name: "Before", PhysicalState: repository.PhysicalStateSolid}}
+	invalidator := &manualItemInvalidatorStub{}
+	audit := &manualItemAuditObserver{invalidations: &invalidator.calls}
+	controller := NewManualItemAdminController(audit, service, invalidator)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Audit: &auditSink{}, Routes: controller.Routes()})
+	csrf, csrfCookies := fetchCSRFToken(t, app)
+	body := `{"name":"Manual tofu","physicalState":"solid","macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+
+	committed := manualItemHTTPRequest(t, app, fiber.MethodPost, "/api/v1/admin/items", body, authCookies, csrfCookies, csrf, "commit-key-0001")
+	committed.Body.Close()
+	if committed.StatusCode != fiber.StatusCreated || invalidator.calls.Load() != 1 {
+		t.Fatalf("committed status=%d invalidations=%d", committed.StatusCode, invalidator.calls.Load())
+	}
+
+	invalidator.calls.Store(0)
+	audit.err = repository.ErrAdminAuditPersistence
+	rolledBack := manualItemHTTPRequest(t, app, fiber.MethodPut, "/api/v1/admin/items/"+itemID.String(), body, authCookies, csrfCookies, csrf, "")
+	rolledBack.Body.Close()
+	if rolledBack.StatusCode != fiber.StatusServiceUnavailable || invalidator.calls.Load() != 0 {
+		t.Fatalf("audit rollback status=%d invalidations=%d", rolledBack.StatusCode, invalidator.calls.Load())
+	}
+
+	audit.err = errors.New("transaction commit failed")
+	transactionFailed := manualItemHTTPRequest(t, app, fiber.MethodDelete, "/api/v1/admin/items/"+itemID.String(), "", authCookies, csrfCookies, csrf, "")
+	transactionFailed.Body.Close()
+	if transactionFailed.StatusCode < fiber.StatusBadRequest || invalidator.calls.Load() != 0 {
+		t.Fatalf("transaction failure status=%d invalidations=%d", transactionFailed.StatusCode, invalidator.calls.Load())
+	}
+
+	audit.err = nil
+	service.updateErr = repository.NewError(repository.ErrorKindConflict, "conflict", nil)
+	conflict := manualItemHTTPRequest(t, app, fiber.MethodPut, "/api/v1/admin/items/"+itemID.String(), body, authCookies, csrfCookies, csrf, "")
+	conflict.Body.Close()
+	if conflict.StatusCode != fiber.StatusConflict || invalidator.calls.Load() != 0 {
+		t.Fatalf("conflict status=%d invalidations=%d", conflict.StatusCode, invalidator.calls.Load())
+	}
 }
 
 func manualItemHTTPRequest(t *testing.T, app *fiber.App, method string, path string, body string, authCookies []*http.Cookie, csrfCookies []*http.Cookie, csrf string, key string) *http.Response {

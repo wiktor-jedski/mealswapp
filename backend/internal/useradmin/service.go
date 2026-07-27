@@ -17,8 +17,10 @@ var ErrForbidden = errors.New("administrator access required")
 
 // Implements DESIGN-009 UserAdminPanel bounded enumeration policy.
 const (
+	// DefaultPageSize is the user lookup page size used when no limit is supplied.
 	DefaultPageSize = 20
-	MaxPageSize     = 25
+	// MaxPageSize is the largest accepted user lookup page.
+	MaxPageSize = 25
 )
 
 // Actor contains only server-derived authorization and correlation metadata.

@@ -16,16 +16,19 @@ import (
 )
 
 type fakeCustomItemService struct {
-	item       customitem.Item
-	createUser uuid.UUID
-	createReq  customitem.CreateRequest
-	getUser    uuid.UUID
-	updateUser uuid.UUID
-	deleteUser uuid.UUID
-	err        error
+	item        customitem.Item
+	createCalls int
+	createUser  uuid.UUID
+	createReq   customitem.CreateRequest
+	getUser     uuid.UUID
+	updateCalls int
+	updateUser  uuid.UUID
+	deleteUser  uuid.UUID
+	err         error
 }
 
 func (s *fakeCustomItemService) Create(_ context.Context, userID uuid.UUID, req customitem.CreateRequest) (customitem.CreateResult, error) {
+	s.createCalls++
 	s.createUser, s.createReq = userID, req
 	return customitem.CreateResult{Item: s.item, Status: fiber.StatusCreated}, s.err
 }
@@ -34,6 +37,7 @@ func (s *fakeCustomItemService) Get(_ context.Context, userID, _ uuid.UUID) (cus
 	return s.item, s.err
 }
 func (s *fakeCustomItemService) Update(_ context.Context, userID, _ uuid.UUID, _ customitem.Request) (customitem.Item, error) {
+	s.updateCalls++
 	s.updateUser = userID
 	return s.item, s.err
 }
@@ -44,6 +48,54 @@ func (s *fakeCustomItemService) Delete(_ context.Context, userID, _ uuid.UUID) e
 
 func customItemBody(name string) string {
 	return `{"name":"` + name + `","physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":5,"fat":2},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+}
+
+// TestProfileControllerCustomItemRejectsDuplicateJSONKeysBeforeService verifies
+// IT-ARCH-009-009, ARCH-009, DESIGN-010 RequestValidator, and
+// SW-REQ-032/SW-REQ-090.
+func TestProfileControllerCustomItemRejectsDuplicateJSONKeysBeforeService(t *testing.T) {
+	cfg := testConfig()
+	userID, itemID := uuid.New(), uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	service := &fakeCustomItemService{}
+	controller := NewProfileController(&fakeProfileService{}).WithCustomItems(service)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: controller.Routes()})
+	token, csrfCookies := fetchCSRFToken(t, app)
+	bodies := map[string]string{
+		"top-level":      `{"name":"First","name":"Second","physicalState":"solid","macrosPer100":{"protein":1,"carbohydrates":2,"fat":3},"micros":{}}`,
+		"macrosPer100":   `{"name":"Item","physicalState":"solid","macrosPer100":{"protein":1,"protein":2,"carbohydrates":2,"fat":3},"micros":{}}`,
+		"micronutrients": `{"name":"Item","physicalState":"solid","macrosPer100":{"protein":1,"carbohydrates":2,"fat":3},"micros":{"Sodium":1,"Sodium":2}}`,
+	}
+	routes := []struct {
+		name, method, path string
+	}{
+		{"create", fiber.MethodPost, "/api/v1/custom-items"},
+		{"update", fiber.MethodPut, "/api/v1/custom-items/" + itemID.String()},
+	}
+	for _, route := range routes {
+		for duplicate, body := range bodies {
+			t.Run(route.name+"/"+duplicate, func(t *testing.T) {
+				request := httptest.NewRequest(route.method, route.path, strings.NewReader(body))
+				request.Header.Set("Content-Type", "application/json")
+				request.Header.Set("Idempotency-Key", "duplicate-json-key")
+				request.Header.Set("X-CSRF-Token", token)
+				addCookies(request, authCookies)
+				addCookies(request, csrfCookies)
+				resp, err := app.Test(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				envelope := decodeEnvelope(t, resp.Body)
+				resp.Body.Close()
+				if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != "invalid_json" {
+					t.Fatalf("response = %d %+v", resp.StatusCode, envelope)
+				}
+				if service.createCalls != 0 || service.updateCalls != 0 {
+					t.Fatalf("service calls: create=%d update=%d", service.createCalls, service.updateCalls)
+				}
+			})
+		}
+	}
 }
 
 func TestProfileControllerCustomItemRoutesRequireAuthenticationAndCSRF(t *testing.T) {
@@ -237,7 +289,11 @@ func TestProfileControllerCustomItemRejectsEscapedNULProvenanceBeforeService(t *
 
 	for _, field := range []string{"densitySourceProvider", "densitySourceFoodId", "densitySourceKind"} {
 		service.createUser = uuid.Nil
-		body := `{"name":"Liquid","physicalState":"liquid","densityGramsPerMilliliter":1,"densitySourceKind":"manual","macrosPer100":{"protein":1,"carbohydrates":0,"fat":0},"micros":{},"` + field + `":"invalid\u0000text"}`
+		sourceKind := `"densitySourceKind":"manual",`
+		if field == "densitySourceKind" {
+			sourceKind = ""
+		}
+		body := `{"name":"Liquid","physicalState":"liquid","densityGramsPerMilliliter":1,` + sourceKind + `"macrosPer100":{"protein":1,"carbohydrates":0,"fat":0},"micros":{},"` + field + `":"invalid\u0000text"}`
 		request := httptest.NewRequest(fiber.MethodPost, "/api/v1/custom-items", strings.NewReader(body))
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("Idempotency-Key", "nul-provenance-key")

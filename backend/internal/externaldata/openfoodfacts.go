@@ -23,7 +23,9 @@ import (
 
 // Implements DESIGN-012 OpenFoodFactsClient request and response bounds.
 const (
-	DefaultOpenFoodFactsEndpoint  = "https://world.openfoodfacts.org/cgi/search.pl"
+	// DefaultOpenFoodFactsEndpoint is the production OpenFoodFacts search endpoint.
+	DefaultOpenFoodFactsEndpoint = "https://world.openfoodfacts.org/cgi/search.pl"
+	// MaxOpenFoodFactsPageSize is the largest accepted OpenFoodFacts result page.
 	MaxOpenFoodFactsPageSize      = 100
 	defaultOpenFoodFactsDeadline  = 5 * time.Second
 	defaultOpenFoodFactsBodyLimit = int64(2 << 20)

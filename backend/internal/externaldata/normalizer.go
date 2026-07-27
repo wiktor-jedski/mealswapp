@@ -19,18 +19,27 @@ type DensitySourceKind string
 
 // Implements DESIGN-012 DataNormalizer density provenance.
 const (
-	DensitySourceImported  DensitySourceKind = "imported"
-	DensitySourceManual    DensitySourceKind = "manual"
+	// DensitySourceImported identifies density derived from provider evidence.
+	DensitySourceImported DensitySourceKind = "imported"
+	// DensitySourceManual identifies curator-supplied density.
+	DensitySourceManual DensitySourceKind = "manual"
+	// DensitySourceEstimated identifies estimated density.
 	DensitySourceEstimated DensitySourceKind = "estimated"
 )
 
 // Implements DESIGN-012 DataNormalizer stable warning vocabulary.
 const (
-	WarningMissingImage             = "missing_image"
-	WarningMissingMacros            = "missing_macros"
-	WarningMissingMicronutrients    = "missing_micronutrients"
-	WarningMissingLiquidDensity     = "missing_liquid_density"
-	WarningUncertainUnitConversion  = "uncertain_unit_conversion"
+	// WarningMissingImage identifies a candidate without an image.
+	WarningMissingImage = "missing_image"
+	// WarningMissingMacros identifies a candidate without complete macronutrients.
+	WarningMissingMacros = "missing_macros"
+	// WarningMissingMicronutrients identifies a candidate without micronutrients.
+	WarningMissingMicronutrients = "missing_micronutrients"
+	// WarningMissingLiquidDensity identifies a liquid candidate without density evidence.
+	WarningMissingLiquidDensity = "missing_liquid_density"
+	// WarningUncertainUnitConversion identifies an unsupported or ambiguous provider unit.
+	WarningUncertainUnitConversion = "uncertain_unit_conversion"
+	// WarningSuspiciousLiquidMacroSum identifies liquid macros exceeding their normalized basis.
 	WarningSuspiciousLiquidMacroSum = "suspicious_liquid_macros"
 )
 

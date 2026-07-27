@@ -134,6 +134,9 @@ func validateCustomItemUpdate(ctx *fiber.Ctx) error {
 // validateCustomItemBody rejects malformed, unknown, and client-owned fields before dispatch.
 // Implements DESIGN-010 RequestValidator and DESIGN-008 ProfileController.
 func validateCustomItemBody(ctx *fiber.Ctx) error {
+	if err := rejectDuplicateJSONKeys(ctx.Body()); err != nil {
+		return invalidCustomItemBodyError()
+	}
 	req, err := decodeCustomItemRequest(ctx.Body())
 	if err != nil {
 		return err
