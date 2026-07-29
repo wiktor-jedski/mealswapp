@@ -1,6 +1,7 @@
 package customitem
 
 // Implements DESIGN-008 ProfileController custom-item service verification.
+// Implements DESIGN-005 UnitConverter metric domain invariant verification.
 
 import (
 	"context"
@@ -130,8 +131,13 @@ func TestServiceCreatePreservesResourceConflictClassification(t *testing.T) {
 func TestFromEntityStripsClassificationHierarchyFromPublicProjection(t *testing.T) {
 	parentID, childID := uuid.New(), uuid.New()
 	item := fromEntity(repository.CustomFoodItemEntity{FoodItemEntity: repository.FoodItemEntity{
-		FoodCategories: []repository.ClassificationEntity{{ID: childID, Name: "Child", Kind: repository.ClassificationKindFoodCategory, ParentID: &parentID}},
+		AverageUnitWeightGrams:          28.3495,
+		AverageServingVolumeMilliliters: 29.5735,
+		FoodCategories:                  []repository.ClassificationEntity{{ID: childID, Name: "Child", Kind: repository.ClassificationKindFoodCategory, ParentID: &parentID}},
 	}})
+	if item.AverageUnitWeightGrams != 28.3495 || item.AverageServingVolumeMilliliters != 29.5735 {
+		t.Fatalf("metric projection changed = %#v", item)
+	}
 	if len(item.FoodCategories) != 1 || item.FoodCategories[0].ID != childID || item.FoodCategories[0].Name != "Child" {
 		t.Fatalf("classification projection = %#v", item.FoodCategories)
 	}

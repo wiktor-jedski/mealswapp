@@ -60,7 +60,7 @@ func TestAutocompleteServiceRetrievesFoodAndMealCandidatesWithBoundedQueries(t *
 	}
 
 	service := NewAutocompleteService(foodRepo, mealRepo)
-	ranked, err := service.Autocomplete(ctx, "  PEar  ", repository.RepositoryContext{IncludeDeleted: true, UnitSystem: repository.UnitSystemImperial})
+	ranked, err := service.Autocomplete(ctx, "  PEar  ", repository.RepositoryContext{IncludeDeleted: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +77,6 @@ func TestAutocompleteServiceRetrievesFoodAndMealCandidatesWithBoundedQueries(t *
 		}
 		if call.IncludeDeleted {
 			t.Fatalf("autocomplete should not include deleted rows")
-		}
-		if call.UnitSystem != repository.UnitSystemImperial {
-			t.Fatalf("repository query unit system = %q", call.UnitSystem)
 		}
 	}
 }

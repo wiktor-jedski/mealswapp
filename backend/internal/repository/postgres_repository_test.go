@@ -47,6 +47,9 @@ var testInactiveVocabularyUpsertSQL string
 //go:embed sql/testdata/food_exists_by_name.sql
 var testFoodExistsByNameSQL string
 
+//go:embed sql/testdata/food_row_json.sql
+var testFoodRowJSONSQL string
+
 //go:embed sql/testdata/user_delete.sql
 var testUserDeleteSQL string
 
@@ -713,7 +716,7 @@ func TestPostgresVocabularyRepositoryValidation(t *testing.T) {
 	}
 }
 
-func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
+func TestPostgresFoodItemRepositoryCRUDHydrationPreservesMetricStorage(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
 	classificationRepo := NewPostgresClassificationRepository(db)
@@ -742,8 +745,12 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
+	var storedBefore string
+	if err := db.QueryRow(ctx, testFoodRowJSONSQL, id).Scan(&storedBefore); err != nil {
+		t.Fatalf("read stored item before repository reads: %v", err)
+	}
 
-	item, err := foodRepo.GetByID(ctx, id, RepositoryContext{UnitSystem: UnitSystemMetric})
+	item, err := foodRepo.GetByID(ctx, id, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("GetByID() error = %v", err)
 	}
@@ -757,12 +764,19 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 		t.Fatalf("GetByID() culinary_role classifications = %#v", item.CulinaryRoles)
 	}
 
-	imperial, err := foodRepo.GetByID(ctx, id, RepositoryContext{UnitSystem: UnitSystemImperial})
+	secondRead, err := foodRepo.GetByID(ctx, id, RepositoryContext{})
 	if err != nil {
-		t.Fatalf("GetByID() imperial error = %v", err)
+		t.Fatalf("GetByID() second read error = %v", err)
 	}
-	if imperial.AverageUnitWeightGrams != 3.5274 {
-		t.Fatalf("imperial average unit weight = %v, want 3.5274 oz", imperial.AverageUnitWeightGrams)
+	if secondRead.AverageUnitWeightGrams != 100 {
+		t.Fatalf("metric average unit weight = %v, want 100 g", secondRead.AverageUnitWeightGrams)
+	}
+	var storedAfter string
+	if err := db.QueryRow(ctx, testFoodRowJSONSQL, id).Scan(&storedAfter); err != nil {
+		t.Fatalf("read stored item after repository reads: %v", err)
+	}
+	if storedAfter != storedBefore {
+		t.Fatalf("repository reads rewrote stored metric values:\nbefore: %s\nafter:  %s", storedBefore, storedAfter)
 	}
 
 	item.Name = "Firm Tofu"
@@ -771,7 +785,7 @@ func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 	if err := foodRepo.Update(ctx, item); err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
-	updated, err := foodRepo.GetByID(ctx, id, RepositoryContext{UnitSystem: UnitSystemMetric})
+	updated, err := foodRepo.GetByID(ctx, id, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("GetByID() updated error = %v", err)
 	}
@@ -959,12 +973,11 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 
 	maxPrep := 1
 	items, total, err := foodRepo.Search(ctx, RepositoryQuery{
-		RepositoryContext: RepositoryContext{UnitSystem: UnitSystemMetric},
-		Name:              "Ap",
-		FoodCategoryIDs:   []uuid.UUID{categoryID},
-		CulinaryRoleIDs:   []uuid.UUID{functionalityID},
-		MaxPrepMinutes:    &maxPrep,
-		Limit:             10,
+		Name:            "Ap",
+		FoodCategoryIDs: []uuid.UUID{categoryID},
+		CulinaryRoleIDs: []uuid.UUID{functionalityID},
+		MaxPrepMinutes:  &maxPrep,
+		Limit:           10,
 	})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -980,7 +993,6 @@ func TestPostgresFoodItemRepositorySearch(t *testing.T) {
 		t.Fatalf("Search() infix food name total=%d items=%#v, want apple juice", total, items)
 	}
 	items, total, err = foodRepo.Search(ctx, RepositoryQuery{
-		RepositoryContext:       RepositoryContext{UnitSystem: UnitSystemMetric},
 		FoodCategoryIDs:         []uuid.UUID{categoryID},
 		ExcludedFoodCategoryIDs: []uuid.UUID{excludedCategoryID},
 		ExcludedCulinaryRoleIDs: []uuid.UUID{excludedRoleID},
@@ -2835,15 +2847,15 @@ func TestPostgresMealRepositorySingleRecipeAndMacros(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() single error = %v", err)
 	}
-	single, err := mealRepo.GetByID(ctx, singleID, RepositoryContext{UnitSystem: UnitSystemImperial})
+	single, err := mealRepo.GetByID(ctx, singleID, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("GetByID() single error = %v", err)
 	}
 	if single.Type != MealTypeSingle || single.Name != "Restaurant Rice Bowl" || len(single.Classifications) != 1 {
 		t.Fatalf("single meal = %#v", single)
 	}
-	if single.AverageUnitWeightGrams != 3.5274 {
-		t.Fatalf("single imperial weight = %v, want 3.5274", single.AverageUnitWeightGrams)
+	if single.AverageUnitWeightGrams != 100 {
+		t.Fatalf("single metric weight = %v, want 100", single.AverageUnitWeightGrams)
 	}
 	singleMacros, err := mealRepo.CalculateMacros(ctx, singleID)
 	if err != nil {
@@ -3226,12 +3238,6 @@ func TestPostgresMealRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("validateMeal() macro error = %v, want validation", err)
 	}
 
-	meal := MealEntity{PhysicalState: PhysicalStateLiquid, AverageUnitWeightGrams: 250}
-	convertMealForUnitSystem(&meal, UnitSystemImperial)
-	if meal.AverageUnitWeightGrams != 8.4535 {
-		t.Fatalf("convertMealForUnitSystem() liquid = %v, want 8.4535", meal.AverageUnitWeightGrams)
-	}
-
 }
 
 func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
@@ -3297,7 +3303,7 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 
 	searchValues := append([]any{}, foodValues...)
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{row: fakeRow{values: []any{1}}, rowsList: []pgx.Rows{&fakeRows{next: true, values: searchValues}, nil}, queryErrs: []error{nil, queryErr}})
-	if _, _, err := repo.Search(ctx, RepositoryQuery{RepositoryContext: RepositoryContext{UnitSystem: UnitSystemImperial}, Limit: -1, Offset: -1}); !IsKind(err, ErrorKindConnection) {
+	if _, _, err := repo.Search(ctx, RepositoryQuery{Limit: -1, Offset: -1}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Search() hydrate error = %v, want connection", err)
 	}
 
@@ -3387,10 +3393,6 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("scanFoodItem() rows no micros item = %#v", item)
 	}
 
-	convertFoodItemForUnitSystem(&item, UnitSystemImperial)
-	if item.AverageServingVolumeMilliliters != 8.4535 {
-		t.Fatalf("liquid imperial serving volume = %v, want 8.4535", item.AverageServingVolumeMilliliters)
-	}
 }
 
 func TestMapPostgresError(t *testing.T) {

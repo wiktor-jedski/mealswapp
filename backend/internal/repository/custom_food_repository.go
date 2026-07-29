@@ -98,7 +98,6 @@ func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID 
 	if err := r.hydrateClassifications(ctx, &item); err != nil {
 		return CustomFoodItemEntity{}, err
 	}
-	convertFoodItemForUnitSystem(&item, rc.UnitSystem)
 	return CustomFoodItemEntity{FoodItemEntity: item, OwnerID: ownerID}, nil
 }
 
@@ -132,7 +131,6 @@ func (r *PostgresCustomFoodItemRepository) List(ctx context.Context, ownerID uui
 		if err := r.hydrateClassifications(ctx, &item); err != nil {
 			return nil, err
 		}
-		convertFoodItemForUnitSystem(&item, rc.UnitSystem)
 		items = append(items, CustomFoodItemEntity{FoodItemEntity: item, OwnerID: ownerID})
 	}
 	return items, nil
@@ -152,7 +150,7 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 			if err != nil {
 				return err
 			}
-			item, err := NewPostgresCustomFoodItemRepository(db).GetByID(ctx, claim.UserID, itemID, RepositoryContext{UnitSystem: UnitSystemMetric})
+			item, err := NewPostgresCustomFoodItemRepository(db).GetByID(ctx, claim.UserID, itemID, RepositoryContext{})
 			if err != nil {
 				return err
 			}
