@@ -22,9 +22,11 @@ The real-stack Task 283 harness now enables the seam before starting Vite and
 runs a production-browser scenario before the existing catalog scenarios. The
 scenario waits for the verification-required UI, performs authoritative
 picker recovery, replays the captured immutable body and idempotency key, and
-proves the picker contains exactly one item with the replayed stable ID. The
-existing backend integration proof remains responsible for the database,
-audit, idempotency, and Redis exactly-once assertions.
+proves the picker contains exactly one item with the replayed stable ID. It
+also records operation-scoped Redis snapshots; the harness then performs
+read-only PostgreSQL proofs for exactly one food row, one `manual_create`
+audit entry, and one idempotency record, plus exactly one Redis generation
+advance. The resulting proof is committed with the acceptance run.
 
 ## Validation
 
@@ -33,6 +35,8 @@ audit, idempotency, and Redis exactly-once assertions.
 | `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run typecheck` | PASS |
 | `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./...` | PASS (previous task baseline) |
 | `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run typecheck` | PASS after harness/test repair |
+| `python3 scripts/run-task283-acceptance.py --timeout-seconds 240` | Task 294 browser recovery and exact-effect proof PASS; aggregate reports retain unrelated Phase 08 acceptance findings |
+| Managed Task 294 proof | `foodCount=1`, `auditCount=1`, `idempotencyCount=1`, `generationBefore=0`, `generationAfter=1`, `generationDelta=1`, with no assertion failures |
 | Task 292 dependency status | OPEN; Task 294 is not prepared by this repair |
 
 No task-list status row was changed because the required Task 292 dependency

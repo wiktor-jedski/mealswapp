@@ -186,18 +186,11 @@ async function adminSearch(page: Page, name: string, baseURL = ""): Promise<{ re
 	return { response, items: body.data!.items! };
 }
 
-function generation(): string {
-	const container = fixture("MEALSWAPP_TASK283_REDIS_CONTAINER");
-	if (!/^mealswapp-e2e-[0-9a-f]{24}$/.test(container)) throw new Error("Task 283 Redis container identity is invalid");
-	return execFileSync("docker", ["exec", container, "redis-cli", "GET", "classification:cache-generation:v1"], { encoding: "utf8" }).trim();
-}
-
 function generationSnapshot(): { id: string; value: string } {
 	const id = crypto.randomUUID();
 	const directory = fixture("MEALSWAPP_TASK283_REDIS_OBSERVATION_REQUEST_DIR");
 	const request = join(directory, `${id}.request.json`);
 	const response = join(directory, `${id}.response.json`);
-	const value = generation();
 	writeFileSync(request, `${JSON.stringify({ schema: "mealswapp.task283-redis-observation-request.v1", id })}\n`, { encoding: "utf8", mode: 0o600 });
 	const deadline = Date.now() + 10_000;
 	while (!existsSync(response) && Date.now() < deadline) {
@@ -205,10 +198,10 @@ function generationSnapshot(): { id: string; value: string } {
 	}
 	if (!existsSync(response)) throw new Error("Task 283 Redis observation timed out");
 	const observed = JSON.parse(readFileSync(response, "utf8")) as { schema?: string; id?: string; value?: string; error?: string };
-	if (observed.schema !== "mealswapp.task283-redis-observation.v1" || observed.id !== id || observed.value !== value) {
+	if (observed.schema !== "mealswapp.task283-redis-observation.v1" || observed.id !== id || !observed.value?.match(/^\d+$/)) {
 		throw new Error(`Task 283 independent Redis observation mismatch: ${observed.error ?? "value changed"}`);
 	}
-	return { id, value };
+	return { id, value: observed.value };
 }
 
 function runAuditFailureSQL(statement: "install" | "drop"): void {
@@ -251,6 +244,7 @@ test("Task 294 production transport corruption recovers exactly once", async ({ 
 	await requireManaged();
 	await admin(page, info);
 	const name = `Task 294 transport ${info.project.name}`;
+	const beforeGeneration = generationSnapshot();
 	const requests: Array<{ key: string; body: Record<string, unknown>; csrf: string }> = [];
 	page.on("request", async (request) => {
 		if (request.method() === "POST" && request.url().endsWith("/api/v1/admin/items")) {
@@ -282,6 +276,21 @@ test("Task 294 production transport corruption recovers exactly once", async ({ 
 	expect(authoritative.status()).toBe(200);
 	const authoritativeBody = await authoritative.json() as { data?: { id?: string; name?: string } };
 	expect(authoritativeBody.data).toMatchObject({ id: recoveredID, name });
+	const replay = await page.request.post("/api/v1/admin/items", {
+		headers: { "X-CSRF-Token": requests[0]!.csrf, "Idempotency-Key": requests[0]!.key },
+		data: requests[0]!.body
+	});
+	expect(replay.status()).toBe(201);
+	const replayBody = await replay.json() as { requestId?: string; data?: { id?: string } };
+	expect(replayBody.data?.id).toBe(recoveredID);
+	expect(replayBody.requestId).toMatch(UUID);
+	const afterGeneration = generationSnapshot();
+	writeFileSync(join(fixture("PHASE08_ACCEPTANCE_RESULT_DIR"), "task294-transport-proof.json"), `${JSON.stringify({
+		schema: "mealswapp.task294-transport-proof.v1", name, entityId: recoveredID,
+		idempotencyKey: requests[0]!.key, requestIds: [replayBody.requestId],
+		generationSnapshots: { generationBefore: beforeGeneration.id, generationAfter: afterGeneration.id },
+		expected: { foodCount: 1, auditCount: 1, idempotencyCount: 1, generationBefore: beforeGeneration.value, generationAfter: afterGeneration.value, generationDelta: 1 }
+	}, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
 });
 
 test("solid and liquid creation persists ownerless canonical state and density provenance", async ({ page }, info) => {

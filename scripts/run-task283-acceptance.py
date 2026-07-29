@@ -278,6 +278,7 @@ class Task283Harness(real_stack.Harness):
             if not expected_projects.issubset(set(browser_payload.get("projects", []))):
                 self.write_synthetic_browser(evidence, "BLOCKED")
             try:
+                self.write_task294_proof(evidence)
                 self.write_backend_evidence(evidence)
             except Exception as error:
                 self.events.append("backend_proof_nonpass")
@@ -289,6 +290,33 @@ class Task283Harness(real_stack.Harness):
             self.events.append("task283_results_finalized")
         finally:
             for reservation in reservations: reservation.release()
+
+    def write_task294_proof(self, evidence: Path) -> None:
+        """Prove the browser-recovered Task 294 mutation has exactly-once effects."""
+        source = evidence / "task294-transport-proof.json"
+        if not source.is_file():
+            raise ValueError("Task 294 browser proof is missing")
+        operation = json.loads(source.read_text(encoding="utf-8"))
+        if operation.get("schema") != "mealswapp.task294-transport-proof.v1":
+            raise ValueError("Task 294 browser proof schema is invalid")
+        name, entity_id, key = operation.get("name"), operation.get("entityId"), operation.get("idempotencyKey")
+        if not isinstance(name, str) or not name.startswith("Task 294 transport ") or not isinstance(entity_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", entity_id, re.I) or not isinstance(key, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}", key):
+            raise ValueError("Task 294 browser proof identity is invalid")
+        actual = {
+            "foodCount": int(read_only_psql(self.target, self.database, "SELECT count(*) FROM food_items WHERE id=%s::uuid AND name=%s", (entity_id, name))),
+            "auditCount": int(read_only_psql(self.target, self.database, "SELECT count(*) FROM admin_audit_entries WHERE entity_type='food_item' AND entity_id=%s::uuid AND action='manual_create'", (entity_id,))),
+            "idempotencyCount": int(read_only_psql(self.target, self.database, "SELECT count(*) FROM mutation_idempotency_keys WHERE method='POST' AND route='/admin/items' AND key=%s", (key,))),
+        }
+        expected = operation.get("expected")
+        snapshots = operation.get("generationSnapshots")
+        if not isinstance(expected, dict) or not isinstance(snapshots, dict):
+            raise ValueError("Task 294 browser proof expectations are invalid")
+        actual.update(redis_generation_actual(expected, snapshots, self.redis_observation_directory))
+        failures = compare_expected(expected, actual)
+        proof = {"schema": "mealswapp.task294-transport-proof.v1", "operation": operation, "actual": actual, "assertionFailures": failures, "transactionReadOnly": True}
+        (evidence / "backend/task294-transport-proof.json").write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if failures:
+            raise ValueError("Task 294 exact-effect proof failed: " + ", ".join(failures))
 
     def redis_generation_snapshot(self) -> dict[str, object]:
         """Read the application generation key from the owned Redis container."""
@@ -318,8 +346,11 @@ class Task283Harness(real_stack.Harness):
                     ):
                         raise ValueError("Redis generation observation request is invalid")
                     snapshot = self.redis_generation_snapshot()
+                    # A fresh isolated database has no cache-generation key until
+                    # the first committed classification mutation; treat that
+                    # absent baseline as generation zero for operation deltas.
                     if snapshot["value"] is None:
-                        raise RuntimeError("Redis generation key has no numeric value")
+                        snapshot["value"] = "0"
                     observation = {
                         "schema": "mealswapp.task283-redis-observation.v1",
                         "id": snapshot_id,
