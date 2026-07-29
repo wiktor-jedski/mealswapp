@@ -103,9 +103,18 @@ func TestTask301TransitionUsesEvalShaAndFallsBackOnlyForNoScript(t *testing.T) {
 	if len(uncached.calls[1].keys) != 2 || len(uncached.calls[1].args) != 5 {
 		t.Fatalf("EVAL fallback keys/args = %d/%d, want 2/5", len(uncached.calls[1].keys), len(uncached.calls[1].args))
 	}
+	fallbackFailure := &task301ScriptClient{
+		evalShaErr: task301RedisError("NOSCRIPT No matching script. Please use EVAL."),
+		evalErr:    errors.New("EVAL failed"),
+	}
+	err := NewRedisOptimizationJobStore(fallbackFailure).Save(context.Background(), job)
+	if !errors.Is(err, queue.ErrQueueUnavailable) || !strings.Contains(err.Error(), "EVAL failed") {
+		t.Fatalf("Save(EVAL failure) error = %v, want mapped fallback error", err)
+	}
+	fallbackFailure.assertCalls(t, "evalsha", "eval")
 
 	failed := &task301ScriptClient{evalShaErr: errors.New("Redis unavailable")}
-	err := NewRedisOptimizationJobStore(failed).Save(context.Background(), job)
+	err = NewRedisOptimizationJobStore(failed).Save(context.Background(), job)
 	if !errors.Is(err, queue.ErrQueueUnavailable) {
 		t.Fatalf("Save(Redis failure) error = %v, want ErrQueueUnavailable", err)
 	}
@@ -185,6 +194,11 @@ func TestTask301EmbeddedTransitionPreservesRedisStateMachineAndTTLs(t *testing.T
 	}
 	if err := store.PublishFailed(ctx, failedJob.JobID, nil, failure, time.Now().UTC()); err != nil {
 		t.Fatalf("PublishFailed(processing) error = %v", err)
+	}
+	task301AssertTTL(t, client.PTTL(ctx, optimizationJobKey(failedJob.JobID)).Val(), jobTTL)
+	task301AssertTTL(t, client.PTTL(ctx, optimizationExpiredKey(failedJob.JobID)).Val(), time.Hour)
+	if owner := client.Get(ctx, optimizationExpiredKey(failedJob.JobID)).Val(); owner != failedJob.UserID.String() {
+		t.Fatalf("failed expiry marker owner = %q, want %q", owner, failedJob.UserID)
 	}
 	if err := store.PublishCompleted(ctx, failedJob.JobID, []optimization.DietAlternative{task221Alternative(0.5)}, time.Now().UTC()); err == nil {
 		t.Fatal("PublishCompleted(failed) error = nil, want terminal immutability conflict")
