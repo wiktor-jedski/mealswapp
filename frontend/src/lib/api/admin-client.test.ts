@@ -57,6 +57,7 @@ test("searches bounded ownerless summaries with stable duplicate-name IDs", asyn
 	const malformed = [
 		{ items: [{ ...duplicate(itemId, "solid"), ownerId: userId }], page: 1, pageSize: 10, total: 1 },
 		{ items: [{ ...duplicate(itemId, "solid"), name: "" }], page: 1, pageSize: 10, total: 1 },
+		{ items: [{ ...duplicate(itemId, "solid"), macrosPer100: { ...duplicate(itemId, "solid").macrosPer100, calories: 100 } }], page: 1, pageSize: 10, total: 1 },
 		{ items: [duplicate(itemId, "solid")], page: 0, pageSize: 10, total: 1 },
 		{ items: Array.from({ length: 51 }, () => duplicate(itemId, "solid")), page: 1, pageSize: 50, total: 51 }
 	];

@@ -2249,7 +2249,7 @@ components:
           type: string
           enum: [solid, liquid]
         macrosPer100:
-          $ref: "#/components/schemas/MacroProjection"
+          $ref: "#/components/schemas/MacroProfile"
         foodCategories:
           type: array
           maxItems: 100
