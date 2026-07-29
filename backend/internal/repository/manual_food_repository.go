@@ -83,6 +83,9 @@ func (r *PostgresManualFoodItemRepository) ClaimCreate(ctx context.Context, tx A
 	if err := validateManualFoodCreateClaim(claim, encode); err != nil {
 		return ManualFoodItemCreateClaimResult{}, err
 	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return ManualFoodItemCreateClaimResult{}, err
+	}
 	_, claimErr := scanManualFoodCreateClaim(tx.QueryRow(ctx, manualFoodCreateClaimSQL, claim.AdminUserID, claim.Key, claim.BodyHash))
 	if claimErr == nil {
 		id, err := createManualFoodItem(ctx, tx, claim.Item)
@@ -125,6 +128,9 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if item.ID == uuid.Nil {
 		return validationError("food item id is required")
 	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return err
+	}
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return err
 	}
@@ -163,6 +169,9 @@ func (r *PostgresManualFoodItemRepository) Delete(ctx context.Context, tx AdminM
 // createManualFoodItem persists one ownerless global row and its classifications.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEntity) (uuid.UUID, error) {
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return uuid.Nil, err
+	}
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return uuid.Nil, err
 	}

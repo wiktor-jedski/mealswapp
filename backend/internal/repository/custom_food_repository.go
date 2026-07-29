@@ -146,6 +146,9 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 	}
 	var result CustomFoodItemCreateClaimResult
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
 		_, claimErr := scanCustomFoodCreateClaim(db.QueryRow(ctx, customFoodCreateClaimSQL, claim.UserID, claim.Key, claim.BodyHash))
 		if claimErr == nil {
 			itemID, err := createCustomFoodItemInTransaction(ctx, db, claim.Item)
