@@ -64,9 +64,16 @@
 	async function mutate(action: (signal: AbortSignal) => Promise<AdminMicronutrient>, success: string): Promise<void> {
 		const operation = begin(); busy = true; error = ""; message = "";
 		try {
-			await action(operation.signal);
-			const current = await api.listMicronutrients(operation.signal);
-			if (operation.generation === generation) { entries = current; message = success; }
+			const changed = await action(operation.signal);
+			try {
+				const current = await api.listMicronutrients(operation.signal);
+				if (operation.generation === generation) { entries = current; message = success; }
+			} catch (refreshReason) {
+				if (operation.generation === generation && !aborted(refreshReason)) {
+					entries = entries.map((entry) => entry.key === changed.key ? changed : entry);
+					message = `${success} Refresh is unavailable; showing the successful result.`;
+				}
+			}
 		} catch (reason) {
 			if (operation.generation === generation && !aborted(reason)) {
 				error = safeMessage(reason);

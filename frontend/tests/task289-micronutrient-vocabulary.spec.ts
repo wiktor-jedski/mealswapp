@@ -115,9 +115,11 @@ test("administrator recovers from audit and refresh failures with keyboard contr
 	await name.fill("Sodium audit");
 	await name.press("Enter");
 	await expect(vocabulary.getByRole("alert")).toContainText("No change was shown as successful");
+	failRefresh = true;
 	await name.fill("Sodium recovered");
 	await name.press("Enter");
-	await expect(vocabulary.getByRole("status")).toContainText("refreshed");
+	await expect(vocabulary.getByRole("status")).toContainText("successful result");
+	await expect(name).toHaveValue("Sodium recovered");
 	failRefresh = true;
 	await vocabulary.getByRole("button", { name: "Refresh" }).click();
 	await expect(vocabulary.getByRole("alert")).toContainText("No change was shown as successful");
