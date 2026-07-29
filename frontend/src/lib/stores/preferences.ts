@@ -172,9 +172,9 @@ export async function retryUnitPreference(): Promise<void> {
 	}
 	if (status.operation === "save" && status.pendingUnitSystem) {
 		await setUnitSystem(status.pendingUnitSystem);
-		return;
+	} else {
+		await loadAuthenticatedUnitPreference(status.userId);
 	}
-	await loadAuthenticatedUnitPreference(status.userId);
 }
 
 /** Cancels account work and restores the separate anonymous device preference. */

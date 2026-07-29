@@ -22,11 +22,11 @@
   "controls": [
     {
       "path": "docs/implementation/02_TASK_LIST.md",
-      "sha256": "3339d96fa4da0c6e2e0174ab0aa3da9544dce93dff99006eb1e624b1c536df59"
+      "sha256": "2892917a08d6945ff38f82a8bbe47aeacd6fb661b7f1f33330c2fee971ae1d14"
     },
     {
       "path": "docs/implementation/04_OPEN.md",
-      "sha256": "de951074a8dc70f49c01eedc99af2cf56c0d7b5894733c838190fa93defbdf15"
+      "sha256": "b7a40411c449085c0f40f48a7ce169801f785362e671533aa0ccc103085f8801"
     },
     {
       "path": "docs/testing/phase08/acceptance-manifest.json",

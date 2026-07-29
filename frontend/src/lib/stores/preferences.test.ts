@@ -340,6 +340,15 @@ test("retry is a no-op when no recoverable failure exists", async () => {
 	await expect(retryUnitPreference()).resolves.toBeUndefined();
 });
 
+test("retry reloads a failed authenticated profile", async () => {
+	await loadAuthenticatedUnitPreference("account-a", async () => {
+		throw new Error("offline");
+	});
+	setPreferenceDependencies({ probeProfileSession: async () => profile("account-a", "imperial") });
+	await retryUnitPreference();
+	expect(get(preferencesStore).unitSystem).toBe("imperial");
+});
+
 function profile(userId: string, unitSystem: "metric" | "imperial"): ProfileData {
 	return {
 		userId,
