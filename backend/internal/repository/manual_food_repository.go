@@ -90,7 +90,8 @@ func (r *PostgresManualFoodItemRepository) GetByIDInMutation(ctx context.Context
 // Search returns one bounded deterministic page from active global food_items only.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func (r *PostgresManualFoodItemRepository) Search(ctx context.Context, normalizedName string, limit int, offset int) ([]FoodItemEntity, int, error) {
-	if normalizedName == "" || normalizedName != strings.TrimSpace(normalizedName) || normalizedName != strings.ToLower(normalizedName) || strings.ContainsRune(normalizedName, '\x00') {
+	normalizedName = strings.ToLower(canonicalManualFoodName(normalizedName))
+	if normalizedName == "" || strings.ContainsRune(normalizedName, '\x00') {
 		return nil, 0, validationError("normalized food item search name is required")
 	}
 	if limit < 1 || limit > 50 || offset < 0 {
@@ -170,6 +171,7 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if item.ID == uuid.Nil {
 		return validationError("food item id is required")
 	}
+	item.Name = canonicalManualFoodName(item.Name)
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return err
 	}
@@ -208,6 +210,7 @@ func (r *PostgresManualFoodItemRepository) Delete(ctx context.Context, tx AdminM
 // createManualFoodItem persists one ownerless global row and its classifications.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEntity) (uuid.UUID, error) {
+	item.Name = canonicalManualFoodName(item.Name)
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return uuid.Nil, err
 	}
@@ -225,6 +228,12 @@ func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEnti
 		return uuid.Nil, err
 	}
 	return id, nil
+}
+
+// canonicalManualFoodName collapses internal whitespace at the global-item persistence boundary.
+// Implements DESIGN-009 ItemCurator canonical name persistence.
+func canonicalManualFoodName(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 }
 
 // getManualFoodByID hydrates one global row using the supplied executor.

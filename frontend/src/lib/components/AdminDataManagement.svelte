@@ -99,13 +99,18 @@
 	}
 
 	async function searchItems(page = 1): Promise<boolean> {
-		const name = itemSearchQuery.trim();
-		if (!name) { itemSearchError = "Enter an item name."; itemSearchStatus = "error"; return false; }
 		const { generation, controller } = beginItemSearch();
+		const name = itemSearchQuery.trim();
+		if (!name) {
+			itemSearchItems = []; itemSearchPage = 1; itemSearchTotal = 0;
+			itemSearchError = "Enter an item name."; itemSearchStatus = "error"; return false;
+		}
 		itemSearchStatus = "loading"; itemSearchError = "";
 		try {
 			const result = await api.searchItems({ name, page, pageSize: itemSearchPageSize }, controller.signal);
 			if (!currentItemSearch(generation, controller)) return false;
+			const resultPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+			if (page > resultPages) return searchItems(resultPages);
 			itemSearchItems = result.items; itemSearchPage = result.page; itemSearchPageSize = result.pageSize; itemSearchTotal = result.total;
 			itemSearchStatus = result.items.length ? "success" : "empty";
 			return true;
