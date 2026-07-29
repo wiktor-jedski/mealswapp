@@ -84,3 +84,45 @@ test("administrator adds, edits, deactivates, and reactivates canonical entries 
 	expect(results.violations.filter(({ impact }) => impact === "serious" || impact === "critical")).toEqual([]);
 	expect(await vocabulary.innerText()).not.toMatch(/owner|private food|email|user id/i);
 });
+
+test("administrator recovers from audit and refresh failures with keyboard controls on mobile dark theme", async ({ page }) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+	let entries: Entry[] = [{ key: "Sodium", displayName: "Sodium", unit: "mg", active: true }];
+	let failMutation = true;
+	let failRefresh = false;
+	await stubShell(page);
+	await page.route(/\/api\/v1\/admin\/micronutrients(\/.*)?$/, async (route) => {
+		const request = route.request();
+		if (request.method() === "GET") {
+			if (failRefresh) return json(route, 503, { status: "error", requestId: "task-289", error: { category: "dependency", code: "dependency_unavailable", message: "Vocabulary refresh unavailable", retryable: true } });
+			return json(route, 200, ok({ micronutrients: entries }));
+		}
+		if (failMutation) {
+			failMutation = false;
+			return json(route, 503, { status: "error", requestId: "task-289", error: { category: "dependency", code: "audit_write_failed", message: "The vocabulary action could not be recorded.", retryable: true } });
+		}
+		const [, key] = /\/micronutrients\/([^/]+)\/([^/]+)$/.exec(new URL(request.url()).pathname) ?? [];
+		const current = entries.find((entry) => entry.key === key)!;
+		const updated = { ...current, displayName: (request.postDataJSON() as { displayName: string }).displayName };
+		entries = entries.map((entry) => entry.key === key ? updated : entry);
+		return json(route, 200, ok({ micronutrient: updated }));
+	});
+	await page.goto("/admin");
+	const vocabulary = page.locator("[data-admin-micronutrients]");
+	const sodium = vocabulary.locator('[data-micronutrient-key="Sodium"]');
+	const name = sodium.getByLabel("Display name");
+	await name.fill("Sodium audit");
+	await name.press("Enter");
+	await expect(vocabulary.getByRole("alert")).toContainText("No change was shown as successful");
+	await name.fill("Sodium recovered");
+	await name.press("Enter");
+	await expect(vocabulary.getByRole("status")).toContainText("refreshed");
+	failRefresh = true;
+	await vocabulary.getByRole("button", { name: "Refresh" }).click();
+	await expect(vocabulary.getByRole("alert")).toContainText("No change was shown as successful");
+	failRefresh = false;
+	await vocabulary.getByRole("button", { name: "Refresh" }).click();
+	await expect(sodium.getByLabel("Display name")).toHaveValue("Sodium recovered");
+	expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
