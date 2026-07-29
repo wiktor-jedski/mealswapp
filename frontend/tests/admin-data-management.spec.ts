@@ -347,6 +347,22 @@ test("unused classification delete reloads the authoritative hierarchy", async (
 	expect(state.classificationReads).toBeGreaterThanOrEqual(readsBeforeDelete + 2);
 });
 
+test("deleted editor context survives refresh failure and clears after read-only retry", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	state.classificationReadFailures = { food_category: 1 };
+	await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Edit" }).click();
+	await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Delete" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Deleted, but the list could not be refreshed")).toBeVisible();
+	await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("Produce");
+	const readsBeforeRetry = state.classificationReads;
+	await page.getByRole("button", { name: "Retry list refresh" }).click();
+	await expect(page.getByText("Classification deleted and refreshed.")).toBeVisible();
+	await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("");
+	expect(state.classificationReads).toBe(readsBeforeRetry + 2);
+	expect(state.classificationDeletes).toBe(1);
+});
+
 test("item replacement preserves all fields and renders the differing authoritative follow-up", async ({ page }) => {
 	const state = await stubApp(page);
 	state.item = {

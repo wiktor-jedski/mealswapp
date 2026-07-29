@@ -22,6 +22,7 @@
 	let createKey = $state("");
 	let createBody = $state("");
 	let classifications = $state<Record<ClassificationKind, AdminClassification[]>>({ food_category: [], culinary_role: [] });
+	let lastSafeClassifications = $state<Record<ClassificationKind, AdminClassification[]>>({ food_category: [], culinary_role: [] });
 	let classificationKind = $state<ClassificationKind>("food_category");
 	let classificationName = $state("");
 	let classificationId = $state("");
@@ -30,6 +31,7 @@
 	let classificationReadBusy = $state(false);
 	let classificationRefreshRequired = $state(false);
 	let savedClassification = $state<AdminClassification | undefined>();
+	let deletedClassificationId = $state("");
 	let classificationBusy = $derived(classificationMutationBusy || classificationReadBusy);
 	let classificationMessage = $state("");
 	let classificationError = $state("");
@@ -84,21 +86,30 @@
 			const projection = await classificationProjection(controller.signal);
 			if (currentClassificationRead(generation, controller)) {
 				if (savedClassification && !projectionContains(projection, savedClassification)) {
+					classifications = lastSafeClassifications;
 					classificationMessage = "Saved, but the list could not be refreshed";
 					return;
 				}
+				lastSafeClassifications = projection;
 				classifications = projection;
 				const completedSave = classificationRefreshRequired && savedClassification !== undefined;
+				const completedDeleteId = classificationRefreshRequired ? deletedClassificationId : "";
+				const completedDelete = completedDeleteId !== "";
 				classificationRefreshRequired = false;
 				savedClassification = undefined;
+				deletedClassificationId = "";
 				if (!preserveError) classificationError = "";
 				if (completedSave) {
 					resetClassificationEditor();
 					classificationMessage = "Classification saved and refreshed.";
+				} else if (completedDelete) {
+					if (classificationId === completedDeleteId) resetClassificationEditor();
+					classificationMessage = "Classification deleted and refreshed.";
 				}
 			}
 		} catch (error) {
 			if (currentClassificationRead(generation, controller) && !aborted(error)) {
+				classifications = lastSafeClassifications;
 				if (classificationRefreshRequired) classificationMessage = savedClassification ? "Saved, but the list could not be refreshed" : "Deleted, but the list could not be refreshed";
 				else classificationError = message(error);
 			}
@@ -186,6 +197,7 @@
 			classificationName = saved.name;
 			classificationParentId = saved.parentId ?? "";
 			classificationRefreshRequired = true;
+			deletedClassificationId = "";
 			classificationMessage = "Classification saved. Refreshing list…";
 			await refreshClassifications();
 		} catch (error) {
@@ -217,14 +229,11 @@
 		try {
 			await api.deleteClassification(target.id, { signal: controller.signal });
 			if (!currentClassificationMutation(generation, controller)) return;
-			const deletedEditedClassification = classificationId === target.id;
+			deletedClassificationId = target.id;
 			classificationRefreshRequired = true;
 			classificationMessage = "Deleted, but the list could not be refreshed";
 			await refreshClassifications();
-			if (!classificationRefreshRequired) {
-				if (deletedEditedClassification) resetClassificationEditor();
-				classificationMessage = "Classification deleted and refreshed.";
-			}
+			if (!classificationRefreshRequired) classificationMessage = "Classification deleted and refreshed.";
 		} catch (error) {
 			if (currentClassificationMutation(generation, controller) && !aborted(error)) {
 				classificationError = message(error);
