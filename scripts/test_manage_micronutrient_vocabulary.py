@@ -249,6 +249,13 @@ class VocabularyOperatorTests(unittest.TestCase):
                     ("GET", "/api/v1/admin/micronutrients"),
                 ])
 
+        status, stdout, stderr = self.run_operator([
+            "add", "--key", "Iron", "--display-name", "Iron", "--unit", "mg", "--dry-run",
+        ])
+        self.assertEqual(status, 2)
+        self.assertEqual(stdout, "")
+        self.assertEqual(stderr, "micronutrient key already exists\n")
+
     def test_dry_run_missing_key_and_permanent_failures_exit_nonzero(self) -> None:
         status, stdout, stderr = self.run_operator([
             "deactivate", "--key", "VitaminE", "--dry-run",
@@ -380,6 +387,17 @@ class VocabularyOperatorTests(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertEqual(stderr, "API response is invalid\n")
 
+        VocabularyHandler.mutation_body = b'{"status":"ok","requestId":"bad"}'
+        VocabularyHandler.list_body = envelope("micronutrients", [
+            {"key": "VitaminK", "displayName": "Vitamin K", "unit": "mg", "active": False},
+        ])
+        status, stdout, stderr = self.run_operator([
+            "update-unit", "--key", "VitaminK", "--unit", "mg",
+        ])
+        self.assertEqual(status, 0)
+        self.assertIn("succeeded command=update-unit key=VitaminK unit=mg active=false", stdout)
+        self.assertEqual(stderr, "")
+
     def test_explicit_environment_target_and_argument_validation_precede_credentials(self) -> None:
         invalid_targets = [
             ("development", "http://example.test", False),
@@ -388,6 +406,8 @@ class VocabularyOperatorTests(unittest.TestCase):
             ("staging", "https://api.example.test", True),
             ("development", "http://user:secret@127.0.0.1:8080", False),
             ("development", "http://127.0.0.1:8080/api?raw=1", False),
+            ("development", "http://127.0.0.1:8080/health", False),
+            ("development", " http://127.0.0.1:8080", False),
         ]
         for environment, target, confirmation in invalid_targets:
             with self.subTest(environment=environment, target=target):
@@ -424,20 +444,36 @@ class VocabularyOperatorTests(unittest.TestCase):
         self.assertIsNone(OPERATOR.retry_after_seconds("not-a-date"))
 
         class Response:
-            status = 200
-            headers = Message()
+            def __init__(self, body: bytes):
+                self.status = 200
+                self.headers = Message()
+                self.body = body
+                self.read_limits: list[int] = []
 
             def read(self, _limit: int = -1) -> bytes:
-                return envelope("micronutrients", [])
+                self.read_limits.append(_limit)
+                return self.body
 
             def close(self) -> None:
                 return None
 
         session = OPERATOR.VocabularyClient("http://127.0.0.1:8080")
-        with mock.patch.object(session.opener, "open", return_value=Response()) as opened:
+        with mock.patch.object(
+            session.opener, "open", return_value=Response(envelope("micronutrients", [])),
+        ) as opened:
             response = session.request("GET", "/api/v1/admin/micronutrients")
         self.assertEqual(response.status, 200)
         self.assertEqual(opened.call_args.kwargs["timeout"], 30)
+
+        login_response = Response(b'{"status":"ok"}')
+        csrf_response = Response(b'{"data":{"csrfToken":"csrf-secret"}}')
+        with mock.patch.object(
+            session.opener, "open", side_effect=[login_response, csrf_response],
+        ) as opened:
+            session.login("admin@example.test", "password-secret")
+        self.assertEqual(opened.call_count, 2)
+        self.assertEqual(login_response.read_limits, [OPERATOR.MAX_RESPONSE_BYTES + 1])
+        self.assertEqual(csrf_response.read_limits, [OPERATOR.MAX_RESPONSE_BYTES + 1])
 
     def test_operator_has_no_database_or_process_execution_boundary(self) -> None:
         source = (SCRIPTS / "manage-micronutrient-vocabulary.py").read_text(encoding="utf-8")

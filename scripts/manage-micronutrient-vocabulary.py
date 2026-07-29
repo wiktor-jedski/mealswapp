@@ -260,7 +260,13 @@ class VocabularyClient(AuthenticatedSession):
                 continue
             if response.status != expected_status:
                 raise OperatorError("mutation failed permanently")
-            return validate_entry(response_data(response, "micronutrient", expected_status))
+            try:
+                return validate_entry(response_data(response, "micronutrient", expected_status))
+            except OperatorError:
+                reconciled = self.reconcile(desired)
+                if reconciled is not None:
+                    return reconciled
+                raise
         raise OperatorError("operator request failed")
 
 
@@ -346,7 +352,10 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         if args.dry_run:
             entries = client.list_entries()
-            if args.command != "add" and args.key not in {entry["key"] for entry in entries}:
+            existing_keys = {entry["key"] for entry in entries}
+            if args.command == "add" and args.key in existing_keys:
+                raise ConflictError("micronutrient key already exists")
+            if args.command != "add" and args.key not in existing_keys:
                 raise OperatorError("micronutrient key was not found")
             print(f"validated command={args.command} key={args.key} dry_run=true")
             return 0

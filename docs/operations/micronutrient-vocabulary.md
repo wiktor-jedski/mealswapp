@@ -42,3 +42,19 @@ reactivate          --key VitaminK
 Append `--dry-run` to a mutation command to authenticate, read authoritative vocabulary state, and validate the operation without sending a mutation. Unit updates and deactivation can still be rejected by the server with an in-use conflict because food-item usage is intentionally not exposed by the list API.
 
 Every mutation carries a fresh CSRF token. After an ambiguous network or 5xx outcome, the operator reads authoritative vocabulary state and accepts an already-applied result before considering a retry; this prevents duplicate audit mutations after a lost success response. Otherwise, ambiguous outcomes and valid bounded `Retry-After` responses are retried at most three times with the identical method, path, and body. Authentication or authorization failure aborts immediately. Validation, missing-entry, in-use/concurrent conflict, malformed response, exhausted retry, and permanent HTTP failures exit nonzero with a fixed safe diagnostic.
+
+## Disposable-stack acceptance
+
+After starting a throwaway PostgreSQL/Redis/API stack and bootstrapping an administrator, run the real API acceptance with `MEALSWAPP_TASK290_DISPOSABLE=1`, `MEALSWAPP_TASK290_ADMIN_EMAIL`, and `MEALSWAPP_TASK290_ADMIN_PASSWORD` supplied only through the environment:
+
+```sh
+MEALSWAPP_TASK290_DISPOSABLE=1 \
+MEALSWAPP_TASK290_ADMIN_EMAIL="$ADMIN_EMAIL" \
+MEALSWAPP_TASK290_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+python3 scripts/run-task290-acceptance.py \
+  --environment development \
+  --base-url http://127.0.0.1:8080 \
+  --database-url "$DISPOSABLE_DATABASE_URL"
+```
+
+The runner performs list, dry-run, add, display-name update, unit update, deactivate, and reactivate through the real HTTP API, then checks the final projection and (when `--database-url` is supplied) read-only audit action names. Tear down the disposable database after the run; no operator mutation is directed at a persistent fixture.
