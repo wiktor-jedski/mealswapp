@@ -636,18 +636,20 @@ retained in the mandatory append-only
     {
       "id": "P08-FIND-282-002",
       "rootCauseId": "ROOT-T282-USDA-OPTIONAL-PORTION",
-      "status": "OPEN DEFECT",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-033"
       ],
       "scenarios": [
         "P08-SWR033-STANDARDIZED-STORAGE"
       ],
-      "observed": "A controlled USDA result with valid identity and nutrients but null optional portion amount/unit causes the provider page to be rejected.",
+      "observed": "Resolved by the Task 288 controlled-provider retest: unusable optional measures are skipped, valid text-only volume evidence and valid peers survive, and the Administration UI reports partial normalization without provider unavailability.",
       "expected": "Invalid optional portion evidence is skipped or warned while the valid candidate remains available without inventing liquid density.",
-      "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json",
+      "evidence": "docs/implementation/evidence/task-288-preparation.md",
       "owner": "backend-external-data",
-      "retestCondition": "Run Task 282 with mixed valid and null optional USDA measures and observe the candidate with canonical metric values."
+      "retestCondition": "Run Task 282 with mixed valid and null optional USDA measures and observe the candidate with canonical metric values.",
+      "closedDate": "2026-07-29",
+      "passingEvidence": "docs/implementation/evidence/task-288-preparation.md"
     },
     {
       "id": "P08-FIND-282-003",

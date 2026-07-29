@@ -393,7 +393,7 @@ export interface SavedItemsData {
 export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
-/** Canonical quantity units accepted by saved daily-diet entries. */
+/** Explicit quantity units normalized by the server exactly once after basis validation. */
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
 /** Distinguishes Food Items from Meals in Daily Diet entries. */
@@ -1205,7 +1205,7 @@ export interface ClassificationSummary {
 }
 
 // Implements DESIGN-008 ProfileController frontend custom-item mutation contract.
-/** Client-editable private custom-item fields. */
+/** Client-editable private custom-item fields whose metric-named values always use metric units. */
 export interface CustomItemRequest {
 	name: string;
 	physicalState: "solid" | "liquid";
@@ -1271,7 +1271,8 @@ export type ExternalCandidateWarning =
 	| "missing_micronutrients"
 	| "missing_liquid_density"
 	| "uncertain_unit_conversion"
-	| "suspicious_liquid_macros";
+	| "suspicious_liquid_macros"
+	| "partial_normalization";
 
 export type ExternalProviderWarningCode =
 	| "provider_rate_limited"
@@ -1395,7 +1396,7 @@ export interface MacroProfile {
 }
 
 // Implements DESIGN-002 SearchController frontend substitution source summary contract.
-/** Macro and amount totals for the user's selected substitution input list. */
+/** Macro totals plus metric gram and milliliter totals after one request-unit normalization. */
 export interface SourceSummary {
 	macros: MacroProfile;
 	calories: number;

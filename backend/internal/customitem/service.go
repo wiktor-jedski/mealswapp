@@ -153,7 +153,7 @@ func (s *Service) Get(ctx context.Context, userID, itemID uuid.UUID) (item Item,
 	if s == nil || s.items == nil {
 		return Item{}, repository.NewError(repository.ErrorKindConnection, "custom item service is unavailable", nil)
 	}
-	entity, err := s.items.GetByID(ctx, userID, itemID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+	entity, err := s.items.GetByID(ctx, userID, itemID, repository.RepositoryContext{})
 	if err != nil {
 		return Item{}, err
 	}
@@ -203,7 +203,7 @@ func (s *Service) List(ctx context.Context, userID uuid.UUID) (result []Item, er
 	if s == nil || s.items == nil {
 		return nil, repository.NewError(repository.ErrorKindConnection, "custom item service is unavailable", nil)
 	}
-	entities, err := s.items.List(ctx, userID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+	entities, err := s.items.List(ctx, userID, repository.RepositoryContext{})
 	if err != nil {
 		return nil, err
 	}

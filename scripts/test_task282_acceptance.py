@@ -204,6 +204,17 @@ class Task282AcceptanceTests(unittest.TestCase):
         self.assertEqual(off["nutriments"]["energy_modifier"], "~")
         self.assertEqual(malformed["nutriments"]["proteins_100g"], "bad")
 
+    def test_optional_usda_fixture_mixes_usable_and_unusable_portion_evidence(self) -> None:
+        food = fixture.usda_food()
+        food["foodMeasures"] = [
+            {"gramWeight": 224, "disseminationText": "1 cup", "amount": None, "measureUnit": None},
+            {"gramWeight": 12, "disseminationText": "variable portion", "amount": None, "measureUnit": None},
+        ]
+        self.assertEqual(len(food["foodMeasures"]), 2)
+        rejected = fixture.usda_food()
+        rejected["fdcId"] = 0
+        self.assertEqual(rejected["fdcId"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

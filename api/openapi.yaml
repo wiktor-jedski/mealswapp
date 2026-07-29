@@ -1816,7 +1816,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [missing_image, missing_macros, missing_micronutrients, missing_liquid_density, uncertain_unit_conversion, suspicious_liquid_macros]
+            enum: [missing_image, missing_macros, missing_micronutrients, missing_liquid_density, uncertain_unit_conversion, suspicious_liquid_macros, partial_normalization]
     # Implements DESIGN-009 ExternalSearchProxy closed provider warning vocabulary.
     ExternalDataWarning:
       type: object
@@ -2035,12 +2035,15 @@ components:
             averageUnitWeightGrams:
               type: [number, "null"]
               exclusiveMinimum: 0
+              description: Metric grams. This field is never converted for display preferences.
             averageServingVolumeMilliliters:
               type: [number, "null"]
               exclusiveMinimum: 0
+              description: Metric milliliters. This field is never converted for display preferences.
             densityGramsPerMilliliter:
               type: [number, "null"]
               exclusiveMinimum: 0
+              description: Metric grams per milliliter. This field is never converted for display preferences.
             densitySourceProvider:
               type: [string, "null"]
               maxLength: 200
@@ -2550,7 +2553,7 @@ components:
     CanonicalQuantityUnit:
       type: string
       enum: [g, ml, oz, fl_oz]
-      description: Canonical mass or volume unit accepted by saved-diet entries.
+      description: Explicit mass or volume unit. The server rejects cross-basis units and normalizes supported imperial input exactly once before calculation.
     FoodObjectType:
       type: string
       enum: [food_item, meal]
@@ -2755,12 +2758,15 @@ components:
         averageUnitWeightGrams:
           type: number
           exclusiveMinimum: 0
+          description: Metric grams. Imperial display input must be converted by the client before using this metric-named field.
         averageServingVolumeMilliliters:
           type: number
           exclusiveMinimum: 0
+          description: Metric milliliters. Imperial display input must be converted by the client before using this metric-named field.
         densityGramsPerMilliliter:
           type: number
           exclusiveMinimum: 0
+          description: Metric grams per milliliter.
         densitySourceProvider:
           type: string
           maxLength: 200
@@ -3242,9 +3248,11 @@ components:
         totalGrams:
           type: number
           minimum: 0
+          description: Total metric grams after basis-compatible request quantities are normalized exactly once.
         totalMilliliters:
           type: number
           minimum: 0
+          description: Total metric milliliters after basis-compatible request quantities are normalized exactly once.
     # Implements DESIGN-002 SearchController food-object result contract.
     FoodObject:
       type: object

@@ -82,10 +82,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if provider == "usda":
             food = usda_food()
+            if query == "rejected":
+                food["fdcId"] = 0
             if query == "optional":
                 food["foodMeasures"] = [
-                    {"gramWeight": 224, "disseminationText": "1 cup", "amount": None, "measureUnit": None}
+                    {"gramWeight": 224, "disseminationText": "1 cup", "amount": None, "measureUnit": None},
+                    {"gramWeight": 12, "disseminationText": "variable portion", "amount": None, "measureUnit": None},
                 ]
+            if query == "zero":
+                self._json(200, {"totalHits": 0, "currentPage": 0, "totalPages": 0, "foods": []})
+                return
             self._json(200, {"totalHits": 1, "currentPage": 1, "totalPages": 1, "foods": [food]})
             return
         product = off_product(metadata=query == "metadata", malformed=query == "malformed-consumed")

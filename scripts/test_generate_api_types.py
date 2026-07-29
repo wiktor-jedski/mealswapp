@@ -126,6 +126,7 @@ class OperationResponseDriftTest(unittest.TestCase):
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
 		self.assertEqual(GENERATOR.custom_item_contract_mismatches(source), [])
 		generated = GENERATOR.generated_contract(source)
+		self.assertIn("metric-named values always use metric units", generated)
 		self.assertIn("export interface CustomItem extends CustomItemRequest", generated)
 		classification = generated[generated.index("export interface ClassificationSummary"):generated.index("export interface CustomItemRequest")]
 		self.assertNotIn("parentId", classification)
@@ -136,6 +137,18 @@ class OperationResponseDriftTest(unittest.TestCase):
 		self.assertIsNotNone(re.fullmatch(pattern.group(1), " Tofu "))
 		self.assertIsNone(re.fullmatch(pattern.group(1), "   "))
 		self.assertIsNone(re.fullmatch(pattern.group(1), "bad\x00name"))
+
+	def test_metric_named_and_explicit_quantity_contracts_are_documented(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		fields = GENERATOR.schema_block(source, "CustomItemFields") or ""
+		for description in ("Metric grams.", "Metric milliliters.", "Metric grams per milliliter."):
+			self.assertIn(description, fields)
+		unit = GENERATOR.schema_block(source, "CanonicalQuantityUnit") or ""
+		self.assertIn("rejects cross-basis units", unit)
+		self.assertIn("exactly once", unit)
+		generated = GENERATOR.generated_contract(source)
+		self.assertIn("normalized by the server exactly once after basis validation", generated)
+		self.assertIn("metric gram and milliliter totals after one request-unit normalization", generated)
 
 	def test_custom_item_name_or_parent_projection_drift_is_rejected(self) -> None:
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
