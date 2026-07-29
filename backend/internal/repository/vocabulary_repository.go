@@ -203,7 +203,13 @@ func (r *PostgresMicronutrientVocabularyRepository) SetActive(ctx context.Contex
 // lockUsageTables serializes guarded changes with global and private food writes.
 // Implements DESIGN-005 MicronutrientVocabulary concurrent item-write safeguard.
 func (r *PostgresMicronutrientVocabularyRepository) lockUsageTables(ctx context.Context) error {
-	_, err := r.db.Exec(ctx, vocabularyLockUsageTablesSQL)
+	return lockMicronutrientUsageTables(ctx, r.db)
+}
+
+// lockMicronutrientUsageTables serializes vocabulary guards with every item write.
+// Implements DESIGN-005 MicronutrientVocabulary concurrent item-write safeguard.
+func lockMicronutrientUsageTables(ctx context.Context, db sqlExecutor) error {
+	_, err := db.Exec(ctx, vocabularyLockUsageTablesSQL)
 	return mapPostgresError(err, "lock micronutrient usage")
 }
 
