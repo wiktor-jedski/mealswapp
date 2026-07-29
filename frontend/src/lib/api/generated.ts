@@ -750,12 +750,39 @@ export type SearchHistoryEnvelope = Envelope<SearchHistoryData>;
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** JSON account export bundle. */
 export interface ExportBundle {
-	user: Record<string, unknown>;
-	consent: Array<Record<string, unknown>>;
-	savedItems: SavedItem[];
+	user: ExportUser;
+	consent: ExportConsent[];
+	savedItems: ExportSavedItem[];
 	savedDiets: ExportSavedDiet[];
-	history: SearchHistoryEntry[];
-	customItems: Array<Record<string, unknown>>;
+	history: ExportSearchHistoryEntry[];
+	customItems: ExportCustomItem[];
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** Top-level authenticated account identity. */
+export interface ExportUser {
+	userId: string;
+	email: string;
+	role: "user" | "admin";
+	displayName: string;
+	unitSystem: "metric" | "imperial";
+	themePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One accepted legal-version pair. */
+export interface ExportConsent {
+	privacyPolicyVersion: string;
+	termsVersion: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free saved-item reference. */
+export interface ExportSavedItem {
+	id: string;
+	itemId: string;
+	kind: "favorite" | "saved_meal" | "saved_diet";
+	createdAt: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -763,9 +790,50 @@ export interface ExportBundle {
 export interface ExportSavedDiet {
 	id: string;
 	name: string;
-	entries: DailyDietFoodObjectEntry[];
+	entries: ExportSavedDietEntry[];
 	createdAt: string;
 	updatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One ordered owner-free saved-diet entry. */
+export interface ExportSavedDietEntry {
+	id: string;
+	foodObjectId: string;
+	foodObjectType: FoodObjectType;
+	quantity: number;
+	unit: CanonicalQuantityUnit;
+	position: number;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free decrypted search-history entry. */
+export interface ExportSearchHistoryEntry {
+	id: string;
+	query: string;
+	mode: string;
+	filtersHash: string;
+	createdAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free private custom-item projection. */
+export interface ExportCustomItem {
+	id: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	prepTimeMinutes: number;
+	averageUnitWeightGrams?: number;
+	averageServingVolumeMilliliters?: number;
+	densityGramsPerMilliliter?: number;
+	densitySourceProvider?: string;
+	densitySourceFoodId?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
+	macrosPer100: MacroProfile;
+	micros: Record<string, number>;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+	imageUrl?: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.

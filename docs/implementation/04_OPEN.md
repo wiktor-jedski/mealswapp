@@ -764,7 +764,7 @@ retained in the mandatory append-only
     {
       "id": "P08-FIND-284-001",
       "rootCauseId": "ROOT-T284-EXPORT-OWNER-PROJECTION",
-      "status": "OPEN DEFECT",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-043",
         "SW-REQ-072"
@@ -773,11 +773,13 @@ retained in the mandatory append-only
         "P08-SWR043-PRIVATE-ITEM-ISOLATION",
         "P08-SWR072-DATA-PORTABILITY"
       ],
-      "observed": "The owner-scoped JSON account export includes nested repository projections with UserID ownership fields even though cross-owner access, per-owner contents, CSV parsing, and global-data exclusion otherwise pass.",
+      "observed": "Closed after Account Export moved saved items, saved diets, search history, and custom items to export-only projections and the isolated Task 284 run passed private isolation, parsed JSON/CSV portability, and erasure proof.",
       "expected": "Account Export contains the authenticated account section and owner-scoped data without repeating persistence ownership identifiers in nested saved-item or other resource projections.",
       "evidence": "logs/real-stack-e2e/68bcf9edf41e8867a4b53b31/acceptance/results.json",
       "owner": "backend-privacy",
-      "retestCondition": "Rerun Task 284 and require P08-SWR043-ACCEPT-01 plus P08-SWR072-STEP-04 to pass with no nested owner or UserID fields in parsed JSON/CSV projections."
+      "retestCondition": "Rerun Task 284 and require P08-SWR043-ACCEPT-01 plus P08-SWR072-STEP-04 to pass with no nested owner or UserID fields in parsed JSON/CSV projections.",
+      "closedDate": "2026-07-29",
+      "passingEvidence": "logs/real-stack-e2e/71523b12517ff6b4d870302a/acceptance/results.json"
     },
     {
       "id": "P08-FIND-285-001",
@@ -838,7 +840,7 @@ retained in the mandatory append-only
 - **PLANNED (Task 291, accepted 2026-07-29; owner: frontend/data-curation maintainers):** resolve `P08-FIND-283-002` by exposing the existing classification create-with-parent, reparent, detach, and hierarchy-conflict behavior in the Administration UI, then rerun the isolated SW-REQ-057 acceptance scenario.
 - **PLANNED (Task 292, accepted 2026-07-29; owner: backend/frontend/data-curation maintainers):** resolve `P08-FIND-283-005` with an administrator-only, global-only paginated item search contract and accessible picker, while retaining direct UUID loading as a secondary advanced tool. The isolated retest must prove ownerlessness, private partition isolation, Catalog and Substitution visibility, and deletion exclusion.
 - **TRACKING (Task 302, project-owner decision, 2026-07-29):** `P08-FIND-283-006` is a real-stack evidence gap, not a confirmed separate product defect. Do not create a duplicate product task. Task 302 must prove valid and invalid micronutrient, allergen, and classification behavior together with exact persistence, audit, rollback, and Redis-generation counts.
-- **PLANNED (Task 293, accepted 2026-07-29; owner: backend/privacy/frontend maintainers):** resolve `P08-FIND-284-001` with export-only nested projections. Keep the account identity only in the top-level user section and remove repeated persistence ownership fields from nested JSON and CSV data, then rerun the isolated private-isolation and portability scenarios.
+- **IMPLEMENTED (Task 293, verified 2026-07-29; owner: backend/privacy/frontend maintainers):** `P08-FIND-284-001` is closed. Account Export now uses strict export-only projections for saved items, saved diets, search history, and custom items, retains the authenticated account identity only in the top-level user section, rejects nested ownership fields recursively in the frontend decoder, and preserves portable content in deterministic JSON and escaped JSON-in-CSV records. The isolated Task 284 run passed SW-REQ-043, SW-REQ-072, and SW-REQ-073 with user-A/user-B PostgreSQL, browser, worker, and cache evidence.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-001` to Phase 09 planning. It requires an approved deployed test origin, bounded GCP Cloud Logging scope, least-privilege reader, and retention evidence. No task is created now. Local console output remains invalid evidence.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/E2E/observability maintainers):** move `P08-FIND-285-002` to Phase 09 planning. It requires safe deployed fixtures for authentication, provider, administration, validation, dependency, and audit-failure actions. No task is created now, and no public fault-injection API is approved.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-003` to Phase 09 planning. Its missing, duplicate, malformed, inconsistent, or privacy-unsafe centralized-log behavior can be evaluated only after the deployed environment exists. No task is created now.

@@ -20,7 +20,6 @@ import { fixture, openSidebarForControl, recordAcceptance, responseRequestId, sc
 // Implements DESIGN-008 AccountDeleter, DataExporter, and owner-scoped ProfileController acceptance.
 const enabled = process.env.MEALSWAPP_TASK284_REAL_E2E === "1" && process.env.MEALSWAPP_REAL_STACK_MANAGED === "1";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const EXPORT_OWNER_ROOT = "ROOT-T284-EXPORT-OWNER-PROJECTION";
 
 test.skip(!enabled, "Run scripts/run-task284-acceptance.py for isolated real-stack evidence.");
 
@@ -172,26 +171,28 @@ function assertExportCSV(rows: CSVRow[], expected: {
 }): void {
 	expect(rows[0]).toEqual(["section", "field", "value"]);
 	const body = rows.slice(1);
-	const allowedSections = new Set(["user", "savedItems", "savedDiets", "savedDietEntries", "history", "consent", "customItems"]);
+	const allowedSections = new Set(["user", "savedItems", "savedDiets", "history", "consent", "customItems"]);
 	expect(body.every(([section]) => allowedSections.has(section))).toBe(true);
 	expect(body.filter(([section]) => section === "user").map(([, field]) => field)).toEqual([
-		"userId", "email", "displayName", "unitSystem", "themePreference"
+		"userId", "email", "role", "displayName", "unitSystem", "themePreference"
 	]);
-	const customRows = body.filter(([section]) => section === "customItems");
+	const customRows = body.filter(([section, field]) => section === "customItems" && field !== "count");
 	expect(customRows.map(([, field]) => field).sort()).toEqual([...expected.customItems].sort());
 	for (const [, , value] of customRows) {
 		const customProjection = JSON.parse(value) as unknown;
 		expect([...collectKeys(customProjection)].some((key) => /^(owner|ownerId)$/i.test(key))).toBe(false);
 	}
 	if (expected.diet) {
-		expect(body.filter(([section]) => section === "savedDiets")).toEqual([
-			["savedDiets", "Task 284 portable diet", expected.diet]
-		]);
-		expect(body.filter(([section]) => section === "savedDietEntries")).toEqual([
-			["savedDietEntries", "food_item", expected.dietSource]
-		]);
+		const dietRows = body.filter(([section]) => section === "savedDiets");
+		expect(dietRows).toHaveLength(1);
+		expect(dietRows[0][1]).toBe(expected.diet);
+		expect(JSON.parse(dietRows[0][2])).toMatchObject({
+			id: expected.diet,
+			name: "Task 284 portable diet",
+			entries: [{ foodObjectId: expected.dietSource, foodObjectType: "food_item", quantity: 100, unit: "g", position: 0 }]
+		});
 	} else {
-		expect(body.filter(([section]) => section === "savedDiets" || section === "savedDietEntries")).toEqual([]);
+		expect(body.filter(([section, field]) => section === "savedDiets" && field !== "count")).toEqual([]);
 	}
 	for (const forbidden of expected.forbidden) {
 		expect(body.some((cells) => cells.some((cell) => cell.includes(forbidden)))).toBe(false);
@@ -394,19 +395,26 @@ test("P08-SWR043-ACCEPT-01 P08-SWR072-STEP-04 export projections omit nested own
 	expect(csvResponse.status()).toBe(200);
 	const csvRows = parseCSV(await csvResponse.text());
 	const csvProjectionKeys = new Set<string>();
-	for (const [section, , value] of csvRows.slice(1)) {
-		if (section === "customItems") collectKeys(JSON.parse(value) as unknown, csvProjectionKeys);
+	for (const [section, field, value] of csvRows.slice(1)) {
+		if (section !== "user" && field !== "count") collectKeys(JSON.parse(value) as unknown, csvProjectionKeys);
 	}
 	await recordAcceptance(
 		info,
 		["P08-SWR043-ACCEPT-01", "P08-SWR072-STEP-04"],
 		[],
 		[{ type: "backend", path: "backend/task284-proof.json" }],
-		["owner_state=projection_leak"],
-		EXPORT_OWNER_ROOT
+		["owner_state=owner_free"]
 	);
+	expect(Object.keys(exported.user).filter((key) => /^(?:owner|ownerId|userId|UserID)$/i.test(key))).toEqual(["userId"]);
+	const nestedJSON = {
+		consent: exported.consent,
+		savedItems: exported.savedItems,
+		savedDiets: exported.savedDiets,
+		history: exported.history,
+		customItems: exported.customItems
+	};
 	expect(
-		[...collectKeys(exported), ...csvProjectionKeys].some((key) => /^(owner|ownerId|UserID)$/i.test(key)),
+		[...collectKeys(nestedJSON), ...csvProjectionKeys].some((key) => /^(?:owner|ownerId|userId|UserID)$/i.test(key)),
 		"owner identity must not leak from nested export projections"
 	).toBeFalsy();
 });

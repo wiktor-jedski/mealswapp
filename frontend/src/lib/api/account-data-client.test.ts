@@ -7,10 +7,15 @@ const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
 
 const itemId = "00000000-0000-4000-8000-000000000261";
+const objectId = "00000000-0000-4000-8000-000000000262";
+const createdAt = "2026-07-28T00:00:00Z";
 const exportBundle = {
-	user: {}, consent: [], savedItems: [],
-	savedDiets: [{ id: itemId, name: "Portable diet", entries: [], createdAt: "2026-07-28T00:00:00Z", updatedAt: "2026-07-28T00:00:00Z" }],
-	history: [], customItems: [{ id: itemId, name: "Private tofu" }]
+	user: { userId: itemId, email: "owner@example.test", role: "user", displayName: "Owner", unitSystem: "metric", themePreference: "system" },
+	consent: [{ privacyPolicyVersion: "privacy-v1", termsVersion: "terms-v1" }],
+	savedItems: [{ id: objectId, itemId, kind: "favorite", createdAt }],
+	savedDiets: [{ id: itemId, name: "Portable diet", entries: [{ id: objectId, foodObjectId: itemId, foodObjectType: "food_item", quantity: 100, unit: "g", position: 0 }], createdAt, updatedAt: createdAt }],
+	history: [{ id: objectId, query: "tofu", mode: "catalog", filtersHash: "hash", createdAt }],
+	customItems: [{ id: itemId, name: "Private tofu", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 12, carbohydrates: 3, fat: 6 }, micros: { sodium: 4 }, foodCategories: [{ id: objectId, name: "Legumes", kind: "food_category" }], culinaryRoles: [] }]
 };
 
 test("loads the raw generated export and deletes its owner-free custom item with CSRF", async () => {
@@ -29,10 +34,15 @@ test("loads the raw generated export and deletes its owner-free custom item with
 });
 
 test("rejects ownership leakage, malformed identifiers, oversized exports, and non-empty deletes", async () => {
-	globalThis.fetch = mock(async () => new Response(JSON.stringify({ ...exportBundle, customItems: [{ ...exportBundle.customItems[0], ownerId: itemId }] }), { status: 200 })) as typeof fetch;
-	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
-	globalThis.fetch = mock(async () => new Response(JSON.stringify({ ...exportBundle, savedDiets: [{ ...exportBundle.savedDiets[0], UserID: itemId }] }), { status: 200 })) as typeof fetch;
-	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
+	for (const leaking of [
+		{ ...exportBundle, customItems: [{ ...exportBundle.customItems[0], ownerId: itemId }] },
+		{ ...exportBundle, savedItems: [{ ...exportBundle.savedItems[0], UserID: itemId }] },
+		{ ...exportBundle, savedDiets: [{ ...exportBundle.savedDiets[0], entries: [{ ...exportBundle.savedDiets[0].entries[0], owner_id: itemId }] }] },
+		{ ...exportBundle, customItems: [{ ...exportBundle.customItems[0], macrosPer100: { ...exportBundle.customItems[0].macrosPer100, owner: itemId } }] }
+	]) {
+		globalThis.fetch = mock(async () => new Response(JSON.stringify(leaking), { status: 200 })) as typeof fetch;
+		await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
+	}
 	globalThis.fetch = mock(async () => new Response(JSON.stringify({ ...exportBundle, savedDiets: undefined }), { status: 200 })) as typeof fetch;
 	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
 	await expect(deletePrivateCustomItem("not-a-uuid")).rejects.toBeInstanceOf(AccountDataClientError);

@@ -34,10 +34,14 @@ class OperationResponseDriftTest(unittest.TestCase):
 		self.assertIn("\tsavedDiets: ExportSavedDiet[];", generated)
 		export_diet = generated[generated.index("export interface ExportSavedDiet"):generated.index("export type ExportFormat")]
 		self.assertNotIn("userId", export_diet)
-		self.assertIn("\tentries: DailyDietFoodObjectEntry[];", export_diet)
+		self.assertIn("\tentries: ExportSavedDietEntry[];", export_diet)
 		export_schema = GENERATOR.schema_block(source, "ExportBundle") or ""
 		self.assertIn("required: [user, consent, savedItems, savedDiets, history, customItems]", export_schema)
 		self.assertIn('$ref: "#/components/schemas/ExportSavedDiet"', export_schema)
+		for schema in ("ExportUser", "ExportConsent", "ExportSavedItem", "ExportSavedDiet", "ExportSavedDietEntry", "ExportSearchHistoryEntry"):
+			self.assertIn("additionalProperties: false", GENERATOR.schema_block(source, schema) or "")
+		for projection in ("ExportSavedItem", "ExportSavedDiet", "ExportSavedDietEntry", "ExportSearchHistoryEntry", "ExportCustomItem"):
+			self.assertNotRegex(GENERATOR.schema_block(source, projection) or "", r"(?i)\b(?:user|owner)_?id\b")
 		self.assertEqual(GENERATOR.administration_description_mismatches(source, generated), [])
 		changed_description = "One regenerated ownerless administration item."
 		mutated = source.replace(
