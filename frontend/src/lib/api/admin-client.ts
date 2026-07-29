@@ -23,9 +23,12 @@ export interface AdminMutationOptions {
 	signal?: AbortSignal;
 }
 
+/** Transport certainty available after an administration request fails. */
+export type AdminFailureOutcome = "confirmed_response" | "pre_response" | "possibly_committed";
+
 /** Safe normalized failure returned by an administration API call. */
 export class AdminClientError extends Error {
-	constructor(readonly status: number, readonly appError: AppError) {
+	constructor(readonly status: number, readonly appError: AppError, readonly outcome: AdminFailureOutcome = "confirmed_response") {
 		super(appError.message);
 		this.name = "AdminClientError";
 	}
@@ -55,12 +58,12 @@ export async function searchAdminItems(query: { name: string; page?: number; pag
 
 /** Creates one global item with a caller-owned retry-stable idempotency key. */
 export async function createAdminItem(requestBody: AdminItemRequest, idempotencyKey: IdempotencyKey, options: AdminMutationOptions = {}): Promise<AdminItem> {
-	return decodeItem(await mutation("/api/v1/admin/items", "POST", requestBody, options, { "Idempotency-Key": idempotencyKey }), 201);
+	return decodeItem(await mutation("/api/v1/admin/items", "POST", requestBody, options, { "Idempotency-Key": idempotencyKey }), 201, true);
 }
 
 /** Replaces one global item and returns only the server projection. */
 export async function replaceAdminItem(itemId: string, requestBody: AdminItemRequest, options: AdminMutationOptions = {}): Promise<AdminItem> {
-	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options), 200);
+	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options), 200, true);
 }
 
 /** Soft-deletes one global item only after an empty 204 response. */
@@ -169,7 +172,7 @@ async function request(url: string, init: RequestInit): Promise<Response> {
 		response = await fetch(url, { credentials: "include", headers: { Accept: "application/json", ...init.headers }, ...init });
 	} catch (error) {
 		if (isAbort(error)) throw error;
-		throw new AdminClientError(0, { category: "network", code: "network_error", message: "The administration service could not be reached. Try again.", retryable: true });
+		throw new AdminClientError(0, { category: "network", code: "network_error", message: "The administration service could not be reached. Try again.", retryable: true }, "pre_response");
 	}
 	if (!response.ok) throw await responseError(response);
 	return response;
@@ -181,25 +184,32 @@ async function json(response: Response, expectedStatus: number): Promise<unknown
 }
 
 function decodeData(value: unknown, status: number): unknown {
-	if (!exact(value, ["status", "requestId", "data"]) || value.status !== "ok" || !boundedString(value.requestId, 1, 128, false)) throw malformed(status);
+	if (!exact(value, ["status", "requestId", "data"]) || value.status !== "ok" || !safeRequestId(value.requestId)) throw malformed(status, requestIdFrom(value));
 	return value.data;
 }
 
-function decodeItem(responsePromise: Promise<Response> | Response, expectedStatus: number): Promise<AdminItem> {
-	return Promise.resolve(responsePromise).then(async (response) => {
-		const value = decodeData(await json(response, expectedStatus), response.status);
+async function decodeItem(responsePromise: Promise<Response> | Response, expectedStatus: number, mutationResponse = false): Promise<AdminItem> {
+	const response = await responsePromise;
+	let raw: unknown;
+	try {
+		raw = await json(response, expectedStatus);
+		const requestId = requestIdFrom(raw);
+		const value = decodeData(raw, response.status);
 		const optional = ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter", "densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "foodCategoryIds", "culinaryRoleIds", "imageUrl"];
-		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], optional) || !uuid(value.id) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status);
-		if (!optionalPositive(value.averageUnitWeightGrams) || !optionalPositive(value.averageServingVolumeMilliliters) || !optionalPositive(value.densityGramsPerMilliliter) || !optionalBoundedString(value.densitySourceProvider, 200) || !optionalBoundedString(value.densitySourceFoodId, 200) || (value.densitySourceKind !== undefined && !["imported", "manual", "estimated"].includes(String(value.densitySourceKind))) || !optionalBoundedString(value.imageUrl, 2048) || (value.imageUrl !== undefined && !safeUriReference(value.imageUrl))) throw malformed(response.status);
-		if (!optionalUuidCollection(value.foodCategoryIds) || !optionalUuidCollection(value.culinaryRoleIds)) throw malformed(response.status);
-		if (value.physicalState === "solid" && (value.macrosPer100.protein as number) + (value.macrosPer100.carbohydrates as number) + (value.macrosPer100.fat as number) > 100) throw malformed(response.status);
-		if (value.physicalState === "solid" && [value.averageServingVolumeMilliliters, value.densityGramsPerMilliliter, value.densitySourceProvider, value.densitySourceFoodId, value.densitySourceKind].some((field) => field !== undefined)) throw malformed(response.status);
-		if (value.physicalState === "liquid" && (value.densityGramsPerMilliliter === undefined || value.densitySourceKind === undefined)) throw malformed(response.status);
-		if (value.densitySourceKind === "imported" && (!value.densitySourceFoodId || !["usda", "openfoodfacts"].includes(String(value.densitySourceProvider)))) throw malformed(response.status);
+		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], optional) || !uuid(value.id) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status, requestId);
+		if (!optionalPositive(value.averageUnitWeightGrams) || !optionalPositive(value.averageServingVolumeMilliliters) || !optionalPositive(value.densityGramsPerMilliliter) || !optionalBoundedString(value.densitySourceProvider, 200) || !optionalBoundedString(value.densitySourceFoodId, 200) || (value.densitySourceKind !== undefined && !["imported", "manual", "estimated"].includes(String(value.densitySourceKind))) || !optionalBoundedString(value.imageUrl, 2048) || (value.imageUrl !== undefined && !safeUriReference(value.imageUrl))) throw malformed(response.status, requestId);
+		if (!optionalUuidCollection(value.foodCategoryIds) || !optionalUuidCollection(value.culinaryRoleIds)) throw malformed(response.status, requestId);
+		if (value.physicalState === "solid" && (value.macrosPer100.protein as number) + (value.macrosPer100.carbohydrates as number) + (value.macrosPer100.fat as number) > 100) throw malformed(response.status, requestId);
+		if (value.physicalState === "solid" && [value.averageServingVolumeMilliliters, value.densityGramsPerMilliliter, value.densitySourceProvider, value.densitySourceFoodId, value.densitySourceKind].some((field) => field !== undefined)) throw malformed(response.status, requestId);
+		if (value.physicalState === "liquid" && (value.densityGramsPerMilliliter === undefined || value.densitySourceKind === undefined)) throw malformed(response.status, requestId);
+		if (value.densitySourceKind === "imported" && (!value.densitySourceFoodId || !["usda", "openfoodfacts"].includes(String(value.densitySourceProvider)))) throw malformed(response.status, requestId);
 		value.foodCategories.forEach((classification) => decodeClassificationSummary(classification, "food_category", response.status));
 		value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", response.status));
 		return value as unknown as AdminItem;
-	});
+	} catch (error) {
+		if (!mutationResponse || !(error instanceof AdminClientError) || error.appError.code !== "malformed_admin_response") throw error;
+		throw malformed(response.status, error.appError.requestId ?? requestIdFrom(raw), "possibly_committed");
+	}
 }
 
 function decodeItemSearchSummary(value: unknown, status: number): AdminItemSearchSummary {
@@ -232,26 +242,43 @@ function decodeUser(value: unknown, status: number): AdminUser {
 
 async function responseError(response: Response): Promise<AdminClientError> {
 	let code = "admin_request_failed";
+	let requestId: string | undefined;
 	try {
 		const value = JSON.parse(await readBoundedText(response, MAX_ERROR_BYTES)) as unknown;
 		if (record(value) && record(value.error) && typeof value.error.code === "string" && SAFE_ERROR_CODES.has(value.error.code)) code = value.error.code;
+		requestId = requestIdFrom(value);
 	} catch { /* Status and approved code provide the safe fallback. */ }
 	const status = safeErrorStatus(response.status);
 	const conflict = status === 409;
-	return new AdminClientError(status, {
-		category: conflict ? "validation" : status >= 500 ? "server" : "unknown",
+	const validation = status === 400 || status === 422;
+	const appError: AppError = {
+		category: conflict || validation ? "validation" : status >= 500 ? "server" : "unknown",
 		code,
-		message: conflict ? "The record changed or conflicts with authoritative data. It has been refreshed." : "The administration action did not complete. No change was shown as successful.",
+		message: conflict ? "The record changed or conflicts with authoritative data. It has been refreshed." : validation ? "Check the submitted fields and correct the validation problem." : "The administration action did not complete. No change was shown as successful.",
 		retryable: conflict || status >= 500
+	};
+	if (requestId) appError.requestId = requestId;
+	return new AdminClientError(status, {
+		...appError
 	});
 }
 
-function malformed(status: number): AdminClientError {
-	return new AdminClientError(Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0, { category: "server", code: "malformed_admin_response", message: "The administration service returned an invalid response. No change was shown as successful.", retryable: true });
+function malformed(status: number, requestId?: string, outcome: AdminFailureOutcome = "confirmed_response"): AdminClientError {
+	const appError: AppError = { category: "server", code: "malformed_admin_response", message: outcome === "possibly_committed" ? "The server accepted the item request but returned an invalid confirmation. Verify the saved state before retrying." : "The administration service returned an invalid response. No change was shown as successful.", retryable: true };
+	if (requestId) appError.requestId = requestId;
+	return new AdminClientError(Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0, appError, outcome);
 }
 
 function invalidRequest(): AdminClientError {
 	return new AdminClientError(0, { category: "validation", code: "invalid_admin_request", message: "The administration request is too large or cannot be encoded.", retryable: false });
+}
+
+function requestIdFrom(value: unknown): string | undefined {
+	return record(value) && safeRequestId(value.requestId) ? value.requestId : undefined;
+}
+
+function safeRequestId(value: unknown): value is string {
+	return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 }
 
 async function cancelResponseBody(response: Response): Promise<void> {

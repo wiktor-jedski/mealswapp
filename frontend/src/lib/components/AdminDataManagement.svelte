@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from "svelte";
-	import { adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
-	import type { AdminClassification, AdminItem, AdminItemSearchSummary, AdminUser } from "../api/generated";
-	import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
+	import { AdminClientError, adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
+	import type { AdminClassification, AdminItem, AdminItemRequest, AdminItemSearchSummary, AdminUser } from "../api/generated";
+	import { adminItemMatchesRequest, deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
 
 	// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel authoritative administration workflows.
 
@@ -19,6 +19,20 @@
 	let itemError = $state("");
 	let createKey = $state("");
 	let createBody = $state("");
+	type AmbiguousItemMutation = Readonly<{
+		kind: "create" | "update";
+		request: AdminItemRequest;
+		form: AdminItemForm;
+		body: string;
+		createKey?: string;
+		itemId?: string;
+		requestId?: string;
+		retryAllowed: boolean;
+	}>;
+	let ambiguousItemMutation = $state<AmbiguousItemMutation | undefined>();
+	let conflictingItem = $state<AdminItem | undefined>();
+	let recoveryNotice = $state<HTMLElement | undefined>();
+	let itemErrorNotice = $state<HTMLElement | undefined>();
 	let itemSearchQuery = $state("");
 	let itemSearchItems = $state<AdminItemSearchSummary[]>([]);
 	let itemSearchPage = $state(1);
@@ -121,6 +135,7 @@
 	}
 
 	async function loadSearchResult(item: AdminItemSearchSummary): Promise<void> {
+		if (ambiguousItemMutation?.kind === "create") { await verifyCreateCandidate(item.itemId); return; }
 		itemId = item.itemId;
 		await loadItem();
 	}
@@ -146,17 +161,20 @@
 
 	async function saveItem(event: SubmitEvent): Promise<void> {
 		event.preventDefault(); itemError = ""; itemMessage = "";
+		if (ambiguousItemMutation) { itemError = "Verify the previous item request before submitting another mutation."; await focusRecovery(); return; }
 		const parsed = parseAdminItemForm(form);
-		if (!parsed.request) { itemError = parsed.error ?? "Check the item fields."; return; }
+		if (!parsed.request) { itemError = parsed.error ?? "Check the item fields."; await focusItemError(); return; }
+		const request = snapshotRequest(parsed.request);
+		const formSnapshot = snapshotForm(form);
+		const body = JSON.stringify(request);
 		const targetId = currentItem?.id; const { generation, controller } = beginItemOperation(); itemBusy = true;
 		try {
 			const wasEditing = Boolean(targetId);
 			let saved: AdminItem;
-			if (targetId) saved = await api.replaceItem(targetId, parsed.request, { signal: controller.signal });
+			if (targetId) saved = await api.replaceItem(targetId, request, { signal: controller.signal });
 			else {
-				const body = JSON.stringify(parsed.request);
 				if (!createKey || createBody !== body) { createKey = newAdminItemKey(); createBody = body; }
-				saved = await api.createItem(parsed.request, createKey, { signal: controller.signal });
+				saved = await api.createItem(request, createKey, { signal: controller.signal });
 			}
 			const projection = await api.getItem(saved.id, controller.signal);
 			if (currentItemOperation(generation, controller)) {
@@ -165,8 +183,126 @@
 				if (currentItemOperation(generation, controller)) itemMessage = refreshed ? (wasEditing ? "Item saved and refreshed." : "Item created and refreshed.") : (wasEditing ? "Item saved, but search results could not be refreshed." : "Item created, but search results could not be refreshed.");
 			}
 		} catch (error) {
-			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = message(error); if (targetId) await refreshCurrentItem(targetId, generation, controller); }
+			if (currentItemOperation(generation, controller) && !aborted(error)) {
+				if (possiblyCommitted(error)) {
+					ambiguousItemMutation = {
+						kind: targetId ? "update" : "create",
+						request,
+						form: formSnapshot,
+						body,
+						...(targetId ? { itemId: targetId } : { createKey }),
+						...(error.appError.requestId ? { requestId: error.appError.requestId } : {}),
+						retryAllowed: false
+					};
+					conflictingItem = undefined;
+					form = snapshotForm(formSnapshot);
+					itemError = "";
+					itemMessage = "Verification required: the server may have saved this item. Ordinary submission is blocked.";
+					await focusRecovery();
+				} else {
+					itemError = message(error);
+					if (targetId) await refreshCurrentItem(targetId, generation, controller);
+					await focusItemError();
+				}
+			}
 		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function verifyAmbiguousItem(): Promise<void> {
+		const recovery = ambiguousItemMutation;
+		if (!recovery) return;
+		if (recovery.kind === "update") {
+			await verifyUpdate(recovery);
+			return;
+		}
+		await verifyCreate(recovery);
+	}
+
+	async function verifyUpdate(recovery: AmbiguousItemMutation): Promise<void> {
+		if (!recovery.itemId) return;
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		try {
+			const item = await api.getItem(recovery.itemId, controller.signal);
+			if (!currentItemOperation(generation, controller)) return;
+			if (!adminItemMatchesRequest(item, recovery.request)) { conflictingItem = item; itemError = "Verification found authoritative values that differ from the submitted update. The update will not be resubmitted."; await focusRecovery(); return; }
+			await finishRecovery(item, generation, controller, "Update recovered from authoritative state.");
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = verificationReadMessage(error); await focusRecovery(); }
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function verifyCreate(recovery: AmbiguousItemMutation): Promise<void> {
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		itemSearchController?.abort(); itemSearchQuery = recovery.request.name; itemSearchStatus = "loading"; itemSearchError = "";
+		try {
+			let page = 1;
+			let firstPage: Awaited<ReturnType<AdminApi["searchItems"]>> | undefined;
+			let exactCandidateFound = false;
+			do {
+				const result = await api.searchItems({ name: recovery.request.name, page, pageSize: 50 }, controller.signal);
+				if (!firstPage) firstPage = result;
+				for (const summary of result.items.filter(({ name }) => name === recovery.request.name)) {
+					exactCandidateFound = true;
+					const item = await api.getItem(summary.itemId, controller.signal);
+					if (adminItemMatchesRequest(item, recovery.request)) { await finishRecovery(item, generation, controller, "Create recovered from authoritative state."); return; }
+					conflictingItem ??= item;
+				}
+				if (page * result.pageSize >= result.total) break;
+				page += 1;
+			} while (page <= 10_000);
+			if (!currentItemOperation(generation, controller) || !firstPage) return;
+			itemSearchItems = firstPage.items; itemSearchPage = firstPage.page; itemSearchPageSize = firstPage.pageSize; itemSearchTotal = firstPage.total;
+			itemSearchStatus = firstPage.items.length ? "success" : "empty";
+			if (exactCandidateFound) {
+				itemError = "Verification found an item with this name but conflicting authoritative values. Retry remains blocked.";
+			} else {
+				ambiguousItemMutation = { ...recovery, retryAllowed: true };
+				itemMessage = "No matching authoritative item was found. A retry is now safe only with the original request and idempotency key.";
+			}
+			await focusRecovery();
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) { itemSearchStatus = "error"; itemSearchError = verificationReadMessage(error); itemError = "Verification could not complete. Retry remains blocked."; await focusRecovery(); }
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function verifyCreateCandidate(id: string): Promise<void> {
+		const recovery = ambiguousItemMutation;
+		if (recovery?.kind !== "create") return;
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		try {
+			const item = await api.getItem(id, controller.signal);
+			if (!currentItemOperation(generation, controller)) return;
+			if (!adminItemMatchesRequest(item, recovery.request)) { conflictingItem = item; ambiguousItemMutation = { ...recovery, retryAllowed: false }; itemError = "This authoritative item differs from the submitted create request. Retry remains blocked."; await focusRecovery(); return; }
+			await finishRecovery(item, generation, controller, "Create recovered from authoritative state.");
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = verificationReadMessage(error); await focusRecovery(); }
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function retryAmbiguousCreate(): Promise<void> {
+		const recovery = ambiguousItemMutation;
+		if (recovery?.kind !== "create" || !recovery.retryAllowed || !recovery.createKey) return;
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		try {
+			const saved = await api.createItem(recovery.request, recovery.createKey, { signal: controller.signal });
+			const item = await api.getItem(saved.id, controller.signal);
+			if (!currentItemOperation(generation, controller)) return;
+			if (!adminItemMatchesRequest(item, recovery.request)) { conflictingItem = item; ambiguousItemMutation = { ...recovery, retryAllowed: false }; itemError = "The retry returned conflicting authoritative values. No further retry is allowed."; await focusRecovery(); return; }
+			await finishRecovery(item, generation, controller, "Create safely recovered with the original idempotency key.");
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) {
+				ambiguousItemMutation = { ...recovery, ...(error instanceof AdminClientError && error.appError.requestId ? { requestId: error.appError.requestId } : {}), retryAllowed: false };
+				itemError = possiblyCommitted(error) ? "The retry also returned an invalid confirmation. Verify authoritative state again." : message(error);
+				await focusRecovery();
+			}
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function finishRecovery(item: AdminItem, generation: number, controller: AbortController, success: string): Promise<void> {
+		if (!currentItemOperation(generation, controller)) return;
+		applyItem(item); ambiguousItemMutation = undefined; conflictingItem = undefined; createKey = ""; createBody = "";
+		const refreshed = await refreshItemSearch();
+		if (currentItemOperation(generation, controller)) itemMessage = refreshed ? success : `${success} Search results could not be refreshed.`;
 	}
 
 	async function refreshCurrentItem(id: string, generation: number, controller: AbortController): Promise<void> {
@@ -174,8 +310,8 @@
 		catch (error) { if (currentItemOperation(generation, controller) && !aborted(error)) currentItem = undefined; }
 	}
 
-	function resetItemState(): void { currentItem = undefined; itemId = ""; form = emptyForm(); itemError = ""; createKey = ""; createBody = ""; }
-	function newItem(): void { itemController?.abort(); ++itemGeneration; itemBusy = false; resetItemState(); itemMessage = ""; }
+	function resetItemState(): void { currentItem = undefined; itemId = ""; form = emptyForm(); itemError = ""; createKey = ""; createBody = ""; ambiguousItemMutation = undefined; conflictingItem = undefined; }
+	function newItem(): void { if (ambiguousItemMutation) { itemError = "Verify the previous item request before starting another item."; void focusRecovery(); return; } itemController?.abort(); ++itemGeneration; itemBusy = false; resetItemState(); itemMessage = ""; }
 
 	async function deleteItem(target: Confirmation): Promise<void> {
 		if (target.action !== "item" || currentItem?.id !== target.id) { itemError = "The confirmed item is no longer current. Reload it before deleting."; return; }
@@ -296,6 +432,12 @@
 	}
 
 	function message(error: unknown): string { return error instanceof Error ? error.message : "The administration action did not complete."; }
+	function possiblyCommitted(error: unknown): error is AdminClientError { return error instanceof AdminClientError && error.outcome === "possibly_committed"; }
+	function verificationReadMessage(error: unknown): string { return error instanceof AdminClientError && error.status === 404 ? "The authoritative item could not be found. Verification is still required." : `Authoritative verification failed. ${message(error)}`; }
+	function snapshotRequest(request: AdminItemRequest): AdminItemRequest { return JSON.parse(JSON.stringify(request)) as AdminItemRequest; }
+	function snapshotForm(value: AdminItemForm): AdminItemForm { return JSON.parse(JSON.stringify(value)) as AdminItemForm; }
+	async function focusRecovery(): Promise<void> { await tick(); recoveryNotice?.focus(); }
+	async function focusItemError(): Promise<void> { await tick(); itemErrorNotice?.focus(); }
 	/** Uses the native DESIGN-009 modal lifecycle so the complete page background remains keyboard-inert. */
 	function openModal(node: HTMLDialogElement): { destroy: () => void } {
 		const controls = (): HTMLElement[] => [...node.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
@@ -322,7 +464,19 @@
 <div class="grid gap-6" data-admin-data-management bind:this={adminRoot} tabindex="-1">
 	<div class="contents" data-admin-background inert={confirmation ? true : undefined}>
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="manual-items-title">
-		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Search active ownerless items by name, then load the authoritative item to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy}>New item</button></div>
+			<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Search active ownerless items by name, then load the authoritative item to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy || Boolean(ambiguousItemMutation)}>New item</button></div>
+			{#if ambiguousItemMutation}
+				<div class="grid gap-2 rounded border border-[var(--color-error)] p-3" role="alert" tabindex="-1" bind:this={recoveryNotice} data-admin-item-recovery>
+					<p class="font-semibold">Verification required</p>
+					<p class="text-sm">The {ambiguousItemMutation.kind} request may already be committed. The submitted fields are locked and no ordinary mutation can be sent.</p>
+					{#if ambiguousItemMutation.requestId}<p class="break-all font-data text-xs">Request ID: {ambiguousItemMutation.requestId}</p>{/if}
+					{#if conflictingItem}<p class="text-sm">Conflicting authoritative item: {conflictingItem.name}.</p>{/if}
+					<div class="flex flex-wrap gap-2">
+						<button type="button" class="rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={() => void verifyAmbiguousItem()}>{ambiguousItemMutation.kind === "update" ? "Verify saved update" : "Check authoritative items"}</button>
+						{#if ambiguousItemMutation.kind === "create" && ambiguousItemMutation.retryAllowed}<button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={() => void retryAmbiguousCreate()}>Retry original create safely</button>{/if}
+					</div>
+				</div>
+			{/if}
 		<form class="flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void searchItems(1); }} aria-label="Search global items"><label class="grid flex-1 gap-1 text-sm">Item name<input maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemSearchQuery} /></label><button type="submit" class="self-end rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchStatus === "loading"}>Search</button></form>
 		<div class="grid gap-2" aria-live="polite" aria-busy={itemSearchStatus === "loading"} data-admin-item-search-results>
 			{#if itemSearchStatus === "loading"}<p role="status" class="text-sm text-[var(--color-muted)]">Loading matching global items…</p>
@@ -334,7 +488,7 @@
 					{#each itemSearchItems as item (item.itemId)}
 						<li class="grid gap-2 rounded border border-[var(--color-border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]" data-admin-item-search-result>
 							<div class="grid min-w-0 gap-1"><h3 class="font-bold">{item.name}</h3><p class="break-all font-data text-xs text-[var(--color-muted)]">ID {item.itemId}</p><p class="text-sm">{item.physicalState === "solid" ? "Solid" : "Liquid"} · P {item.macrosPer100.protein} · C {item.macrosPer100.carbohydrates} · F {item.macrosPer100.fat}</p><p class="text-sm">Food Categories: {item.foodCategories.length ? item.foodCategories.map(({ name }) => name).join(", ") : "None"} · Culinary Roles: {item.culinaryRoles.length ? item.culinaryRoles.map(({ name }) => name).join(", ") : "None"}</p></div>
-							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>Edit {item.name}</button>
+							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>{ambiguousItemMutation?.kind === "create" ? "Verify" : "Edit"} {item.name}</button>
 						</li>
 					{/each}
 				</ul>
@@ -342,7 +496,8 @@
 			{:else}<p class="text-sm text-[var(--color-muted)]">Enter a human-readable item name to begin.</p>{/if}
 		</div>
 		<details class="rounded border border-[var(--color-border)] p-3"><summary class="cursor-pointer font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]">Advanced: load by item ID</summary><form class="mt-3 flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void loadItem(); }} aria-label="Load global item"><label class="grid flex-1 gap-1 text-sm">Item ID<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-data focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemId} /></label><button type="submit" class="self-end rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>Load by ID</button></form></details>
-		<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveItem} aria-label="Manual global item form">
+			<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveItem} aria-label="Manual global item form">
+				<fieldset class="contents" disabled={Boolean(ambiguousItemMutation)}>
 			<label class="grid gap-1 text-sm sm:col-span-2">Name<input required maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.name} /></label>
 			<label class="grid gap-1 text-sm">Physical state<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.physicalState}><option value="solid">Solid</option><option value="liquid">Liquid</option></select></label>
 			<label class="grid gap-1 text-sm">Preparation time (minutes)<input inputmode="numeric" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.prepTimeMinutes} /></label>
@@ -362,9 +517,10 @@
 			<label class="grid gap-1 text-sm">Food Categories<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.foodCategoryIds}>{#each classifications.food_category as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm">Culinary Roles<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.culinaryRoleIds}>{#each classifications.culinary_role as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm sm:col-span-2">Allergens<select multiple size="7" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.allergenKeys}>{#each allergenOptions as key}<option value={key}>{key.replaceAll("_", " ")}</option>{/each}</select></label>
-			<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
-		</form>
-		{#if itemError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
+				<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
+				</fieldset>
+			</form>
+		{#if itemError}<p role="alert" tabindex="-1" bind:this={itemErrorNotice} class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
 	</section>
 
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="classifications-title">

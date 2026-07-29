@@ -66,3 +66,18 @@ test("makes searchable discovery primary and UUID loading an advanced fallback",
 	expect(source).toContain("loadSearchResult(item)");
 	expect(source).toContain("refreshItemSearch()");
 });
+
+test("blocks ambiguous item resubmission and exposes authoritative recovery", () => {
+	expect(source).toContain('error.outcome === "possibly_committed"');
+	expect(source).toContain("snapshotRequest(parsed.request)");
+	expect(source).toContain("snapshotForm(form)");
+	expect(source).toContain("data-admin-item-recovery");
+	expect(source).toContain("Verify saved update");
+	expect(source).toContain("Check authoritative items");
+	expect(source).toContain("Retry original create safely");
+	expect(source).toContain("adminItemMatchesRequest");
+	expect(source).toContain("{ createKey }");
+	expect(source).toContain("disabled={Boolean(ambiguousItemMutation)}");
+	expect(source).toContain("recoveryNotice?.focus()");
+	expect(source).toContain("itemErrorNotice?.focus()");
+});

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import {
-	createAdminClassification, createAdminItem, deleteAdminClassification, deleteAdminItem, getAdminItem,
+	AdminClientError, createAdminClassification, createAdminItem, deleteAdminClassification, deleteAdminItem, getAdminItem,
 	listAdminClassifications, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion, searchAdminItems
 } from "./admin-client";
 import type { AdminItemRequest } from "./generated";
@@ -72,7 +72,7 @@ test("rejects conflicts, audit failures, malformed privacy projections, and fals
 		response(200, envelope({ users: [{ id: userId, email: "user@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", password: "secret" }] })),
 		response(200, envelope(item))
 	];
-	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as typeof fetch;
+	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as unknown as typeof fetch;
 	await expect(deleteAdminClassification(classId, { csrfToken: "csrf" })).rejects.toMatchObject({ status: 409, appError: { code: "classification_in_use" } });
 	await expect(replaceAdminItem(itemId, request, { csrfToken: "csrf" })).rejects.toMatchObject({ status: 500, appError: { code: "audit_write_failed", message: expect.not.stringContaining("snapshot") } });
 	// Unknown user fields are not part of the generated privacy-minimized contract.
@@ -213,4 +213,47 @@ test("preserves a classification parent in the generated-contract replacement re
 
 	await expect(replaceAdminClassification(classId, { name: "Leaf", parentId: parentClassId }, { csrfToken: "csrf" })).resolves.toMatchObject({ id: classId, parentId: parentClassId });
 	expect(body).toEqual({ name: "Leaf", parentId: parentClassId });
+});
+
+test("classifies malformed successful item mutations as possibly committed with only a bounded request ID", async () => {
+	const queued = [
+		response(201, { status: "ok", requestId: "req-create:294", data: { id: "corrupt" } }),
+		new Response("{", { status: 200, headers: { "Content-Type": "application/json" } }),
+		response(200, { status: "ok", requestId: "unsafe request id", data: { id: "corrupt" } }),
+		response(200, envelope({ ...item, id: "corrupt" }))
+	];
+	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as unknown as typeof fetch;
+
+	await expect(createAdminItem(request, "stable-key", { csrfToken: "csrf" })).rejects.toMatchObject({
+		status: 201,
+		outcome: "possibly_committed",
+		appError: { code: "malformed_admin_response", requestId: "req-create:294" }
+	});
+	for (let index = 0; index < 2; index++) {
+		try {
+			await replaceAdminItem(itemId, request, { csrfToken: "csrf" });
+			throw new Error("malformed mutation was accepted");
+		} catch (error) {
+			expect(error).toBeInstanceOf(AdminClientError);
+			expect((error as AdminClientError).outcome).toBe("possibly_committed");
+			expect((error as AdminClientError).appError.requestId).toBeUndefined();
+		}
+	}
+	await expect(getAdminItem(itemId)).rejects.toMatchObject({ outcome: "confirmed_response", appError: { code: "malformed_admin_response" } });
+});
+
+test("distinguishes confirmed response failures from failures before any response", async () => {
+	const queued: Array<Response | Error> = [
+		response(400, { status: "error", requestId: "req-validation-294", error: { code: "validation_failed" } }),
+		response(500, { status: "error", requestId: "req-server-294", error: { code: "internal_error" } }),
+		new TypeError("offline")
+	];
+	globalThis.fetch = (() => {
+		const next = queued.shift()!;
+		return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+	}) as unknown as typeof fetch;
+
+	await expect(createAdminItem(request, "stable-key", { csrfToken: "csrf" })).rejects.toMatchObject({ status: 400, outcome: "confirmed_response", appError: { code: "validation_failed", requestId: "req-validation-294", retryable: false } });
+	await expect(replaceAdminItem(itemId, request, { csrfToken: "csrf" })).rejects.toMatchObject({ status: 500, outcome: "confirmed_response", appError: { code: "internal_error", requestId: "req-server-294" } });
+	await expect(createAdminItem(request, "stable-key", { csrfToken: "csrf" })).rejects.toMatchObject({ status: 0, outcome: "pre_response", appError: { code: "network_error" } });
 });
