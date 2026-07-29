@@ -620,7 +620,7 @@ retained in the mandatory append-only
     {
       "id": "P08-FIND-282-001",
       "rootCauseId": "ROOT-T282-OFF-METADATA",
-      "status": "OPEN DEFECT",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-055"
       ],
@@ -631,7 +631,9 @@ retained in the mandatory append-only
       "expected": "Unsupported provider metadata is ignored while supported numeric nutrients remain strictly validated and the candidate remains available for curation.",
       "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json",
       "owner": "backend-external-data",
-      "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI."
+      "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI.",
+      "closedDate": "2026-07-29",
+      "passingEvidence": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/SW-REQ-055.json"
     },
     {
       "id": "P08-FIND-282-002",

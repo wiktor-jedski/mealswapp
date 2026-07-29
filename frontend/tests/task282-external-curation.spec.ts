@@ -165,6 +165,12 @@ test("partial failure, outage, malformed data, timeout, cancellation, quota rese
 		requestIds.push((await search(page, workflow, query, "USDA + OpenFoodFacts")).requestId);
 		await expect(workflow).not.toContainText(/nutriments|api_key|provider payload|task282-controlled-key/i);
 	}
+	requestIds.push((await search(page, workflow, "outage", "OpenFoodFacts")).requestId);
+	await expect(workflow.locator("[data-external-empty]")).toHaveText("External providers could not complete this search.");
+	requestIds.push((await search(page, workflow, "malformed-consumed", "OpenFoodFacts")).requestId);
+	await expect(workflow.locator("[data-external-empty]")).toHaveText("Provider candidates were rejected because their data could not be used.");
+	requestIds.push((await search(page, workflow, "zero", "OpenFoodFacts")).requestId);
+	await expect(workflow.locator("[data-external-empty]")).toHaveText("No external candidates matched this search.");
 	await workflow.getByLabel("External food search").fill("cancel");
 	await workflow.getByRole("button", { name: /Search/ }).click();
 	await workflow.getByLabel("External food search").fill("success");
@@ -187,7 +193,7 @@ test("partial failure, outage, malformed data, timeout, cancellation, quota rese
 test("legitimate OpenFoodFacts metadata remains visible [P08-SWR055-STEP-02]", async ({ page }, testInfo) => {
 	const workflow = await openAdministration(page);
 	const result = await search(page, workflow, "metadata", "OpenFoodFacts");
-	await recordAcceptance(testInfo, ["P08-SWR055-STEP-02"], [result.requestId], [], ["provider_state=rejected_candidate"], "ROOT-T282-OFF-METADATA");
+	await recordAcceptance(testInfo, ["P08-SWR055-STEP-02"], [result.requestId], [], ["provider_state=accepted_metadata"]);
 	await expect(workflow.getByText("Fixture chickpeas")).toBeVisible();
 });
 

@@ -143,7 +143,7 @@ func (c *OpenFoodFactsClient) SearchResult(ctx context.Context, query ExternalSe
 	if dropped > 0 {
 		c.logDropped(ctx, dropped)
 	}
-	result.Records = records
+	result.Records, result.RejectedCandidates = records, dropped
 	return result, nil
 }
 
@@ -230,17 +230,14 @@ func projectOpenFoodFactsProduct(product openFoodFactsProduct) (ExternalFoodReco
 	nutrients := make(map[string]float64, len(product.Nutrients))
 	for rawKey, rawValue := range product.Nutrients {
 		key := strings.TrimSpace(rawKey)
-		if key == "" || utf8.RuneCountInString(key) > 128 || containsUnsafeProviderText(key) {
+		if key == "" || utf8.RuneCountInString(rawKey) > 128 || containsUnsafeProviderText(rawKey) {
 			return ExternalFoodRecord{}, false
+		}
+		if _, _, supported := classifyOpenFoodFactsNutrient(key); !supported {
+			continue
 		}
 		token := bytes.TrimSpace(rawValue)
 		if len(token) == 0 {
-			return ExternalFoodRecord{}, false
-		}
-		if token[0] == '"' {
-			if key == "label" || strings.HasSuffix(key, "_unit") {
-				continue
-			}
 			return ExternalFoodRecord{}, false
 		}
 		if token[0] != '-' && (token[0] < '0' || token[0] > '9') {

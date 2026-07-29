@@ -105,6 +105,21 @@ func TestExternalSearchProxyPartialAndCompleteOutageWarnings(t *testing.T) {
 	}
 }
 
+func TestExternalSearchProxyDistinguishesRejectedCandidatesFromZeroMatches(t *testing.T) {
+	rejected := &proxyProvider{result: ProviderResult{RejectedCandidates: 2}}
+	proxy := NewExternalSearchProxy(ProviderSet{OpenFoodFacts: rejected}, NewRateLimitHandler(nil, nil), NewDataNormalizer(&proxyVocabulary{}))
+	response, err := proxy.Search(context.Background(), ExternalSearchQuery{Query: "apple", Provider: "openfoodfacts", Page: 1})
+	if err != nil || len(response.Candidates) != 0 || len(response.Warnings) != 1 || response.Warnings[0] != (ExternalDataWarning{"openfoodfacts", string(ProviderErrorInvalidPayload), string(ProviderErrorInvalidPayload)}) {
+		t.Fatalf("rejected response=%#v err=%v", response, err)
+	}
+
+	rejected.result = ProviderResult{}
+	response, err = proxy.Search(context.Background(), ExternalSearchQuery{Query: "apple", Provider: "openfoodfacts", Page: 1})
+	if err != nil || len(response.Candidates) != 0 || len(response.Warnings) != 0 {
+		t.Fatalf("zero-match response=%#v err=%v", response, err)
+	}
+}
+
 // TestExternalSearchProxyPropagatesCancellation verifies IT-ARCH-012-003,
 // ARCH-012, DESIGN-012 RateLimitHandler, and SW-REQ-055.
 func TestExternalSearchProxyPropagatesCancellation(t *testing.T) {

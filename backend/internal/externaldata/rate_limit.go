@@ -166,8 +166,9 @@ type ResultProvider interface {
 // ProviderResult contains only projected records and safe response metadata.
 // Implements DESIGN-012 ProviderRateLimit.
 type ProviderResult struct {
-	Records []ExternalFoodRecord
-	Headers http.Header
+	Records            []ExternalFoodRecord
+	Headers            http.Header
+	RejectedCandidates int
 }
 
 // projectRateLimitHeaders discards all provider response metadata except the quota fields consumed here.
@@ -337,6 +338,9 @@ func searchExternalRecords(ctx context.Context, query ExternalSearchQuery, provi
 			}
 			warnings = append(warnings, ExternalDataWarning{item.name, code, code})
 			continue
+		}
+		if result.RejectedCandidates > 0 {
+			warnings = append(warnings, ExternalDataWarning{item.name, string(ProviderErrorInvalidPayload), string(ProviderErrorInvalidPayload)})
 		}
 		records := result.Records
 		if len(records) > query.PageSize {

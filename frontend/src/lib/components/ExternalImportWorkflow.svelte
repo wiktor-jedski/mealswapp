@@ -136,6 +136,16 @@
     }
   }
 
+  function emptySearchMessage(): string {
+    if (providerWarnings.some((warning) => warning.code === "invalid_external_payload")) {
+      return "Provider candidates were rejected because their data could not be used.";
+    }
+    if (providerWarnings.length > 0) {
+      return "External providers could not complete this search.";
+    }
+    return "No external candidates matched this search.";
+  }
+
   function selectCandidate(candidate: ExternalCandidate): void {
     invalidateImportOwnership();
     pendingSearch = null;
@@ -380,7 +390,7 @@
   {#if searchState === "loading"}
     <p role="status" aria-live="polite" data-external-loading>Searching external providers…</p>
   {:else if searchState === "empty"}
-    <p role="status" data-external-empty>No external candidates matched this search.</p>
+    <p role="status" data-external-empty>{emptySearchMessage()}</p>
   {:else if searchState === "error"}
     <div class="grid justify-items-start gap-2" role="alert" data-external-error>
       <p>{searchMessage}</p>
