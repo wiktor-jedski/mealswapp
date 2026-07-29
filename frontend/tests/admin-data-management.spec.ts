@@ -404,10 +404,14 @@ test("overlapping canceled classification reads accept the newest projection and
 	await page.reload();
 	await expect(page.locator("[data-admin-data-management]")).toBeVisible();
 	await expect(page.getByRole("treeitem").filter({ hasText: "Late projection" })).toBeVisible();
+	await expect(page.locator(`[data-classification-id="00000000-0000-4000-8000-000000000107"]`)).toBeVisible();
+	await expect(page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem")).toContainText(["Food", "Produce", "Late projection"]);
 	await page.waitForTimeout(300);
 	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toBeVisible();
 	await expect(page.getByRole("treeitem").filter({ hasText: "Late projection" })).toBeVisible();
 	expect(state.classificationMutations).toBe(1);
+	await expect(page.getByText("Saved, but the list could not be refreshed")).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Retry list refresh" })).toHaveCount(0);
 });
 
 test("item replacement preserves all fields and renders the differing authoritative follow-up", async ({ page }) => {
