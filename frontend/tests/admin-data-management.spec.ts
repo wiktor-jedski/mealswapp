@@ -31,6 +31,7 @@ interface State {
 	classificationReadFailures?: Partial<Record<"food_category" | "culinary_role", number>>;
 	classificationReadOverrides?: Partial<Record<"food_category" | "culinary_role", unknown[]>>;
 	classificationReadDelays?: Partial<Record<"food_category" | "culinary_role", number>>;
+	classificationReadPlans?: Partial<Record<"food_category" | "culinary_role", Array<{ delay: number; values: unknown[] }>>>;
 	authoritativeNameAfterPut?: string;
 	userLookupDelays?: Record<string, number>;
 	itemReadDelays?: Record<string, number>;
@@ -65,8 +66,10 @@ async function stubApp(page: Page): Promise<State> {
 		if (path === "/api/v1/admin/classifications" && method === "GET") {
 			state.classificationReads++;
 			const kind = url.searchParams.get("kind") as "food_category" | "culinary_role";
-			const delay = state.classificationReadDelays?.[kind] ?? 0;
+			const plan = state.classificationReadPlans?.[kind]?.shift();
+			const delay = plan?.delay ?? state.classificationReadDelays?.[kind] ?? 0;
 			if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+			if (plan) return json(route, 200, ok({ classifications: plan.values }));
 			const override = state.classificationReadOverrides?.[kind];
 			if (override) {
 				if (state.classificationReadOverrides) delete state.classificationReadOverrides[kind];
@@ -381,6 +384,30 @@ test("stale successful delete projection is rejected and retried as a read only"
 	await expect(page.locator(`[data-classification-id="${categoryId}"]`)).toHaveCount(0);
 	await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("");
 	expect(state.classificationDeletes).toBe(1);
+});
+
+test("overlapping canceled classification reads accept the newest projection and reject late stale replay", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	state.classificationReadPlans = {
+		food_category: [
+			{ delay: 250, values: state.categories.map((value) => ({ ...value })) },
+			{ delay: 0, values: state.categories }
+		],
+		culinary_role: [
+			{ delay: 250, values: state.roles.map((value) => ({ ...value })) },
+			{ delay: 0, values: state.roles.map((value) => ({ ...value })) }
+		]
+	};
+	await page.getByLabel("Name", { exact: true }).last().fill("Late projection");
+	await page.getByRole("button", { name: "Create", exact: true }).click();
+	await page.waitForTimeout(35);
+	await page.reload();
+	await expect(page.locator("[data-admin-data-management]")).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Late projection" })).toBeVisible();
+	await page.waitForTimeout(300);
+	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Late projection" })).toBeVisible();
+	expect(state.classificationMutations).toBe(1);
 });
 
 test("item replacement preserves all fields and renders the differing authoritative follow-up", async ({ page }) => {
