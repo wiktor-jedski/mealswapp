@@ -156,7 +156,7 @@ func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEn
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
-		if err := lockMicronutrientUsageTables(ctx, db); err != nil {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
 			return err
 		}
 		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
@@ -184,7 +184,7 @@ func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEn
 	micros := marshalMicros(item.Micros)
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
-		if err := lockMicronutrientUsageTables(ctx, db); err != nil {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
 			return err
 		}
 		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {

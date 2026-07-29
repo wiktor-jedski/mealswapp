@@ -63,6 +63,11 @@ var vocabularyIsInUseSQL string
 //go:embed sql/vocabulary_lock_usage_tables.sql
 var vocabularyLockUsageTablesSQL string
 
+// Implements DESIGN-005 MicronutrientVocabulary concurrent item-write safeguard.
+//
+//go:embed sql/vocabulary_lock_item_write_tables.sql
+var vocabularyLockItemWriteTablesSQL string
+
 // PostgresMicronutrientVocabularyRepository persists canonical micronutrient keys.
 // Implements DESIGN-005 MicronutrientVocabulary.
 type PostgresMicronutrientVocabularyRepository struct {
@@ -211,6 +216,13 @@ func (r *PostgresMicronutrientVocabularyRepository) lockUsageTables(ctx context.
 func lockMicronutrientUsageTables(ctx context.Context, db sqlExecutor) error {
 	_, err := db.Exec(ctx, vocabularyLockUsageTablesSQL)
 	return mapPostgresError(err, "lock micronutrient usage")
+}
+
+// lockMicronutrientItemWriteTables coordinates item DML with vocabulary guards.
+// Implements DESIGN-005 MicronutrientVocabulary concurrent item-write safeguard.
+func lockMicronutrientItemWriteTables(ctx context.Context, db sqlExecutor) error {
+	_, err := db.Exec(ctx, vocabularyLockItemWriteTablesSQL)
+	return mapPostgresError(err, "lock micronutrient item writes")
 }
 
 // isInUse reports whether either food-item store contains the canonical key.
