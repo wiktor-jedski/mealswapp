@@ -27,7 +27,8 @@ interface State {
 	authoritativeNameAfterPut?: string;
 	userLookupDelays?: Record<string, number>;
 	itemReadDelays?: Record<string, number>;
-	classificationMutationDelays?: Record<string, number>;
+	classificationMutationWaits?: Record<string, Promise<void>>;
+	classificationMutationCompletions?: Record<string, () => void>;
 }
 
 async function json(route: Route, status: number, body?: unknown): Promise<void> {
@@ -55,7 +56,7 @@ async function stubApp(page: Page): Promise<State> {
 	await page.route(/\/api\/v1\/admin\//, async (route) => {
 		const request = route.request(); const url = new URL(request.url()); const method = request.method(); const path = url.pathname;
 		if (path === "/api/v1/admin/classifications" && method === "GET") { state.classificationReads++; return json(route, 200, ok({ classifications: url.searchParams.get("kind") === "food_category" ? state.categories : state.roles })); }
-		if (path === "/api/v1/admin/classifications/food_category" && method === "POST") { const body = request.postDataJSON(); const delay = state.classificationMutationDelays?.[body.name] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); const classification = { id: body.name === "Slow category" ? "00000000-0000-4000-8000-000000000109" : "00000000-0000-4000-8000-000000000107", name: body.name, kind: "food_category" as const }; state.categories.push(classification); return json(route, 201, ok({ classification })); }
+		if (path === "/api/v1/admin/classifications/food_category" && method === "POST") { const body = request.postDataJSON(); await state.classificationMutationWaits?.[body.name]; const classification = { id: body.name === "Slow category" ? "00000000-0000-4000-8000-000000000109" : "00000000-0000-4000-8000-000000000107", name: body.name, kind: "food_category" as const }; state.categories.push(classification); await json(route, 201, ok({ classification })); state.classificationMutationCompletions?.[body.name]?.(); return; }
 		if (path === `/api/v1/admin/classifications/${categoryId}` && method === "PUT") { const body = request.postDataJSON() as Record<string, unknown>; state.lastClassificationPut = body; state.categories[1] = { ...state.categories[1]!, name: String(body.name), ...(typeof body.parentId === "string" ? { parentId: body.parentId } : { parentId: undefined }) }; return json(route, 200, ok({ classification: state.categories[1] })); }
 		if (path === `/api/v1/admin/classifications/${conflictId}` && method === "DELETE") return json(route, 409, failure(409, "classification_in_use"));
 		if (path.startsWith("/api/v1/admin/classifications/") && method === "DELETE") { const id = path.split("/").at(-1); state.categories = state.categories.filter((value) => value.id !== id); state.roles = state.roles.filter((value) => value.id !== id); return json(route, 204); }
@@ -116,7 +117,7 @@ async function cancelWithKeyboard(page: Page): Promise<void> {
 
 test("keyboard cancellation restores focus for every destructive confirmation and uses a safe fallback", async ({ page }) => {
 	const state = await stubApp(page);
-	state.item = { id: itemId, name: "Focus item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [] };
+	state.item = { id: itemId, name: "Focus item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
 	await openAdmin(page);
 	await page.getByLabel("Item ID").fill(itemId);
 	await page.getByRole("button", { name: "Load" }).click();
@@ -203,7 +204,7 @@ test("item replacement preserves all fields and renders the differing authoritat
 		id: itemId, name: "Imported milk", physicalState: "liquid", prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240,
 		densityGramsPerMilliliter: 1.2, densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported",
 		macrosPer100: { protein: 10, carbohydrates: 110, fat: 5 }, micros: { sodium: 42 }, foodCategoryIds: [categoryId], culinaryRoleIds: [roleId],
-		foodCategories: [{ id: categoryId, name: "Produce", kind: "food_category" }], culinaryRoles: [{ id: roleId, name: "Base", kind: "culinary_role" }], imageUrl: "https://images.example.test/milk.png"
+		foodCategories: [{ id: categoryId, name: "Produce", kind: "food_category" }], culinaryRoles: [{ id: roleId, name: "Base", kind: "culinary_role" }], allergenKeys: ["dairy"], imageUrl: "https://images.example.test/milk.png"
 	};
 	state.authoritativeNameAfterPut = "Authoritative milk";
 	await openAdmin(page); await page.getByLabel("Item ID").fill(itemId); await page.getByRole("button", { name: "Load" }).click();
@@ -214,13 +215,13 @@ test("item replacement preserves all fields and renders the differing authoritat
 	expect(state.lastItemPut).toMatchObject({
 		name: "Submitted milk", prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240,
 		densityGramsPerMilliliter: 1.2, densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported",
-		macrosPer100: { protein: 10, carbohydrates: 110, fat: 5 }, micros: { sodium: 42 }, foodCategoryIds: [categoryId], culinaryRoleIds: [roleId], imageUrl: "https://images.example.test/milk.png"
+		macrosPer100: { protein: 10, carbohydrates: 110, fat: 5 }, micros: { sodium: 42 }, foodCategoryIds: [categoryId], culinaryRoleIds: [roleId], allergenKeys: ["dairy"], imageUrl: "https://images.example.test/milk.png"
 	});
 });
 
 test("confirmation target cannot race mutable item state", async ({ page }) => {
 	const state = await stubApp(page);
-	state.item = { id: itemId, name: "First item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [] };
+	state.item = { id: itemId, name: "First item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
 	await openAdmin(page); await page.getByLabel("Item ID").fill(itemId); await page.getByRole("button", { name: "Load" }).click(); await page.getByRole("button", { name: "Delete item" }).click();
 	await expect(page.locator("[data-admin-background]")).toHaveAttribute("inert", "");
 	await page.locator("[data-admin-confirmation]").evaluate((dialog: HTMLDialogElement) => dialog.close());
@@ -234,7 +235,7 @@ test("confirmation target cannot race mutable item state", async ({ page }) => {
 
 test("older item reads and user lookups cannot overwrite newer state", async ({ page }) => {
 	const state = await stubApp(page);
-	state.item = { id: itemId, name: "Slow item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [] };
+	state.item = { id: itemId, name: "Slow item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
 	state.itemReadDelays = { [itemId]: 200 };
 	state.userLookupDelays = { "slow@example.test": 200, "latest@example.test": 5 };
 	await openAdmin(page);
@@ -247,11 +248,18 @@ test("older item reads and user lookups cannot overwrite newer state", async ({ 
 });
 
 test("older classification mutations and refreshes cannot overwrite the latest projection", async ({ page }) => {
-	const state = await stubApp(page); state.classificationMutationDelays = { "Slow category": 200, "Latest category": 5 }; await openAdmin(page);
+	let releaseSlowMutation = () => {};
+	let completeSlowMutation = () => {};
+	const slowMutationCompleted = new Promise<void>((resolve) => { completeSlowMutation = resolve; });
+	const state = await stubApp(page); state.classificationMutationWaits = { "Slow category": new Promise((resolve) => { releaseSlowMutation = resolve; }) }; state.classificationMutationCompletions = { "Slow category": completeSlowMutation }; await openAdmin(page);
 	const name = page.getByLabel("Name", { exact: true }).last(); const form = page.locator('form[aria-label="Classification form"]');
-	await name.fill("Slow category"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await name.fill("Slow category");
+	const slowRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/admin/classifications/food_category") && request.method() === "POST" && request.postDataJSON().name === "Slow category");
+	await form.evaluate((element: HTMLFormElement) => element.requestSubmit()); await slowRequest;
 	await name.fill("Latest category"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
-	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible(); await page.waitForTimeout(250);
+	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible();
+	releaseSlowMutation();
+	await slowMutationCompleted;
 	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible();
 	await expect(page.getByRole("listitem").filter({ hasText: "Slow category" })).toHaveCount(0);
 });

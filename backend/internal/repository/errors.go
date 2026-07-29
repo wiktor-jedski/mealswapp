@@ -5,6 +5,15 @@ import (
 	"fmt"
 )
 
+// Implements DESIGN-009 AdminController closed administrator-bootstrap outcomes.
+var (
+	ErrAdministratorBootstrapTargetNotFound = errors.New("administrator bootstrap target not found")
+	ErrAdministratorBootstrapUnverified     = errors.New("administrator bootstrap target is unverified")
+	ErrAdministratorBootstrapNoCredential   = errors.New("administrator bootstrap target has no usable credential")
+	ErrAdministratorAlreadyExists           = errors.New("a different administrator already exists")
+	ErrCanonicalEmailCollision              = errors.New("canonical email identity conflicts with another account")
+)
+
 // ErrAdminAuditPersistence identifies an audit write that must roll back its admin mutation.
 // Implements DESIGN-009 AdminController fail-closed transactional audit boundary.
 var ErrAdminAuditPersistence = errors.New("admin audit persistence failed")

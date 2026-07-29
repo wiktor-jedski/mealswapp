@@ -85,6 +85,7 @@ type FoodItemEntity struct {
 	Micros                          MicroValues
 	FoodCategories                  []ClassificationEntity
 	CulinaryRoles                   []ClassificationEntity
+	AllergenKeys                    []string
 	ImageURL                        string
 	DeletedAt                       *time.Time
 	CreatedAt                       time.Time
@@ -520,11 +521,24 @@ type CheckoutIdempotencyRecord struct {
 	UpdatedAt    time.Time
 }
 
-// AdminAuditEntry stores auditable administrative mutations.
+// AdminAuditActorKind identifies the truthful origin of an administrative action.
+// Implements DESIGN-009 AdminController.
+type AdminAuditActorKind string
+
+// Implements DESIGN-009 AdminController truthful audit attribution.
+const (
+	// AdminAuditActorAdministrator identifies an authenticated administrator.
+	AdminAuditActorAdministrator AdminAuditActorKind = "administrator"
+	// AdminAuditActorOperator identifies an infrastructure operator with no administrator account actor.
+	AdminAuditActorOperator AdminAuditActorKind = "operator"
+)
+
+// AdminAuditEntry stores auditable administrative mutations with a truthful nullable actor.
 // Implements DESIGN-009 AdminController.
 type AdminAuditEntry struct {
 	ID          uuid.UUID
-	AdminUserID uuid.UUID
+	ActorKind   AdminAuditActorKind
+	AdminUserID *uuid.UUID
 	Action      string
 	EntityType  string
 	EntityID    *uuid.UUID
@@ -541,6 +555,33 @@ type AdminAuditChanges struct {
 	Before   []byte
 	After    []byte
 	Replayed bool
+}
+
+// AdministratorBootstrapSelector identifies exactly one existing account without exposing PII.
+// Implements DESIGN-009 AdminController operator-only bootstrap.
+type AdministratorBootstrapSelector struct {
+	UserID            *uuid.UUID
+	EmailDigest       *LookupDigest
+	LegacyEmailDigest *LookupDigest
+}
+
+// AdministratorBootstrapResult is the privacy-safe bootstrap outcome.
+// Implements DESIGN-009 AdminController operator-only bootstrap.
+type AdministratorBootstrapResult struct {
+	UserID    uuid.UUID
+	AuditID   *uuid.UUID
+	AuditedAt time.Time
+	Replayed  bool
+}
+
+// PasswordCredentialValidator validates stored password material using the authentication parser.
+// Implements DESIGN-009 AdminController bootstrap eligibility.
+type PasswordCredentialValidator func(string, string) bool
+
+// AdministratorBootstrapRepository atomically creates only the first administrator.
+// Implements DESIGN-009 AdminController operator-only bootstrap.
+type AdministratorBootstrapRepository interface {
+	BootstrapAdministrator(context.Context, AdministratorBootstrapSelector, string) (AdministratorBootstrapResult, error)
 }
 
 // ManualFoodItemCreateClaim is one atomic administrator-scoped global-item creation.
@@ -938,5 +979,6 @@ type AdminMutationAuditRepository interface {
 // Implements DESIGN-009 UserAdminPanel.
 type AdminUserRepository interface {
 	LookupAdminUsers(context.Context, AdminUserLookup) ([]AdminUserRecord, error)
+	ReindexUserEmailDigest(context.Context, uuid.UUID, LookupDigest) error
 	RetryAdminDeletion(context.Context, AdminMutationExecutor, uuid.UUID, uuid.UUID) (AdminDeletionRetry, error)
 }

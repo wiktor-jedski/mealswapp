@@ -75,6 +75,22 @@ func (r *PostgresAdminUserRepository) LookupAdminUsers(ctx context.Context, look
 	return users, nil
 }
 
+// ReindexUserEmailDigest canonicalizes exact legacy lookup material after collision-safe resolution.
+// Implements DESIGN-009 UserAdminPanel and DESIGN-013 InputNormalizer.
+func (r *PostgresAdminUserRepository) ReindexUserEmailDigest(ctx context.Context, userID uuid.UUID, digest LookupDigest) error {
+	if userID == uuid.Nil {
+		return validationError("user id is required")
+	}
+	if err := validateLookupDigest(digest); err != nil {
+		return err
+	}
+	var updated uuid.UUID
+	if err := r.db.QueryRow(ctx, encryptedUserUpdateDigestSQL, userID, digest.KeyVersion, digest.Value).Scan(&updated); err != nil {
+		return mapPostgresError(err, "reindex administrative user email digest")
+	}
+	return nil
+}
+
 // RetryAdminDeletion atomically claims one eligible failure in the supplied audit transaction.
 // Implements DESIGN-009 UserAdminPanel.
 func (r *PostgresAdminUserRepository) RetryAdminDeletion(ctx context.Context, tx AdminMutationExecutor, userID uuid.UUID, requestID uuid.UUID) (AdminDeletionRetry, error) {

@@ -79,7 +79,8 @@ func TestClassificationAdminMutationRollsBackWhenAuditFails(t *testing.T) {
 	ctx := context.Background()
 	audit := NewPostgresAdminImportAuditRepository(db)
 	name := "Rollback category " + uuid.NewString()
-	err := audit.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: uuid.New(), Action: "classification.create", EntityType: "classification", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	adminID := uuid.New()
+	err := audit.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "classification.create", EntityType: "classification", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		created, err := NewPostgresClassificationRepository(tx).Create(ctx, ClassificationEntity{Name: name, Kind: ClassificationKindFoodCategory})
 		if err != nil {
 			return AdminAuditChanges{}, err

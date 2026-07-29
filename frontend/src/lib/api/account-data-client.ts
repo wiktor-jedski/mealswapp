@@ -21,12 +21,13 @@ export class AccountDataClientError extends Error {
 
 /** Loads the authenticated JSON export and validates the private-item projection used by the panel. */
 export async function loadAccountExport(signal?: AbortSignal): Promise<ExportBundle> {
-	const response = await request(buildAccountExportUrl("json"), buildAccountExportRequestInit({ signal }));
+	const response = await request(buildAccountExportUrl("json"), buildAccountExportRequestInit("json", { signal }));
 	if (response.status !== 200) throw new AccountDataClientError();
 	const body = await readBoundedText(response, MAX_EXPORT_BYTES);
 	let value: unknown;
 	try { value = JSON.parse(body) as unknown; } catch { throw new AccountDataClientError(); }
-	if (!isRecord(value) || !isRecord(value.user) || !Array.isArray(value.consent) || !Array.isArray(value.savedItems) || !Array.isArray(value.history) || !Array.isArray(value.customItems)) throw new AccountDataClientError();
+	if (!isRecord(value) || !isRecord(value.user) || !Array.isArray(value.consent) || !Array.isArray(value.savedItems) || !Array.isArray(value.savedDiets) || !Array.isArray(value.history) || !Array.isArray(value.customItems)) throw new AccountDataClientError();
+	value.savedDiets.forEach(assertSavedDiet);
 	value.customItems.forEach(assertCustomItemSummary);
 	return value as unknown as ExportBundle;
 }
@@ -50,6 +51,10 @@ export const accountDataApi: AccountDataApi = { loadExport: loadAccountExport, d
 
 function assertCustomItemSummary(value: unknown): asserts value is CustomItem {
 	if (!isRecord(value) || !uuid(value.id) || typeof value.name !== "string" || value.name.trim() === "" || value.name.length > 200 || "ownerId" in value) throw new AccountDataClientError();
+}
+
+function assertSavedDiet(value: unknown): void {
+	if (!isRecord(value) || !uuid(value.id) || typeof value.name !== "string" || value.name.trim() === "" || !Array.isArray(value.entries) || "userId" in value || "UserID" in value) throw new AccountDataClientError();
 }
 
 async function request(input: string, init: RequestInit): Promise<Response> {

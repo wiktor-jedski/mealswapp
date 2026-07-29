@@ -59,6 +59,43 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	}
 }
 
+// TestLoadExternalDataFixtureOverrides verifies DESIGN-012 controlled-provider composition.
+func TestLoadExternalDataFixtureOverrides(t *testing.T) {
+	t.Setenv("MEALSWAPP_USDA_ENDPOINT", "http://127.0.0.1:18181/usda")
+	t.Setenv("MEALSWAPP_OPENFOODFACTS_ENDPOINT", "http://127.0.0.1:18181/openfoodfacts")
+	t.Setenv("MEALSWAPP_EXTERNAL_PROVIDER_TIMEOUT", "250ms")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ExternalData.USDAEndpoint == "" || cfg.ExternalData.OpenFoodFactsEndpoint == "" || cfg.ExternalData.Deadline != 250*time.Millisecond {
+		t.Fatalf("unexpected external-data config: %+v", cfg.ExternalData)
+	}
+}
+
+// TestLoadRejectsUnsafeExternalDataOverrides verifies DESIGN-012 fixture isolation guards.
+func TestLoadRejectsUnsafeExternalDataOverrides(t *testing.T) {
+	for _, test := range []struct {
+		name, variable, value string
+		production            bool
+	}{
+		{"remote endpoint", "MEALSWAPP_USDA_ENDPOINT", "https://example.test/usda", false},
+		{"credentialed endpoint", "MEALSWAPP_OPENFOODFACTS_ENDPOINT", "http://user@127.0.0.1:18181/off", false},
+		{"invalid deadline", "MEALSWAPP_EXTERNAL_PROVIDER_TIMEOUT", "31s", false},
+		{"production override", "MEALSWAPP_USDA_ENDPOINT", "http://127.0.0.1:18181/usda", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.production {
+				setProductionConfig(t)
+			}
+			t.Setenv(test.variable, test.value)
+			if _, err := Load(); err == nil {
+				t.Fatal("Load() error = nil, want provider override rejection")
+			}
+		})
+	}
+}
+
 // TestLoadRequiresProductionDependencyURLs proves that config will not load
 // if prod env lacks valid URLs.
 // TestLoadRequiresProductionDependencyURLs verifies DESIGN-010 RequestValidator production guards.

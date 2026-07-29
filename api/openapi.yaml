@@ -916,6 +916,42 @@ paths:
           $ref: "#/components/responses/Disclaimer"
         "400":
           $ref: "#/components/responses/Error"
+  # Implements DESIGN-009 AdminController deterministic ownerless catalog export.
+  /api/v1/admin/catalog-export:
+    get:
+      operationId: getApiV1AdminCatalogExport
+      summary: Stream the complete ownerless global catalog
+      description: Returns the versioned global-catalog interchange document, never Account Export data or private custom items.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: includeDeleted
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Deterministic UUID-ordered catalog snapshot with no generated timestamp.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GlobalCatalogExportDocument"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
   /api/v1/admin/external-search:
     get:
       operationId: getApiV1AdminExternalSearch
@@ -1916,13 +1952,200 @@ components:
     AdminItemRequest:
       allOf:
         - $ref: "#/components/schemas/CustomItemFields"
+        - type: object
+          required: [allergenKeys]
+          properties:
+            allergenKeys:
+              type: array
+              maxItems: 100
+              uniqueItems: true
+              items:
+                type: string
+                minLength: 1
+                maxLength: 120
+                pattern: "^[a-z][a-z0-9_]*$"
       unevaluatedProperties: false
-      description: Ownerless global item fields. userId and ownerId are intentionally unsupported.
+      description: Ownerless global item fields with active canonical allergen keys. userId and ownerId are intentionally unsupported.
+    # Implements DESIGN-009 AdminController authoritative global catalog interchange representation.
+    GlobalCatalogExportDocument:
+      type: object
+      additionalProperties: false
+      required: [schema, items]
+      properties:
+        schema:
+          type: string
+          const: mealswapp.global-catalog.v1
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/GlobalCatalogExportEntry"
+      description: Stable snapshot document. A volatile generated timestamp is intentionally absent.
+    GlobalCatalogExportEntry:
+      type: object
+      additionalProperties: false
+      required: [idempotencyKey, item]
+      properties:
+        idempotencyKey:
+          type: string
+          pattern: "^global-catalog:[0-9a-f-]{36}$"
+        item:
+          $ref: "#/components/schemas/GlobalCatalogExportItem"
+    GlobalCatalogExportItem:
+      type: object
+      additionalProperties: false
+      required:
+            - id
+            - name
+            - physicalState
+            - prepTimeMinutes
+            - averageUnitWeightGrams
+            - averageServingVolumeMilliliters
+            - densityGramsPerMilliliter
+            - densitySourceProvider
+            - densitySourceFoodId
+            - densitySourceKind
+            - imageUrl
+            - imageAlt
+            - sourceProvider
+            - externalId
+            - macrosPer100
+            - micros
+            - allergenKeys
+            - createdAt
+            - updatedAt
+            - deletedAt
+            - foodCategoryNames
+            - culinaryRoleNames
+            - classifications
+            - curatedSources
+      properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+              minLength: 1
+              maxLength: 200
+            physicalState:
+              type: string
+              enum: [solid, liquid]
+            prepTimeMinutes:
+              type: integer
+              minimum: 0
+            averageUnitWeightGrams:
+              type: [number, "null"]
+              exclusiveMinimum: 0
+            averageServingVolumeMilliliters:
+              type: [number, "null"]
+              exclusiveMinimum: 0
+            densityGramsPerMilliliter:
+              type: [number, "null"]
+              exclusiveMinimum: 0
+            densitySourceProvider:
+              type: [string, "null"]
+              maxLength: 200
+            densitySourceFoodId:
+              type: [string, "null"]
+              maxLength: 200
+            densitySourceKind:
+              type: [string, "null"]
+              enum: [manual, estimated, imported, null]
+            imageUrl:
+              type: [string, "null"]
+              maxLength: 2048
+            imageAlt:
+              type: [string, "null"]
+              maxLength: 200
+            sourceProvider:
+              type: [string, "null"]
+              maxLength: 200
+            externalId:
+              type: [string, "null"]
+              maxLength: 200
+            macrosPer100:
+              $ref: "#/components/schemas/MacroProfile"
+            micros:
+              type: object
+              additionalProperties:
+                type: number
+                minimum: 0
+            allergenKeys:
+              type: array
+              uniqueItems: true
+              items:
+                type: string
+                pattern: "^[a-z][a-z0-9_]*$"
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+            deletedAt:
+              type: [string, "null"]
+              format: date-time
+            foodCategoryNames:
+              type: array
+              items:
+                type: string
+            culinaryRoleNames:
+              type: array
+              items:
+                type: string
+            classifications:
+              type: object
+              additionalProperties: false
+              required: [foodCategories, culinaryRoles]
+              properties:
+                foodCategories:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/GlobalCatalogExportClassification"
+                culinaryRoles:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/GlobalCatalogExportClassification"
+            curatedSources:
+              type: array
+              items:
+                $ref: "#/components/schemas/GlobalCatalogExportCuratedSource"
+      description: Complete ownerless item projection. Curated-source fields are informational and manual-item import does not recreate curated_imports rows.
+    GlobalCatalogExportClassification:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    GlobalCatalogExportCuratedSource:
+      type: object
+      additionalProperties: false
+      required: [id, provider, externalId, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          minLength: 1
+          maxLength: 200
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: string
+          enum: [draft, imported, conflict, rejected]
     AdminItem:
       allOf:
         - $ref: "#/components/schemas/CustomItemFields"
         - type: object
-          required: [id, prepTimeMinutes, micros, foodCategories, culinaryRoles]
+          required: [id, prepTimeMinutes, micros, foodCategories, culinaryRoles, allergenKeys]
           properties:
             id:
               type: string
@@ -1937,6 +2160,15 @@ components:
               maxItems: 100
               items:
                 $ref: "#/components/schemas/ClassificationSummary"
+            allergenKeys:
+              type: array
+              maxItems: 100
+              uniqueItems: true
+              items:
+                type: string
+                minLength: 1
+                maxLength: 120
+                pattern: "^[a-z][a-z0-9_]*$"
       unevaluatedProperties: false
       description: Ownerless global item projection without private ownership or audit state.
     AdminItemEnvelope:
@@ -3214,7 +3446,8 @@ components:
           $ref: "#/components/schemas/AutocompleteResponse"
     ExportBundle:
       type: object
-      required: [user, consent, savedItems, history, customItems]
+      additionalProperties: false
+      required: [user, consent, savedItems, savedDiets, history, customItems]
       properties:
         user:
           type: object
@@ -3228,6 +3461,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SavedItem"
+        savedDiets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExportSavedDiet"
         history:
           type: array
           items:
@@ -3236,6 +3473,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CustomItem"
+    ExportSavedDiet:
+      type: object
+      additionalProperties: false
+      required: [id, name, entries, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        entries:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/DailyDietFoodObjectEntry"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     ExportFormat:
       type: string
       enum: [json, csv]

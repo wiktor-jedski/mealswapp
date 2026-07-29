@@ -369,7 +369,7 @@ func assertConcurrentNameConfirmation(t *testing.T, ctx context.Context, db *pgx
 
 func confirm(t *testing.T, ctx context.Context, audit *repository.PostgresAdminImportAuditRepository, service *dataimporter.Service, adminID uuid.UUID, key string, req dataimporter.Request, badAudit bool) (result dataimporter.Result, err error) {
 	t.Helper()
-	err = audit.WithMutationAudit(ctx, repository.AdminAuditEntry{AdminUserID: adminID, Action: "import_food", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx repository.AdminMutationExecutor) (repository.AdminAuditChanges, error) {
+	err = audit.WithMutationAudit(ctx, repository.AdminAuditEntry{ActorKind: repository.AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "import_food", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx repository.AdminMutationExecutor) (repository.AdminAuditChanges, error) {
 		result, err = service.Confirm(ctx, tx, adminID, key, req)
 		if err != nil {
 			return repository.AdminAuditChanges{}, err

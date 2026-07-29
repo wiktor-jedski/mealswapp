@@ -31,6 +31,13 @@ class OperationResponseDriftTest(unittest.TestCase):
 		for forbidden in ("rawPayload", "auditSnapshot", "passwordHash", "accessToken"):
 			self.assertNotIn(forbidden, generated)
 		self.assertNotIn("\n\townerId:", generated)
+		self.assertIn("\tsavedDiets: ExportSavedDiet[];", generated)
+		export_diet = generated[generated.index("export interface ExportSavedDiet"):generated.index("export type ExportFormat")]
+		self.assertNotIn("userId", export_diet)
+		self.assertIn("\tentries: DailyDietFoodObjectEntry[];", export_diet)
+		export_schema = GENERATOR.schema_block(source, "ExportBundle") or ""
+		self.assertIn("required: [user, consent, savedItems, savedDiets, history, customItems]", export_schema)
+		self.assertIn('$ref: "#/components/schemas/ExportSavedDiet"', export_schema)
 		self.assertEqual(GENERATOR.administration_description_mismatches(source, generated), [])
 		changed_description = "One regenerated ownerless administration item."
 		mutated = source.replace(
@@ -90,6 +97,7 @@ class OperationResponseDriftTest(unittest.TestCase):
 		for alias in GENERATOR.PHASE08_SUCCESS_ENVELOPES:
 			self.assertRegex(generated, rf"export type {alias} = OkEnvelope<")
 			self.assertNotRegex(generated, rf"export type {alias} = Envelope<")
+		self.assertIn("export interface AdminItemRequest extends CustomItemRequest {\n\tallergenKeys: string[];\n}", generated)
 
 	def test_phase08_source_success_envelopes_cannot_be_weakened(self) -> None:
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")

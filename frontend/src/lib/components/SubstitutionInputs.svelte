@@ -34,6 +34,8 @@
   let excludeFilterQuery = $state("");
   let includeFilterOpen = $state(false);
   let excludeFilterOpen = $state(false);
+  let includeFilterCloseTimer: ReturnType<typeof setTimeout> | undefined;
+  let excludeFilterCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
   let backendFilterOptions = $state<FilterOption[]>([]);
   let filterOptionsStatus = $state<"loading" | "ready" | "empty" | "error">("loading");
@@ -62,8 +64,28 @@
     return () => {
       window.removeEventListener("focus", refresh);
       filterOptionsAbort?.abort();
+      clearTimeout(includeFilterCloseTimer);
+      clearTimeout(excludeFilterCloseTimer);
     };
   });
+
+  function openFilterOptions(kind: "include" | "exclude"): void {
+    if (kind === "include") {
+      clearTimeout(includeFilterCloseTimer);
+      includeFilterOpen = true;
+      return;
+    }
+    clearTimeout(excludeFilterCloseTimer);
+    excludeFilterOpen = true;
+  }
+
+  function scheduleFilterOptionsClose(kind: "include" | "exclude"): void {
+    if (kind === "include") {
+      includeFilterCloseTimer = setTimeout(() => (includeFilterOpen = false), 100);
+      return;
+    }
+    excludeFilterCloseTimer = setTimeout(() => (excludeFilterOpen = false), 100);
+  }
 
   /** Refreshes backend policy; sequence + abort guards prevent stale responses winning. */
   async function loadFilterOptions(retainCurrent = false): Promise<void> {
@@ -375,10 +397,10 @@
           aria-controls="substitution-include-filter-options"
           placeholder="Search categories or roles…"
           bind:value={includeFilterQuery}
-          onfocus={() => (includeFilterOpen = true)}
-          oninput={() => (includeFilterOpen = true)}
+          onfocus={() => openFilterOptions("include")}
+          oninput={() => openFilterOptions("include")}
           onkeydown={(event) => onFilterInputKeydown(visibleIncludeOptions, event)}
-          onblur={() => setTimeout(() => (includeFilterOpen = false), 100)}
+          onblur={() => scheduleFilterOptionsClose("include")}
           data-substitution-include-filter
         />
         {#if includeFilterOpen}
@@ -420,10 +442,10 @@
           aria-controls="substitution-exclude-filter-options"
           placeholder="Search allergies or diets…"
           bind:value={excludeFilterQuery}
-          onfocus={() => (excludeFilterOpen = true)}
-          oninput={() => (excludeFilterOpen = true)}
+          onfocus={() => openFilterOptions("exclude")}
+          oninput={() => openFilterOptions("exclude")}
           onkeydown={(event) => onFilterInputKeydown(visibleExcludeOptions, event)}
-          onblur={() => setTimeout(() => (excludeFilterOpen = false), 100)}
+          onblur={() => scheduleFilterOptionsClose("exclude")}
           data-substitution-exclude-filter
         />
         {#if excludeFilterOpen}

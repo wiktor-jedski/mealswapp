@@ -44,3 +44,10 @@ test("restores confirmation focus to the opener or an enabled in-context fallbac
 	expect(source).toContain("isConnected");
 	expect(source).toContain("data-admin-data-management");
 });
+
+test("initializes, loads, edits, and submits the required allergen key contract", () => {
+	expect(source).toContain("allergenKeys: []");
+	expect(source).toContain("allergenKeys: item.allergenKeys");
+	expect(source).toContain("bind:value={form.allergenKeys}");
+	expect(source).toContain("Allergens");
+});

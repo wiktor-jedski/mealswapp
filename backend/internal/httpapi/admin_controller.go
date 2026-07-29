@@ -234,7 +234,8 @@ func (c *AdminController) transactionalMutation(route AdminRouteDefinition) fibe
 			c.telemetry.AdminMutation(ctx.UserContext(), route.AuditAction, "audit_failed")
 			return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "dependency_unavailable", Message: "service temporarily unavailable", Retryable: true}
 		}
-		entry := repository.AdminAuditEntry{AdminUserID: admin.UserID, Action: route.AuditAction, EntityType: route.EntityType, RequestID: admin.RequestID, CreatedAt: c.now()}
+		adminUserID := admin.UserID
+		entry := repository.AdminAuditEntry{ActorKind: repository.AdminAuditActorAdministrator, AdminUserID: &adminUserID, Action: route.AuditAction, EntityType: route.EntityType, RequestID: admin.RequestID, CreatedAt: c.now()}
 		var result AdminMutationResult
 		var response []byte
 		status := fiber.StatusOK

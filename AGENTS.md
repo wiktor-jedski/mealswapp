@@ -18,6 +18,10 @@ This repository is currently organized around requirements, architecture, design
 
 When application code is added, follow the documented stack: Svelte frontend code under the `frontend/` package, Go/Fiber backend code under the `backend/` package, and tests colocated with code where the language ecosystem expects them.
 
+Task list: `docs/implementation/02_TASK_LIST.md`
+Phase plan: `docs/implementation/01_PLAN.md`
+Open points: `docs/implementation/04_OPEN.md`
+
 ## Build, Test, and Development Commands
 
 - `bash scripts/start-services.sh`: starts local PostgreSQL and Redis with Docker Compose when available, falling back to system `service` commands.

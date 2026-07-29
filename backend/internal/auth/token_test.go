@@ -65,6 +65,28 @@ func TestJWTManagerAccessTokens(t *testing.T) {
 	}
 }
 
+// Implements DESIGN-009 AdminController bootstrap reauthentication semantics.
+func TestAdministratorBootstrapDoesNotChangeExistingSessionClaims(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 27, 12, 0, 0, 0, time.UTC)
+	manager := NewJWTManager(signingKeys{active: "jwt-v1", entries: map[string][]byte{"jwt-v1": []byte("11111111111111111111111111111111")}})
+	manager.now = func() time.Time { return now }
+	userID, sessionID, familyID := uuid.New(), uuid.New(), uuid.New()
+	oldToken, err := manager.CreateAccessToken(ctx, AccessTokenClaims{UserID: userID, Role: "user", HasVerifiedLoginMethod: true, SessionID: sessionID, RefreshFamilyID: familyID, ExpiresAt: now.Add(time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newToken, err := manager.CreateAccessToken(ctx, AccessTokenClaims{UserID: userID, Role: "admin", HasVerifiedLoginMethod: true, SessionID: uuid.New(), RefreshFamilyID: uuid.New(), ExpiresAt: now.Add(time.Minute)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldClaims, oldErr := manager.ValidateAccessToken(ctx, oldToken)
+	newClaims, newErr := manager.ValidateAccessToken(ctx, newToken)
+	if oldErr != nil || newErr != nil || oldClaims.Role != "user" || newClaims.Role != "admin" {
+		t.Fatalf("old=%#v oldErr=%v new=%#v newErr=%v", oldClaims, oldErr, newClaims, newErr)
+	}
+}
+
 // TestJWTManagerRejectsInvalidAccessTokens verifies DESIGN-006 JWTManager fail-closed validation.
 func TestJWTManagerRejectsInvalidAccessTokens(t *testing.T) {
 	ctx := context.Background()

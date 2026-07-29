@@ -753,8 +753,19 @@ export interface ExportBundle {
 	user: Record<string, unknown>;
 	consent: Array<Record<string, unknown>>;
 	savedItems: SavedItem[];
+	savedDiets: ExportSavedDiet[];
 	history: SearchHistoryEntry[];
 	customItems: Array<Record<string, unknown>>;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One exported saved diet without owner identity or derived UI-only fields. */
+export interface ExportSavedDiet {
+	id: string;
+	name: string;
+	entries: DailyDietFoodObjectEntry[];
+	createdAt: string;
+	updatedAt: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -769,14 +780,45 @@ export function buildAccountExportUrl(format: ExportFormat = "json"): `/api/v1/a
 	return `${ACCOUNT_EXPORT_ENDPOINT}?format=${format}`;
 }
 
-/** Builds the authenticated account-export request without exposing cookie values to JavaScript. */
-export function buildAccountExportRequestInit(options: { signal?: AbortSignal } = {}): AuthGetRequestInit {
-	return { method: "GET", credentials: "include", headers: { Accept: "application/json" }, signal: options.signal };
+export interface AccountExportRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" | "text/csv" };
 }
 
-// Implements DESIGN-008 ProfileController generated private-item deletion boundary.
+/** Builds the authenticated account-export request without exposing cookie values to JavaScript. */
+export function buildAccountExportRequestInit(format: ExportFormat = "json", options: { signal?: AbortSignal } = {}): AccountExportRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: format === "csv" ? "text/csv" : "application/json" }, signal: options.signal };
+}
+
+// Implements DESIGN-008 ProfileController generated private-item lifecycle boundary.
+export const CUSTOM_ITEMS_ENDPOINT = "/api/v1/custom-items" as const;
+
 export function buildCustomItemUrl(itemId: string): string {
-	return `/api/v1/custom-items/${encodeURIComponent(itemId)}`;
+	return `${CUSTOM_ITEMS_ENDPOINT}/${encodeURIComponent(itemId)}`;
+}
+
+export interface CustomItemMutationRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "POST" | "PUT";
+	credentials: "include";
+	headers: Record<string, string> & { Accept: "application/json"; "Content-Type": "application/json"; "X-CSRF-Token": string };
+	body: string;
+}
+
+/** Builds an owner-scoped private-item create or replacement request. */
+export function buildCustomItemMutationRequestInit(
+	method: "POST" | "PUT",
+	request: CustomItemRequest,
+	csrfToken: string,
+	options: { idempotencyKey?: IdempotencyKey; signal?: AbortSignal } = {}
+): CustomItemMutationRequestInit {
+	const headers: CustomItemMutationRequestInit["headers"] = {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		"X-CSRF-Token": csrfToken
+	};
+	if (method === "POST" && options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+	return { method, credentials: "include", headers, body: JSON.stringify(request), signal: options.signal };
 }
 
 export interface CustomItemDeleteRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
@@ -800,6 +842,20 @@ export interface DeletionRequestData {
 // Implements DESIGN-008 AccountDeleter frontend deletion contract.
 /** Account deletion response envelope. */
 export type DeletionRequestEnvelope = Envelope<DeletionRequestData>;
+
+// Implements DESIGN-008 AccountDeleter generated request boundary.
+export const ACCOUNT_ENDPOINT = "/api/v1/account" as const;
+
+export interface AccountDeletionRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "DELETE";
+	credentials: "include";
+	headers: Record<string, string> & { Accept: "application/json"; "X-CSRF-Token": string };
+}
+
+/** Builds the authenticated, CSRF-protected account-deletion request. */
+export function buildAccountDeletionRequestInit(csrfToken: string, options: { signal?: AbortSignal } = {}): AccountDeletionRequestInit {
+	return { method: "DELETE", credentials: "include", headers: { Accept: "application/json", "X-CSRF-Token": csrfToken }, signal: options.signal };
+}
 
 // Implements DESIGN-015 DisclaimerRenderer frontend disclaimer contract.
 /** Stable Markdown disclaimer content for login and account surfaces. */
@@ -1242,8 +1298,10 @@ export interface CuratedImportResult {
 export type CuratedImportEnvelope = OkEnvelope<CuratedImportResult>;
 
 // Implements DESIGN-009 ItemCurator ownerless global item boundaries.
-/** Ownerless global item fields. userId and ownerId are intentionally unsupported. */
-export type AdminItemRequest = CustomItemRequest;
+/** Ownerless global item fields with active canonical allergen keys. userId and ownerId are intentionally unsupported. */
+export interface AdminItemRequest extends CustomItemRequest {
+	allergenKeys: string[];
+}
 
 /** Ownerless global item projection without private ownership or audit state. */
 export interface AdminItem extends AdminItemRequest {

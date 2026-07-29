@@ -19,6 +19,7 @@ export interface AdminItemForm {
 	micros: string;
 	foodCategoryIds: string[];
 	culinaryRoleIds: string[];
+	allergenKeys: string[];
 	imageUrl: string;
 }
 
@@ -42,6 +43,7 @@ export function parseAdminItemForm(form: AdminItemForm): { request?: AdminItemRe
 	const averageServingVolumeMilliliters = optionalNumber(form.averageServingVolumeMilliliters);
 	if (prepTimeMinutes === null || averageUnitWeightGrams === null || averageServingVolumeMilliliters === null) return { error: "Preparation and measure values must be bounded positive numbers (preparation may be zero)." };
 	if (form.foodCategoryIds.length > 100 || form.culinaryRoleIds.length > 100 || !uniqueUuids(form.foodCategoryIds) || !uniqueUuids(form.culinaryRoleIds)) return { error: "Select at most 100 unique valid classifications of each kind." };
+	if (form.allergenKeys.length > 100 || new Set(form.allergenKeys).size !== form.allergenKeys.length || form.allergenKeys.some((key) => !/^[a-z][a-z0-9_]{0,119}$/.test(key))) return { error: "Select at most 100 unique canonical allergens." };
 	const imageUrl = form.imageUrl.trim();
 	if (imageUrl && (!safeUriReference(imageUrl) || imageUrl.length > 2048 || imageUrl.includes("\0"))) return { error: "Enter a valid HTTP(S) or relative image URL of at most 2048 characters." };
 	const request: AdminItemRequest = {
@@ -53,6 +55,7 @@ export function parseAdminItemForm(form: AdminItemForm): { request?: AdminItemRe
 		micros,
 		foodCategoryIds: form.foodCategoryIds,
 		culinaryRoleIds: form.culinaryRoleIds,
+		allergenKeys: form.allergenKeys,
 		...(imageUrl ? { imageUrl } : {})
 	};
 	if (form.physicalState === "liquid") {

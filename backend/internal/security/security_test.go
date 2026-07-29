@@ -129,8 +129,8 @@ func TestLookupDigestDeterminismRotationAndFailures(t *testing.T) {
 }
 
 func TestNormalizeInput(t *testing.T) {
-	result, err := NormalizeInput(InputFieldEmail, " user@example.com ")
-	if err != nil || !result.Changed || len(result.Violations) != 1 {
+	result, err := NormalizeInput(InputFieldEmail, " User@Example.COM ")
+	if err != nil || result.Value != "user@example.com" || !result.Changed || len(result.Violations) != 1 {
 		t.Fatalf("normalize = %+v, %v", result, err)
 	}
 	password, err := ValidatePasswordPolicy("StrongerPassword1!", 12)

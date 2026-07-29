@@ -6,7 +6,7 @@ const firstItemId = "00000000-0000-4000-8000-000000000267";
 const secondItemId = "00000000-0000-4000-8000-000000000268";
 const ok = (data: unknown) => ({ status: "ok", requestId: "task-267", data });
 const item = (id: string, name: string) => ({ id, name });
-const bundle = (customItems: unknown[]) => ({ user: {}, consent: [], savedItems: [], history: [], customItems });
+const bundle = (customItems: unknown[]) => ({ user: {}, consent: [], savedItems: [], savedDiets: [], history: [], customItems });
 
 async function json(route: Route, status: number, body?: unknown): Promise<void> {
 	await route.fulfill(body === undefined ? { status } : { status, contentType: "application/json", body: JSON.stringify(body) });

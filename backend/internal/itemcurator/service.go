@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -24,7 +25,23 @@ var (
 
 // Request contains administrator-editable global food-item fields.
 // Implements DESIGN-009 ItemCurator request boundary.
-type Request = customitem.Request
+type Request struct {
+	Name                            string                   `json:"name"`
+	PhysicalState                   repository.PhysicalState `json:"physicalState"`
+	PrepTimeMinutes                 int                      `json:"prepTimeMinutes"`
+	AverageUnitWeightGrams          float64                  `json:"averageUnitWeightGrams,omitempty"`
+	AverageServingVolumeMilliliters float64                  `json:"averageServingVolumeMilliliters,omitempty"`
+	DensityGramsPerMilliliter       float64                  `json:"densityGramsPerMilliliter,omitempty"`
+	DensitySourceProvider           string                   `json:"densitySourceProvider,omitempty"`
+	DensitySourceFoodID             string                   `json:"densitySourceFoodId,omitempty"`
+	DensitySourceKind               string                   `json:"densitySourceKind,omitempty"`
+	MacrosPer100                    repository.MacroValues   `json:"macrosPer100"`
+	Micros                          repository.MicroValues   `json:"micros"`
+	FoodCategoryIDs                 []uuid.UUID              `json:"foodCategoryIds"`
+	CulinaryRoleIDs                 []uuid.UUID              `json:"culinaryRoleIds"`
+	AllergenKeys                    []string                 `json:"allergenKeys"`
+	ImageURL                        string                   `json:"imageUrl,omitempty"`
+}
 
 // ClassificationSummary is the hierarchy-free administration projection.
 // Implements DESIGN-009 ItemCurator response boundary.
@@ -51,6 +68,7 @@ type Item struct {
 	Micros                          repository.MicroValues   `json:"micros"`
 	FoodCategories                  []ClassificationSummary  `json:"foodCategories"`
 	CulinaryRoles                   []ClassificationSummary  `json:"culinaryRoles"`
+	AllergenKeys                    []string                 `json:"allergenKeys"`
 	ImageURL                        string                   `json:"imageUrl,omitempty"`
 }
 
@@ -99,7 +117,7 @@ func (s *Service) Create(ctx context.Context, tx repository.AdminMutationExecuto
 	if len(key) < 8 || len(key) > 255 || strings.ContainsRune(key, '\x00') {
 		return CreateResult{}, ErrMissingIdempotencyKey
 	}
-	normalized, err := customitem.ValidateRequest(req)
+	normalized, err := validateRequest(req)
 	if err != nil {
 		return CreateResult{}, err
 	}
@@ -148,7 +166,7 @@ func (s *Service) Update(ctx context.Context, tx repository.AdminMutationExecuto
 	if id == uuid.Nil {
 		return MutationResult{}, validationError("food item id is required")
 	}
-	normalized, err := customitem.ValidateRequest(req)
+	normalized, err := validateRequest(req)
 	if err != nil {
 		return MutationResult{}, err
 	}
@@ -199,6 +217,44 @@ func requestHash(req Request) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
+// validateRequest normalizes the shared metric food fields and canonical allergen keys.
+// Implements DESIGN-009 ItemCurator global catalog import contract.
+func validateRequest(req Request) (Request, error) {
+	base := customitem.Request{
+		Name: req.Name, PhysicalState: req.PhysicalState, PrepTimeMinutes: req.PrepTimeMinutes,
+		AverageUnitWeightGrams: req.AverageUnitWeightGrams, AverageServingVolumeMilliliters: req.AverageServingVolumeMilliliters,
+		DensityGramsPerMilliliter: req.DensityGramsPerMilliliter, DensitySourceProvider: req.DensitySourceProvider,
+		DensitySourceFoodID: req.DensitySourceFoodID, DensitySourceKind: req.DensitySourceKind, MacrosPer100: req.MacrosPer100,
+		Micros: req.Micros, FoodCategoryIDs: req.FoodCategoryIDs, CulinaryRoleIDs: req.CulinaryRoleIDs, ImageURL: req.ImageURL,
+	}
+	normalized, err := customitem.ValidateRequest(base)
+	if err != nil {
+		return Request{}, err
+	}
+	keys := slices.Clone(req.AllergenKeys)
+	if keys == nil {
+		keys = []string{}
+	}
+	for index, key := range keys {
+		keys[index] = strings.TrimSpace(key)
+		if keys[index] == "" || len(keys[index]) > 120 || strings.ToLower(keys[index]) != keys[index] || strings.ContainsRune(keys[index], '\x00') {
+			return Request{}, validationError("allergen key is invalid")
+		}
+	}
+	slices.Sort(keys)
+	if len(slices.Compact(keys)) != len(keys) || len(keys) > 100 {
+		return Request{}, validationError("allergen keys are invalid")
+	}
+	return Request{
+		Name: normalized.Name, PhysicalState: normalized.PhysicalState, PrepTimeMinutes: normalized.PrepTimeMinutes,
+		AverageUnitWeightGrams: normalized.AverageUnitWeightGrams, AverageServingVolumeMilliliters: normalized.AverageServingVolumeMilliliters,
+		DensityGramsPerMilliliter: normalized.DensityGramsPerMilliliter, DensitySourceProvider: normalized.DensitySourceProvider,
+		DensitySourceFoodID: normalized.DensitySourceFoodID, DensitySourceKind: normalized.DensitySourceKind, MacrosPer100: normalized.MacrosPer100,
+		Micros: normalized.Micros, FoodCategoryIDs: normalized.FoodCategoryIDs, CulinaryRoleIDs: normalized.CulinaryRoleIDs,
+		AllergenKeys: keys, ImageURL: normalized.ImageURL,
+	}, nil
+}
+
 // toEntity maps validated administrator input to the ownerless global model.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func toEntity(id uuid.UUID, req Request) repository.FoodItemEntity {
@@ -215,7 +271,7 @@ func toEntity(id uuid.UUID, req Request) repository.FoodItemEntity {
 		DensityGramsPerMilliliter: req.DensityGramsPerMilliliter, DensitySourceProvider: req.DensitySourceProvider,
 		DensitySourceFoodID: req.DensitySourceFoodID, DensitySourceKind: req.DensitySourceKind, MacrosPer100: req.MacrosPer100,
 		Micros: req.Micros, FoodCategories: classifications(req.FoodCategoryIDs, repository.ClassificationKindFoodCategory),
-		CulinaryRoles: classifications(req.CulinaryRoleIDs, repository.ClassificationKindCulinaryRole), ImageURL: req.ImageURL,
+		CulinaryRoles: classifications(req.CulinaryRoleIDs, repository.ClassificationKindCulinaryRole), AllergenKeys: req.AllergenKeys, ImageURL: req.ImageURL,
 	}
 }
 
@@ -233,12 +289,17 @@ func fromEntity(entity repository.FoodItemEntity) Item {
 	if micros == nil {
 		micros = repository.MicroValues{}
 	}
+	allergenKeys := slices.Clone(entity.AllergenKeys)
+	if allergenKeys == nil {
+		allergenKeys = []string{}
+	}
 	return Item{
 		ID: entity.ID, Name: entity.Name, PhysicalState: entity.PhysicalState, PrepTimeMinutes: entity.PrepTimeMinutes,
 		AverageUnitWeightGrams: entity.AverageUnitWeightGrams, AverageServingVolumeMilliliters: entity.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: entity.DensityGramsPerMilliliter, DensitySourceProvider: entity.DensitySourceProvider,
 		DensitySourceFoodID: entity.DensitySourceFoodID, DensitySourceKind: entity.DensitySourceKind, MacrosPer100: entity.MacrosPer100,
-		Micros: micros, FoodCategories: classifications(entity.FoodCategories), CulinaryRoles: classifications(entity.CulinaryRoles), ImageURL: entity.ImageURL,
+		Micros: micros, FoodCategories: classifications(entity.FoodCategories), CulinaryRoles: classifications(entity.CulinaryRoles),
+		AllergenKeys: allergenKeys, ImageURL: entity.ImageURL,
 	}
 }
 

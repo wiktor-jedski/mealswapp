@@ -1,0 +1,38 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR019-STEP-01",
+    "P08-SWR019-STEP-02",
+    "P08-SWR019-STEP-03",
+    "P08-SWR019-STEP-04",
+    "P08-SWR057-ACCEPT-03",
+    "P08-SWR057-ACCEPT-05"
+  ],
+  "kind": "classification",
+  "entityId": "da3f6cc4-ca6d-4970-b581-a0c0e65e5d33",
+  "name": "Task 283 filter real-stack-desktop-chromium renamed",
+  "requestIds": [
+    "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
+    "3d1dc3a0-cd65-4574-ba93-068caca58390",
+    "05258f78-abfe-4cee-879f-1064dc7e3f03",
+    "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
+    "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
+    "285ba22d-f0e7-4d22-b3d5-da35999c3c19"
+  ],
+  "expected": {
+    "active": true,
+    "kind": "food_category",
+    "auditActions": {
+      "classification.create": 1,
+      "classification.update": 1
+    },
+    "parentId": null,
+    "generationBefore": "6",
+    "generationAfter": "7",
+    "generationDelta": 1
+  },
+  "generationSnapshots": {
+    "generationBefore": "4f5b70b0-0e67-4c83-9d54-235ab6ce6095",
+    "generationAfter": "1c3af530-50dd-4d9e-adc5-c0de5d9e26ca"
+  }
+}

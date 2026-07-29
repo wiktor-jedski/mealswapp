@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/auth"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/catalogexport"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/compliance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
@@ -102,6 +103,7 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	)
 	adminAudit := repository.NewPostgresAdminImportAuditRepository(pg)
 	manualItems := itemcurator.NewService(repository.NewPostgresManualFoodItemRepository(pg))
+	globalCatalogExport := catalogexport.NewService(repository.NewPostgresGlobalCatalogExportRepository(pg))
 	curatedImports := dataimporter.NewService(adminAudit).WithTelemetry(adminExternalTelemetry)
 	adminUserService := useradmin.NewService(repository.NewPostgresAdminUserRepository(pg), adminAudit, encryption, digests)
 	adminUserController := httpapi.NewUserAdminController(adminUserService)
@@ -113,12 +115,18 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		providers = *providerOverride
 	} else {
 		if apiKey, keyErr := externaldata.LoadUSDAAPIKey(); keyErr == nil {
-			providers.USDA, err = externaldata.NewUSDAClient(externaldata.USDAConfig{APIKey: apiKey, Logs: adminExternalTelemetry})
+			providers.USDA, err = externaldata.NewUSDAClient(externaldata.USDAConfig{
+				APIKey: apiKey, Endpoint: cfg.ExternalData.USDAEndpoint,
+				Deadline: cfg.ExternalData.Deadline, Logs: adminExternalTelemetry,
+			})
 			if err != nil {
 				return nil, err
 			}
 		}
-		providers.OpenFoodFacts, err = externaldata.NewOpenFoodFactsClient(externaldata.OpenFoodFactsConfig{CallerID: "Mealswapp/0.1 (https://mealsw.app)", Logs: adminExternalTelemetry})
+		providers.OpenFoodFacts, err = externaldata.NewOpenFoodFactsClient(externaldata.OpenFoodFactsConfig{
+			CallerID: "Mealswapp/0.1 (https://mealsw.app)", Endpoint: cfg.ExternalData.OpenFoodFactsEndpoint,
+			Deadline: cfg.ExternalData.Deadline, Logs: adminExternalTelemetry,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -188,6 +196,7 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		).WithBillingRedirectOrigin(cfg.FrontendOrigin).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
 		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
 		httpapi.NewAdminController(adminAudit, append(classificationController.AdminRoutes(), adminUserController.AdminRoutes()...)...).WithTelemetry(adminExternalTelemetry),
+		httpapi.NewGlobalCatalogExportAdminController(globalCatalogExport),
 		httpapi.NewManualItemAdminController(adminAudit, manualItems, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),
 		httpapi.NewCuratedImportAdminController(adminAudit, curatedImports, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),
 	}

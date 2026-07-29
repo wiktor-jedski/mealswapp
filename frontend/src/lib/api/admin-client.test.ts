@@ -13,7 +13,7 @@ const classId = "00000000-0000-4000-8000-000000000002";
 const parentClassId = "00000000-0000-4000-8000-000000000005";
 const userId = "00000000-0000-4000-8000-000000000003";
 const requestId = "00000000-0000-4000-8000-000000000004";
-const request: AdminItemRequest = { name: "Rice", physicalState: "solid", macrosPer100: { protein: 2, carbohydrates: 28, fat: 0 }, micros: {}, foodCategoryIds: [], culinaryRoleIds: [] };
+const request: AdminItemRequest = { name: "Rice", physicalState: "solid", macrosPer100: { protein: 2, carbohydrates: 28, fat: 0 }, micros: {}, foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [] };
 const item = { ...request, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] };
 
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -66,6 +66,35 @@ test("strictly bounds and validates nested item, classification, and user projec
 	for (const operation of [() => getAdminItem(itemId), () => getAdminItem(itemId), () => getAdminItem(itemId), () => listAdminClassifications("food_category"), () => lookupAdminUsers({ userId })]) {
 		await expect(operation()).rejects.toMatchObject({ appError: { code: "malformed_admin_response" } });
 	}
+});
+
+test("accepts omitted optional item fields and rejects zero or empty placeholders", async () => {
+	const queued = [
+		response(200, envelope(item)),
+		response(200, envelope({ ...item, averageUnitWeightGrams: 0 })),
+		response(200, envelope({ ...item, imageUrl: "" }))
+	];
+	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as typeof fetch;
+
+	await expect(getAdminItem(itemId)).resolves.toEqual(item);
+	await expect(getAdminItem(itemId)).rejects.toMatchObject({ appError: { code: "malformed_admin_response" } });
+	await expect(getAdminItem(itemId)).rejects.toMatchObject({ appError: { code: "malformed_admin_response" } });
+});
+
+test("decodes every canonical development-seed classification UUID", async () => {
+	const foodCategories = [
+		{ id: "20000000-0000-4000-8000-000000000001", name: "Fruit", kind: "food_category" },
+		{ id: "20000000-0000-4000-8000-000000000002", name: "Protein", kind: "food_category" }
+	];
+	const culinaryRoles = [
+		{ id: "20000000-0000-4000-8000-000000000101", name: "Quick", kind: "culinary_role" },
+		{ id: "20000000-0000-4000-8000-000000000102", name: "Breakfast", kind: "culinary_role" }
+	];
+	const queued = [response(200, envelope({ classifications: foodCategories })), response(200, envelope({ classifications: culinaryRoles }))];
+	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as typeof fetch;
+
+	await expect(listAdminClassifications("food_category")).resolves.toEqual(foodCategories);
+	await expect(listAdminClassifications("culinary_role")).resolves.toEqual(culinaryRoles);
 });
 
 test("accepts only calendar-valid RFC3339 admin user dates", async () => {

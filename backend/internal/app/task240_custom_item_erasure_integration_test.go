@@ -64,6 +64,10 @@ func (r *task240FailureRecordRepository) RecordDeletionFailure(ctx context.Conte
 // DESIGN-008 AccountDeleter, and SW-REQ-043/SW-REQ-072/SW-REQ-073 through
 // real HTTP, PostgreSQL, Redis, export, authentication, and deletion collaborators.
 func TestTask240CustomItemErasureIntegration(t *testing.T) {
+	t.Run("Task284RealRetryFailureInjectionAndPartialCompletion", runTask240CustomItemErasureIntegration)
+}
+
+func runTask240CustomItemErasureIntegration(t *testing.T) {
 	db := openDailyDietAPIIntegrationDB(t)
 	redisClient := openTask206Redis(t)
 	ctx := context.Background()
@@ -87,6 +91,25 @@ func TestTask240CustomItemErasureIntegration(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("create curated item: %v", err)
+	}
+	dietID := uuid.New()
+	if _, err := db.Exec(ctx, "INSERT INTO saved_diets (id,user_id,name) VALUES ($1,$2,'Task 284 retry diet')", dietID, ownerID); err != nil {
+		t.Fatalf("seed retry saved diet: %v", err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO saved_diet_meal_entries (saved_diet_id,food_item_id,quantity,unit,position) VALUES ($1,$2,100,'g',0)", dietID, globalID); err != nil {
+		t.Fatalf("seed retry saved diet entry: %v", err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO search_history (user_id,query,mode,filters_hash) VALUES ($1,'Task 284 retry history','catalog','task284')", ownerID); err != nil {
+		t.Fatalf("seed retry history: %v", err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO oauth_identities (user_id,provider,provider_user_id,email) VALUES ($1,'apple',$2,$3)", ownerID, "task284-"+ownerID.String(), "task284-"+ownerID.String()+"@example.test"); err != nil {
+		t.Fatalf("seed retry OAuth identity: %v", err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO password_reset_tokens (token_hash,user_id,expires_at) VALUES ($1,$2,now()+interval '1 day')", "task284-reset-"+ownerID.String(), ownerID); err != nil {
+		t.Fatalf("seed retry password reset token: %v", err)
+	}
+	if _, err := db.Exec(ctx, "INSERT INTO usage_windows (user_id,feature,started_at,search_count) VALUES ($1,'task284-erasure',date_trunc('hour',now()),1)", ownerID); err != nil {
+		t.Fatalf("seed retry usage window: %v", err)
 	}
 	otherBefore := task240RowJSON(t, db, "custom_food_items", otherItemID)
 	globalBefore := task240RowJSON(t, db, "food_items", globalID)
@@ -163,6 +186,22 @@ func TestTask240CustomItemErasureIntegration(t *testing.T) {
 	}
 	if got := task240CountCustomItems(t, db, ownerID); got != 0 {
 		t.Fatalf("transactional account cleanup left %d owner custom items", got)
+	}
+	for table, column := range map[string]string{
+		"users": "id", "oauth_identities": "user_id", "user_profiles": "user_id",
+		"user_sessions": "user_id", "password_reset_tokens": "user_id",
+		"saved_items": "user_id", "saved_diets": "user_id", "search_history": "user_id",
+		"consent_records": "user_id", "entitlements": "user_id", "usage_windows": "user_id",
+		"mutation_idempotency_keys": "user_id", "custom_food_items": "owner_id",
+	} {
+		var count int
+		if err := db.QueryRow(ctx, "SELECT count(*) FROM "+table+" WHERE "+column+"=$1", ownerID).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("partial completion retained %s rows=%d err=%v", table, count, err)
+		}
+	}
+	var dietEntries int
+	if err := db.QueryRow(ctx, "SELECT count(*) FROM saved_diet_meal_entries WHERE saved_diet_id=$1", dietID).Scan(&dietEntries); err != nil || dietEntries != 0 {
+		t.Fatalf("partial completion retained saved diet entries=%d err=%v", dietEntries, err)
 	}
 	for _, key := range ownerCacheKeys {
 		if exists := redisClient.Exists(ctx, key).Val(); exists != 1 {

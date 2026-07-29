@@ -174,7 +174,7 @@ function decodeItem(responsePromise: Promise<Response> | Response, expectedStatu
 	return Promise.resolve(responsePromise).then(async (response) => {
 		const value = decodeData(await json(response, expectedStatus), response.status);
 		const optional = ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter", "densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "foodCategoryIds", "culinaryRoleIds", "imageUrl"];
-		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles"], optional) || !uuid(value.id) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100) throw malformed(response.status);
+		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], optional) || !uuid(value.id) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status);
 		if (!optionalPositive(value.averageUnitWeightGrams) || !optionalPositive(value.averageServingVolumeMilliliters) || !optionalPositive(value.densityGramsPerMilliliter) || !optionalBoundedString(value.densitySourceProvider, 200) || !optionalBoundedString(value.densitySourceFoodId, 200) || (value.densitySourceKind !== undefined && !["imported", "manual", "estimated"].includes(String(value.densitySourceKind))) || !optionalBoundedString(value.imageUrl, 2048) || (value.imageUrl !== undefined && !safeUriReference(value.imageUrl))) throw malformed(response.status);
 		if (!optionalUuidCollection(value.foodCategoryIds) || !optionalUuidCollection(value.culinaryRoleIds)) throw malformed(response.status);
 		if (value.physicalState === "solid" && (value.macrosPer100.protein as number) + (value.macrosPer100.carbohydrates as number) + (value.macrosPer100.fat as number) > 100) throw malformed(response.status);
@@ -276,6 +276,10 @@ function micronutrients(value: unknown): value is Record<string, number> {
 
 function optionalUuidCollection(value: unknown): boolean {
 	return value === undefined || Array.isArray(value) && value.length <= 100 && new Set(value).size === value.length && value.every(uuid);
+}
+
+function allergenKeys(value: unknown): value is string[] {
+	return Array.isArray(value) && value.length <= 100 && new Set(value).size === value.length && value.every((key) => typeof key === "string" && /^[a-z][a-z0-9_]{0,119}$/.test(key));
 }
 
 function optionalPositive(value: unknown): boolean { return value === undefined || finiteBetween(value, Number.MIN_VALUE, MAX_NUTRITION_VALUE); }

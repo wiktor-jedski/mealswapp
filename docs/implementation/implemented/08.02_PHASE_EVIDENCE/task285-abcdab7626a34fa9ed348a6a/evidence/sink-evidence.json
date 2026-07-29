@@ -1,0 +1,7 @@
+{
+  "code": "DEPLOYMENT-SINK-BLOCKED",
+  "observations": [],
+  "schema": "mealswapp.task285-sink-evidence.v1",
+  "sink": "gcp_cloud_logging",
+  "status": "BLOCKED"
+}

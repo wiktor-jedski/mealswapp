@@ -356,6 +356,9 @@ func (r *PostgresAdminImportAuditRepository) FindCuratedImport(ctx context.Conte
 // Implements DESIGN-009 AdminController.
 func (r *PostgresAdminImportAuditRepository) PersistAuditEntry(ctx context.Context, entry AdminAuditEntry) (uuid.UUID, error) {
 	var err error
+	if entry.ActorKind == "" {
+		entry.ActorKind = AdminAuditActorAdministrator
+	}
 	entry.Before, err = sanitizeAdminAuditSnapshot(entry.EntityType, entry.Action, entry.Before)
 	if err != nil {
 		return uuid.Nil, err
@@ -368,7 +371,7 @@ func (r *PostgresAdminImportAuditRepository) PersistAuditEntry(ctx context.Conte
 		return uuid.Nil, err
 	}
 	var id uuid.UUID
-	err = r.db.QueryRow(ctx, adminAuditInsertSQL, entry.AdminUserID, entry.Action, entry.EntityType, entry.EntityID, nullableJSONPayload(entry.Before), nullableJSONPayload(entry.After), entry.RequestID).Scan(&id)
+	err = r.db.QueryRow(ctx, adminAuditInsertSQL, entry.ActorKind, entry.AdminUserID, entry.Action, entry.EntityType, entry.EntityID, nullableJSONPayload(entry.Before), nullableJSONPayload(entry.After), entry.RequestID).Scan(&id)
 	if err != nil {
 		return uuid.Nil, mapPostgresError(err, "persist admin audit")
 	}
@@ -478,7 +481,7 @@ func scanCuratedImport(row pgx.Row) (CuratedImport, error) {
 // Implements DESIGN-009 AdminController.
 func scanAdminAuditEntry(row pgx.Row) (AdminAuditEntry, error) {
 	var entry AdminAuditEntry
-	if err := row.Scan(&entry.ID, &entry.AdminUserID, &entry.Action, &entry.EntityType, &entry.EntityID, &entry.Before, &entry.After, &entry.RequestID, &entry.CreatedAt); err != nil {
+	if err := row.Scan(&entry.ID, &entry.ActorKind, &entry.AdminUserID, &entry.Action, &entry.EntityType, &entry.EntityID, &entry.Before, &entry.After, &entry.RequestID, &entry.CreatedAt); err != nil {
 		return AdminAuditEntry{}, mapPostgresError(err, "scan admin audit")
 	}
 	return entry, nil
@@ -535,8 +538,17 @@ func validateCuratedImport(item CuratedImport) error {
 // validateAdminAuditEntry checks required administrative audit fields.
 // Implements DESIGN-009 AdminController.
 func validateAdminAuditEntry(entry AdminAuditEntry) error {
-	if entry.AdminUserID == uuid.Nil {
-		return validationError("admin user id is required")
+	switch entry.ActorKind {
+	case AdminAuditActorAdministrator:
+		if entry.AdminUserID == nil || *entry.AdminUserID == uuid.Nil {
+			return validationError("administrator audit actor is required")
+		}
+	case AdminAuditActorOperator:
+		if entry.AdminUserID != nil {
+			return validationError("operator audit must not identify an administrator actor")
+		}
+	default:
+		return validationError("audit actor kind is invalid")
 	}
 	if strings.TrimSpace(entry.Action) == "" || strings.TrimSpace(entry.EntityType) == "" {
 		return validationError("audit action and entity type are required")

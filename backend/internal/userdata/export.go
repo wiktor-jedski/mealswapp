@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
@@ -69,9 +70,30 @@ type ExportBundle struct {
 	User        ExportUser             `json:"user"`
 	Consent     []ExportConsent        `json:"consent"`
 	SavedItems  []repository.SavedItem `json:"savedItems"`
-	SavedDiets  []repository.SavedDiet `json:"savedDiets"`
+	SavedDiets  []ExportSavedDiet      `json:"savedDiets"`
 	History     []SearchHistoryEntry   `json:"history"`
 	CustomItems []customitem.Item      `json:"customItems"`
+}
+
+// ExportSavedDiet is an API-safe saved-diet projection without owner identity.
+// Implements DESIGN-008 DataExporter.
+type ExportSavedDiet struct {
+	ID        uuid.UUID              `json:"id"`
+	Name      string                 `json:"name"`
+	Entries   []ExportSavedDietEntry `json:"entries"`
+	CreatedAt time.Time              `json:"createdAt"`
+	UpdatedAt time.Time              `json:"updatedAt"`
+}
+
+// ExportSavedDietEntry is an API-safe saved-diet entry projection.
+// Implements DESIGN-008 DataExporter.
+type ExportSavedDietEntry struct {
+	ID             uuid.UUID                 `json:"id"`
+	FoodObjectID   uuid.UUID                 `json:"foodObjectId"`
+	FoodObjectType repository.FoodObjectType `json:"foodObjectType"`
+	Quantity       float64                   `json:"quantity"`
+	Unit           string                    `json:"unit"`
+	Position       int                       `json:"position"`
 }
 
 // ExportUser contains decrypted user/profile fields for export.
@@ -163,11 +185,29 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 	for _, record := range consentRecords {
 		consent = append(consent, ExportConsent{PrivacyPolicyVersion: record.PrivacyPolicyVersion, TermsVersion: record.TermsVersion})
 	}
-	diets := []repository.SavedDiet{}
+	diets := []ExportSavedDiet{}
 	if s.diets != nil {
-		diets, err = s.diets.List(ctx, userID)
+		savedDiets, listErr := s.diets.List(ctx, userID)
+		err = listErr
 		if err != nil {
 			return ExportBundle{}, err
+		}
+		for _, diet := range savedDiets {
+			entries := make([]ExportSavedDietEntry, 0, len(diet.Entries))
+			for _, entry := range diet.Entries {
+				objectID, objectType := entry.FoodObjectID, entry.FoodObjectType
+				if objectID == uuid.Nil {
+					objectID, objectType = entry.MealID, repository.FoodObjectTypeMeal
+				}
+				entries = append(entries, ExportSavedDietEntry{
+					ID: entry.ID, FoodObjectID: objectID, FoodObjectType: objectType,
+					Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position,
+				})
+			}
+			diets = append(diets, ExportSavedDiet{
+				ID: diet.ID, Name: diet.Name, Entries: entries,
+				CreatedAt: diet.CreatedAt, UpdatedAt: diet.UpdatedAt,
+			})
 		}
 	}
 	customItems := []customitem.Item{}
@@ -216,11 +256,7 @@ func encodeCSV(bundle ExportBundle) ([]byte, error) {
 	for _, diet := range bundle.SavedDiets {
 		rows = append(rows, []string{"savedDiets", diet.Name, diet.ID.String()})
 		for _, entry := range diet.Entries {
-			objectID, objectType := entry.FoodObjectID, entry.FoodObjectType
-			if objectID == uuid.Nil {
-				objectID, objectType = entry.MealID, repository.FoodObjectTypeMeal
-			}
-			rows = append(rows, []string{"savedDietEntries", string(objectType), objectID.String()})
+			rows = append(rows, []string{"savedDietEntries", string(entry.FoodObjectType), entry.FoodObjectID.String()})
 		}
 	}
 	for _, entry := range bundle.History {

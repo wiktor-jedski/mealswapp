@@ -1,0 +1,19 @@
+{
+  "run_id": "b59a299af330a66788a5d5b5",
+  "request_ids": [
+    "97def31b-2a26-4be7-a35b-c576281a8068",
+    "e3d755f2-c40d-4809-a3c6-b42ea7f40558",
+    "e68c4ea4-8eac-4982-a08e-def53b18b5f8"
+  ],
+  "events": [
+    "database_created",
+    "redis_ready",
+    "migrations_applied",
+    "api_ready",
+    "prebootstrap_passed",
+    "administrator_bootstrapped",
+    "postbootstrap_failed",
+    "task281_results_finalized"
+  ],
+  "result": "passed"
+}

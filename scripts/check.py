@@ -7,6 +7,8 @@ import subprocess
 import sys
 import os
 import argparse
+import errno
+import select
 import threading
 import time
 import tempfile
@@ -21,6 +23,39 @@ BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 OPEN_POINTS = ROOT / "docs" / "implementation" / "04_OPEN.md"
 PHASE08_COVERAGE_PROFILE = BACKEND / "phase08-coverage.out"
+_OUTPUT_LOCK = threading.Lock()
+
+
+def _write_text(stream: object, text: str, flush: bool = False) -> None:
+	"""Write complete synchronized gate output even when the parent descriptor is non-blocking."""
+	if not text:
+		return
+	with _OUTPUT_LOCK:
+		try:
+			fd = stream.fileno()  # type: ignore[attr-defined]
+		except (AttributeError, OSError):
+			stream.write(text)  # type: ignore[attr-defined]
+			if flush:
+				stream.flush()  # type: ignore[attr-defined]
+			return
+		encoding = getattr(stream, "encoding", None)
+		data = text.encode(encoding if isinstance(encoding, str) else "utf-8", errors="replace")
+		offset = 0
+		while offset < len(data):
+			try:
+				offset += os.write(fd, data[offset:])
+			except BlockingIOError as error:
+				if error.errno not in {errno.EAGAIN, errno.EWOULDBLOCK}:
+					raise
+				select.select([], [fd], [], 1)
+
+
+def safe_print(*values: object, sep: str = " ", end: str = "\n", file: object | None = None, flush: bool = False) -> None:
+	"""Serialize parent-process output without relying on TextIOWrapper's non-blocking writer."""
+	_write_text(file or sys.stdout, sep.join(str(value) for value in values) + end, flush)
+
+
+print = safe_print
 
 
 @dataclass(frozen=True)
@@ -514,7 +549,10 @@ def validate_phase07_go_coverage(_coverage_output: str) -> None:
 				if match and match.group(4) != "100.0%":
 					path, declaration_line, function, coverage = match.groups()
 					marker = f"`{path}:{declaration_line} {function}` | `{coverage}`"
-					if marker not in open_points:
+					documented_row = re.compile(
+						rf"`{re.escape(path)}:{re.escape(declaration_line)} {re.escape(function)}`\s*\|\s*`{re.escape(coverage)}`"
+					)
+					if documented_row.search(open_points) is None:
 						below_functions.append(marker)
 	if below_functions:
 		raise SystemExit(
@@ -626,6 +664,27 @@ def validate_local_stack_database_isolation_tests() -> None:
 	run(["python3", "-m", "unittest", "scripts/test_verify_local_stack.py"])
 
 
+def validate_real_stack_e2e_harness_tests() -> None:
+	# Implements DESIGN-005 RepositoryInterfaces isolated real-stack E2E lifecycle gate.
+	run(["python3", "-m", "unittest", "scripts/test_run_real_stack_e2e.py"])
+
+
+def validate_phase08_acceptance_contracts() -> None:
+	# Implements DESIGN-014 MetricsCollector and DESIGN-009 AdminController acceptance reporting gate.
+	run([
+		"python3", "-m", "unittest",
+		"scripts/test_phase08_acceptance.py",
+		"scripts/test_task281_acceptance.py",
+		"scripts/test_task282_acceptance.py",
+		"scripts/test_run_task283_acceptance.py",
+		"scripts/test_run_task284_acceptance.py",
+		"scripts/test_run_task285_acceptance.py",
+		"scripts/test_phase08_uat.py",
+	])
+	run(["python3", "scripts/phase08_acceptance.py", "validate"])
+	run(["python3", "scripts/phase08_uat.py", "validate"])
+
+
 def validate_stripe_webhook_tests() -> None:
 	# Implements DESIGN-007 SubscriptionController Stripe webhook aggregate gate.
 	run([
@@ -697,7 +756,14 @@ TRACEABLE_FILES = {
 	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py", "scripts/verify-phase02-uat.py", "scripts/verify-phase03-uat.py",
 	"scripts/test_verify_local_stack.py",
+	"scripts/run-real-stack-e2e.py", "scripts/test_run_real_stack_e2e.py",
+	"scripts/phase08_acceptance.py", "scripts/test_phase08_acceptance.py",
+	"scripts/phase08_uat.py", "scripts/test_phase08_uat.py",
+	"scripts/run-task281-acceptance.py", "scripts/test_task281_acceptance.py",
+	"scripts/run-task282-acceptance.py", "scripts/task282_provider_fixture.py", "scripts/test_task282_acceptance.py",
 	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
+	"scripts/global_catalog_session.py", "scripts/import-global-catalog.py", "scripts/test_import_global_catalog.py",
+	"scripts/export-global-catalog.py", "scripts/test_export_global_catalog.py",
 	"scripts/test_check_coverage.py",
 	"scripts/dev-processes.sh", "scripts/start-dev.sh", "scripts/test_start_dev.py",
 	"scripts/verify-clp-worker-image.sh",
@@ -789,6 +855,11 @@ def validate_generator_tests() -> None:
 	run(["python3", "-m", "unittest", "scripts/test_generate_api_types.py"])
 
 
+def validate_global_catalog_operator_tests() -> None:
+	# Implements DESIGN-009 AdminController and ItemCurator operator regression gate.
+	run(["python3", "-m", "unittest", "scripts/test_import_global_catalog.py", "scripts/test_export_global_catalog.py"])
+
+
 def run_static_lane() -> tuple[int, int]:
 	# Implements DESIGN-014 MetricsCollector independent static quality-gate lane.
 	results = execute_steps([
@@ -802,7 +873,10 @@ def run_static_lane() -> tuple[int, int]:
 		CheckStep("coverage contract tests", validate_coverage_contract_tests),
 		CheckStep("development process tests", validate_start_dev_process_tests),
 		CheckStep("local-stack isolation tests", validate_local_stack_database_isolation_tests),
+		CheckStep("real-stack E2E harness tests", validate_real_stack_e2e_harness_tests),
+		CheckStep("Phase 08 acceptance contracts", validate_phase08_acceptance_contracts),
 		CheckStep("API generator tests", validate_generator_tests),
+		CheckStep("global catalog operator tests", validate_global_catalog_operator_tests),
 		CheckStep("Go formatting", validate_go_format),
 		CheckStep("Go vet", lambda: run(["go", "vet", "./..."], BACKEND)),
 		CheckStep("Go vulnerability scan", lambda: run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)),

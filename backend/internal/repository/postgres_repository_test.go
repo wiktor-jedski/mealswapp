@@ -2366,7 +2366,8 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 	}
 
 	auditID, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{
-		AdminUserID: adminID,
+		ActorKind:   AdminAuditActorAdministrator,
+		AdminUserID: &adminID,
 		Action:      "update_food",
 		EntityType:  "food_item",
 		EntityID:    &foodID,
@@ -2384,12 +2385,13 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAuditForEntity() error = %v", err)
 	}
-	if len(auditEntries) != 1 || auditEntries[0].RequestID != "req-1" {
+	if len(auditEntries) != 1 || auditEntries[0].RequestID != "req-1" || auditEntries[0].ActorKind != AdminAuditActorAdministrator || auditEntries[0].AdminUserID == nil || *auditEntries[0].AdminUserID != adminID {
 		t.Fatalf("audit entries = %#v", auditEntries)
 	}
 
 	rollbackName := "Rollback Pear"
-	err = adminRepo.WithAudit(ctx, AdminAuditEntry{AdminUserID: uuid.New(), Action: "", EntityType: "food_item"}, func(tx sqlExecutor) error {
+	rollbackAdminID := uuid.New()
+	err = adminRepo.WithAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &rollbackAdminID, Action: "", EntityType: "food_item"}, func(tx sqlExecutor) error {
 		_, insertErr := tx.Exec(ctx, testFoodNameFixtureCreateSQL, rollbackName)
 		return insertErr
 	})
@@ -2406,7 +2408,7 @@ func TestPostgresComplianceAndAdminRepositories(t *testing.T) {
 
 	transactionalRollbackName := "Transactional Audit Rollback Pear"
 	err = adminRepo.WithMutationAudit(ctx, AdminAuditEntry{
-		AdminUserID: adminID, Action: "", EntityType: "food_item", RequestID: "task-247-rollback", CreatedAt: time.Now(),
+		ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "", EntityType: "food_item", RequestID: "task-247-rollback", CreatedAt: time.Now(),
 	}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		_, mutationErr := tx.Exec(ctx, testFoodNameFixtureCreateSQL, transactionalRollbackName)
 		return AdminAuditChanges{After: []byte(`{"status":"imported"}`)}, mutationErr
@@ -2601,7 +2603,7 @@ func TestPostgresComplianceAndAdminRepositoryValidationAndErrors(t *testing.T) {
 	deletionValues := []any{requestID, userID, "pending", now, (*time.Time)(nil), "", "", 0, (*time.Time)(nil), (*uuid.UUID)(nil), (*time.Time)(nil)}
 	deletionAuditValues := []any{uuid.New(), requestID, "pending", "processing", "note", now}
 	importValues := []any{uuid.New(), "usda", "fdc-1", &entityID, "conflict", "duplicate", []byte(`{"x":1}`), now, now}
-	auditValues := []any{uuid.New(), adminID, "update", "food_item", &entityID, []byte(`{"before":true}`), []byte(`{"after":true}`), "req-1", now}
+	auditValues := []any{uuid.New(), AdminAuditActorAdministrator, &adminID, "update", "food_item", &entityID, []byte(`{"before":true}`), []byte(`{"after":true}`), "req-1", now}
 
 	complianceRepo := NewPostgresComplianceRepository(&fakeSQLExecutor{})
 	if _, err := complianceRepo.RecordConsent(ctx, ConsentRecord{}); !IsKind(err, ErrorKindValidation) {
@@ -2713,27 +2715,27 @@ func TestPostgresComplianceAndAdminRepositoryValidationAndErrors(t *testing.T) {
 	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("PersistAuditEntry() nil admin error = %v, want validation", err)
 	}
-	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{AdminUserID: adminID}); !IsKind(err, ErrorKindValidation) {
+	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("PersistAuditEntry() missing fields error = %v, want validation", err)
 	}
-	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food", Before: []byte(`{`)}); !IsKind(err, ErrorKindValidation) {
+	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food", Before: []byte(`{`)}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("PersistAuditEntry() bad before error = %v, want validation", err)
 	}
-	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food", After: []byte(`{`)}); !IsKind(err, ErrorKindValidation) {
+	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food", After: []byte(`{`)}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("PersistAuditEntry() bad after error = %v, want validation", err)
 	}
 	adminRepo = NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{row: fakeRow{err: scanErr}})
-	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food"}); !IsKind(err, ErrorKindConnection) {
+	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food"}); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("PersistAuditEntry() scan error = %v, want connection", err)
 	}
 	adminRepo = NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}})
-	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food", Before: []byte(`{}`), After: []byte(`{}`)}); err != nil {
+	if _, err := adminRepo.PersistAuditEntry(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food", Before: []byte(`{}`), After: []byte(`{}`)}); err != nil {
 		t.Fatalf("PersistAuditEntry() fake success error = %v", err)
 	}
-	if err := adminRepo.WithAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food"}, nil); !IsKind(err, ErrorKindValidation) {
+	if err := adminRepo.WithAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food"}, nil); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("WithAudit() nil mutation error = %v, want validation", err)
 	}
-	if err := adminRepo.WithAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food"}, func(sqlExecutor) error { return queryErr }); !errors.Is(err, queryErr) {
+	if err := adminRepo.WithAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food"}, func(sqlExecutor) error { return queryErr }); !errors.Is(err, queryErr) {
 		t.Fatalf("WithAudit() mutation error = %v, want raw query error", err)
 	}
 	if err := adminRepo.WithMutationAudit(ctx, AdminAuditEntry{}, nil); !IsKind(err, ErrorKindValidation) {
@@ -2745,7 +2747,7 @@ func TestPostgresComplianceAndAdminRepositoryValidationAndErrors(t *testing.T) {
 		t.Fatalf("WithMutationAudit() prefilled changes error = %v, want validation", err)
 	}
 	adminRepo = NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{})
-	if err := adminRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "x", EntityType: "food", RequestID: "req"}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
+	if err := adminRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "x", EntityType: "food", RequestID: "req"}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
 		return AdminAuditChanges{}, queryErr
 	}); !errors.Is(err, queryErr) {
 		t.Fatalf("WithMutationAudit() mutation error = %v, want raw query error", err)
@@ -3489,6 +3491,8 @@ type fakeSQLExecutor struct {
 	execErrs   []error
 	execTags   []pgconn.CommandTag
 	execN      int
+	execCalls  int
+	execSQL    []string
 	rowN       int
 	beginErr   error
 	tx         *fakeTx
@@ -3504,7 +3508,9 @@ func (e *fakeSQLExecutor) Begin(context.Context) (pgx.Tx, error) {
 	return &fakeTx{}, nil
 }
 
-func (e *fakeSQLExecutor) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+func (e *fakeSQLExecutor) Exec(_ context.Context, query string, _ ...any) (pgconn.CommandTag, error) {
+	e.execCalls++
+	e.execSQL = append(e.execSQL, query)
 	if len(e.execErrs) > 0 {
 		index := e.execN
 		if index >= len(e.execErrs) {
@@ -3614,12 +3620,16 @@ func (r *fakeRows) Conn() *pgx.Conn        { return nil }
 type fakeTx struct {
 	fakeSQLExecutor
 	commitErr   error
+	committed   bool
 	rollbackErr error
 	rolledBack  bool
 }
 
 func (t *fakeTx) Begin(context.Context) (pgx.Tx, error) { return t, nil }
-func (t *fakeTx) Commit(context.Context) error          { return t.commitErr }
+func (t *fakeTx) Commit(context.Context) error {
+	t.committed = t.commitErr == nil
+	return t.commitErr
+}
 func (t *fakeTx) Rollback(context.Context) error {
 	t.rolledBack = true
 	return t.rollbackErr

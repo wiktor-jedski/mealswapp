@@ -1,0 +1,48 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 replay real-stack-desktop-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-04"
+    ],
+    "entityId": "843488c2-f0e4-436a-9995-070010e41f7c",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "idempotencyCount": 1,
+      "rowCount": 1
+    },
+    "idempotencyKey": "3485af97-0f4c-432a-bd90-82f0bd4e209f",
+    "kind": "item",
+    "name": "Task 283 replay real-stack-desktop-chromium",
+    "requestIds": [
+      "67a0f3e2-d9ae-4e55-9d62-0f052da4431d",
+      "6950dee9-64e1-482b-a49d-4ef8ab41b923"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

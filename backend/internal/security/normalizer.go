@@ -165,7 +165,7 @@ func ValidatePasswordPolicy(value string, minLength int) (NormalizationResult, e
 	return validatePassword(value, minLength)
 }
 
-// normalizeEmail trims and validates an email address without output escaping.
+// normalizeEmail trims, validates, and lower-cases an email for canonical identity lookup.
 // Implements DESIGN-013 InputNormalizer.
 func normalizeEmail(value string) (NormalizationResult, error) {
 	trimmed := strings.TrimSpace(value)
@@ -179,9 +179,10 @@ func normalizeEmail(value string) (NormalizationResult, error) {
 	if err != nil || address.Address != trimmed {
 		return NormalizationResult{}, errors.New("email is invalid")
 	}
-	result := NormalizationResult{Value: trimmed, Changed: trimmed != value}
+	canonical := strings.ToLower(trimmed)
+	result := NormalizationResult{Value: canonical, Changed: canonical != value}
 	if result.Changed {
-		result.Violations = []string{"whitespace_trimmed"}
+		result.Violations = []string{"email_canonicalized"}
 	}
 	return result, nil
 }

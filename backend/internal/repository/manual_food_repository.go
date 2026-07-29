@@ -27,6 +27,26 @@ var manualFoodCreateClaimGetSQL string
 //go:embed sql/manual_food_create_claim_complete.sql
 var manualFoodCreateClaimCompleteSQL string
 
+// Implements DESIGN-009 ItemCurator active allergen validation.
+//
+//go:embed sql/food_allergens_validate.sql
+var foodAllergensValidateSQL string
+
+// Implements DESIGN-009 ItemCurator atomic allergen replacement.
+//
+//go:embed sql/food_allergens_clear.sql
+var foodAllergensClearSQL string
+
+// Implements DESIGN-009 ItemCurator atomic allergen replacement.
+//
+//go:embed sql/food_allergens_replace.sql
+var foodAllergensReplaceSQL string
+
+// Implements DESIGN-009 ItemCurator deterministic allergen hydration.
+//
+//go:embed sql/food_allergens_list.sql
+var foodAllergensListSQL string
+
 // PostgresManualFoodItemRepository persists administrator-authored global food items.
 // Implements DESIGN-009 ItemCurator global/private separation.
 type PostgresManualFoodItemRepository struct {
@@ -108,6 +128,9 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return err
 	}
+	if err := validateManualFoodAllergens(ctx, tx, item.AllergenKeys); err != nil {
+		return err
+	}
 	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL))
 	if err != nil {
 		return mapPostgresError(err, "update manual food item")
@@ -115,7 +138,10 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if result.RowsAffected() == 0 {
 		return NewError(ErrorKindNotFound, "food item not found", nil)
 	}
-	return replaceFoodClassificationsWithExecutor(ctx, tx, item.ID, item.FoodCategories, item.CulinaryRoles)
+	if err := replaceFoodClassificationsWithExecutor(ctx, tx, item.ID, item.FoodCategories, item.CulinaryRoles); err != nil {
+		return err
+	}
+	return replaceManualFoodAllergens(ctx, tx, item.ID, item.AllergenKeys)
 }
 
 // Delete soft-deletes one active global item inside the audit transaction.
@@ -140,11 +166,17 @@ func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEnti
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return uuid.Nil, err
 	}
+	if err := validateManualFoodAllergens(ctx, tx, item.AllergenKeys); err != nil {
+		return uuid.Nil, err
+	}
 	var id uuid.UUID
 	if err := tx.QueryRow(ctx, foodCreateSQL, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL)).Scan(&id); err != nil {
 		return uuid.Nil, mapPostgresError(err, "create manual food item")
 	}
 	if err := replaceFoodClassificationsWithExecutor(ctx, tx, id, item.FoodCategories, item.CulinaryRoles); err != nil {
+		return uuid.Nil, err
+	}
+	if err := replaceManualFoodAllergens(ctx, tx, id, item.AllergenKeys); err != nil {
 		return uuid.Nil, err
 	}
 	return id, nil
@@ -160,7 +192,57 @@ func getManualFoodByID(ctx context.Context, db sqlExecutor, id uuid.UUID, includ
 	if err := hydrateFoodClassificationsWithExecutor(ctx, db, &item); err != nil {
 		return FoodItemEntity{}, err
 	}
+	if err := hydrateManualFoodAllergens(ctx, db, &item); err != nil {
+		return FoodItemEntity{}, err
+	}
 	return item, nil
+}
+
+// validateManualFoodAllergens verifies that every requested key is active.
+// Implements DESIGN-009 ItemCurator global catalog import contract.
+func validateManualFoodAllergens(ctx context.Context, db sqlExecutor, keys []string) error {
+	var valid bool
+	if err := db.QueryRow(ctx, foodAllergensValidateSQL, keys).Scan(&valid); err != nil {
+		return mapPostgresError(err, "validate manual food allergens")
+	}
+	if !valid {
+		return validationError("allergen key is unknown or inactive")
+	}
+	return nil
+}
+
+// replaceManualFoodAllergens replaces allergen assignments in the audit transaction.
+// Implements DESIGN-009 ItemCurator global catalog import contract.
+func replaceManualFoodAllergens(ctx context.Context, db sqlExecutor, id uuid.UUID, keys []string) error {
+	if _, err := db.Exec(ctx, foodAllergensClearSQL, id); err != nil {
+		return mapPostgresError(err, "clear manual food allergens")
+	}
+	if _, err := db.Exec(ctx, foodAllergensReplaceSQL, id, keys); err != nil {
+		return mapPostgresError(err, "replace manual food allergens")
+	}
+	return nil
+}
+
+// hydrateManualFoodAllergens loads canonical allergen keys in deterministic order.
+// Implements DESIGN-009 ItemCurator global catalog import contract.
+func hydrateManualFoodAllergens(ctx context.Context, db sqlExecutor, item *FoodItemEntity) error {
+	rows, err := db.Query(ctx, foodAllergensListSQL, item.ID)
+	if err != nil {
+		return mapPostgresError(err, "load manual food allergens")
+	}
+	defer rows.Close()
+	item.AllergenKeys = []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return mapPostgresError(err, "scan manual food allergen")
+		}
+		item.AllergenKeys = append(item.AllergenKeys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return mapPostgresError(err, "iterate manual food allergens")
+	}
+	return nil
 }
 
 // manualFoodCreateRecord is the validated internal idempotency row.

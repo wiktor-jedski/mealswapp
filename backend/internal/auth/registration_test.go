@@ -15,12 +15,14 @@ type fakeRegistrationRepository struct {
 	called  bool
 	err     error
 	userID  uuid.UUID
+	user    repository.EncryptedAuthUser
 	privacy string
 	terms   string
 }
 
-func (r *fakeRegistrationRepository) CreateUserWithConsent(_ context.Context, _ repository.EncryptedAuthUser, privacyVersion string, termsVersion string) (uuid.UUID, error) {
+func (r *fakeRegistrationRepository) CreateUserWithConsent(_ context.Context, user repository.EncryptedAuthUser, privacyVersion string, termsVersion string) (uuid.UUID, error) {
 	r.called = true
+	r.user = user
 	r.privacy = privacyVersion
 	r.terms = termsVersion
 	if r.err != nil {

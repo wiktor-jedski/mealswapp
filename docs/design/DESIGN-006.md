@@ -22,7 +22,7 @@
 - `interface PasswordResetToken { tokenHash: string; userId: UUID; expiresAt: time.Time; usedAt?: time.Time }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
-1. Registration validates email format, password policy, and uniqueness through ARCH-005.
+1. Registration, login, password reset, and OAuth account matching/linking use DESIGN-013's single trim/validate/lower-case canonical email before encryption and deterministic lookup.
 2. Generate a unique salt and hash the password with Argon2 from `golang.org/x/crypto/argon2`.
 3. Persist the email-and-password Login Method as unverified, persist `AuthUser.hasVerifiedLoginMethod = false` as the account-level projection, and send a verification email through the configured email provider.
 4. Login checks IP and account lockout state before password verification.
@@ -31,6 +31,7 @@
 7. Refresh token flow validates the current refresh token, rotates it, and invalidates the previous token.
 8. OAuth flow uses `github.com/markbates/goth`, creates or links External Login Identities, records provider-asserted verification, updates the account-level verified-login projection when at least one linked Login Method is verified, and activates a first-login trial through ARCH-007.
 9. Password reset stores only a hash of a random token, enforces 1-hour expiry, and marks the token used after password change.
+10. Authentication accepts stored password material only when the Argon2id version, complete non-duplicated parameters, minimum memory cost, Base64 hash of 16 to 64 bytes, and Base64 salt of at least 16 bytes pass the same parser used by password verification. The explicit hash bound makes the Argon2 key-length conversion safe.
 
 ### 3. State Management & Error Handling
 - `unverified_login_method`: an email-and-password Login Method can authenticate but does not unlock paid features until Mealswapp verification succeeds.
@@ -39,6 +40,7 @@
 - `refresh_required`: access token expired but refresh token can rotate.
 - `locked`: account or IP lockout is active; return retry time.
 - `oauth_link_required`: OAuth email matches an existing account and needs explicit linking.
+- `canonical_email_collision`: legacy mixed-case digests resolve to different accounts under the canonical form; fail closed without merging or revealing either identity.
 - `invalid_credentials`: return generic message without revealing which field failed.
 - `session_expired`: clear cookies and require login.
 - `token_reuse_detected`: revoke session family and require reauthentication.

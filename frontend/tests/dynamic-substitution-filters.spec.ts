@@ -52,6 +52,7 @@ async function addSelectedItem(page: Page): Promise<void> {
 	await page.getByLabel("Food search").fill("apple");
 	await page.getByRole("listbox", { name: "Autocomplete suggestions" }).getByRole("option", { name: "Apple" }).click();
 	await expect(page.locator("[data-substitution-card]")).toHaveCount(1);
+	await expect(page.locator("[data-substitution-categories]")).toContainText("Selected Fruit");
 }
 
 test("renders backend order and labels, merges selected classifications, sends IDs, and ignores stale refreshes", async ({ page }) => {
@@ -122,7 +123,9 @@ test("schema-invalid inventories fail closed while selected classifications rema
 		await expect(page.locator("[data-filter-options-error]")).toContainText("temporarily unavailable");
 		await page.locator("#substitution-exclude-filter").focus();
 		await expect(page.locator("[data-substitution-exclude-options] [role=option]")).toHaveText(["Selected Fruit Food Category", "Snack Culinary Role"]);
+		const retried = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/v1/search/filter-options");
 		await page.getByRole("button", { name: "Retry filter options" }).click();
+		await retried;
 	}
 
 	await expect(page.locator("[data-filter-options-empty]")).toBeVisible();

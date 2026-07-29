@@ -55,6 +55,27 @@ func TestPostgresAdminUserLookupIsExactBoundedAndPrivacyMinimized(t *testing.T) 
 	}
 }
 
+func TestPostgresAdminUserReindexesLegacyDigestAndRejectsCollision(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	repo := NewPostgresAdminUserRepository(db)
+	legacyID := createRepositoryUser(t, ctx, db, "Legacy@Example.test")
+	canonical := LookupDigest{KeyVersion: "test-v1", Value: "legacy@example.test"}
+
+	if err := repo.ReindexUserEmailDigest(ctx, legacyID, canonical); err != nil {
+		t.Fatalf("ReindexUserEmailDigest() error=%v", err)
+	}
+	reindexed, err := repo.LookupAdminUsers(ctx, AdminUserLookup{EmailDigest: &canonical, Limit: 1})
+	if err != nil || len(reindexed) != 1 || reindexed[0].ID != legacyID {
+		t.Fatalf("canonical lookup=%+v err=%v", reindexed, err)
+	}
+
+	collisionID := createRepositoryUser(t, ctx, db, "collision@example.test")
+	if err := repo.ReindexUserEmailDigest(ctx, collisionID, canonical); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("ReindexUserEmailDigest() collision error=%v", err)
+	}
+}
+
 func TestPostgresAdminDeletionRetryPermitsOnlyLegalScopedFailures(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
@@ -76,7 +97,7 @@ func TestPostgresAdminDeletionRetryPermitsOnlyLegalScopedFailures(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			userID := createRepositoryUser(t, ctx, db, fmt.Sprintf("retry-%d@example.test", index))
 			requestID := createFailedDeletionFixture(t, ctx, db, userID, tc.category, tc.retryCount)
-			err := audit.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "retry_deletion", EntityType: "deletion_request", RequestID: uuid.NewString(), CreatedAt: time.Now()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+			err := audit.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "retry_deletion", EntityType: "deletion_request", RequestID: uuid.NewString(), CreatedAt: time.Now()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 				retry, err := NewPostgresAdminUserRepository(tx).RetryAdminDeletion(ctx, tx, userID, requestID)
 				if err != nil {
 					return AdminAuditChanges{}, err
@@ -107,7 +128,7 @@ func TestPostgresAdminDeletionRetryPermitsOnlyLegalScopedFailures(t *testing.T) 
 	ownerID := createRepositoryUser(t, ctx, db, "retry-owner@example.test")
 	otherID := createRepositoryUser(t, ctx, db, "retry-other@example.test")
 	requestID := createFailedDeletionFixture(t, ctx, db, ownerID, "permanent", 0)
-	err := audit.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "retry_deletion", EntityType: "deletion_request", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err := audit.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "retry_deletion", EntityType: "deletion_request", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		_, err := NewPostgresAdminUserRepository(tx).RetryAdminDeletion(ctx, tx, otherID, requestID)
 		return AdminAuditChanges{}, err
 	})
@@ -134,7 +155,7 @@ func TestPostgresAdminDeletionConcurrentRetryClaimsOnceWithAtomicAudits(t *testi
 		go func() {
 			ready.Done()
 			<-start
-			results <- audit.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "retry_deletion", EntityType: "deletion_request", RequestID: uuid.NewString(), CreatedAt: time.Now()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+			results <- audit.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "retry_deletion", EntityType: "deletion_request", RequestID: uuid.NewString(), CreatedAt: time.Now()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 				retry, err := NewPostgresAdminUserRepository(tx).RetryAdminDeletion(ctx, tx, userID, requestID)
 				if err != nil {
 					return AdminAuditChanges{}, err

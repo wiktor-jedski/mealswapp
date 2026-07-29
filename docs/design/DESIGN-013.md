@@ -24,18 +24,20 @@
 1. Load encryption keys from GCP Secret Manager at process start; identify active key by version.
 2. Encrypt PII fields with AES-256-GCM before repository persistence.
 3. Decrypt only at service boundaries that need plaintext; never log plaintext PII.
-4. Normalize string inputs using typed field-specific rules. Phase 02 supports email trimming and validation; add rules when later domain controllers introduce fields.
-5. Use parameterized SQL in ARCH-005 as the primary SQL injection defense.
-6. Redirect HTTP to HTTPS in deployed environments without consuming forwarded scheme headers. Defer TLS 1.3 edge termination and trusted forwarded-header support until Phase 09 deploys and verifies a restricted ingress boundary.
-7. Apply Fiber limiter middleware using IP, user, or endpoint scoped keys.
-8. Validate Fiber CSRF synchronizer tokens for state-changing requests unless the route declares an explicit exemption.
-9. Write structured audit logs for auth events, every API request, errors, and admin actions. Persist an audit before dispatching flagged security-sensitive mutations.
+4. Normalize string inputs using typed field-specific rules. Email has one identity contract across registration, login, password reset, OAuth account matching/linking, user administration, and administrator bootstrap: trim, validate, and lower-case before encryption or HMAC lookup.
+5. When a pre-canonical email digest is resolved through the exact trimmed legacy spelling, reindex it to the canonical digest. Resolve canonical and legacy digests together, refuse different-account collisions, and rely on the unique digest index to fail closed against concurrent collisions.
+6. Use parameterized SQL in ARCH-005 as the primary SQL injection defense.
+7. Redirect HTTP to HTTPS in deployed environments without consuming forwarded scheme headers. Defer TLS 1.3 edge termination and trusted forwarded-header support until Phase 09 deploys and verifies a restricted ingress boundary.
+8. Apply Fiber limiter middleware using IP, user, or endpoint scoped keys.
+9. Validate Fiber CSRF synchronizer tokens for state-changing requests unless the route declares an explicit exemption.
+10. Write structured audit logs for auth events, every API request, errors, and admin actions. Persist an audit before dispatching flagged security-sensitive mutations.
 
 ### 3. State Management & Error Handling
 - `encrypted`: field stored as envelope.
 - `decryption_failed`: return internal error and alert because data or key state is inconsistent.
 - `input_rejected`: validation failed before normalization; return 400.
 - `normalized`: accepted value differs from input; log only metadata.
+- `canonical_email_collision`: two historical identities collapse to the same canonical email; do not reindex, authenticate, link, or promote either account through the ambiguous selector.
 - `rate_limited`: return 429.
 - `csrf_invalid`: return 403.
 - `tls_required`: redirect or reject non-TLS traffic.

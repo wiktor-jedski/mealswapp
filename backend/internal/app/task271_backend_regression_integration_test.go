@@ -182,6 +182,10 @@ func task271RegisterAdmin(t *testing.T, server *fiber.App, db *pgxpool.Pool, cfg
 }
 
 func task271ItemBody(name string) string {
+	return fmt.Sprintf(`{"name":%q,"physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":5,"fat":2},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[],"allergenKeys":[]}`, name)
+}
+
+func task271CustomItemBody(name string) string {
 	return fmt.Sprintf(`{"name":%q,"physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":5,"fat":2},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`, name)
 }
 
@@ -306,7 +310,7 @@ func task271AssertError(t *testing.T, response *http.Response, status int, code 
 
 func task271CreateCustomItem(t *testing.T, server *fiber.App, cookies []*http.Cookie, csrf, name string) uuid.UUID {
 	t.Helper()
-	response := liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/custom-items", task271ItemBody(name), cookies, "task-271-private", csrf)
+	response := liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/custom-items", task271CustomItemBody(name), cookies, "task-271-private", csrf)
 	envelope := decodeLiveDailyDietEnvelope(t, response)
 	response.Body.Close()
 	if response.StatusCode != fiber.StatusCreated {

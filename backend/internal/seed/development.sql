@@ -8,13 +8,76 @@ ON CONFLICT (key) DO UPDATE
 SET display_name = EXCLUDED.display_name, unit = EXCLUDED.unit, active = EXCLUDED.active;
 
 -- Implements DESIGN-005 ClassificationEntity deterministic development fixtures.
+-- Repair the four legacy PostgreSQL-valid but public-contract-invalid seed UUIDs
+-- while preserving hierarchy, item, meal, custom-item, and audit references.
+CREATE TEMP TABLE seed_classification_uuid_repairs (
+    old_id uuid PRIMARY KEY,
+    new_id uuid NOT NULL UNIQUE
+) ON COMMIT DROP;
+
+INSERT INTO seed_classification_uuid_repairs (old_id, new_id)
+VALUES
+    ('20000000-0000-0000-0000-000000000001', '20000000-0000-4000-8000-000000000001'),
+    ('20000000-0000-0000-0000-000000000002', '20000000-0000-4000-8000-000000000002'),
+    ('20000000-0000-0000-0000-000000000101', '20000000-0000-4000-8000-000000000101'),
+    ('20000000-0000-0000-0000-000000000102', '20000000-0000-4000-8000-000000000102');
+
+UPDATE classifications legacy
+SET name = legacy.name || ' (legacy seed UUID)'
+FROM seed_classification_uuid_repairs repair
+WHERE legacy.id = repair.old_id;
+
 INSERT INTO classifications (id, name, kind)
 VALUES
-    ('20000000-0000-0000-0000-000000000001', 'Fruit', 'food_category'),
-    ('20000000-0000-0000-0000-000000000002', 'Protein', 'food_category'),
-    ('20000000-0000-0000-0000-000000000101', 'Quick', 'culinary_role'),
-    ('20000000-0000-0000-0000-000000000102', 'Breakfast', 'culinary_role')
+    ('20000000-0000-4000-8000-000000000001', 'Fruit', 'food_category'),
+    ('20000000-0000-4000-8000-000000000002', 'Protein', 'food_category'),
+    ('20000000-0000-4000-8000-000000000101', 'Quick', 'culinary_role'),
+    ('20000000-0000-4000-8000-000000000102', 'Breakfast', 'culinary_role')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+
+UPDATE classifications child
+SET parent_id = repair.new_id
+FROM seed_classification_uuid_repairs repair
+WHERE child.parent_id = repair.old_id;
+
+INSERT INTO food_item_classifications (food_item_id, classification_id)
+SELECT assignment.food_item_id, repair.new_id
+FROM food_item_classifications assignment
+JOIN seed_classification_uuid_repairs repair ON repair.old_id = assignment.classification_id
+ON CONFLICT DO NOTHING;
+
+DELETE FROM food_item_classifications assignment
+USING seed_classification_uuid_repairs repair
+WHERE assignment.classification_id = repair.old_id;
+
+INSERT INTO meal_classifications (meal_id, classification_id)
+SELECT assignment.meal_id, repair.new_id
+FROM meal_classifications assignment
+JOIN seed_classification_uuid_repairs repair ON repair.old_id = assignment.classification_id
+ON CONFLICT DO NOTHING;
+
+DELETE FROM meal_classifications assignment
+USING seed_classification_uuid_repairs repair
+WHERE assignment.classification_id = repair.old_id;
+
+INSERT INTO custom_food_item_classifications (custom_food_item_id, classification_id)
+SELECT assignment.custom_food_item_id, repair.new_id
+FROM custom_food_item_classifications assignment
+JOIN seed_classification_uuid_repairs repair ON repair.old_id = assignment.classification_id
+ON CONFLICT DO NOTHING;
+
+DELETE FROM custom_food_item_classifications assignment
+USING seed_classification_uuid_repairs repair
+WHERE assignment.classification_id = repair.old_id;
+
+UPDATE admin_audit_entries audit
+SET entity_id = repair.new_id
+FROM seed_classification_uuid_repairs repair
+WHERE audit.entity_type = 'classification' AND audit.entity_id = repair.old_id;
+
+DELETE FROM classifications legacy
+USING seed_classification_uuid_repairs repair
+WHERE legacy.id = repair.old_id;
 
 -- Implements DESIGN-005 FoodItemEntity deterministic development fixtures.
 -- Repair legacy local dev rows created before milk fixtures received deterministic IDs.
@@ -53,14 +116,14 @@ SET name = EXCLUDED.name, physical_state = EXCLUDED.physical_state,
 
 INSERT INTO food_item_classifications (food_item_id, classification_id)
 VALUES
-    ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001'),
-    ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000101'),
-    ('21000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002'),
-    ('21000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000102'),
-    ('21000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000002'),
-    ('21000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000102'),
-    ('21000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000002'),
-    ('21000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000102')
+    ('21000000-0000-0000-0000-000000000001', '20000000-0000-4000-8000-000000000001'),
+    ('21000000-0000-0000-0000-000000000001', '20000000-0000-4000-8000-000000000101'),
+    ('21000000-0000-0000-0000-000000000002', '20000000-0000-4000-8000-000000000002'),
+    ('21000000-0000-0000-0000-000000000002', '20000000-0000-4000-8000-000000000102'),
+    ('21000000-0000-0000-0000-000000000003', '20000000-0000-4000-8000-000000000002'),
+    ('21000000-0000-0000-0000-000000000003', '20000000-0000-4000-8000-000000000102'),
+    ('21000000-0000-0000-0000-000000000004', '20000000-0000-4000-8000-000000000002'),
+    ('21000000-0000-0000-0000-000000000004', '20000000-0000-4000-8000-000000000102')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO food_item_allergens (food_item_id, allergen_key)
@@ -117,25 +180,31 @@ VALUES
 
 INSERT INTO meal_classifications (meal_id, classification_id)
 VALUES
-    ('22000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000101'),
-    ('22000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000102'),
-    ('22000000-0000-0000-0000-000000000101', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000102', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000103', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000104', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000105', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000106', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000107', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000108', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000109', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000110', '20000000-0000-0000-0000-000000000002'),
-    ('22000000-0000-0000-0000-000000000113', '20000000-0000-0000-0000-000000000102'),
-    ('22000000-0000-0000-0000-000000000117', '20000000-0000-0000-0000-000000000001'),
-    ('22000000-0000-0000-0000-000000000120', '20000000-0000-0000-0000-000000000001'),
-    ('22000000-0000-0000-0000-000000000124', '20000000-0000-0000-0000-000000000002')
+    ('22000000-0000-0000-0000-000000000001', '20000000-0000-4000-8000-000000000101'),
+    ('22000000-0000-0000-0000-000000000002', '20000000-0000-4000-8000-000000000102'),
+    ('22000000-0000-0000-0000-000000000101', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000102', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000103', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000104', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000105', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000106', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000107', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000108', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000109', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000110', '20000000-0000-4000-8000-000000000002'),
+    ('22000000-0000-0000-0000-000000000113', '20000000-0000-4000-8000-000000000102'),
+    ('22000000-0000-0000-0000-000000000117', '20000000-0000-4000-8000-000000000001'),
+    ('22000000-0000-0000-0000-000000000120', '20000000-0000-4000-8000-000000000001'),
+    ('22000000-0000-0000-0000-000000000124', '20000000-0000-4000-8000-000000000002')
 ON CONFLICT DO NOTHING;
 
 -- Implements DESIGN-006 AuthUser deterministic development fixtures.
+-- Implements DESIGN-009 AdminController removal of the unusable legacy administrator fixture.
+DELETE FROM admin_audit_entries
+WHERE admin_user_id = '23000000-0000-0000-0000-000000000002';
+DELETE FROM users
+WHERE id = '23000000-0000-0000-0000-000000000002';
+
 INSERT INTO users (
     id, email_key_version, email_nonce, email_ciphertext, normalized_email_lookup_key_version, normalized_email_digest,
     role, email_verified, password_hash, password_salt
@@ -149,18 +218,6 @@ VALUES
         'seed-v1',
         'seed.user@example.test',
         'user',
-        true,
-        'fixture-hash-not-secret',
-        'fixture-salt-not-secret'
-    ),
-    (
-        '23000000-0000-0000-0000-000000000002',
-        'seed-v1',
-        decode('736565642d61646d696e2d6e6f6e6365', 'hex'),
-        convert_to('seed.admin@example.test', 'UTF8'),
-        'seed-v1',
-        'seed.admin@example.test',
-        'admin',
         true,
         'fixture-hash-not-secret',
         'fixture-salt-not-secret'
@@ -213,8 +270,3 @@ INSERT INTO curated_imports (id, source_provider, external_id, food_item_id, sta
 VALUES ('25000000-0000-0000-0000-000000000001', 'seed-provider', 'seed-external-1', '21000000-0000-0000-0000-000000000001', 'imported', '{"fixture":true}'::jsonb)
 ON CONFLICT (source_provider, external_id) DO UPDATE
 SET food_item_id = EXCLUDED.food_item_id, status = EXCLUDED.status, raw_payload = EXCLUDED.raw_payload;
-
--- Implements DESIGN-009 AdminController deterministic development fixtures.
-INSERT INTO admin_audit_entries (id, admin_user_id, action, entity_type, entity_id, before_snapshot, after_snapshot, request_id)
-VALUES ('26000000-0000-0000-0000-000000000001', '23000000-0000-0000-0000-000000000002', 'seed_import', 'food_item', '21000000-0000-0000-0000-000000000001', '{}'::jsonb, '{"fixture":true}'::jsonb, 'seed-request')
-ON CONFLICT (id) DO NOTHING;

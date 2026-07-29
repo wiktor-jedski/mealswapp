@@ -219,6 +219,10 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if _, ok := rawBundle["format"]; ok {
 		t.Fatalf("json bundle leaked transport format: %s", payload.Body)
 	}
+	savedDietsJSON, err := json.Marshal(rawBundle["savedDiets"])
+	if err != nil || strings.Contains(string(savedDietsJSON), "UserID") || strings.Contains(string(savedDietsJSON), "userId") {
+		t.Fatalf("saved-diet export leaked owner identity: %s err=%v", savedDietsJSON, err)
+	}
 	csvPayload, err := service.BuildExport(ctx, userID, "csv")
 	if err != nil {
 		t.Fatalf("BuildExport(csv) error = %v", err)

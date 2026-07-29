@@ -1,0 +1,228 @@
+{
+  "exitCode": 2,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR090-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 192
+      },
+      "status": "PASS",
+      "text": "Accept when only active canonical keys are persisted."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR090-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-01",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 187
+      },
+      "status": "PASS",
+      "text": "Create/import an item using Sodium."
+    },
+    {
+      "backendEvidence": [
+        "mutation_count=0",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR090-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-02",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "2d3e7150-3230-47f2-b5ec-89c0c6e7cd1b",
+        "3498c6f7-e5aa-4879-a0be-cd799adb8ec8",
+        "80db79eb-783d-4d9f-bde9-15240f64c829"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 188
+      },
+      "status": "PASS",
+      "text": "Try the same using Na."
+    },
+    {
+      "backendEvidence": [
+        "mutation_count=0",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR090-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-03",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "2d3e7150-3230-47f2-b5ec-89c0c6e7cd1b",
+        "3498c6f7-e5aa-4879-a0be-cd799adb8ec8",
+        "80db79eb-783d-4d9f-bde9-15240f64c829"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 189
+      },
+      "status": "PASS",
+      "text": "Try an unknown micronutrient."
+    },
+    {
+      "backendEvidence": [
+        "mutation_count=0"
+      ],
+      "criterionId": "P08-SWR090-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-282-004"
+      ],
+      "id": "P08-SWR090-STEP-04",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T282-VOCABULARY-DISABLE",
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 190
+      },
+      "status": "BLOCKED",
+      "text": "Disable a vocabulary entry and retry."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR090-STEP-04"
+      ],
+      "id": "ROOT-T282-VOCABULARY-DISABLE"
+    }
+  ],
+  "runId": "task282-7e90a8f191987741e6caac1f-sw-req-090",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "BLOCKED"
+}

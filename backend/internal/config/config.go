@@ -52,6 +52,15 @@ type Config struct {
 	Account        AccountConfig
 	Billing        BillingConfig
 	OAuth          OAuthConfig
+	ExternalData   ExternalDataConfig
+}
+
+// ExternalDataConfig contains development-only controlled-provider overrides.
+// Implements DESIGN-012 USDAClient and OpenFoodFactsClient testable production composition.
+type ExternalDataConfig struct {
+	USDAEndpoint          string
+	OpenFoodFactsEndpoint string
+	Deadline              time.Duration
 }
 
 // AccountConfig contains authentication and account-flow settings.
@@ -147,6 +156,9 @@ func Load() (Config, error) {
 	if cfg.OAuth, err = loadOAuthConfig(cfg.Environment); err != nil {
 		return Config{}, err
 	}
+	if cfg.ExternalData, err = loadExternalDataConfig(cfg.Environment); err != nil {
+		return Config{}, err
+	}
 
 	if cfg.Environment == "production" {
 		if os.Getenv("MEALSWAPP_DATABASE_URL") == "" || os.Getenv("MEALSWAPP_REDIS_URL") == "" {
@@ -178,6 +190,39 @@ func Load() (Config, error) {
 		}
 	}
 
+	return cfg, nil
+}
+
+// loadExternalDataConfig permits isolated loopback fixtures only outside production.
+// Implements DESIGN-012 provider endpoint and deadline configuration trust boundary.
+func loadExternalDataConfig(environment string) (ExternalDataConfig, error) {
+	cfg := ExternalDataConfig{
+		USDAEndpoint:          strings.TrimSpace(os.Getenv("MEALSWAPP_USDA_ENDPOINT")),
+		OpenFoodFactsEndpoint: strings.TrimSpace(os.Getenv("MEALSWAPP_OPENFOODFACTS_ENDPOINT")),
+	}
+	deadline := strings.TrimSpace(os.Getenv("MEALSWAPP_EXTERNAL_PROVIDER_TIMEOUT"))
+	if deadline != "" {
+		value, err := time.ParseDuration(deadline)
+		if err != nil || value <= 0 || value > 30*time.Second {
+			return ExternalDataConfig{}, errors.New("MEALSWAPP_EXTERNAL_PROVIDER_TIMEOUT must be between 0 and 30s")
+		}
+		cfg.Deadline = value
+	}
+	if environment == "production" && (cfg.USDAEndpoint != "" || cfg.OpenFoodFactsEndpoint != "" || cfg.Deadline != 0) {
+		return ExternalDataConfig{}, errors.New("external provider overrides are unavailable in production")
+	}
+	for name, value := range map[string]string{
+		"MEALSWAPP_USDA_ENDPOINT":          cfg.USDAEndpoint,
+		"MEALSWAPP_OPENFOODFACTS_ENDPOINT": cfg.OpenFoodFactsEndpoint,
+	} {
+		if value == "" {
+			continue
+		}
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Scheme != "http" || parsed.Hostname() != "127.0.0.1" || parsed.Port() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return ExternalDataConfig{}, fmt.Errorf("%s must be an uncredentialed loopback HTTP URL", name)
+		}
+	}
 	return cfg, nil
 }
 

@@ -4,11 +4,11 @@ import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminI
 // Implements DESIGN-009 ItemCurator and UserAdminPanel validation and legal-retry verification.
 
 const valid = (overrides: Partial<AdminItemForm> = {}): AdminItemForm => ({
-	name: "Broth", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "10", carbohydrates: "20", fat: "5", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{\"sodium\":1}", foodCategoryIds: [], culinaryRoleIds: [], imageUrl: "", ...overrides
+	name: "Broth", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "10", carbohydrates: "20", fat: "5", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{\"sodium\":1}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "", ...overrides
 });
 
 test("builds generated-contract solid and liquid item requests", () => {
-	expect(parseAdminItemForm(valid()).request).toEqual({ name: "Broth", physicalState: "solid", macrosPer100: { protein: 10, carbohydrates: 20, fat: 5 }, micros: { sodium: 1 }, foodCategoryIds: [], culinaryRoleIds: [] });
+	expect(parseAdminItemForm(valid()).request).toEqual({ name: "Broth", physicalState: "solid", macrosPer100: { protein: 10, carbohydrates: 20, fat: 5 }, micros: { sodium: 1 }, foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [] });
 	expect(parseAdminItemForm(valid({ physicalState: "liquid", density: "1.02" })).request).toMatchObject({ physicalState: "liquid", densityGramsPerMilliliter: 1.02, densitySourceKind: "manual" });
 });
 
