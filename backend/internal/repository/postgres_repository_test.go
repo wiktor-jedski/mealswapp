@@ -800,6 +800,39 @@ func TestPostgresVocabularyAdministratorLifecycle(t *testing.T) {
 	}
 }
 
+// TestPostgresVocabularyConcurrentCreateConflict proves one canonical key cannot fork under concurrent administrator writes.
+// Implements DESIGN-005 MicronutrientVocabulary.
+func TestPostgresVocabularyConcurrentCreateConflict(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	repo := NewPostgresMicronutrientVocabularyRepository(db)
+	ctx := context.Background()
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, displayName := range []string{"Concurrent mineral A", "Concurrent mineral B"} {
+		displayName := displayName
+		go func() {
+			<-start
+			_, err := repo.Create(ctx, MicronutrientVocabularyEntry{Key: "Concurrentium", DisplayName: displayName, Unit: "mg", Active: true})
+			results <- err
+		}()
+	}
+	close(start)
+	var succeeded, conflicted int
+	for range 2 {
+		err := <-results
+		if err == nil {
+			succeeded++
+		} else if IsKind(err, ErrorKindConflict) {
+			conflicted++
+		} else {
+			t.Fatalf("concurrent Create() error = %v", err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("concurrent outcomes: succeeded=%d conflicted=%d", succeeded, conflicted)
+	}
+}
+
 func TestPostgresFoodItemRepositoryCRUDHydrationAndConversion(t *testing.T) {
 	db := openRepositoryTestDB(t)
 	ctx := context.Background()
