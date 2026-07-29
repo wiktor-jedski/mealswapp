@@ -239,12 +239,19 @@ test("disabled micronutrient vocabulary entries are rejected through Administrat
 	const csrfBody = await safeEnvelope(csrf) as { requestId?: string; data?: { csrfToken?: string } };
 	const requestIds = [csrfBody.requestId!];
 	const headers = { "X-CSRF-Token": csrfBody.data?.csrfToken ?? "" };
-	const key = "VitaminD";
+	const vocabularyBefore = await page.request.get("/api/v1/admin/micronutrients");
+	const vocabularyBeforeBody = await safeEnvelope(vocabularyBefore) as { requestId?: string; data?: { micronutrients?: Array<{ key: string; active: boolean }> } };
+	requestIds.push(vocabularyBeforeBody.requestId!);
+	const candidates = vocabularyBeforeBody.data?.micronutrients?.filter((entry) => entry.active).map((entry) => entry.key) ?? [];
+	let key = "";
 	try {
-		const disabled = await page.request.post(`/api/v1/admin/micronutrients/${key}/deactivate`, { headers });
-		const disabledBody = await safeEnvelope(disabled);
-		requestIds.push(disabledBody.requestId!);
-		expect(disabled.status()).toBe(200);
+		for (const candidate of candidates) {
+			const disabled = await page.request.post(`/api/v1/admin/micronutrients/${candidate}/deactivate`, { headers });
+			const disabledBody = await safeEnvelope(disabled);
+			requestIds.push(disabledBody.requestId!);
+			if (disabled.status() === 200) { key = candidate; break; }
+		}
+		expect(key).not.toBe("");
 
 		const rejected = await page.request.post("/api/v1/admin/imports", {
 			headers: { ...headers, "Idempotency-Key": "task282-disabled-micronutrient" },
@@ -263,6 +270,7 @@ test("disabled micronutrient vocabulary entries are rejected through Administrat
 		expect(rejected.status()).toBe(400);
 		expect(rejectedBody.error?.code).toBe("validation_failed");
 	} finally {
+		if (!key) throw new Error("no unused active micronutrient vocabulary fixture was available");
 		const restored = await page.request.post(`/api/v1/admin/micronutrients/${key}/reactivate`, { headers });
 		const restoredBody = await safeEnvelope(restored);
 		requestIds.push(restoredBody.requestId!);
