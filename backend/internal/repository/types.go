@@ -18,7 +18,7 @@ const (
 	PhysicalStateLiquid PhysicalState = "liquid"
 )
 
-// UnitSystem identifies caller-facing unit conversion preferences.
+// UnitSystem identifies persisted frontend display preferences.
 // Implements DESIGN-005 UnitConverter.
 type UnitSystem string
 
@@ -166,11 +166,10 @@ type MealEntity struct {
 	UpdatedAt                 time.Time
 }
 
-// RepositoryContext carries caller scoping and conversion preferences.
+// RepositoryContext carries caller scoping preferences.
 // Implements DESIGN-005 RepositoryInterfaces.
 type RepositoryContext struct {
 	UserID         *uuid.UUID
-	UnitSystem     UnitSystem
 	IncludeDeleted bool
 }
 

@@ -59,8 +59,7 @@ func (s AutocompleteService) Autocomplete(ctx context.Context, query string, rc 
 	for _, candidateQuery := range autocompleteCandidateQueries(normalized.Value) {
 		repoQuery := repository.RepositoryQuery{
 			RepositoryContext: repository.RepositoryContext{
-				UserID:     rc.UserID,
-				UnitSystem: rc.UnitSystem,
+				UserID: rc.UserID,
 			},
 			Name:   candidateQuery,
 			Limit:  autocompleteCandidateLimit,

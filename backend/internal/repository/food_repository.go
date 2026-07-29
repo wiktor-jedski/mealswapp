@@ -83,7 +83,6 @@ func (r *PostgresFoodItemRepository) GetByID(ctx context.Context, id uuid.UUID, 
 	if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 		return FoodItemEntity{}, err
 	}
-	convertFoodItemForUnitSystem(&item, rc.UnitSystem)
 	return item, nil
 }
 
@@ -124,7 +123,6 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 		if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 			return nil, 0, err
 		}
-		convertFoodItemForUnitSystem(&item, q.UnitSystem)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -409,20 +407,6 @@ func scanFoodItem(row foodRowScanner) (FoodItemEntity, error) {
 		item.Micros = MicroValues{}
 	}
 	return item, nil
-}
-
-// convertFoodItemForUnitSystem converts display values to the requested unit system.
-// Implements DESIGN-005 FoodItemEntity.
-func convertFoodItemForUnitSystem(item *FoodItemEntity, unitSystem UnitSystem) {
-	if unitSystem != UnitSystemImperial {
-		return
-	}
-	switch item.PhysicalState {
-	case PhysicalStateSolid:
-		item.AverageUnitWeightGrams, _ = ConvertUnit(item.AverageUnitWeightGrams, "g", "oz")
-	case PhysicalStateLiquid:
-		item.AverageServingVolumeMilliliters, _ = ConvertUnit(item.AverageServingVolumeMilliliters, "ml", "fl_oz")
-	}
 }
 
 // validateFoodDensity checks required liquid density metadata.

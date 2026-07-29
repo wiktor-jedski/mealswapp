@@ -9,7 +9,7 @@
 - `RecipeEntity`: owns ingredient composition, quantities, and aggregate macro calculation inputs.
 - `ClassificationEntity`: owns Food Category and Culinary Role classification identity, hierarchy, and uniqueness constraints.
 - `MicronutrientVocabulary`: owns canonical micronutrient keys, display names, units, active/inactive state, and validation before storage.
-- `UnitConverter`: owns metric/imperial and serving-to-base conversions at repository boundaries.
+- `UnitConverter`: owns basis-compatible imperial and recipe-serving input normalization into metric domain quantities before calculation or persistence.
 - `MacroNormalizer`: owns per-100g/per-100ml storage normalization and quantity scaling.
 - `RepositoryInterfaces`: owns typed data access contracts for services and modules.
 
@@ -24,11 +24,11 @@
 - `interface MealEntity { id: UUID; type: "single" | "composite"; name: string; recipeItems?: RecipeIngredientEntity[]; physicalState: PhysicalState; prepTimeMinutes: number; averageUnitWeightGrams?: number; macrosPer100: MacroValues; normalizedMacrosAvailable: boolean }`
 - `interface RecipeIngredientEntity { foodItemId: UUID; quantity: number; unit: string }`
 - `interface ClassificationEntity { id: UUID; name: string; kind: "food_category" | "culinary_role"; parentId?: UUID }`
-- `interface RepositoryContext { userId?: UUID; unitSystem: UnitSystem; includeDeleted: boolean }`
+- `interface RepositoryContext { userId?: UUID; includeDeleted: boolean }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Store all base macro values per 100g for solids and per 100ml for liquids.
-2. Convert user-entered quantities to the storage basis before insert or update.
+2. Keep persistence, repository entities, domain services, exports, and fields named in grams or milliliters metric-only. Convert basis-compatible user-entered imperial quantities exactly once before calculation or persistence; never reinterpret or rewrite existing stored values.
 3. Convert solid servings with `averageUnitWeightGrams` and liquid servings with `averageServingVolumeMilliliters`; never treat grams as a milliliter proxy.
 4. Validate every micronutrient key against active `MicronutrientVocabularyEntry` records before insert or update; reject aliases such as `Na` when the canonical key is `Sodium`.
 5. Store micronutrients as supplemental display/export data only; repository methods that build similarity inputs must return only protein, carbohydrates, and fat.
@@ -36,7 +36,7 @@
 7. Apply user scoping in repository queries whenever custom items, saved meals, profile data, or history are requested.
 8. For composite meals, load ingredients, sum each ingredient macro after scaling by ingredient quantity, and normalize the total to the meal's per-100g basis. Convert liquid ingredient volume to mass using required density. Missing persisted liquid density is invalid data and returns an error.
 9. Use `g`, `ml`, `oz`, and `fl_oz` as the canonical physical quantity vocabulary. Retain the internal `serving` token only for recipe ingredients as the persisted implementation of SW-REQ-036's user-facing “per unit” calculation: convert solid servings through `averageUnitWeightGrams` and liquid servings through `averageServingVolumeMilliliters` before macro scaling. Accept `g`, `oz`, and `serving` for solid recipe ingredients; accept `ml`, `fl_oz`, and `serving` for liquid recipe ingredients. Saved-diet and substitution contracts never accept `serving`. Reject cross-basis units at service, repository, HTTP, and database boundaries.
-10. Convert metric values to imperial only at the repository boundary when `RepositoryContext.unitSystem = "imperial"`.
+10. Return metric repository entities independently of the user's display preference. Perform metric-to-imperial display conversion only in the frontend.
 11. Use raw SQL with parameter binding through `pgx` or `lib/pq`; never concatenate user input into SQL.
 12. Maintain indexes for item name, food_category classifications, culinary_role classifications, micronutrient vocabulary keys, and common filter columns.
 13. Return domain entities with normalized macros, validated micronutrients, and hydrated classification lists for callers.

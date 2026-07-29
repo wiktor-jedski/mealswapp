@@ -113,7 +113,6 @@ func (r *PostgresMealRepository) GetByID(ctx context.Context, id uuid.UUID, rc R
 	if err := r.hydrateMealClassifications(ctx, &meal); err != nil {
 		return MealEntity{}, err
 	}
-	convertMealForUnitSystem(&meal, rc.UnitSystem)
 	return meal, nil
 }
 
@@ -166,14 +165,7 @@ func (r *PostgresMealRepository) Search(ctx context.Context, q RepositoryQuery) 
 // CalculateMacros returns aggregate macro values for a meal.
 // Implements DESIGN-005 MealEntity.
 func (r *PostgresMealRepository) CalculateMacros(ctx context.Context, mealID uuid.UUID) (MacroValues, error) {
-	return r.calculateMacros(ctx, mealID, RepositoryContext{UnitSystem: UnitSystemMetric})
-}
-
-// calculateMacros derives meal macros from persisted ingredients.
-// Implements DESIGN-005 MealEntity.
-func (r *PostgresMealRepository) calculateMacros(ctx context.Context, mealID uuid.UUID, rc RepositoryContext) (MacroValues, error) {
-	rc.UnitSystem = UnitSystemMetric
-	meal, err := r.GetByID(ctx, mealID, rc)
+	meal, err := r.GetByID(ctx, mealID, RepositoryContext{})
 	if err != nil {
 		return MacroValues{}, err
 	}
@@ -193,7 +185,7 @@ func (r *PostgresMealRepository) calculateCompositeMacros(ctx context.Context, i
 	total := MacroValues{}
 	totalMassGrams := 0.0
 	for _, ingredient := range ingredients {
-		food, err := NewPostgresFoodItemRepository(r.db).GetByID(ctx, ingredient.FoodItemID, RepositoryContext{UnitSystem: UnitSystemMetric})
+		food, err := NewPostgresFoodItemRepository(r.db).GetByID(ctx, ingredient.FoodItemID, RepositoryContext{})
 		if err != nil {
 			return MacroValues{}, false, err
 		}
@@ -325,7 +317,7 @@ func (r *PostgresMealRepository) validateIngredients(ctx context.Context, mealID
 			return validationError("ingredient positions must be unique")
 		}
 		seenPositions[ingredient.Position] = struct{}{}
-		food, err := NewPostgresFoodItemRepository(r.db).GetByID(ctx, ingredient.FoodItemID, RepositoryContext{UnitSystem: UnitSystemMetric})
+		food, err := NewPostgresFoodItemRepository(r.db).GetByID(ctx, ingredient.FoodItemID, RepositoryContext{})
 		if err != nil {
 			return err
 		}
@@ -491,20 +483,6 @@ func ingredientMassGrams(nativeBasis float64, food FoodItemEntity) (float64, err
 		return 0, validationError("persisted liquid ingredient density is required")
 	}
 	return nativeBasis * food.DensityGramsPerMilliliter, nil
-}
-
-// convertMealForUnitSystem converts meal display values to the requested unit system.
-// Implements DESIGN-005 MealEntity.
-func convertMealForUnitSystem(meal *MealEntity, unitSystem UnitSystem) {
-	if unitSystem != UnitSystemImperial {
-		return
-	}
-	switch meal.PhysicalState {
-	case PhysicalStateSolid:
-		meal.AverageUnitWeightGrams, _ = ConvertUnit(meal.AverageUnitWeightGrams, "g", "oz")
-	case PhysicalStateLiquid:
-		meal.AverageUnitWeightGrams, _ = ConvertUnit(meal.AverageUnitWeightGrams, "ml", "fl_oz")
-	}
 }
 
 // nullableMealMacro stores direct macros only for opaque single meals.

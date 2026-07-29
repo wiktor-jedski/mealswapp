@@ -266,7 +266,7 @@ func (s *SubstitutionService) loadSourceObject(ctx context.Context, input Substi
 		if s.mealRepository == nil {
 			return substitutionSourceObject{}, fmt.Errorf("meal repository unavailable")
 		}
-		meal, err := s.mealRepository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		meal, err := s.mealRepository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{})
 		if err != nil {
 			return substitutionSourceObject{}, err
 		}
@@ -278,7 +278,7 @@ func (s *SubstitutionService) loadSourceObject(ctx context.Context, input Substi
 		}
 		return substitutionSourceObject{physicalState: meal.PhysicalState, macros: meal.MacrosPer100, culinaryRoles: roles}, nil
 	}
-	food, err := s.repository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+	food, err := s.repository.GetByID(ctx, input.FoodObjectID, repository.RepositoryContext{})
 	if err != nil {
 		return substitutionSourceObject{}, err
 	}

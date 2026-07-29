@@ -1,6 +1,7 @@
 package userdata
 
 // Implements DESIGN-008 DataExporter verification.
+// Implements DESIGN-005 UnitConverter metric export verification.
 
 import (
 	"bytes"
@@ -194,7 +195,7 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	customID := uuid.New()
 	customs := &memoryExportCustomItems{items: []customitem.Item{{
 		ID: customID, Name: "Private tofu", PhysicalState: repository.PhysicalStateSolid,
-		MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 2, Fat: 4}, Micros: repository.MicroValues{"Sodium": 3},
+		AverageUnitWeightGrams: 28.3495, MacrosPer100: repository.MacroValues{Protein: 10, Carbohydrates: 2, Fat: 4}, Micros: repository.MicroValues{"Sodium": 3},
 		FoodCategories: []customitem.ClassificationSummary{{ID: uuid.New(), Name: "Child", Kind: repository.ClassificationKindFoodCategory}},
 	}}}
 	service := NewExportService(repo, repo, repo, repo, repo, encryption, diets).WithCustomItems(customs)
@@ -206,7 +207,7 @@ func TestExportServiceBuildsJSONAndCSV(t *testing.T) {
 	if err := json.Unmarshal(payload.Body, &bundle); err != nil {
 		t.Fatalf("decode export json: %v", err)
 	}
-	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.SavedDiets) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 1 || bundle.CustomItems[0].ID != customID || bundle.CustomItems[0].Name != "Private tofu" || customs.userID != userID {
+	if bundle.User.Email != "ada@example.test" || bundle.User.DisplayName != "Ada" || len(bundle.SavedItems) != 1 || len(bundle.SavedDiets) != 1 || len(bundle.History) != 1 || len(bundle.CustomItems) != 1 || bundle.CustomItems[0].ID != customID || bundle.CustomItems[0].Name != "Private tofu" || bundle.CustomItems[0].AverageUnitWeightGrams != 28.3495 || customs.userID != userID {
 		t.Fatalf("json bundle = %#v", bundle)
 	}
 	if strings.Contains(string(payload.Body), "ownerId") || strings.Contains(string(payload.Body), "parentId") || strings.Contains(string(payload.Body), "global") {

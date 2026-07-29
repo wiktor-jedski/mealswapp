@@ -243,9 +243,8 @@ func (b *ConstraintBuilder) LoadFromSavedDiet(ctx context.Context, userID, dietI
 		return SavedDietOptimizationInputs{}, validationError("persisted original diet must contain at least one meal")
 	}
 
-	unitSystem := repository.UnitSystemMetric
 	owner := userID
-	context := repository.RepositoryContext{UserID: &owner, UnitSystem: unitSystem}
+	context := repository.RepositoryContext{UserID: &owner}
 	meals := make([]repository.MealEntity, 0)
 	seen := make(map[uuid.UUID]struct{})
 	for index, entry := range diet.Entries {

@@ -436,13 +436,13 @@ func (s *Service) foodObjectNutrition(ctx context.Context, id uuid.UUID, objectT
 		if s == nil || s.meals == nil {
 			return "", repository.MacroValues{}, repository.NewError(repository.ErrorKindConnection, "meal service is unavailable", nil)
 		}
-		meal, err := s.meals.GetByID(ctx, id, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		meal, err := s.meals.GetByID(ctx, id, repository.RepositoryContext{})
 		return meal.PhysicalState, meal.MacrosPer100, err
 	case repository.FoodObjectTypeFoodItem:
 		if s == nil || s.foods == nil {
 			return "", repository.MacroValues{}, repository.NewError(repository.ErrorKindConnection, "Food Item service is unavailable", nil)
 		}
-		food, err := s.foods.GetByID(ctx, id, repository.RepositoryContext{UnitSystem: repository.UnitSystemMetric})
+		food, err := s.foods.GetByID(ctx, id, repository.RepositoryContext{})
 		return food.PhysicalState, food.MacrosPer100, err
 	default:
 		return "", repository.MacroValues{}, validationError("Food Object type is invalid")
