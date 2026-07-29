@@ -90,6 +90,11 @@
 					classificationMessage = "Saved, but the list could not be refreshed";
 					return;
 				}
+				if (deletedClassificationId && projectionContainsId(projection, deletedClassificationId)) {
+					classifications = lastSafeClassifications;
+					classificationMessage = "Deleted, but the list could not be refreshed";
+					return;
+				}
 				lastSafeClassifications = projection;
 				classifications = projection;
 				const completedSave = classificationRefreshRequired && savedClassification !== undefined;
@@ -118,6 +123,10 @@
 
 	function projectionContains(projection: Record<ClassificationKind, AdminClassification[]>, saved: AdminClassification): boolean {
 		return projection[saved.kind].some((value) => value.id === saved.id && value.name === saved.name && (value.parentId ?? "") === (saved.parentId ?? ""));
+	}
+
+	function projectionContainsId(projection: Record<ClassificationKind, AdminClassification[]>, id: string): boolean {
+		return Object.values(projection).some((values) => values.some((value) => value.id === id));
 	}
 
 	async function loadItem(): Promise<void> {

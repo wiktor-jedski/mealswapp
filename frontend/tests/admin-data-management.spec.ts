@@ -363,6 +363,26 @@ test("deleted editor context survives refresh failure and clears after read-only
 	expect(state.classificationDeletes).toBe(1);
 });
 
+test("stale successful delete projection is rejected and retried as a read only", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	state.classificationReadOverrides = {
+		food_category: state.categories.map((value) => ({ ...value })),
+		culinary_role: state.roles.map((value) => ({ ...value }))
+	};
+	await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Edit" }).click();
+	await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Delete" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Deleted, but the list could not be refreshed")).toBeVisible();
+	await expect(page.locator(`[data-classification-id="${categoryId}"]`)).toBeVisible();
+	await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("Produce");
+	expect(state.classificationDeletes).toBe(1);
+	await page.getByRole("button", { name: "Retry list refresh" }).click();
+	await expect(page.getByText("Classification deleted and refreshed.")).toBeVisible();
+	await expect(page.locator(`[data-classification-id="${categoryId}"]`)).toHaveCount(0);
+	await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("");
+	expect(state.classificationDeletes).toBe(1);
+});
+
 test("item replacement preserves all fields and renders the differing authoritative follow-up", async ({ page }) => {
 	const state = await stubApp(page);
 	state.item = {
