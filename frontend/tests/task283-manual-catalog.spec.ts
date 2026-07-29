@@ -259,33 +259,24 @@ test("solid and liquid creation persists ownerless canonical state and density p
 	const secondRead = await page.request.get(`${secondAPI()}/api/v1/admin/items/${liquidCreate.value.id}`);
 	expect(secondRead.status()).toBe(200);
 	expect(await item(secondRead)).toEqual(liquidCreate.value);
-	const privateKey = crypto.randomUUID();
 	const sharedSearchQuery = "Task 283";
-	const privateResponse = await page.request.post("/api/v1/custom-items", {
-		headers: { "X-CSRF-Token": token, "Idempotency-Key": privateKey },
-		data: solid(`${sharedSearchQuery} private ${info.project.name}`)
-	});
-	expect(privateResponse.status()).toBe(201);
-	const privateBody = await privateResponse.json() as { data?: { id?: string } };
-	expect(privateBody.data?.id).toMatch(UUID);
+	const privatePartitionID = fixture("MEALSWAPP_TASK283_PRIVATE_ITEM_ID");
 	const createdPicker = await adminSearch(page, sharedSearchQuery, secondAPI());
 	expect(createdPicker.items).toContainEqual(expect.objectContaining({ itemId: solidCreate.value.id, name: solidCreate.value.name, macrosPer100: solidCreate.value.macrosPer100 }));
-	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privateBody.data!.id);
+	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privatePartitionID);
 	const createdCatalog = await search(page, { query: sharedSearchQuery, mode: "catalog", page: 1, filters: [] });
 	expect(createdCatalog.items.map(({ id }) => id)).toContain(solidCreate.value.id);
-	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privateBody.data!.id);
+	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privatePartitionID);
 	const createdSubstitution = await search(page, {
 		query: sharedSearchQuery, mode: "substitution", page: 1, filters: [],
 		substitutionInputs: [{ foodObjectId: solidCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
 	}, secondAPI());
 	expect(createdSubstitution.items.map(({ id }) => id)).toContain(liquidCreate.value.id);
-	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privateBody.data!.id);
-	const privateDelete = await page.request.delete(`/api/v1/custom-items/${privateBody.data!.id}`, { headers: { "X-CSRF-Token": token } });
-	expect(privateDelete.status()).toBe(204);
+	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privatePartitionID);
 	const criteria = ["P08-SWR056-STEP-01", "P08-SWR056-STEP-02", "P08-SWR056-ACCEPT-01", "P08-SWR033-STEP-05"];
 	await record(info, "solid-create", criteria, {
 		kind: "item", entityId: solidCreate.value.id, name: solidCreate.value.name, idempotencyKey: solidCreate.key,
-		requestIds: [await responseRequestId(solidCreate.response), await responseRequestId(privateResponse), await responseRequestId(createdPicker.response), await responseRequestId(createdCatalog.response), await responseRequestId(privateDelete)],
+		requestIds: [await responseRequestId(solidCreate.response), await responseRequestId(createdPicker.response), await responseRequestId(createdCatalog.response)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "solid", metricBasis: "100g", macros: solidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100g"]);
 	await record(info, "liquid-create", criteria, {

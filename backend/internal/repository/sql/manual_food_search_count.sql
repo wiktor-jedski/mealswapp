@@ -2,4 +2,4 @@
 SELECT count(*)
 FROM food_items
 WHERE deleted_at IS NULL
-  AND strpos(normalized_name, $1::text) > 0;
+  AND strpos(regexp_replace(normalized_name, '[[:space:]]+', ' ', 'g'), $1::text) > 0;

@@ -154,6 +154,17 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	if err != nil || total != 1 || len(discovered) != 1 || discovered[0].ID != itemID || discovered[0].Name != "Manual global tofu" || len(discovered[0].FoodCategories) != 1 || len(discovered[0].CulinaryRoles) != 1 {
 		t.Fatalf("global discovery items=%+v total=%d err=%v", discovered, total, err)
 	}
+	var legacyID uuid.UUID
+	if err := db.QueryRow(ctx, `INSERT INTO food_items (name, physical_state, protein_per_100, carbohydrates_per_100, fat_per_100) VALUES ('Legacy   whitespace tofu', 'solid', 1, 2, 3) RETURNING id`).Scan(&legacyID); err != nil {
+		t.Fatal(err)
+	}
+	legacy, legacyTotal, err := manualRepo.Search(ctx, "legacy whitespace tofu", 20, 0)
+	if err != nil || legacyTotal != 1 || len(legacy) != 1 || legacy[0].ID != legacyID {
+		t.Fatalf("legacy whitespace discovery items=%+v total=%d err=%v", legacy, legacyTotal, err)
+	}
+	if _, err := db.Exec(ctx, `DELETE FROM food_items WHERE id = $1`, legacyID); err != nil {
+		t.Fatal(err)
+	}
 	auditsAfterSearch, err := auditRepo.ListAuditForEntity(ctx, "food_item", itemID)
 	if err != nil || len(auditsAfterSearch) != len(audits) {
 		t.Fatalf("read-only discovery changed audit state: before=%d after=%d err=%v", len(audits), len(auditsAfterSearch), err)
