@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"sort"
@@ -145,6 +146,11 @@ func TestMicronutrientAdminHTTPLifecycle(t *testing.T) {
 	status, body := request(fiber.MethodGet, "/api/v1/admin/micronutrients", "")
 	if status != fiber.StatusOK || len(body.Data["micronutrients"].([]any)) != 1 {
 		t.Fatalf("list = %d %+v", status, body)
+	}
+	// The live response projection must match the documented lower-camel-case API contract.
+	encoded, err := json.Marshal(repository.MicronutrientVocabularyEntry{Key: "VitaminK", DisplayName: "Vitamin K", Unit: "mcg", Active: true})
+	if err != nil || string(encoded) != `{"key":"VitaminK","displayName":"Vitamin K","unit":"mcg","active":true}` {
+		t.Fatalf("micronutrient response JSON = %s, err=%v", encoded, err)
 	}
 	status, _ = request(fiber.MethodPut, "/api/v1/admin/micronutrients/VitaminK/display-name", `{"displayName":"Vitamin K1"}`)
 	if status != fiber.StatusOK {

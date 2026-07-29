@@ -43,10 +43,10 @@ type MicroValues map[string]float64
 // MicronutrientVocabularyEntry stores one canonical micronutrient definition.
 // Implements DESIGN-005 MicronutrientVocabulary.
 type MicronutrientVocabularyEntry struct {
-	Key         string
-	DisplayName string
-	Unit        string
-	Active      bool
+	Key         string `json:"key"`
+	DisplayName string `json:"displayName"`
+	Unit        string `json:"unit"`
+	Active      bool   `json:"active"`
 }
 
 // ClassificationKind identifies Food Category and Culinary Role classification groups.
