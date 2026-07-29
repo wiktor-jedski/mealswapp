@@ -105,6 +105,26 @@ func TestExternalSearchProxyPartialAndCompleteOutageWarnings(t *testing.T) {
 	}
 }
 
+func TestExternalSearchProxyDistinguishesPartialAndRejectedCandidates(t *testing.T) {
+	partial := proxyRecord("usda", "1", "Partial")
+	partial.PartialNormalization = true
+	provider := &proxyProvider{result: ProviderResult{
+		Records:            []ExternalFoodRecord{partial},
+		RejectedCandidates: true,
+	}}
+	proxy := NewExternalSearchProxy(ProviderSet{USDA: provider}, NewRateLimitHandler(nil, nil), NewDataNormalizer(&proxyVocabulary{}))
+	response, err := proxy.Search(context.Background(), ExternalSearchQuery{Query: "apple", Provider: "usda", Page: 1})
+	if err != nil || len(response.Candidates) != 1 || len(response.Warnings) != 1 {
+		t.Fatalf("response=%#v err=%v", response, err)
+	}
+	if !reflect.DeepEqual(response.Candidates[0].Warnings, []string{WarningMissingImage, WarningMissingMicronutrients, WarningPartialNormalization}) {
+		t.Fatalf("candidate warnings=%#v", response.Candidates[0].Warnings)
+	}
+	if response.Warnings[0].Code != string(ProviderErrorInvalidPayload) {
+		t.Fatalf("provider warnings=%#v", response.Warnings)
+	}
+}
+
 // TestExternalSearchProxyPropagatesCancellation verifies IT-ARCH-012-003,
 // ARCH-012, DESIGN-012 RateLimitHandler, and SW-REQ-055.
 func TestExternalSearchProxyPropagatesCancellation(t *testing.T) {

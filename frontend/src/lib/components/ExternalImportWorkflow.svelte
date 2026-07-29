@@ -50,6 +50,8 @@
   let blockedConflictCode = $state("");
   let pendingSearch = $state<SearchRequest | null>(null);
   let visibleSelectedWarnings = $derived(selectedWarnings.filter((warning) => warning !== "missing_liquid_density" || !hasValidLiquidDensity(draft)));
+  let hasRejectedCandidates = $derived(providerWarnings.some((warning) => warning.code === "invalid_external_payload"));
+  let hasProviderFailure = $derived(providerWarnings.some((warning) => warning.code !== "invalid_external_payload"));
   let searchController: AbortController | null = null;
   let searchSequence = 0;
   let importOwnershipToken = 0;
@@ -65,7 +67,8 @@
     missing_micronutrients: "Micronutrient data is incomplete.",
     missing_liquid_density: "Liquid density is missing; add it when quantity conversion needs it.",
     uncertain_unit_conversion: "A source unit conversion needs review.",
-    suspicious_liquid_macros: "Liquid nutrition values may use an unexpected basis."
+    suspicious_liquid_macros: "Liquid nutrition values may use an unexpected basis.",
+    partial_normalization: "Some optional source measures were ignored."
   };
 
   const providerWarningLabels: Record<ExternalDataWarning["code"], string> = {
@@ -73,7 +76,7 @@
     provider_unavailable: "One provider is unavailable; available results are shown.",
     timeout: "One provider timed out; available results are shown.",
     retry_exhausted: "One provider could not be reached after retries.",
-    invalid_external_payload: "One provider returned data that could not be used."
+    invalid_external_payload: "Some provider candidates were rejected because required data was invalid."
   };
 
   onMount(() => {
@@ -380,7 +383,13 @@
   {#if searchState === "loading"}
     <p role="status" aria-live="polite" data-external-loading>Searching external providers…</p>
   {:else if searchState === "empty"}
-    <p role="status" data-external-empty>No external candidates matched this search.</p>
+    {#if hasRejectedCandidates}
+      <p role="status" data-external-rejected>Some provider candidates were rejected because required data was invalid.</p>
+    {:else if hasProviderFailure}
+      <p role="status" data-external-provider-failure>External providers could not return results.</p>
+    {:else}
+      <p role="status" data-external-empty>No external candidates matched this search.</p>
+    {/if}
   {:else if searchState === "error"}
     <div class="grid justify-items-start gap-2" role="alert" data-external-error>
       <p>{searchMessage}</p>

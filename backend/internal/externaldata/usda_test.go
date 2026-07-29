@@ -85,6 +85,22 @@ func TestUSDASearchEncodesQueryKeyPaginationAndProjectsDeterministically(t *test
 	}
 }
 
+func TestUSDASearchSupportsExactFDCIDAndBroadNameQueries(t *testing.T) {
+	queries := make(chan string, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries <- r.URL.Query().Get("query")
+		_, _ = w.Write([]byte(`{"totalHits":0,"currentPage":0,"totalPages":0,"foods":[]}`))
+	}))
+	defer server.Close()
+	client := newTestUSDAClient(t, server.URL, nil, 0, 0)
+	for _, query := range []string{"282001", "lentil soup"} {
+		records, err := client.Search(context.Background(), ExternalSearchQuery{Query: query, Provider: "usda", Page: 1, PageSize: 25})
+		if err != nil || len(records) != 0 || <-queries != query {
+			t.Fatalf("query=%q records=%#v err=%v", query, records, err)
+		}
+	}
+}
+
 func TestUSDASearchRejectsInvalidInputBeforeOutboundRequest(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls.Add(1) }))
@@ -224,15 +240,8 @@ func TestUSDASearchBoundsResponseAndRejectsMalformedOrPartialPayloads(t *testing
 	}{
 		{name: "too large", body: validUSDAPayload, limit: 16, wantCode: ProviderErrorResponseTooLarge},
 		{name: "malformed JSON", body: `{`, wantCode: ProviderErrorInvalidPayload},
-		{name: "malformed food", body: `{"totalHits":1,"currentPage":1,"totalPages":1,"foods":["bad"]}`, wantCode: ProviderErrorInvalidPayload},
 		{name: "missing envelope", body: `{"foods":[]}`, wantCode: ProviderErrorInvalidPayload},
 		{name: "missing foods", body: `{"totalHits":0,"currentPage":0,"totalPages":0}`, wantCode: ProviderErrorInvalidPayload},
-		{name: "missing identity", body: searchPayload(`{"description":"Apple","foodNutrients":[]}`), wantCode: ProviderErrorInvalidPayload},
-		{name: "missing nutrients", body: searchPayload(`{"fdcId":1,"description":"Apple"}`), wantCode: ProviderErrorInvalidPayload},
-		{name: "partial serving", body: searchPayload(`{"fdcId":1,"description":"Apple","servingSize":10,"foodNutrients":[]}`), wantCode: ProviderErrorInvalidPayload},
-		{name: "bad nutrient", body: searchPayload(`{"fdcId":1,"description":"Apple","foodNutrients":[{"nutrientName":"Protein","unitName":"G","value":-1}]}`), wantCode: ProviderErrorInvalidPayload},
-		{name: "duplicate nutrient", body: searchPayload(`{"fdcId":1,"description":"Apple","foodNutrients":[{"nutrientName":"Protein","unitName":"G","value":1},{"nutrientName":"Protein","unitName":"G","value":2}]}`), wantCode: ProviderErrorInvalidPayload},
-		{name: "bad portion", body: searchPayload(`{"fdcId":1,"description":"Apple","foodNutrients":[],"foodMeasures":[{"amount":1,"gramWeight":0,"measureUnit":{"name":"cup"}}]}`), wantCode: ProviderErrorInvalidPayload},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -242,6 +251,43 @@ func TestUSDASearchBoundsResponseAndRejectsMalformedOrPartialPayloads(t *testing
 			_, err := client.Search(context.Background(), validUSDAQuery())
 			assertProviderError(t, err, tc.wantCode, http.StatusOK, false)
 		})
+	}
+}
+
+func TestUSDASearchRejectsMalformedCandidatesWithoutFailingTheProvider(t *testing.T) {
+	foods := []string{
+		`"bad"`,
+		`{"description":"Apple","foodNutrients":[]}`,
+		`{"fdcId":1,"description":"Apple"}`,
+		`{"fdcId":1,"description":"Apple","servingSize":10,"foodNutrients":[]}`,
+		`{"fdcId":1,"description":"Apple","foodNutrients":[{"nutrientName":"","unitName":"G","value":1}]}`,
+		`{"fdcId":1,"description":"Apple","foodNutrients":[{"nutrientName":"Protein","unitName":"G","value":-1}]}`,
+		`{"fdcId":1,"description":"Apple","foodNutrients":[{"nutrientName":"Protein","unitName":"G","value":1},{"nutrientName":"Protein","unitName":"G","value":2}]}`,
+	}
+	for _, food := range foods {
+		t.Run(food, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(searchPayload(food)))
+			}))
+			defer server.Close()
+			result, err := newTestUSDAClient(t, server.URL, nil, 0, 0).SearchResult(context.Background(), validUSDAQuery())
+			if err != nil || len(result.Records) != 0 || !result.RejectedCandidates {
+				t.Fatalf("result=%#v err=%v", result, err)
+			}
+		})
+	}
+}
+
+func TestDecodeUSDAPortionRejectsUnusableOptionalShapes(t *testing.T) {
+	for _, raw := range []string{
+		`{`,
+		`{"amount":1,"measureUnit":{"name":"cup"}}`,
+		`{"amount":1,"gramWeight":10,"measureUnit":{"name":"slice"}}`,
+		`{"amount":null,"gramWeight":10,"measureUnit":null}`,
+	} {
+		if portion, ok := decodeUSDAPortion(json.RawMessage(raw)); ok {
+			t.Fatalf("optional portion accepted: %#v", portion)
+		}
 	}
 }
 
@@ -272,6 +318,81 @@ func TestUSDASearchHandlesRequestTransportAndBodyReadFailures(t *testing.T) {
 	})}
 	_, err = client.Search(context.Background(), validUSDAQuery())
 	assertProviderError(t, err, ProviderErrorUnavailable, http.StatusTemporaryRedirect, true)
+}
+
+// TestDecodeUSDASearchToleratesOptionalPortionsAndIsolatesCandidates verifies
+// DESIGN-012 USDAClient optional-evidence tolerance and SW-REQ-033.
+func TestDecodeUSDASearchToleratesOptionalPortionsAndIsolatesCandidates(t *testing.T) {
+	body := `{"totalHits":4,"currentPage":1,"totalPages":1,"foods":[
+		{
+			"fdcId":1,"description":"Liquid peer","servingSize":240,"servingSizeUnit":"ml",
+			"foodNutrients":[{"nutrientName":"Protein","unitName":"G","value":1}],
+			"foodMeasures":[
+				{"amount":null,"gramWeight":224,"disseminationText":"about one cup","measureUnit":null},
+				{"amount":1,"gramWeight":240,"measureUnit":{"abbreviation":"cup"}},
+				{"amount":null,"gramWeight":15,"disseminationText":"1 tablespoon","measureUnit":null},
+				{"amount":null,"gramWeight":12,"disseminationText":"1 cup chopped","measureUnit":null}
+			]
+		},
+		{"fdcId":2,"description":"Valid peer","foodNutrients":[],"foodMeasures":[]},
+		{"fdcId":0,"description":"Invalid identity","foodNutrients":[]},
+		{"fdcId":3,"description":"Invalid nutrient","foodNutrients":[{"nutrientName":"Protein","unitName":"G","value":null}]},
+		{"fdcId":4,"description":"Unsupported nutrient metadata","foodNutrients":[{"nutrientName":"Future nutrient","unitName":"FUTURE","value":"not numeric"}]}
+	]}`
+	records, err := decodeUSDASearch([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 || records[0].ExternalID != "1" || records[1].ExternalID != "2" || records[2].ExternalID != "4" {
+		t.Fatalf("valid peers = %#v", records)
+	}
+	wantPortions := []ExternalFoodPortion{
+		{Amount: 1, Unit: "cup", GramWeight: 240},
+		{Amount: 1, Unit: "tablespoon", GramWeight: 15},
+	}
+	if !records[0].PartialNormalization || !reflect.DeepEqual(records[0].Portions, wantPortions) {
+		t.Fatalf("partial record = %#v", records[0])
+	}
+	if records[0].ServingSize == nil || *records[0].ServingSize != 240 || records[0].ServingUnit != "ml" {
+		t.Fatalf("top-level serving pair was not preserved: %#v", records[0])
+	}
+	if records[1].PartialNormalization || len(records[1].Portions) != 0 {
+		t.Fatalf("valid peer was marked partial: %#v", records[1])
+	}
+	if len(records[2].Nutrients) != 0 {
+		t.Fatalf("unsupported malformed nutrient was projected: %#v", records[2].Nutrients)
+	}
+}
+
+func TestUSDASearchResultReportsRejectedCandidatesWithoutProviderFailure(t *testing.T) {
+	body := `{"totalHits":2,"currentPage":1,"totalPages":1,"foods":[
+		{"fdcId":1,"description":"Valid peer","foodNutrients":[]},
+		{"fdcId":0,"description":"Invalid peer","foodNutrients":[]}
+	]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	result, err := newTestUSDAClient(t, server.URL, nil, 0, 0).SearchResult(context.Background(), validUSDAQuery())
+	if err != nil || len(result.Records) != 1 || !result.RejectedCandidates {
+		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
+func TestDecodeUSDAFoodToleratesMalformedOptionalMeasuresContainer(t *testing.T) {
+	for _, container := range []string{`{}`, `"not-an-array"`, `null`} {
+		t.Run(container, func(t *testing.T) {
+			raw := `{"fdcId":9,"description":"Valid food","foodNutrients":[],"foodMeasures":` + container + `}`
+			record, err := decodeUSDAFood([]byte(raw))
+			if err != nil {
+				t.Fatalf("optional foodMeasures rejected food: %v", err)
+			}
+			if !record.PartialNormalization || len(record.Portions) != 0 {
+				t.Fatalf("record=%#v, want partial record without portions", record)
+			}
+		})
+	}
 }
 
 func TestDecodeUSDASearchAcceptsEmptyResultsAndOrdersPortionTies(t *testing.T) {

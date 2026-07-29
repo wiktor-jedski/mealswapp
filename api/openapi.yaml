@@ -1816,7 +1816,7 @@ components:
           uniqueItems: true
           items:
             type: string
-            enum: [missing_image, missing_macros, missing_micronutrients, missing_liquid_density, uncertain_unit_conversion, suspicious_liquid_macros]
+            enum: [missing_image, missing_macros, missing_micronutrients, missing_liquid_density, uncertain_unit_conversion, suspicious_liquid_macros, partial_normalization]
     # Implements DESIGN-009 ExternalSearchProxy closed provider warning vocabulary.
     ExternalDataWarning:
       type: object
