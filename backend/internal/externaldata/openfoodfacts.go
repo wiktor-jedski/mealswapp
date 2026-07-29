@@ -240,6 +240,8 @@ func containsUnsafeJSONObjectKey(raw []byte) bool {
 	return false
 }
 
+// rawJSONStringEnd returns the closing quote offset for one raw JSON string.
+// Implements DESIGN-012 OpenFoodFactsClient provider-key safety at the raw JSON boundary.
 func rawJSONStringEnd(raw []byte, start int) (int, bool) {
 	escaped := false
 	for offset := start + 1; offset < len(raw); offset++ {
