@@ -20,7 +20,8 @@ is `PASSED` on the synchronized phase branch.
   states.
 - `frontend/tests/task296-real-stack-preference.spec.ts` and
   `scripts/verify-task-296-ui.sh` provide an isolated real-stack acceptance
-  path that registers a disposable user, updates the profile through the
+  path that migrates the controlled database, starts and health-checks the
+  API, registers a disposable user, updates the profile through the
   CSRF-protected API, and rereads the authoritative persisted preference.
 - Component, store, generated-client, auth-session, focused workflow, and
   desktop/mobile Playwright regressions cover persistence, hydration,
@@ -34,7 +35,7 @@ is `PASSED` on the synchronized phase branch.
 | `bun test src/lib/stores/preferences.test.ts --coverage` | PASS; `23` tests, `preferences.ts` `100.00%` functions / `100.00%` lines |
 | `bun run check` | PASS; `549` frontend tests, typecheck, generated drift, and production build |
 | `bunx playwright test tests/task296-unit-preference.spec.ts` | PASS; `8/8` desktop/mobile cases |
-| `MEALSWAPP_DATABASE_URL=... MEALSWAPP_REDIS_URL=... bash scripts/verify-task-296-ui.sh` | PASS; one isolated PostgreSQL/Redis/API desktop case verifies metric default, confirmed imperial update, and persisted imperial reload |
+| `MEALSWAPP_DATABASE_URL=... MEALSWAPP_REDIS_URL=... MEALSWAPP_TASK296_RESULT_FILE=docs/implementation/preparations/task-296-real-stack-result.json bash scripts/verify-task-296-ui.sh` | PASS; runner migration/API health plus one isolated PostgreSQL/Redis/API desktop case verifies metric default, confirmed imperial update, and persisted imperial reload; result artifact committed beside this preparation |
 | changed-area Playwright lane | PASS; `62/62` cases |
 | `python3 -m unittest scripts/test_generate_api_types.py` | PASS; `25/25` |
 | `bun test src/lib/api/auth-client.test.ts --coverage` | PASS; `11` tests; `auth-client.ts` measured at `89.47%` functions / `82.46%` lines |
