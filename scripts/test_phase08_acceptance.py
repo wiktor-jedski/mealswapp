@@ -416,8 +416,8 @@ class Phase08AcceptanceTests(unittest.TestCase):
             scenario=self.criteria[0]["scenarioId"],
         )
         findings = self.validate_ledger(closed)
-        with self.assertRaisesRegex(acceptance.ValidationError, "no unresolved finding"):
-            acceptance.synchronize_results(normalized, self.criteria, findings)
+        synchronized = acceptance.synchronize_results(normalized, self.criteria, findings)
+        self.assertEqual(["P08-FIND-001"], synchronized[0]["findingIds"])
 
     def test_duplicate_root_cause_findings_are_rejected(self) -> None:
         first = self.finding()

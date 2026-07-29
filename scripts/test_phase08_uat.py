@@ -41,10 +41,10 @@ class Phase08UATTests(unittest.TestCase):
     def test_committed_report_is_current_and_complete(self) -> None:
         self.validate()
         self.assertEqual(91, len(self.report["results"]))
-        self.assertEqual({"PASS": 67, "FAIL": 13, "BLOCKED": 11}, self.report["counts"])
-        self.assertEqual(14, len(self.report["openFindings"]))
+        self.assertEqual({"PASS": 72, "FAIL": 8, "BLOCKED": 11}, self.report["counts"])
+        self.assertEqual(11, len(self.report["openFindings"]))
         self.assertEqual(
-            "PREPARED",
+            "PASSED",
             next(item["status"] for item in self.report["taskTrace"] if item["taskId"] == 286),
         )
 

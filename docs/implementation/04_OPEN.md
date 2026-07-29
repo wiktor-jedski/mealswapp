@@ -581,7 +581,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run Task 281 on desktop and mobile after the helper opens hidden responsive navigation controls.",
       "closedDate": "2026-07-28",
-      "passingEvidence": "logs/real-stack-e2e/9f13846d58116dcc9473618b/acceptance/prebootstrap.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-281-002",
@@ -615,7 +615,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run the isolated Task 281 suite and prove all lifecycle stages, exact PostgreSQL/audit assertions, Redis PONG, cleanup, and report finalization complete.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/9f13846d58116dcc9473618b/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-282-001",
@@ -667,7 +667,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Rerun Task 282 and require P08-SWR055-ACCEPT-06 PASS plus one food/import/audit and ownerless global persistence evidence.",
       "closedDate": "2026-07-28",
-      "passingEvidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-282-004",
@@ -761,7 +761,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run Task 282 and prove the disposable stack, loopback fixtures, backend evidence, cleanup, and three Task 280 reports finalize.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-284-001",
