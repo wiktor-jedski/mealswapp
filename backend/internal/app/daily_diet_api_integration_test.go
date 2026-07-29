@@ -68,9 +68,94 @@ func TestDailyDietProductionAPIWithLivePostgres(t *testing.T) {
 	}
 	csrfToken, userCookies := fetchLiveDailyDietCSRF(t, server, userCookies)
 	otherCSRF, otherCookies := fetchLiveDailyDietCSRF(t, server, otherCookies)
+
+	customRepo := repository.NewPostgresCustomFoodItemRepository(db)
+	customID, err := customRepo.Create(ctx, repository.CustomFoodItemEntity{
+		OwnerID: userID,
+		FoodItemEntity: repository.FoodItemEntity{
+			Name: "Owner custom shake", PhysicalState: repository.PhysicalStateLiquid,
+			DensityGramsPerMilliliter: 1, DensitySourceKind: "manual",
+			MacrosPer100: repository.MacroValues{Protein: 2, Carbohydrates: 3, Fat: 4},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create custom Food Item: %v", err)
+	}
+	resp := liveDailyDietRequest(t, server, fiber.MethodGet, "/api/v1/custom-items", "", userCookies, "", "")
+	ownerCustomItems := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if items := ownerCustomItems.Data["items"].([]any); resp.StatusCode != fiber.StatusOK || len(items) != 1 {
+		t.Fatalf("owner custom-item list status=%d body=%+v", resp.StatusCode, ownerCustomItems)
+	}
+	resp = liveDailyDietRequest(t, server, fiber.MethodGet, "/api/v1/custom-items", "", otherCookies, "", "")
+	otherCustomItems := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if items := otherCustomItems.Data["items"].([]any); resp.StatusCode != fiber.StatusOK || len(items) != 0 {
+		t.Fatalf("cross-owner custom-item list status=%d body=%+v", resp.StatusCode, otherCustomItems)
+	}
+	customBody := liveCustomDailyDietBody("Private Day", customID, mealB)
+	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", customBody, otherCookies, "live-cross-owner-custom", otherCSRF)
+	assertLiveDailyDietStatus(t, resp, fiber.StatusNotFound)
+	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", customBody, userCookies, "live-owner-custom", csrfToken)
+	customDiet := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("custom create status=%d body=%+v", resp.StatusCode, customDiet)
+	}
+	customDietID := liveUUIDFromData(t, customDiet.Data, "id")
+	assertLiveAggregate(t, customDiet.Data, 7, 8, 6, 114)
+	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", customBody, userCookies, "live-owner-custom", csrfToken)
+	customReplay := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusCreated || liveUUIDFromData(t, customReplay.Data, "id") != customDietID {
+		t.Fatalf("custom replay status=%d body=%+v", resp.StatusCode, customReplay)
+	}
+	var customReferences, otherReferences int
+	if err := db.QueryRow(ctx, `
+		SELECT (custom_food_item_id IS NOT NULL)::int,
+		       (meal_id IS NOT NULL)::int + (food_item_id IS NOT NULL)::int
+		FROM saved_diet_meal_entries
+		WHERE saved_diet_id = $1 AND custom_food_item_id IS NOT NULL
+	`, customDietID).Scan(&customReferences, &otherReferences); err != nil {
+		t.Fatalf("read custom saved-diet reference: %v", err)
+	}
+	if customReferences != 1 || otherReferences != 0 {
+		t.Fatalf("custom reference invariant = custom:%d other:%d", customReferences, otherReferences)
+	}
+	resp = liveDailyDietRequest(t, server, fiber.MethodGet, "/api/v1/daily-diets/"+customDietID.String(), "", userCookies, "", "")
+	reloadedCustom := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	entries := reloadedCustom.Data["entries"].([]any)
+	if entries[0].(map[string]any)["foodObjectType"] != string(repository.FoodObjectTypeCustomFoodItem) {
+		t.Fatalf("reloaded custom entries = %+v", entries)
+	}
+	missingCustomBody := liveCustomDailyDietBody("Must not replace", uuid.New(), mealB)
+	resp = liveDailyDietRequest(t, server, fiber.MethodPut, "/api/v1/daily-diets/"+customDietID.String(), missingCustomBody, userCookies, "", csrfToken)
+	assertLiveDailyDietStatus(t, resp, fiber.StatusNotFound)
+	resp = liveDailyDietRequest(t, server, fiber.MethodGet, "/api/v1/daily-diets/"+customDietID.String(), "", userCookies, "", "")
+	unchangedCustom := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if unchangedCustom.Data["name"] != "Private Day" {
+		t.Fatalf("rejected custom replacement mutated diet: %+v", unchangedCustom)
+	}
+	replacementCustomBody := liveCustomDailyDietBody("Private Day Updated", customID, mealB)
+	resp = liveDailyDietRequest(t, server, fiber.MethodPut, "/api/v1/daily-diets/"+customDietID.String(), replacementCustomBody, userCookies, "", csrfToken)
+	replacedCustom := decodeLiveDailyDietEnvelope(t, resp)
+	resp.Body.Close()
+	if resp.StatusCode != fiber.StatusOK || replacedCustom.Data["name"] != "Private Day Updated" {
+		t.Fatalf("custom replacement status=%d body=%+v", resp.StatusCode, replacedCustom)
+	}
+	resp = liveDailyDietRequest(t, server, fiber.MethodDelete, "/api/v1/daily-diets/"+customDietID.String(), "", userCookies, "", csrfToken)
+	assertLiveDailyDietStatus(t, resp, fiber.StatusNoContent)
+	if err := customRepo.Delete(ctx, userID, customID); err != nil {
+		t.Fatalf("delete custom Food Item: %v", err)
+	}
+	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", customBody, userCookies, "live-deleted-custom", csrfToken)
+	assertLiveDailyDietStatus(t, resp, fiber.StatusNotFound)
+
 	body := liveMixedDailyDietBody("Training Day", foodA, mealB)
 
-	resp := liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, userCookies, "live-csrf-failure", "")
+	resp = liveDailyDietRequest(t, server, fiber.MethodPost, "/api/v1/daily-diets", body, userCookies, "live-csrf-failure", "")
 	assertLiveDailyDietStatus(t, resp, fiber.StatusForbidden)
 	if got := countLiveSavedDiets(t, db, userID); got != 0 {
 		t.Fatalf("CSRF failure wrote %d diets", got)
@@ -345,6 +430,10 @@ func liveDailyDietBody(name string, mealA, mealB uuid.UUID) string {
 
 func liveMixedDailyDietBody(name string, foodItem, meal uuid.UUID) string {
 	return fmt.Sprintf(`{"name":%q,"entries":[{"foodObjectId":%q,"foodObjectType":"food_item","quantity":100,"unit":"ml","position":0},{"foodObjectId":%q,"foodObjectType":"meal","quantity":200,"unit":"g","position":1}]}`, name, foodItem.String(), meal.String())
+}
+
+func liveCustomDailyDietBody(name string, customFoodItem, meal uuid.UUID) string {
+	return fmt.Sprintf(`{"name":%q,"entries":[{"foodObjectId":%q,"foodObjectType":"custom_food_item","quantity":100,"unit":"ml","position":0},{"foodObjectId":%q,"foodObjectType":"meal","quantity":100,"unit":"g","position":1}]}`, name, customFoodItem.String(), meal.String())
 }
 
 func mergeLiveDailyDietCookies(existing, updates []*http.Cookie) []*http.Cookie {

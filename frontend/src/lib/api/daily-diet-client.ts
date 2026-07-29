@@ -260,8 +260,8 @@ function decodeDiet(value: unknown, status: number, requestId: string): DailyDie
 	};
 }
 
-function foodObjectType(value: unknown): value is "food_item" | "meal" {
-	return value === "food_item" || value === "meal";
+function foodObjectType(value: unknown): value is "food_item" | "meal" | "custom_food_item" {
+	return value === "food_item" || value === "meal" || value === "custom_food_item";
 }
 
 function malformedResponse(status: number, requestId?: string): DailyDietClientError {

@@ -19,8 +19,30 @@ import (
 type CustomItemService interface {
 	Create(context.Context, uuid.UUID, customitem.CreateRequest) (customitem.CreateResult, error)
 	Get(context.Context, uuid.UUID, uuid.UUID) (customitem.Item, error)
+	List(context.Context, uuid.UUID) ([]customitem.Item, error)
 	Update(context.Context, uuid.UUID, uuid.UUID, customitem.Request) (customitem.Item, error)
 	Delete(context.Context, uuid.UUID, uuid.UUID) error
+}
+
+// ListCustomItems returns deterministic active private items only for the authenticated owner.
+// Implements DESIGN-008 ProfileController custom-item selection.
+func (c *ProfileController) ListCustomItems(ctx *fiber.Ctx) error {
+	user, ok := authenticatedUser(ctx)
+	if !ok {
+		return unauthorizedError()
+	}
+	if c.customItems == nil {
+		return customItemDependencyError()
+	}
+	items, err := c.customItems.List(ctx.UserContext(), user.UserID)
+	if err != nil {
+		return customItemError(err)
+	}
+	data := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		data = append(data, customItemData(item))
+	}
+	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: map[string]any{"items": data}})
 }
 
 // CreateCustomItem creates or replays an authenticated user's private item.

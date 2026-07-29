@@ -25,7 +25,13 @@ type fakeCustomItemService struct {
 	updateCalls int
 	updateUser  uuid.UUID
 	deleteUser  uuid.UUID
+	items       []customitem.Item
 	err         error
+}
+
+func (s *fakeCustomItemService) List(_ context.Context, userID uuid.UUID) ([]customitem.Item, error) {
+	s.getUser = userID
+	return s.items, s.err
 }
 
 func (s *fakeCustomItemService) Create(_ context.Context, userID uuid.UUID, req customitem.CreateRequest) (customitem.CreateResult, error) {
@@ -49,6 +55,35 @@ func (s *fakeCustomItemService) Delete(_ context.Context, userID, _ uuid.UUID) e
 
 func customItemBody(name string) string {
 	return `{"name":"` + name + `","physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":5,"fat":2},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+}
+
+// TestProfileControllerListsOnlyServiceOwnerProjection verifies the authenticated custom-food picker boundary.
+// Implements DESIGN-008 ProfileController custom-item selection.
+func TestProfileControllerListsOnlyServiceOwnerProjection(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, cookies := testJWTAuth(t, cfg, userID, nil)
+	service := &fakeCustomItemService{items: []customitem.Item{{ID: uuid.New(), Name: "Same name"}, {ID: uuid.New(), Name: "Same name"}}}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewProfileController(&fakeProfileService{}).WithCustomItems(service).Routes()})
+	request := httptest.NewRequest(fiber.MethodGet, "/api/v1/custom-items", nil)
+	addCookies(request, cookies)
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeEnvelope(t, response.Body)
+	response.Body.Close()
+	items := envelope.Data["items"].([]any)
+	if response.StatusCode != fiber.StatusOK || service.getUser != userID || len(items) != 2 {
+		t.Fatalf("list status=%d user=%s items=%+v", response.StatusCode, service.getUser, items)
+	}
+	for _, item := range items {
+		projected := item.(map[string]any)
+		if _, exposed := projected["ownerId"]; exposed {
+			t.Fatalf("owner leaked in custom-item projection: %+v", projected)
+		}
+	}
 }
 
 // TestProfileControllerCustomItemRejectsDuplicateJSONKeysBeforeService verifies

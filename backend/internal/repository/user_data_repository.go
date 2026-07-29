@@ -524,14 +524,16 @@ func scanSavedDiet(row pgx.Row, diet *SavedDiet) error {
 // scanSavedDietEntry scans one ordered saved-diet meal-entry row.
 // Implements DESIGN-008 SavedDataRepository.
 func scanSavedDietEntry(rows pgx.Rows, entry *SavedDietMealEntry) error {
-	var mealID, foodItemID *uuid.UUID
-	if err := rows.Scan(&entry.ID, &entry.SavedDietID, &mealID, &foodItemID, &entry.Quantity, &entry.Unit, &entry.Position, &entry.CreatedAt); err != nil {
+	var mealID, foodItemID, customFoodItemID *uuid.UUID
+	if err := rows.Scan(&entry.ID, &entry.SavedDietID, &mealID, &foodItemID, &customFoodItemID, &entry.Quantity, &entry.Unit, &entry.Position, &entry.CreatedAt); err != nil {
 		return mapPostgresError(err, "scan saved diet entry")
 	}
-	if mealID != nil && foodItemID == nil {
+	if mealID != nil && foodItemID == nil && customFoodItemID == nil {
 		entry.FoodObjectID, entry.FoodObjectType, entry.MealID = *mealID, FoodObjectTypeMeal, *mealID
-	} else if foodItemID != nil && mealID == nil {
+	} else if foodItemID != nil && mealID == nil && customFoodItemID == nil {
 		entry.FoodObjectID, entry.FoodObjectType = *foodItemID, FoodObjectTypeFoodItem
+	} else if customFoodItemID != nil && mealID == nil && foodItemID == nil {
+		entry.FoodObjectID, entry.FoodObjectType = *customFoodItemID, FoodObjectTypeCustomFoodItem
 	} else {
 		return NewError(ErrorKindInternal, "saved diet entry has invalid Food Object identity", nil)
 	}
@@ -552,7 +554,7 @@ func validateSavedDietInput(userID uuid.UUID, diet SavedDiet, replacing bool) er
 	}
 	for _, entry := range diet.Entries {
 		legacyMeal := entry.FoodObjectID == uuid.Nil && entry.MealID != uuid.Nil
-		if !legacyMeal && (entry.FoodObjectID == uuid.Nil || (entry.FoodObjectType != FoodObjectTypeMeal && entry.FoodObjectType != FoodObjectTypeFoodItem)) {
+		if !legacyMeal && (entry.FoodObjectID == uuid.Nil || (entry.FoodObjectType != FoodObjectTypeMeal && entry.FoodObjectType != FoodObjectTypeFoodItem && entry.FoodObjectType != FoodObjectTypeCustomFoodItem)) {
 			return validationError("saved diet Food Object identity is required")
 		}
 		if entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) {

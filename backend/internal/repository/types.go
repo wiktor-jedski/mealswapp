@@ -120,14 +120,15 @@ type CustomFoodItemCreateClaimResult struct {
 // Implements DESIGN-008 ProfileController durable custom-item creation.
 type CustomFoodItemResponseEncoder func(CustomFoodItemEntity) ([]byte, error)
 
-// FoodObjectType distinguishes the two object kinds accepted by Daily Diet entries.
+// FoodObjectType distinguishes the object kinds accepted by Daily Diet entries.
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 type FoodObjectType string
 
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 const (
-	FoodObjectTypeFoodItem FoodObjectType = "food_item"
-	FoodObjectTypeMeal     FoodObjectType = "meal"
+	FoodObjectTypeFoodItem       FoodObjectType = "food_item"
+	FoodObjectTypeMeal           FoodObjectType = "meal"
+	FoodObjectTypeCustomFoodItem FoodObjectType = "custom_food_item"
 )
 
 // MealType identifies opaque single and composite meals.
