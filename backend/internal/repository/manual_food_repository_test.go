@@ -150,6 +150,14 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	if _, err := manualRepo.GetByID(ctx, privateID, false); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("global repository exposed private item: %v", err)
 	}
+	discovered, total, err := manualRepo.Search(ctx, "manual global tofu", 20, 0)
+	if err != nil || total != 1 || len(discovered) != 1 || discovered[0].ID != itemID || discovered[0].Name != item.Name || len(discovered[0].FoodCategories) != 1 || len(discovered[0].CulinaryRoles) != 1 {
+		t.Fatalf("global discovery items=%+v total=%d err=%v", discovered, total, err)
+	}
+	auditsAfterSearch, err := auditRepo.ListAuditForEntity(ctx, "food_item", itemID)
+	if err != nil || len(auditsAfterSearch) != len(audits) {
+		t.Fatalf("read-only discovery changed audit state: before=%d after=%d err=%v", len(audits), len(auditsAfterSearch), err)
+	}
 	var globalHasOwner bool
 	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'food_items' AND column_name = 'owner_id')`).Scan(&globalHasOwner); err != nil || globalHasOwner {
 		t.Fatalf("global owner column exists=%t err=%v", globalHasOwner, err)
@@ -176,6 +184,9 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	}
 	assertManualFoodSearch(t, ctx, foodRepo, item.Name, itemID, false)
 	assertManualFoodSearch(t, ctx, foodRepo, updated.Name, itemID, true)
+	if items, total, err := manualRepo.Search(ctx, "manual global", 1, 0); err != nil || total < 2 || len(items) != 1 {
+		t.Fatalf("bounded deterministic discovery items=%+v total=%d err=%v", items, total, err)
+	}
 
 	rollbackItem := item
 	rollbackItem.Name = "Manual audit rollback"
@@ -206,6 +217,9 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 		t.Fatalf("delete: %v", err)
 	}
 	assertManualFoodSearch(t, ctx, foodRepo, updated.Name, itemID, false)
+	if items, total, err := manualRepo.Search(ctx, "manual global tempeh", 20, 0); err != nil || total != 0 || len(items) != 0 {
+		t.Fatalf("deleted item discovery items=%+v total=%d err=%v", items, total, err)
+	}
 	if _, err := manualRepo.GetByID(ctx, itemID, false); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("deleted read error=%v", err)
 	}

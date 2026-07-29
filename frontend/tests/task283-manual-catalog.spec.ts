@@ -54,6 +54,13 @@ interface SearchItem {
 	classifications: Array<{ id: string; name: string; kind: string }>;
 }
 
+interface AdminSearchItem {
+	itemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	macrosPer100: MacroProfile;
+}
+
 interface SourceSummary {
 	macros: MacroProfile;
 	calories: number;
@@ -170,6 +177,14 @@ async function search(page: Page, data: Record<string, unknown>, baseURL = ""): 
 	return { response, items: body.data!.items!, sourceSummary: body.data?.sourceSummary };
 }
 
+async function adminSearch(page: Page, name: string, baseURL = ""): Promise<{ response: APIResponse; items: AdminSearchItem[] }> {
+	const response = await page.request.get(`${baseURL}/api/v1/admin/items?query=${encodeURIComponent(name)}&page=1&pageSize=50`);
+	expect(response.status()).toBe(200);
+	const body = await response.json() as { data?: { items?: AdminSearchItem[] } };
+	expect(Array.isArray(body.data?.items)).toBeTruthy();
+	return { response, items: body.data!.items! };
+}
+
 function generation(): string {
 	const container = fixture("MEALSWAPP_TASK283_REDIS_CONTAINER");
 	if (!/^mealswapp-e2e-[0-9a-f]{24}$/.test(container)) throw new Error("Task 283 Redis container identity is invalid");
@@ -244,15 +259,38 @@ test("solid and liquid creation persists ownerless canonical state and density p
 	const secondRead = await page.request.get(`${secondAPI()}/api/v1/admin/items/${liquidCreate.value.id}`);
 	expect(secondRead.status()).toBe(200);
 	expect(await item(secondRead)).toEqual(liquidCreate.value);
+	const privateKey = crypto.randomUUID();
+	const sharedSearchQuery = "Task 283";
+	const privateResponse = await page.request.post("/api/v1/custom-items", {
+		headers: { "X-CSRF-Token": token, "Idempotency-Key": privateKey },
+		data: solid(`${sharedSearchQuery} private ${info.project.name}`)
+	});
+	expect(privateResponse.status()).toBe(201);
+	const privateBody = await privateResponse.json() as { data?: { id?: string } };
+	expect(privateBody.data?.id).toMatch(UUID);
+	const createdPicker = await adminSearch(page, sharedSearchQuery, secondAPI());
+	expect(createdPicker.items).toContainEqual(expect.objectContaining({ itemId: solidCreate.value.id, name: solidCreate.value.name, macrosPer100: solidCreate.value.macrosPer100 }));
+	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privateBody.data!.id);
+	const createdCatalog = await search(page, { query: sharedSearchQuery, mode: "catalog", page: 1, filters: [] });
+	expect(createdCatalog.items.map(({ id }) => id)).toContain(solidCreate.value.id);
+	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privateBody.data!.id);
+	const createdSubstitution = await search(page, {
+		query: sharedSearchQuery, mode: "substitution", page: 1, filters: [],
+		substitutionInputs: [{ foodObjectId: solidCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
+	}, secondAPI());
+	expect(createdSubstitution.items.map(({ id }) => id)).toContain(liquidCreate.value.id);
+	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privateBody.data!.id);
+	const privateDelete = await page.request.delete(`/api/v1/custom-items/${privateBody.data!.id}`, { headers: { "X-CSRF-Token": token } });
+	expect(privateDelete.status()).toBe(204);
 	const criteria = ["P08-SWR056-STEP-01", "P08-SWR056-STEP-02", "P08-SWR056-ACCEPT-01", "P08-SWR033-STEP-05"];
 	await record(info, "solid-create", criteria, {
 		kind: "item", entityId: solidCreate.value.id, name: solidCreate.value.name, idempotencyKey: solidCreate.key,
-		requestIds: [await responseRequestId(solidCreate.response)],
+		requestIds: [await responseRequestId(solidCreate.response), await responseRequestId(privateResponse), await responseRequestId(createdPicker.response), await responseRequestId(createdCatalog.response), await responseRequestId(privateDelete)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "solid", metricBasis: "100g", macros: solidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100g"]);
 	await record(info, "liquid-create", criteria, {
 		kind: "item", entityId: liquidCreate.value.id, name: liquidCreate.value.name, idempotencyKey: liquidCreate.key,
-		requestIds: [await responseRequestId(liquidCreate.response), await responseRequestId(secondRead)],
+		requestIds: [await responseRequestId(liquidCreate.response), await responseRequestId(secondRead), await responseRequestId(createdSubstitution.response)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "liquid", metricBasis: "100ml", density: 0.92, densitySourceKind: "manual", macros: liquidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100ml"]);
 });
@@ -367,6 +405,8 @@ test("updates are authoritative in Catalog and Substitution Search", async ({ pa
 	});
 	expect(update.status()).toBe(200);
 	expect(await item(update)).toMatchObject({ id: target.value.id, name: updatedName, macrosPer100: updatedMacros });
+	const picker = await adminSearch(page, updatedName);
+	expect(picker.items).toContainEqual(expect.objectContaining({ itemId: target.value.id, name: updatedName, macrosPer100: updatedMacros }));
 	const catalog = await search(page, { query: updatedName, mode: "catalog", page: 1, filters: [] });
 	expect(catalog.items).toContainEqual(expect.objectContaining({ id: target.value.id, name: updatedName, macros: updatedMacros, macroBasis: "100g" }));
 	const substitution = await search(page, {
@@ -380,7 +420,7 @@ test("updates are authoritative in Catalog and Substitution Search", async ({ pa
 	const criteria = ["P08-SWR056-STEP-03", "P08-SWR056-STEP-04", "P08-SWR056-ACCEPT-05"];
 	await record(info, "update-search", criteria, {
 		kind: "item", entityId: target.value.id, name: updatedName, idempotencyKey: target.key,
-		requestIds: [await responseRequestId(target.response), await responseRequestId(update), await responseRequestId(catalog.response), await responseRequestId(substitution.response), await responseRequestId(autocomplete)],
+		requestIds: [await responseRequestId(target.response), await responseRequestId(update), await responseRequestId(picker.response), await responseRequestId(catalog.response), await responseRequestId(substitution.response), await responseRequestId(autocomplete)],
 		expected: { active: true, auditActions: { manual_create: 1, manual_update: 1 }, idempotencyCount: 1, name: updatedName, macros: updatedMacros }
 	}, ["mutation_count=2", "audit_count=2", "rollback_state=committed"]);
 });
@@ -413,10 +453,14 @@ test("deletion removes the stable identity from active reads and every search pr
 	expect(autocomplete.status()).toBe(200);
 	const autocompleteBody = await autocomplete.json() as { data?: { items?: Array<{ itemId: string; label: string }> } };
 	expect(autocompleteBody.data?.items).toContainEqual(expect.objectContaining({ itemId: target.value.id, label: updatedName }));
+	const activePicker = await adminSearch(page, updatedName);
+	expect(activePicker.items.map(({ itemId }) => itemId)).toContain(target.value.id);
 	const deletion = await page.request.delete(`${secondAPI()}/api/v1/admin/items/${target.value.id}`, { headers: { "X-CSRF-Token": await csrf(page, secondAPI()) } });
 	expect(deletion.status()).toBe(204);
 	const deletedRead = await page.request.get(`/api/v1/admin/items/${target.value.id}`);
 	expect(deletedRead.status()).toBe(404);
+	const deletedPicker = await adminSearch(page, updatedName, secondAPI());
+	expect(deletedPicker.items.map(({ itemId }) => itemId)).not.toContain(target.value.id);
 	const deletedCatalog = await search(page, { query: updatedName, mode: "catalog", page: 1, filters: [] }, secondAPI());
 	expect(deletedCatalog.items.map((value) => value.id)).not.toContain(target.value.id);
 	const deletedSubstitution = await search(page, {
@@ -432,7 +476,7 @@ test("deletion removes the stable identity from active reads and every search pr
 	const criteria = ["P08-SWR056-STEP-05", "P08-SWR056-STEP-06", "P08-SWR056-ACCEPT-06"];
 	await record(info, "update-delete-search", criteria, {
 		kind: "item", entityId: target.value.id, name: updatedName, idempotencyKey: target.key,
-		requestIds: [await responseRequestId(target.response), await responseRequestId(update), await responseRequestId(catalog.response), await responseRequestId(substitution.response), await responseRequestId(autocomplete), await responseRequestId(deletedRead), await responseRequestId(deletedCatalog.response), await responseRequestId(deletedSubstitution.response), await responseRequestId(deletedAutocomplete)],
+		requestIds: [await responseRequestId(target.response), await responseRequestId(update), await responseRequestId(activePicker.response), await responseRequestId(catalog.response), await responseRequestId(substitution.response), await responseRequestId(autocomplete), await responseRequestId(deletedRead), await responseRequestId(deletedPicker.response), await responseRequestId(deletedCatalog.response), await responseRequestId(deletedSubstitution.response), await responseRequestId(deletedAutocomplete)],
 		expected: { active: false, deleted: true, auditActions: { manual_create: 1, manual_update: 1, manual_delete: 1 }, idempotencyCount: 1, name: updatedName, macros: updatedMacros, autocompleteContainsDeleted: false },
 		observed: { autocompleteContainsDeleted: (deletedAutocompleteBody.data?.items?.map((value) => value.itemId) ?? []).includes(target.value.id) }
 	}, ["mutation_count=3", "audit_count=3", "rollback_state=committed"]);

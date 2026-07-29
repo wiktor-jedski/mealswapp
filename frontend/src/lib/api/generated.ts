@@ -1313,6 +1313,26 @@ export interface AdminItem extends AdminItemRequest {
 
 export type AdminItemEnvelope = OkEnvelope<AdminItem>;
 
+/** Bounded active global-item summary without private ownership, micronutrients, images, or audit state. */
+export interface AdminItemSearchSummary {
+	itemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	macrosPer100: MacroProfile;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+/** Deterministic page metadata and bounded active global-item summaries. */
+export interface AdminItemSearchPageData {
+	items: AdminItemSearchSummary[];
+	page: number;
+	pageSize: number;
+	total: number;
+}
+
+export type AdminItemSearchEnvelope = OkEnvelope<AdminItemSearchPageData>;
+
 // Implements DESIGN-009 TagManager administration hierarchy boundary.
 /** Global classification name and optional parent used by administrator mutations. */
 export interface AdminClassificationRequest {

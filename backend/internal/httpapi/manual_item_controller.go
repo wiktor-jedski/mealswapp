@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/itemcurator"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
 // ManualItemService defines administrator-authored global food-item behavior.
@@ -18,6 +20,7 @@ import (
 type ManualItemService interface {
 	Create(context.Context, repository.AdminMutationExecutor, uuid.UUID, string, itemcurator.Request) (itemcurator.CreateResult, error)
 	Get(context.Context, uuid.UUID) (itemcurator.Item, error)
+	Search(context.Context, itemcurator.SearchQuery) (itemcurator.SearchPage, error)
 	Update(context.Context, repository.AdminMutationExecutor, uuid.UUID, itemcurator.Request) (itemcurator.MutationResult, error)
 	Delete(context.Context, repository.AdminMutationExecutor, uuid.UUID) (itemcurator.MutationResult, error)
 }
@@ -43,11 +46,30 @@ func NewManualItemAdminController(audit repository.AdminMutationAuditRepository,
 	readLimit := RateLimitRule{Scope: "user", MaxRequests: 120, WindowSeconds: 60}
 	mutationLimit := RateLimitRule{Scope: "user", MaxRequests: 30, WindowSeconds: 60}
 	return NewAdminController(audit,
+		AdminRouteDefinition{Method: fiber.MethodGet, Path: "/items", Handler: items.Search, Validate: validateManualItemSearch, RateLimit: &readLimit},
 		AdminRouteDefinition{Method: fiber.MethodPost, Path: "/items", Mutation: items.Create, Validate: validateManualItemCreate, RateLimit: &mutationLimit, AuditAction: "manual_create", EntityType: "food_item"},
 		AdminRouteDefinition{Method: fiber.MethodGet, Path: "/items/:itemId", Handler: items.Get, Validate: ValidatePath("itemId", validateManualItemID), RateLimit: &readLimit},
 		AdminRouteDefinition{Method: fiber.MethodPut, Path: "/items/:itemId", Mutation: items.Update, Validate: validateManualItemUpdate, RateLimit: &mutationLimit, AuditAction: "manual_update", EntityType: "food_item"},
 		AdminRouteDefinition{Method: fiber.MethodDelete, Path: "/items/:itemId", Mutation: items.Delete, Validate: ValidatePath("itemId", validateManualItemID), RateLimit: &mutationLimit, AuditAction: "manual_delete", EntityType: "food_item"},
 	)
+}
+
+// Search returns one bounded page of active ownerless global item summaries.
+// Implements DESIGN-009 ItemCurator searchable picker.
+func (c *ManualItemController) Search(ctx *fiber.Ctx) error {
+	if c == nil || c.service == nil {
+		return manualItemDependencyError()
+	}
+	page, err := c.service.Search(ctx.UserContext(), itemcurator.SearchQuery{
+		Name: ctx.Query("query"), Page: ctx.QueryInt("page", 1), PageSize: ctx.QueryInt("pageSize", 20),
+	})
+	if err != nil {
+		return manualItemError(err)
+	}
+	ctx.Set(fiber.HeaderCacheControl, "no-store")
+	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: map[string]any{
+		"items": page.Items, "page": page.Page, "pageSize": page.PageSize, "total": page.Total,
+	}})
 }
 
 // Create creates or replays one global food item.
@@ -161,6 +183,21 @@ func validateManualItemCreate(ctx *fiber.Ctx) error {
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "idempotency_key_required", Message: "Idempotency-Key header is required"}
 	}
 	return validateManualItemBody(ctx)
+}
+
+// validateManualItemSearch rejects malformed or unbounded discovery requests.
+// Implements DESIGN-009 ItemCurator and DESIGN-010 RequestValidator.
+func validateManualItemSearch(ctx *fiber.Ctx) error {
+	query := ctx.Query("query")
+	if _, err := security.NormalizeInput(security.InputFieldSearchQuery, query); err != nil {
+		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
+	}
+	page, pageErr := strconv.Atoi(ctx.Query("page", "1"))
+	pageSize, sizeErr := strconv.Atoi(ctx.Query("pageSize", "20"))
+	if pageErr != nil || sizeErr != nil || page < 1 || page > security.MaxSearchPage || pageSize < 1 || pageSize > 50 {
+		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
+	}
+	return ctx.Next()
 }
 
 // validateManualItemUpdate validates the item identity and strict replacement body.

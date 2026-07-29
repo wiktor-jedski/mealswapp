@@ -1071,6 +1071,54 @@ paths:
           $ref: "#/components/responses/Error"
   # Implements DESIGN-009 ItemCurator ownerless global item creation.
   /api/v1/admin/items:
+    get:
+      operationId: searchApiV1AdminItems
+      summary: Search active ownerless global food items by normalized name
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Deterministic bounded page of active ownerless global item summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminItemSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
     post:
       operationId: postApiV1AdminItem
       summary: Create an ownerless global food item
@@ -2183,6 +2231,69 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/AdminItem"
+    # Implements DESIGN-009 ItemCurator bounded ownerless picker projection.
+    AdminItemSearchSummary:
+      description: Bounded active global-item summary without private ownership, micronutrients, images, or audit state.
+      type: object
+      additionalProperties: false
+      required: [itemId, name, physicalState, macrosPer100, foodCategories, culinaryRoles]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        physicalState:
+          type: string
+          enum: [solid, liquid]
+        macrosPer100:
+          $ref: "#/components/schemas/MacroProjection"
+        foodCategories:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        culinaryRoles:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+    AdminItemSearchPageData:
+      description: Deterministic page metadata and bounded active global-item summaries.
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AdminItemSearchSummary"
+        page:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+    AdminItemSearchEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          const: ok
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/AdminItemSearchPageData"
     # Implements DESIGN-009 TagManager administration-only hierarchy contract.
     AdminClassificationRequest:
       description: Global classification name and optional parent used by administrator mutations.
