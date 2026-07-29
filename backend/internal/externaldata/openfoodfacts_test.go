@@ -228,6 +228,21 @@ func TestOpenFoodFactsSearchBoundsBodiesAndHandlesMalformedOrPartialPayloads(t *
 	}
 }
 
+func TestOpenFoodFactsSearchRejectsMalformedUTF8KeysWithoutHidingPeers(t *testing.T) {
+	malformedProduct := []byte(`{"code":"bad","product_name":"Bad","nutriments":{"proteins_100g":1,`)
+	malformedProduct = append(malformedProduct, '"', 0xff, '"')
+	malformedProduct = append(malformedProduct, []byte(`:2}}`)...)
+	body := append([]byte(`{"count":2,"page":1,"page_count":1,"page_size":20,"products":[`), malformedProduct...)
+	body = append(body, []byte(`,{"code":"good","product_name":"Good","nutriments":{"proteins_100g":3}}]}`)...)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) }))
+	defer server.Close()
+
+	result, err := newTestOpenFoodFactsClient(t, server.URL, nil, 0, 0).SearchResult(context.Background(), validOpenFoodFactsQuery())
+	if err != nil || result.RejectedCandidates != 1 || len(result.Records) != 1 || result.Records[0].ExternalID != "good" {
+		t.Fatalf("malformed UTF-8 result = %#v, err = %v", result, err)
+	}
+}
+
 func TestOpenFoodFactsSearchEnforcesFiniteAllocationBound(t *testing.T) {
 	exactBody := paddedOpenFoodFactsPayload(t, int(defaultOpenFoodFactsBodyLimit))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(exactBody) }))

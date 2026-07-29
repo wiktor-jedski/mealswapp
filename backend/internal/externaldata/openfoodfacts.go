@@ -168,11 +168,11 @@ func validateOpenFoodFactsQuery(query ExternalSearchQuery) (ExternalSearchQuery,
 // openFoodFactsSearchPayload captures the required legacy text-search envelope.
 // Implements DESIGN-012 OpenFoodFactsClient payload parsing.
 type openFoodFactsSearchPayload struct {
-	Count     *int                   `json:"count"`
-	Page      *int                   `json:"page"`
-	PageCount *int                   `json:"page_count"`
-	PageSize  *int                   `json:"page_size"`
-	Products  []openFoodFactsProduct `json:"products"`
+	Count     *int              `json:"count"`
+	Page      *int              `json:"page"`
+	PageCount *int              `json:"page_count"`
+	PageSize  *int              `json:"page_size"`
+	Products  []json.RawMessage `json:"products"`
 }
 
 // openFoodFactsProduct captures only fields required by downstream normalization.
@@ -197,7 +197,16 @@ func decodeOpenFoodFactsSearch(body []byte) ([]ExternalFoodRecord, int, error) {
 	}
 	records := make([]ExternalFoodRecord, 0, len(payload.Products))
 	dropped := 0
-	for _, product := range payload.Products {
+	for _, rawProduct := range payload.Products {
+		if containsUnsafeJSONObjectKey(rawProduct) {
+			dropped++
+			continue
+		}
+		var product openFoodFactsProduct
+		if err := json.Unmarshal(rawProduct, &product); err != nil {
+			dropped++
+			continue
+		}
 		record, ok := projectOpenFoodFactsProduct(product)
 		if !ok {
 			dropped++
@@ -206,6 +215,47 @@ func decodeOpenFoodFactsSearch(body []byte) ([]ExternalFoodRecord, int, error) {
 		records = append(records, record)
 	}
 	return records, dropped, nil
+}
+
+// containsUnsafeJSONObjectKey validates object-key bytes before encoding/json can replace malformed UTF-8.
+// Implements DESIGN-012 OpenFoodFactsClient provider-key safety at the raw JSON boundary.
+func containsUnsafeJSONObjectKey(raw []byte) bool {
+	for offset := 0; offset < len(raw); offset++ {
+		if raw[offset] != '"' {
+			continue
+		}
+		end, ok := rawJSONStringEnd(raw, offset)
+		if !ok {
+			return false
+		}
+		next := end + 1
+		for next < len(raw) && (raw[next] == ' ' || raw[next] == '\t' || raw[next] == '\n' || raw[next] == '\r') {
+			next++
+		}
+		if next < len(raw) && raw[next] == ':' && !utf8.Valid(raw[offset:end+1]) {
+			return true
+		}
+		offset = end
+	}
+	return false
+}
+
+func rawJSONStringEnd(raw []byte, start int) (int, bool) {
+	escaped := false
+	for offset := start + 1; offset < len(raw); offset++ {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if raw[offset] == '\\' {
+			escaped = true
+			continue
+		}
+		if raw[offset] == '"' {
+			return offset, true
+		}
+	}
+	return 0, false
 }
 
 // projectOpenFoodFactsProduct validates one candidate and discards all unselected provider bytes.
