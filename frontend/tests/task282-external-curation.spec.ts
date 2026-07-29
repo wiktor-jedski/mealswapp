@@ -164,7 +164,12 @@ test("partial failure, outage, malformed data, timeout, cancellation, quota rese
 	for (const query of ["outage", "malformed", "malformed-consumed", "timeout"]) {
 		requestIds.push((await search(page, workflow, query, "USDA + OpenFoodFacts")).requestId);
 		await expect(workflow).not.toContainText(/nutriments|api_key|provider payload|task282-controlled-key/i);
+		if (query === "outage") await expect(workflow.locator("[data-external-provider-failure]")).toBeVisible();
 	}
+	requestIds.push((await search(page, workflow, "rejected", "USDA")).requestId);
+	await expect(workflow.locator("[data-external-rejected]")).toBeVisible();
+	requestIds.push((await search(page, workflow, "zero", "USDA")).requestId);
+	await expect(workflow.locator("[data-external-empty]")).toHaveText("No external candidates matched this search.");
 	await workflow.getByLabel("External food search").fill("cancel");
 	await workflow.getByRole("button", { name: /Search/ }).click();
 	await workflow.getByLabel("External food search").fill("success");
@@ -194,8 +199,11 @@ test("legitimate OpenFoodFacts metadata remains visible [P08-SWR055-STEP-02]", a
 test("optional USDA portion metadata degrades without losing the candidate [P08-SWR033-STEP-02]", async ({ page }, testInfo) => {
 	const workflow = await openAdministration(page);
 	const result = await search(page, workflow, "optional", "USDA");
-	await recordAcceptance(testInfo, ["P08-SWR033-STEP-02"], [result.requestId], [], ["provider_state=rejected_candidate", "metric_basis=100ml"], "ROOT-T282-USDA-OPTIONAL-PORTION");
 	await expect(workflow.getByText("Fixture lentils")).toBeVisible();
+	await expect(workflow.locator("[data-provider-warnings]")).toHaveCount(0);
+	await workflow.getByText("Fixture lentils").locator("..").locator("..").getByRole("button", { name: "Curate" }).click();
+	await expect(workflow.locator("[data-candidate-warnings]")).toContainText("Some optional source measures were ignored.");
+	await recordAcceptance(testInfo, ["P08-SWR033-STEP-02"], [result.requestId], [], ["provider_state=partial_normalization", "metric_basis=100ml"]);
 });
 
 test("external import rejects aliases and unknown micronutrient keys [P08-SWR090-STEP-02] [P08-SWR090-STEP-03]", async ({ page }, testInfo) => {

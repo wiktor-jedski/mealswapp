@@ -250,6 +250,29 @@ func TestNormalizeNeverAssumesOneMilliliterEqualsOneGram(t *testing.T) {
 	}
 }
 
+// TestNormalizeUSDAKeepsServingAndPortionEvidenceDistinct verifies
+// DESIGN-012 USDAClient/DataNormalizer optional portion semantics and SW-REQ-033.
+func TestNormalizeUSDAKeepsServingAndPortionEvidenceDistinct(t *testing.T) {
+	serving := 100.0
+	record := ExternalFoodRecord{
+		Provider: "usda", ExternalID: "288", Name: "USDA solid serving",
+		ServingSize: &serving, ServingUnit: "g", PartialNormalization: true,
+		Nutrients: map[string]float64{
+			"Protein (G)": 1, "Carbohydrate, by difference (G)": 2, "Total lipid (fat) (G)": 3,
+		},
+	}
+	candidate, err := NormalizeExternalRecord(record, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if candidate.ServingSize != 100 || candidate.ServingUnit != "g" || candidate.AverageUnitWeightGrams != 0 || candidate.DensityGramsPerMilliliter != 0 {
+		t.Fatalf("candidate invented measure evidence: %#v", candidate)
+	}
+	if !hasWarning(candidate.Warnings, WarningPartialNormalization) {
+		t.Fatalf("partial warning absent: %#v", candidate.Warnings)
+	}
+}
+
 func TestNormalizeDensityProvenanceOptions(t *testing.T) {
 	record := ExternalFoodRecord{Provider: "openfoodfacts", ExternalID: "density", Name: "Drink", Nutrients: map[string]float64{"proteins_100ml": 1, "carbohydrates_100ml": 2, "fat_100ml": 3}}
 	for _, kind := range []DensitySourceKind{DensitySourceManual, DensitySourceEstimated, DensitySourceImported} {

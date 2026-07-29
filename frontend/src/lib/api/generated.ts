@@ -1242,7 +1242,8 @@ export type ExternalCandidateWarning =
 	| "missing_micronutrients"
 	| "missing_liquid_density"
 	| "uncertain_unit_conversion"
-	| "suspicious_liquid_macros";
+	| "suspicious_liquid_macros"
+	| "partial_normalization";
 
 export type ExternalProviderWarningCode =
 	| "provider_rate_limited"
