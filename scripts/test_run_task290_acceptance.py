@@ -57,7 +57,8 @@ class Task290AcceptanceTests(unittest.TestCase):
             commands.append(command)
             if command == ["list"]:
                 keys = [previous[index + 1] for previous in commands for index, value in enumerate(previous[:-1]) if value == "--key"]
-                row = f"{keys[-1]}\tTask 290 acceptance\tmg\ttrue\n" if keys else ""
+                updated = any(previous and previous[0] == "update-unit" for previous in commands)
+                row = f"{keys[-1]}\tTask 290 acceptance updated\t{'mcg' if updated else 'mg'}\ttrue\n" if keys else ""
                 return 0, f"key\tdisplay_name\tunit\tactive\n{row}", ""
             if command[-1:] == ["--dry-run"] and command[0] == "add":
                 dry_runs += 1
@@ -76,7 +77,7 @@ class Task290AcceptanceTests(unittest.TestCase):
             args = Namespace(environment="development", base_url="http://127.0.0.1:8080", database_url="redacted")
             HARNESS.execute(args)
         self.assertEqual([command[0] for command in commands], [
-            "list", "add", "add", "add", "update-display-name", "update-unit", "deactivate", "reactivate", "list",
+            "list", "add", "add", "add", "update-display-name", "update-unit", "deactivate", "reactivate", "list", "list",
         ])
 
 

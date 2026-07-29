@@ -58,3 +58,13 @@ python3 scripts/run-task290-acceptance.py \
 ```
 
 The runner performs list, dry-run, add, display-name update, unit update, deactivate, and reactivate through the real HTTP API, then checks the final projection and (when `--database-url` is supplied) read-only audit action names. Tear down the disposable database after the run; no operator mutation is directed at a persistent fixture.
+
+To let the runner own the complete disposable lifecycle, use `--start-disposable`. It creates and migrates an owned database, starts Redis and the controlled Task 289 API, bootstraps a run-owned administrator, runs the commands, records inspectable lifecycle artifacts under `logs/real-stack-e2e/`, verifies cleanup, and drops the owned database and Redis container. When Task 289 is still isolated, point `--api-source-root` at its task worktree; after integration, omit that option.
+
+```sh
+MEALSWAPP_TASK290_DISPOSABLE=1 \
+python3 scripts/run-task290-acceptance.py \
+  --environment development \
+  --start-disposable \
+  --api-source-root /home/wiktor/Work/worktrees/mealswapp/289
+```
