@@ -43,6 +43,7 @@ export default defineConfig({
               response.writeHead(proxyResponse.statusCode ?? 502, headers);
               response.end(body);
             });
+            proxyResponse.resume();
           });
         }
       }

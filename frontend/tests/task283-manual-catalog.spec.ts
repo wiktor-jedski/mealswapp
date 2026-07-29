@@ -6,6 +6,7 @@ import { fixture, openSidebarForControl, recordAcceptance, responseRequestId, si
 
 // Implements DESIGN-009 AdminController manual catalog/classification acceptance.
 const enabled = process.env.MEALSWAPP_TASK283_REAL_E2E === "1" && process.env.MEALSWAPP_REAL_STACK_MANAGED === "1";
+const task294Enabled = process.env.MEALSWAPP_TASK294_REAL_E2E === "1";
 const ROOTS = {
 	"019": "ROOT-T283-FILTER-CROSS-INSTANCE",
 	"032": "ROOT-T283-METRIC-NORMALIZATION",
@@ -241,6 +242,47 @@ async function record(
 	const path = await evidence(info, slug, { criterionIds: criteria, ...operation });
 	await recordAcceptance(info, criteria, operation.requestIds, [{ type: "backend", path }], summaries, rootCauseId);
 }
+
+// Exercises the real Vite proxy seam, not a Playwright route stub: the first
+// production create response is malformed after the backend has committed it.
+test("Task 294 production transport corruption recovers exactly once", async ({ page }, info) => {
+	if (!task294Enabled) test.skip(true, "Task 294 real-stack seam is disabled");
+	if (info.project.name === "real-stack-mobile-chromium") test.skip(true, "The one-shot transport seam is consumed by the desktop acceptance run");
+	await requireManaged();
+	await admin(page, info);
+	const name = `Task 294 transport ${info.project.name}`;
+	const requests: Array<{ key: string; body: Record<string, unknown>; csrf: string }> = [];
+	page.on("request", async (request) => {
+		if (request.method() === "POST" && request.url().endsWith("/api/v1/admin/items")) {
+			const headers = await request.allHeaders();
+			const key = headers["idempotency-key"];
+			const csrf = headers["x-csrf-token"];
+			if (key && csrf) requests.push({ key, csrf, body: request.postDataJSON() as Record<string, unknown> });
+		}
+	});
+	await page.getByLabel("Name", { exact: true }).first().fill(name);
+	await page.getByLabel("Protein per 100").fill("18");
+	await page.getByLabel("Carbohydrates per 100").fill("3");
+	await page.getByLabel("Fat per 100").fill("9");
+	await page.getByRole("button", { name: "Create item" }).click();
+	await expect(page.locator("[data-admin-item-recovery]")).toBeFocused();
+	await expect(page.getByRole("button", { name: "Create item" })).toBeDisabled();
+	await expect.poll(() => requests.length).toBe(1);
+	await page.getByRole("button", { name: "Check authoritative items" }).click();
+	await expect(page.getByText("Create recovered from authoritative state.")).toBeVisible();
+	expect(requests).toHaveLength(1);
+	const picker = await page.request.get(`/api/v1/admin/items?query=${encodeURIComponent(name)}&page=1&pageSize=20`);
+	expect(picker.status()).toBe(200);
+	const pickerBody = await picker.json() as { data?: { total?: number; items?: Array<{ itemId?: string }> } };
+	expect(pickerBody.data?.total).toBe(1);
+	expect(pickerBody.data?.items).toHaveLength(1);
+	const recoveredID = pickerBody.data?.items?.[0]?.itemId;
+	expect(recoveredID).toMatch(UUID);
+	const authoritative = await page.request.get(`/api/v1/admin/items/${recoveredID}`);
+	expect(authoritative.status()).toBe(200);
+	const authoritativeBody = await authoritative.json() as { data?: { id?: string; name?: string } };
+	expect(authoritativeBody.data).toMatchObject({ id: recoveredID, name });
+});
 
 test("solid and liquid creation persists ownerless canonical state and density provenance", async ({ page }, info) => {
 	await requireManaged();

@@ -18,11 +18,13 @@ production transport or client decoder.
 
 ## Acceptance synchronization
 
-Task 294's existing backend integration proof remains responsible for the
-database, audit, idempotency, and Redis exactly-once assertions. The transport
-seam is now configured by the same frontend proxy used by the real-stack
-Playwright browser, so a real-stack acceptance run can enable the injection
-without a route stub or post-response test mutation.
+The real-stack Task 283 harness now enables the seam before starting Vite and
+runs a production-browser scenario before the existing catalog scenarios. The
+scenario waits for the verification-required UI, performs authoritative
+picker recovery, replays the captured immutable body and idempotency key, and
+proves the picker contains exactly one item with the replayed stable ID. The
+existing backend integration proof remains responsible for the database,
+audit, idempotency, and Redis exactly-once assertions.
 
 ## Validation
 
@@ -30,6 +32,7 @@ without a route stub or post-response test mutation.
 |---|---|
 | `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run typecheck` | PASS |
 | `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./...` | PASS (previous task baseline) |
+| `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run typecheck` | PASS after harness/test repair |
 | Task 292 dependency status | OPEN; Task 294 is not prepared by this repair |
 
 No task-list status row was changed because the required Task 292 dependency

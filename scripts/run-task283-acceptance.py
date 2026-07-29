@@ -173,7 +173,12 @@ class Task283Harness(real_stack.Harness):
 
     def application_environment(self, database_url: str, redis_url: str, api_port: int, frontend_port: int) -> dict[str, str]:
         environment = super().application_environment(database_url, redis_url, api_port, frontend_port)
-        environment.update({"MEALSWAPP_TASK283_REAL_E2E": "1", "MEALSWAPP_REAL_STACK_MANAGED": "1"})
+        environment.update({
+            "MEALSWAPP_TASK283_REAL_E2E": "1",
+            "MEALSWAPP_REAL_STACK_MANAGED": "1",
+            "MEALSWAPP_TASK294_CORRUPT_MANUAL_ITEM_RESPONSE_ONCE": "1",
+            "MEALSWAPP_TASK294_REAL_E2E": "1",
+        })
         return environment
 
     def start_application_stack(self, api_binary, database_url, redis_url, reservations):
@@ -233,7 +238,17 @@ class Task283Harness(real_stack.Harness):
             (evidence / "backend/task283-redis-before.json").write_text(json.dumps(generation_before, sort_keys=True) + "\n")
             browser_failure = None
             try:
-                real_stack.run_command(["bunx","playwright","test","-c","playwright.real-stack.config.ts","tests/task283-manual-catalog.spec.ts"], cwd=ROOT / "frontend", env=playwright_env, timeout=self.timeout)
+                real_stack.run_command(
+                    ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep", "Task 294 production transport corruption"],
+                    cwd=ROOT / "frontend", env=playwright_env, timeout=self.timeout,
+                )
+                suite_environment = dict(playwright_env)
+                suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"
+                suite_environment["MEALSWAPP_TASK283_AUTH_STATE_DIR"] = str(self.raw_dir / "task283-auth-state-suite")
+                real_stack.run_command(
+                    ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep-invert", "Task 294 production transport corruption"],
+                    cwd=ROOT / "frontend", env=suite_environment, timeout=self.timeout,
+                )
             except BaseException as error:
                 browser_failure = error
                 self.events.append("browser_product_nonpass" if isinstance(error, __import__("subprocess").CalledProcessError) else "browser_infrastructure_nonpass")
