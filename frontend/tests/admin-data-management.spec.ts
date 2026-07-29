@@ -27,8 +27,10 @@ interface State {
 	deletedItemIds: string[];
 	classificationReads: number;
 	classificationMutations: number;
+	classificationDeletes: number;
 	classificationReadFailures?: Partial<Record<"food_category" | "culinary_role", number>>;
 	classificationReadOverrides?: Partial<Record<"food_category" | "culinary_role", unknown[]>>;
+	classificationReadDelays?: Partial<Record<"food_category" | "culinary_role", number>>;
 	authoritativeNameAfterPut?: string;
 	userLookupDelays?: Record<string, number>;
 	itemReadDelays?: Record<string, number>;
@@ -45,7 +47,7 @@ async function stubApp(page: Page): Promise<State> {
 		categories: [{ id: categoryParentId, name: "Food", kind: "food_category" }, { id: categoryId, name: "Produce", kind: "food_category", parentId: categoryParentId }, { id: conflictId, name: "In use", kind: "food_category" }],
 		roles: [{ id: roleId, name: "Base", kind: "culinary_role" }, { id: roleChildId, name: "Sauce", kind: "culinary_role", parentId: roleId }],
 		user: { id: userId, email: "minimal@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", deletion: { requestId: deletionId, status: "failed", failureCategory: "unknown", retryCount: 1, requestedAt: "2026-07-20T00:00:00Z" } },
-		deletedItemIds: [], classificationReads: 0, classificationMutations: 0
+		deletedItemIds: [], classificationReads: 0, classificationMutations: 0, classificationDeletes: 0
 	};
 	const session = ok({ userId: "admin-256", role: "admin", hasVerifiedLoginMethod: true, accessExpiresAt: "2026-07-21T22:00:00Z", refreshExpiresAt: "2026-07-28T22:00:00Z" });
 	await page.route(/\/api\/v1\/(profile|auth\/refresh|billing\/entitlement|search-history|saved-items|search\/autocomplete|auth\/csrf-token)(\?.*)?$/, async (route) => {
@@ -63,6 +65,8 @@ async function stubApp(page: Page): Promise<State> {
 		if (path === "/api/v1/admin/classifications" && method === "GET") {
 			state.classificationReads++;
 			const kind = url.searchParams.get("kind") as "food_category" | "culinary_role";
+			const delay = state.classificationReadDelays?.[kind] ?? 0;
+			if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
 			const override = state.classificationReadOverrides?.[kind];
 			if (override) {
 				if (state.classificationReadOverrides) delete state.classificationReadOverrides[kind];
@@ -93,7 +97,7 @@ async function stubApp(page: Page): Promise<State> {
 			return json(route, 200, ok({ classification: state.categories[1] }));
 		}
 		if (path === `/api/v1/admin/classifications/${conflictId}` && method === "DELETE") return json(route, 409, failure(409, "classification_in_use"));
-		if (path.startsWith("/api/v1/admin/classifications/") && method === "DELETE") { const id = path.split("/").at(-1); state.categories = state.categories.filter((value) => value.id !== id); state.roles = state.roles.filter((value) => value.id !== id); return json(route, 204); }
+		if (path.startsWith("/api/v1/admin/classifications/") && method === "DELETE") { const id = path.split("/").at(-1); state.classificationDeletes++; state.categories = state.categories.filter((value) => value.id !== id); state.roles = state.roles.filter((value) => value.id !== id); return json(route, 204); }
 		if (path === "/api/v1/admin/items" && method === "POST") { const body = request.postDataJSON(); state.item = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] }; return json(route, 201, ok(state.item)); }
 		if (path === `/api/v1/admin/items/${itemId}` && method === "GET") { const delay = state.itemReadDelays?.[itemId] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); return state.item ? json(route, 200, ok(state.item)) : json(route, 404, failure(404, "not_found")); }
 		if (path === `/api/v1/admin/items/${secondItemId}` && method === "GET") return json(route, 200, ok({ ...state.item, id: secondItemId, name: "Second item" }));
@@ -269,6 +273,24 @@ test("classification hierarchy supports same-kind create, reparent, detach, and 
 	await name.fill("Duplicate"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
 	await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data");
 	expect(state.classificationMutations).toBe(mutationsBeforeRejections);
+});
+
+test("classification kind changes clear cross-kind parents and deleting the edited row resets the editor", async ({ page }) => {
+		const state = await stubApp(page); await openAdmin(page);
+		const parent = page.getByLabel("Parent");
+		await parent.selectOption(categoryParentId);
+		await page.getByLabel("Kind").selectOption("culinary_role");
+		await expect(parent).toHaveValue("");
+		expect(state.lastClassificationPost).toBeUndefined();
+
+		await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Edit" }).click();
+		await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("Produce");
+		await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Delete" }).click();
+		await page.getByRole("button", { name: "Confirm" }).dblclick();
+		await expect(page.getByText("Classification deleted and refreshed.")).toBeVisible();
+		await expect(page.getByLabel("Name", { exact: true }).last()).toHaveValue("");
+		await expect(page.getByRole("button", { name: "Create", exact: true })).toBeVisible();
+		expect(state.classificationDeletes).toBe(1);
 });
 
 test("confirmed save survives a partial list failure and retries only the read", async ({ page }) => {

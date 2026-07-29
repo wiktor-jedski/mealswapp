@@ -201,6 +201,11 @@
 		classificationKind = value.kind; classificationId = value.id; classificationName = value.name; classificationParentId = value.parentId ?? ""; classificationError = ""; classificationMessage = "";
 	}
 
+	function changeClassificationKind(value: ClassificationKind): void {
+		classificationKind = value;
+		if (!classificationId || !classifications[value].some((candidate) => candidate.id === classificationParentId)) classificationParentId = "";
+	}
+
 	function resetClassificationEditor(): void {
 		classificationName = ""; classificationId = ""; classificationParentId = "";
 	}
@@ -212,10 +217,14 @@
 		try {
 			await api.deleteClassification(target.id, { signal: controller.signal });
 			if (!currentClassificationMutation(generation, controller)) return;
+			const deletedEditedClassification = classificationId === target.id;
 			classificationRefreshRequired = true;
 			classificationMessage = "Deleted, but the list could not be refreshed";
 			await refreshClassifications();
-			if (!classificationRefreshRequired) classificationMessage = "Classification deleted and refreshed.";
+			if (!classificationRefreshRequired) {
+				if (deletedEditedClassification) resetClassificationEditor();
+				classificationMessage = "Classification deleted and refreshed.";
+			}
 		} catch (error) {
 			if (currentClassificationMutation(generation, controller) && !aborted(error)) {
 				classificationError = message(error);
@@ -353,7 +362,7 @@
 		<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="classifications-title">
 			<div><h2 id="classifications-title" class="text-lg font-bold">Food Categories and Culinary Roles</h2><p class="text-sm text-[var(--color-muted)]">Create, rename, reparent, or detach classifications. The server validates the complete hierarchy.</p></div>
 			<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveClassification} aria-label="Classification form">
-				<label class="grid gap-1 text-sm">Kind<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationKind} disabled={Boolean(classificationId) || classificationBusy || classificationRefreshRequired}><option value="food_category">Food Category</option><option value="culinary_role">Culinary Role</option></select></label>
+				<label class="grid gap-1 text-sm">Kind<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value={classificationKind} onchange={(event) => changeClassificationKind((event.currentTarget as HTMLSelectElement).value as ClassificationKind)} disabled={Boolean(classificationId) || classificationBusy || classificationRefreshRequired}><option value="food_category">Food Category</option><option value="culinary_role">Culinary Role</option></select></label>
 				<label class="grid gap-1 text-sm">Name<input maxlength="120" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationName} disabled={classificationBusy || classificationRefreshRequired} /></label>
 				<label class="grid gap-1 text-sm">Parent<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationParentId} disabled={classificationBusy || classificationRefreshRequired}><option value="">No parent</option>{#each classificationHierarchy(classifications[classificationKind]).filter(({ value }) => value.id !== classificationId) as { value, parentName }}<option value={value.id}>{value.name}{parentName ? ` — child of ${parentName}` : ""}</option>{/each}</select></label>
 				<button type="submit" class="self-end rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired}>{classificationId ? "Save classification" : "Create"}</button>

@@ -40,6 +40,8 @@ test("separates confirmed classification mutations from recoverable hierarchy re
 	expect(source).toContain("projectionContains(projection, savedClassification)");
 	expect(source).toContain("parentId: classificationParentId || null");
 	expect(source).toContain('value.id !== classificationId');
+	expect(source).toContain("changeClassificationKind");
+	expect(source).toContain("deletedEditedClassification");
 	expect(source).toContain('role="tree"');
 	expect(source).toContain("aria-level={row.depth + 1}");
 });
