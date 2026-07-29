@@ -3429,7 +3429,7 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("Search() invalid micros error = %v, want validation", err)
 	}
 
-	failedCreateTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{foodID}}, execErr: execErr}}
+	failedCreateTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{foodID}}, rows: &fakeRows{}, execErr: execErr}}
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: failedCreateTx})
 	validWater := FoodItemEntity{Name: "Water", PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "manual", MacrosPer100: MacroValues{}}
 	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
@@ -3439,18 +3439,18 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatal("Create() replace classifications error did not roll back transaction")
 	}
 
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}}}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}, rows: &fakeRows{}}}})
 	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Create() insert scan error = %v, want connection", err)
 	}
 
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErr: execErr}}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{rows: &fakeRows{}, execErr: execErr}}})
 	validWater.ID = foodID
 	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Update() exec error = %v, want connection", err)
 	}
 
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, execErr}}}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{rows: &fakeRows{}, execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, execErr}}}})
 	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Update() replace classifications error = %v, want connection", err)
 	}

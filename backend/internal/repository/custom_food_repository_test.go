@@ -324,6 +324,7 @@ func TestPostgresCustomFoodItemRepositoryErrorBranches(t *testing.T) {
 	rollbackTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{
 		execErrs: []error{nil, wantErr},
 		execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")},
+		rows:     &fakeRows{},
 	}}
 	repo = NewPostgresCustomFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: rollbackTx})
 	if err := repo.Update(ctx, valid); !IsKind(err, ErrorKindConnection) {

@@ -282,9 +282,6 @@ func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context,
 // validateMicronutrientsWithExecutor validates active keys in a caller transaction.
 // Implements DESIGN-009 ItemCurator and DESIGN-005 MicronutrientVocabulary.
 func validateMicronutrientsWithExecutor(ctx context.Context, db sqlExecutor, micros MicroValues) error {
-	if len(micros) == 0 {
-		return nil
-	}
 	repo := NewPostgresMicronutrientVocabularyRepository(db)
 	entries, err := repo.ListActive(ctx)
 	if err != nil {
