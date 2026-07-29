@@ -267,12 +267,12 @@ type usdaSearchPayload struct {
 // usdaFood captures provider fields required for external-record projection.
 // Implements DESIGN-012 USDAClient payload parsing.
 type usdaFood struct {
-	FDCID       int               `json:"fdcId"`
-	Description string            `json:"description"`
-	ServingSize *float64          `json:"servingSize"`
-	ServingUnit string            `json:"servingSizeUnit"`
-	Nutrients   []usdaNutrient    `json:"foodNutrients"`
-	Measures    []json.RawMessage `json:"foodMeasures"`
+	FDCID       int             `json:"fdcId"`
+	Description string          `json:"description"`
+	ServingSize *float64        `json:"servingSize"`
+	ServingUnit string          `json:"servingSizeUnit"`
+	Nutrients   []usdaNutrient  `json:"foodNutrients"`
+	Measures    json.RawMessage `json:"foodMeasures"`
 }
 
 // usdaNutrient captures one named and unit-qualified USDA nutrient value.
@@ -357,9 +357,15 @@ func decodeUSDAFood(raw json.RawMessage) (ExternalFoodRecord, error) {
 		}
 		nutrients[key] = *value
 	}
-	portions := make([]ExternalFoodPortion, 0, len(food.Measures))
+	var measures []json.RawMessage
 	partialNormalization := false
-	for _, rawMeasure := range food.Measures {
+	if len(food.Measures) > 0 {
+		if json.Unmarshal(food.Measures, &measures) != nil || measures == nil {
+			partialNormalization = true
+		}
+	}
+	portions := make([]ExternalFoodPortion, 0, len(measures))
+	for _, rawMeasure := range measures {
 		portion, ok := decodeUSDAPortion(rawMeasure)
 		if !ok {
 			partialNormalization = true

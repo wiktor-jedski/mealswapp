@@ -380,6 +380,21 @@ func TestUSDASearchResultReportsRejectedCandidatesWithoutProviderFailure(t *test
 	}
 }
 
+func TestDecodeUSDAFoodToleratesMalformedOptionalMeasuresContainer(t *testing.T) {
+	for _, container := range []string{`{}`, `"not-an-array"`, `null`} {
+		t.Run(container, func(t *testing.T) {
+			raw := `{"fdcId":9,"description":"Valid food","foodNutrients":[],"foodMeasures":` + container + `}`
+			record, err := decodeUSDAFood([]byte(raw))
+			if err != nil {
+				t.Fatalf("optional foodMeasures rejected food: %v", err)
+			}
+			if !record.PartialNormalization || len(record.Portions) != 0 {
+				t.Fatalf("record=%#v, want partial record without portions", record)
+			}
+		})
+	}
+}
+
 func TestDecodeUSDASearchAcceptsEmptyResultsAndOrdersPortionTies(t *testing.T) {
 	empty, err := decodeUSDASearch([]byte(`{"totalHits":0,"currentPage":0,"totalPages":0,"foods":[]}`))
 	if err != nil || empty == nil || len(empty) != 0 {
