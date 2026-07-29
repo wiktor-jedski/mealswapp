@@ -295,6 +295,12 @@ test("global item picker cancels stale searches, disambiguates duplicate names, 
 	await secondResult.press("Enter");
 	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Second item");
 	await expect(page.getByText("Authoritative item loaded.")).toBeVisible();
+	await query.fill("slow tofu"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.getByText("Loading matching global items…")).toBeVisible();
+	await query.fill(""); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.getByText("Enter an item name.")).toBeVisible();
+	await page.waitForTimeout(250);
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(0);
 });
 
 test("global item picker exposes deterministic bounded pagination", async ({ page }) => {
@@ -347,6 +353,30 @@ test("picker refreshes after committed mutations and recovers a failed read with
 	await expect(page.getByText("Item deleted and search results refreshed.")).toBeVisible();
 	await expect(page.getByText("No active global items matched this name.")).toBeVisible();
 	expect(state.deletedItemIds).toEqual([itemId]);
+});
+
+test("picker recovers to the previous page when deleting its last later-page item", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Paged tofu 11", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	state.itemSearchItems = Array.from({ length: 11 }, (_, index) => ({
+		itemId: index === 10 ? itemId : `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+		name: `Paged tofu ${String(index + 1).padStart(2, "0")}`,
+		physicalState: "solid",
+		macrosPer100: { protein: index, carbohydrates: 3, fat: 2 },
+		foodCategories: [],
+		culinaryRoles: []
+	}));
+	await openAdmin(page);
+	await page.getByLabel("Item name").fill("paged tofu");
+	await page.locator('form[aria-label="Search global items"]').getByRole("button", { name: "Search", exact: true }).click();
+	await page.getByRole("button", { name: "Next" }).click();
+	await expect(page.getByText("Page 2 of 2")).toBeVisible();
+	await page.getByRole("button", { name: "Edit Paged tofu 11" }).click();
+	await page.getByRole("button", { name: "Delete item" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Item deleted and search results refreshed.")).toBeVisible();
+	await expect(page.getByText("Page 1 of 1")).toBeVisible();
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(10);
 });
 
 test("older classification mutations and refreshes cannot overwrite the latest projection", async ({ page }) => {
