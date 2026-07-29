@@ -130,6 +130,19 @@ func assertTask260MetricLabels(t *testing.T, point MetricPoint) {
 	}
 }
 
+func TestAdminExternalTelemetryPreservesPartialNormalization(t *testing.T) {
+	sink := &MemorySink{}
+	telemetry := NewAdminExternalTelemetry(sink, sink)
+	telemetry.NormalizationWarning(context.Background(), "usda", "partial_normalization")
+	metrics, logs := sink.Snapshot()
+	if len(metrics) != 1 || metrics[0].Labels["warning"] != "partial_normalization" {
+		t.Fatalf("metrics=%#v", metrics)
+	}
+	if len(logs) != 1 || logs[0].Fields["warning"] != "partial_normalization" {
+		t.Fatalf("logs=%#v", logs)
+	}
+}
+
 func task260AllowedLabelValues(key string) []string {
 	switch key {
 	case "provider":

@@ -101,7 +101,7 @@ func (t *AdminExternalTelemetry) ProviderQuota(ctx context.Context, provider, st
 // NormalizationWarning records canonical warning categories only.
 // Implements DESIGN-014 MetricsCollector normalization warning metrics.
 func (t *AdminExternalTelemetry) NormalizationWarning(ctx context.Context, provider, warning string) {
-	if !allowed(provider, "usda", "openfoodfacts", "external") || !allowed(warning, "missing_image", "missing_macros", "missing_micronutrients", "missing_liquid_density", "uncertain_unit_conversion", "suspicious_liquid_macros", "invalid_external_payload") {
+	if !allowed(provider, "usda", "openfoodfacts", "external") || !allowed(warning, "missing_image", "missing_macros", "missing_micronutrients", "missing_liquid_density", "uncertain_unit_conversion", "suspicious_liquid_macros", "partial_normalization", "invalid_external_payload") {
 		return
 	}
 	labels := map[string]string{"provider": provider, "warning": warning}
