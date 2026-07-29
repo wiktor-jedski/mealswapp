@@ -1,10 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Implements DESIGN-001 SearchView browser test harness and docs/design/01_TECH_STACK.md Playwright + axe toolchain.
+const webServerPort = Number(process.env.MEALSWAPP_PLAYWRIGHT_PORT ?? 4173);
 const webServerCommand =
   process.env.MEALSWAPP_PLAYWRIGHT_REUSE_BUILD === "1"
-    ? "bun run preview"
-    : "bun run build && bun run preview";
+    ? `bunx vite preview --port ${webServerPort} --strictPort`
+    : `bun run build && bunx vite preview --port ${webServerPort} --strictPort`;
 
 export default defineConfig({
   testDir: "./tests",
@@ -18,7 +19,7 @@ export default defineConfig({
       : undefined,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:4173",
+    baseURL: `http://localhost:${webServerPort}`,
     trace: "on-first-retry",
     screenshot: "only-on-failure"
   },
@@ -34,7 +35,7 @@ export default defineConfig({
   ],
   webServer: {
     command: webServerCommand,
-    url: "http://localhost:4173",
+    url: `http://localhost:${webServerPort}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
   }

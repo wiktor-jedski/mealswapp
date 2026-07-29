@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import {
 	createAdminClassification, createAdminItem, deleteAdminClassification, deleteAdminItem, getAdminItem,
-	listAdminClassifications, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion
+	listAdminClassifications, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion, searchAdminItems
 } from "./admin-client";
 import type { AdminItemRequest } from "./generated";
 
@@ -34,6 +34,35 @@ test("uses documented generated-contract routes, methods, CSRF, and idempotency"
 	expect(calls[4]!.url).toBe("/api/v1/admin/classifications?kind=food_category");
 	expect(calls[8]!.url).toContain("email=user%2Btag%40example.test");
 	expect(calls[9]!.url).toBe(`/api/v1/admin/users/${userId}/deletion-requests/${requestId}/retry`);
+});
+
+test("searches bounded ownerless summaries with stable duplicate-name IDs", async () => {
+	const duplicate = (id: string, physicalState: "solid" | "liquid") => ({
+		itemId: id, name: "Tofu", physicalState, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 },
+		foodCategories: [{ id: classId, name: "Protein", kind: "food_category" }], culinaryRoles: []
+	});
+	let requested = "";
+	let requestedInit: RequestInit | undefined;
+	globalThis.fetch = ((input, init) => {
+		requested = String(input);
+		requestedInit = init;
+		return Promise.resolve(response(200, envelope({ items: [duplicate(itemId, "solid"), duplicate(requestId, "liquid")], page: 1, pageSize: 10, total: 2 })));
+	}) as typeof fetch;
+
+	const result = await searchAdminItems({ name: " tofu & rice ", page: 1, pageSize: 10 });
+	expect(requested).toBe("/api/v1/admin/items?query=+tofu+%26+rice+&page=1&pageSize=10");
+	expect(requestedInit?.cache).toBe("no-store");
+	expect(result.items.map(({ itemId: id }) => id)).toEqual([itemId, requestId]);
+
+	const malformed = [
+		{ items: [{ ...duplicate(itemId, "solid"), ownerId: userId }], page: 1, pageSize: 10, total: 1 },
+		{ items: [{ ...duplicate(itemId, "solid"), name: "" }], page: 1, pageSize: 10, total: 1 },
+		{ items: [duplicate(itemId, "solid")], page: 0, pageSize: 10, total: 1 },
+		{ items: Array.from({ length: 51 }, () => duplicate(itemId, "solid")), page: 1, pageSize: 50, total: 51 }
+	];
+	const malformedCount = malformed.length;
+	globalThis.fetch = (() => Promise.resolve(response(200, envelope(malformed.shift())))) as typeof fetch;
+	for (let index = 0; index < malformedCount; index++) await expect(searchAdminItems({ name: "tofu" })).rejects.toMatchObject({ appError: { code: "malformed_admin_response" } });
 });
 
 test("rejects conflicts, audit failures, malformed privacy projections, and false-success statuses", async () => {
