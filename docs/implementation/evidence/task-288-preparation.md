@@ -54,3 +54,21 @@ text-only cup/tablespoon evidence, mixed measures, top-level serving pairs,
 invalid identity, malformed supported nutrients, ignored malformed unsupported
 nutrients, valid-peer isolation, exact FDC-ID and broad-name searches. Existing
 focused provider tests retain timeout and rate-limit coverage.
+
+## Reviewer repair evidence
+
+The reviewer repairs were committed separately:
+
+- `f1a2efa2 task 288 preserve partial normalization telemetry`: added the
+  `partial_normalization` category to the privacy-safe telemetry allowlist and
+  regression coverage for metric and log emission.
+- `36308377 task 288 tolerate malformed optional measures`: decodes
+  `foodMeasures` through a raw optional container, preserving the valid food
+  while marking malformed object, string, and null containers as partial
+  normalization; required search-envelope validation remains strict.
+
+Repair verification:
+
+- `GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test ./internal/observability ./internal/externaldata`: PASS
+- focused telemetry regression: PASS
+- malformed optional-container regression for object, string, and null values: PASS
