@@ -1,13 +1,14 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel task-256 browser verification.
+// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel task-291 browser verification.
 
 const itemId = "00000000-0000-4000-8000-000000000101";
 const categoryId = "00000000-0000-4000-8000-000000000102";
 const categoryParentId = "00000000-0000-4000-8000-000000000110";
 const conflictId = "00000000-0000-4000-8000-000000000103";
 const roleId = "00000000-0000-4000-8000-000000000104";
+const roleChildId = "00000000-0000-4000-8000-000000000111";
 const userId = "00000000-0000-4000-8000-000000000105";
 const deletionId = "00000000-0000-4000-8000-000000000106";
 const secondItemId = "00000000-0000-4000-8000-000000000108";
@@ -17,13 +18,17 @@ const failure = (status: number, code: string) => ({ status: "error", requestId:
 interface State {
 	item?: Record<string, unknown>;
 	categories: Array<{ id: string; name: string; kind: "food_category"; parentId?: string }>;
-	roles: Array<{ id: string; name: string; kind: "culinary_role" }>;
+	roles: Array<{ id: string; name: string; kind: "culinary_role"; parentId?: string }>;
 	user: Record<string, unknown>;
 	conflictNextRetry?: boolean;
 	lastItemPut?: Record<string, unknown>;
+	lastClassificationPost?: Record<string, unknown>;
 	lastClassificationPut?: Record<string, unknown>;
 	deletedItemIds: string[];
 	classificationReads: number;
+	classificationMutations: number;
+	classificationReadFailures?: Partial<Record<"food_category" | "culinary_role", number>>;
+	classificationReadOverrides?: Partial<Record<"food_category" | "culinary_role", unknown[]>>;
 	authoritativeNameAfterPut?: string;
 	userLookupDelays?: Record<string, number>;
 	itemReadDelays?: Record<string, number>;
@@ -38,9 +43,9 @@ async function json(route: Route, status: number, body?: unknown): Promise<void>
 async function stubApp(page: Page): Promise<State> {
 	const state: State = {
 		categories: [{ id: categoryParentId, name: "Food", kind: "food_category" }, { id: categoryId, name: "Produce", kind: "food_category", parentId: categoryParentId }, { id: conflictId, name: "In use", kind: "food_category" }],
-		roles: [{ id: roleId, name: "Base", kind: "culinary_role" }],
+		roles: [{ id: roleId, name: "Base", kind: "culinary_role" }, { id: roleChildId, name: "Sauce", kind: "culinary_role", parentId: roleId }],
 		user: { id: userId, email: "minimal@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", deletion: { requestId: deletionId, status: "failed", failureCategory: "unknown", retryCount: 1, requestedAt: "2026-07-20T00:00:00Z" } },
-		deletedItemIds: [], classificationReads: 0
+		deletedItemIds: [], classificationReads: 0, classificationMutations: 0
 	};
 	const session = ok({ userId: "admin-256", role: "admin", hasVerifiedLoginMethod: true, accessExpiresAt: "2026-07-21T22:00:00Z", refreshExpiresAt: "2026-07-28T22:00:00Z" });
 	await page.route(/\/api\/v1\/(profile|auth\/refresh|billing\/entitlement|search-history|saved-items|search\/autocomplete|auth\/csrf-token)(\?.*)?$/, async (route) => {
@@ -55,9 +60,38 @@ async function stubApp(page: Page): Promise<State> {
 	});
 	await page.route(/\/api\/v1\/admin\//, async (route) => {
 		const request = route.request(); const url = new URL(request.url()); const method = request.method(); const path = url.pathname;
-		if (path === "/api/v1/admin/classifications" && method === "GET") { state.classificationReads++; return json(route, 200, ok({ classifications: url.searchParams.get("kind") === "food_category" ? state.categories : state.roles })); }
-		if (path === "/api/v1/admin/classifications/food_category" && method === "POST") { const body = request.postDataJSON(); await state.classificationMutationWaits?.[body.name]; const classification = { id: body.name === "Slow category" ? "00000000-0000-4000-8000-000000000109" : "00000000-0000-4000-8000-000000000107", name: body.name, kind: "food_category" as const }; state.categories.push(classification); await json(route, 201, ok({ classification })); state.classificationMutationCompletions?.[body.name]?.(); return; }
-		if (path === `/api/v1/admin/classifications/${categoryId}` && method === "PUT") { const body = request.postDataJSON() as Record<string, unknown>; state.lastClassificationPut = body; state.categories[1] = { ...state.categories[1]!, name: String(body.name), ...(typeof body.parentId === "string" ? { parentId: body.parentId } : { parentId: undefined }) }; return json(route, 200, ok({ classification: state.categories[1] })); }
+		if (path === "/api/v1/admin/classifications" && method === "GET") {
+			state.classificationReads++;
+			const kind = url.searchParams.get("kind") as "food_category" | "culinary_role";
+			const override = state.classificationReadOverrides?.[kind];
+			if (override) {
+				if (state.classificationReadOverrides) delete state.classificationReadOverrides[kind];
+				return json(route, 200, ok({ classifications: override }));
+			}
+			const remainingFailures = state.classificationReadFailures?.[kind] ?? 0;
+			if (remainingFailures > 0) {
+				state.classificationReadFailures = { ...state.classificationReadFailures, [kind]: remainingFailures - 1 };
+				return json(route, 503, failure(503, "dependency_unavailable"));
+			}
+			return json(route, 200, ok({ classifications: kind === "food_category" ? state.categories : state.roles }));
+		}
+		if (/^\/api\/v1\/admin\/classifications\/(food_category|culinary_role)$/.test(path) && method === "POST") {
+			const body = request.postDataJSON(); await state.classificationMutationWaits?.[body.name];
+			if (body.name === "Duplicate") return json(route, 409, failure(409, "conflict"));
+			state.lastClassificationPost = body;
+			const kind = path.endsWith("food_category") ? "food_category" as const : "culinary_role" as const;
+			const classification = { id: body.name === "Slow category" ? "00000000-0000-4000-8000-000000000109" : "00000000-0000-4000-8000-000000000107", name: body.name, kind, ...(typeof body.parentId === "string" ? { parentId: body.parentId } : {}) };
+			state.classificationMutations++;
+			if (kind === "food_category") state.categories.push(classification); else state.roles.push(classification);
+			await json(route, 201, ok({ classification })); state.classificationMutationCompletions?.[body.name]?.(); return;
+		}
+		if (path === `/api/v1/admin/classifications/${categoryId}` && method === "PUT") {
+			const body = request.postDataJSON() as Record<string, unknown>; state.lastClassificationPut = body;
+			if (body.name === "Cycle") return json(route, 409, failure(409, "conflict"));
+			state.classificationMutations++;
+			state.categories[1] = { ...state.categories[1]!, name: String(body.name), ...(typeof body.parentId === "string" ? { parentId: body.parentId } : { parentId: undefined }) };
+			return json(route, 200, ok({ classification: state.categories[1] }));
+		}
 		if (path === `/api/v1/admin/classifications/${conflictId}` && method === "DELETE") return json(route, 409, failure(409, "classification_in_use"));
 		if (path.startsWith("/api/v1/admin/classifications/") && method === "DELETE") { const id = path.split("/").at(-1); state.categories = state.categories.filter((value) => value.id !== id); state.roles = state.roles.filter((value) => value.id !== id); return json(route, 204); }
 		if (path === "/api/v1/admin/items" && method === "POST") { const body = request.postDataJSON(); state.item = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] }; return json(route, 201, ok(state.item)); }
@@ -128,7 +162,7 @@ test("keyboard cancellation restores focus for every destructive confirmation an
 	await cancelWithKeyboard(page);
 	await expect(itemDelete).toBeFocused();
 
-	const classificationDelete = page.getByRole("listitem").filter({ hasText: "Produce" }).getByRole("button", { name: "Delete" });
+	const classificationDelete = page.getByRole("treeitem").filter({ hasText: "Produce" }).getByRole("button", { name: "Delete" });
 	await classificationDelete.focus();
 	await classificationDelete.press("Enter");
 	await cancelWithKeyboard(page);
@@ -176,11 +210,11 @@ test("manual global item CRUD validates, confirms, refreshes, and never shows au
 // DESIGN-009 TagManager/UserAdminPanel, and SW-REQ-054/SW-REQ-057/SW-REQ-073.
 test("classification conflicts and legal deletion retries preserve authoritative state", async ({ page }) => {
 	const state = await stubApp(page); await openAdmin(page);
-	await page.getByLabel("Name", { exact: true }).last().fill("Vegetable"); await page.getByRole("button", { name: "Create", exact: true }).click(); await expect(page.getByRole("listitem").filter({ hasText: "Vegetable" })).toBeVisible();
-	const produce = page.getByRole("listitem").filter({ hasText: "Produce" }); await produce.getByRole("button", { name: "Rename" }).click(); await page.getByLabel("Name", { exact: true }).last().fill("Fresh produce"); await page.getByRole("button", { name: "Save rename" }).click(); await expect(page.getByRole("listitem").filter({ hasText: "Fresh produce" })).toBeVisible();
+	await page.getByLabel("Name", { exact: true }).last().fill("Vegetable"); await page.getByRole("button", { name: "Create", exact: true }).click(); await expect(page.getByRole("treeitem").filter({ hasText: "Vegetable" })).toBeVisible();
+	const produce = page.getByRole("treeitem").filter({ hasText: "Produce" }); await produce.getByRole("button", { name: "Edit" }).click(); await page.getByLabel("Name", { exact: true }).last().fill("Fresh produce"); await page.getByRole("button", { name: "Save classification" }).click(); await expect(page.getByRole("treeitem").filter({ hasText: "Fresh produce" })).toBeVisible();
 	expect(state.lastClassificationPut).toEqual({ name: "Fresh produce", parentId: categoryParentId });
 	expect(state.categories.find(({ id }) => id === categoryId)?.parentId).toBe(categoryParentId);
-	const inUse = page.getByRole("listitem").filter({ hasText: "In use" }); await inUse.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click(); await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data"); await expect(page.getByRole("listitem").filter({ hasText: "In use" })).toBeVisible();
+	const inUse = page.getByRole("treeitem").filter({ hasText: "In use" }); await inUse.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click(); await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data"); await expect(page.getByRole("treeitem").filter({ hasText: "In use" })).toBeVisible();
 	await page.getByLabel("Email or user ID").fill("minimal@example.test"); await page.getByRole("button", { name: "Look up" }).click();
 	await expect(page.locator("[data-admin-user]")).toContainText("unknown · retries 1"); state.conflictNextRetry = true; await page.getByRole("button", { name: "Retry legal deletion" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
 	await expect(page.locator("[data-admin-user-error]")).toContainText("authoritative data"); await expect(page.locator("[data-admin-user]")).toContainText("pending"); await expect(page.getByText("Deletion retry accepted and authoritative state refreshed.")).toHaveCount(0);
@@ -188,13 +222,106 @@ test("classification conflicts and legal deletion retries preserve authoritative
 	await expect(page.getByText("Deletion retry accepted and authoritative state refreshed.")).toBeVisible(); await expect(page.locator("[data-admin-user]")).toContainText("pending"); await expect(page.getByRole("button", { name: "Retry legal deletion" })).toHaveCount(0);
 });
 
+test("classification hierarchy supports same-kind create, reparent, detach, and authoritative conflict recovery", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	const form = page.locator('form[aria-label="Classification form"]');
+	const name = page.getByLabel("Name", { exact: true }).last();
+	const parent = page.getByLabel("Parent");
+
+	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toHaveAttribute("aria-level", "2");
+	await expect(page.getByRole("treeitem").filter({ hasText: "Sauce" })).toHaveAttribute("aria-level", "2");
+	await name.fill("Leafy");
+	await parent.selectOption(categoryId);
+	await page.getByRole("button", { name: "Create", exact: true }).click();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Leafy" })).toHaveAttribute("aria-level", "3");
+	expect(state.lastClassificationPost).toEqual({ name: "Leafy", parentId: categoryId });
+	await expect(page.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
+
+	await page.getByLabel("Kind").selectOption("culinary_role");
+	await expect(parent.locator("option")).toHaveText(["No parent", "Base", "Sauce — child of Base"]);
+	await name.fill("Garnish"); await parent.selectOption(roleId);
+	await page.getByRole("button", { name: "Create", exact: true }).click();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Garnish" })).toBeVisible();
+	expect(state.lastClassificationPost).toEqual({ name: "Garnish", parentId: roleId });
+
+	const produce = page.locator(`[data-classification-id="${categoryId}"]`);
+	await produce.getByRole("button", { name: "Edit" }).click();
+	await expect(parent.locator(`option[value="${categoryId}"]`)).toHaveCount(0);
+	await expect(parent.locator(`option[value="${roleId}"]`)).toHaveCount(0);
+	await parent.selectOption(""); await page.getByRole("button", { name: "Save classification" }).click();
+	await expect(page.locator(`[data-classification-id="${categoryId}"]`)).toHaveAttribute("aria-level", "1");
+	expect(state.lastClassificationPut).toEqual({ name: "Produce", parentId: null });
+
+	await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Edit" }).click();
+	await parent.selectOption(categoryParentId); await page.getByRole("button", { name: "Save classification" }).click();
+	await expect(page.locator(`[data-classification-id="${categoryId}"]`)).toHaveAttribute("aria-level", "2");
+	expect(state.lastClassificationPut).toEqual({ name: "Produce", parentId: categoryParentId });
+
+	const mutationsBeforeRejections = state.classificationMutations;
+	await page.locator(`[data-classification-id="${categoryId}"]`).getByRole("button", { name: "Edit" }).click();
+	await name.fill("Cycle"); await parent.selectOption("00000000-0000-4000-8000-000000000107");
+	await page.getByRole("button", { name: "Save classification" }).click();
+	await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data");
+	await expect(page.getByRole("button", { name: "Save classification" })).toBeEnabled();
+	expect(state.classificationMutations).toBe(mutationsBeforeRejections);
+
+	await page.getByRole("button", { name: "Cancel edit" }).click();
+	await name.fill("Duplicate"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data");
+	expect(state.classificationMutations).toBe(mutationsBeforeRejections);
+});
+
+test("confirmed save survives a partial list failure and retries only the read", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	state.classificationReadFailures = { food_category: 1 };
+	const previousNames = await page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem").allTextContents();
+	await page.getByLabel("Name", { exact: true }).last().fill("Leafy");
+	await page.getByLabel("Parent").selectOption(categoryId);
+	await page.getByRole("button", { name: "Create", exact: true }).click();
+
+	await expect(page.getByText("Saved, but the list could not be refreshed")).toBeVisible();
+	await expect(page.locator("[data-admin-classification-recovery]")).toContainText("00000000-0000-4000-8000-000000000107");
+	await expect(page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem")).toHaveText(previousNames);
+	await expect(page.getByRole("button", { name: "Save classification" })).toBeDisabled();
+	await page.locator('form[aria-label="Classification form"]').evaluate((element: HTMLFormElement) => element.requestSubmit());
+	expect(state.classificationMutations).toBe(1);
+
+	const readsBeforeRetry = state.classificationReads;
+	await page.getByRole("button", { name: "Retry list refresh" }).click();
+	await expect(page.getByText("Classification saved and refreshed.")).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Leafy" })).toBeVisible();
+	expect(state.classificationReads).toBe(readsBeforeRetry + 2);
+	expect(state.classificationMutations).toBe(1);
+});
+
+test("confirmed save rejects a stale successful projection and recovers by read only", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	state.classificationReadOverrides = {
+		food_category: state.categories.map((value) => ({ ...value })),
+		culinary_role: state.roles.map((value) => ({ ...value }))
+	};
+	const previousNames = await page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem").allTextContents();
+	await page.getByLabel("Name", { exact: true }).last().fill("Stale child");
+	await page.getByLabel("Parent").selectOption(categoryId);
+	await page.getByRole("button", { name: "Create", exact: true }).click();
+
+	await expect(page.getByText("Saved, but the list could not be refreshed")).toBeVisible();
+	await expect(page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem")).toHaveText(previousNames);
+	await expect(page.locator("[data-admin-classification-recovery]")).toContainText("Stale child");
+	expect(state.classificationMutations).toBe(1);
+
+	await page.getByRole("button", { name: "Retry list refresh" }).click();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Stale child" })).toBeVisible();
+	expect(state.classificationMutations).toBe(1);
+});
+
 test("unused classification delete reloads the authoritative hierarchy", async ({ page }) => {
 	const state = await stubApp(page); await openAdmin(page);
 	const readsBeforeDelete = state.classificationReads;
-	const produce = page.getByRole("listitem").filter({ hasText: "Produce" });
+	const produce = page.getByRole("treeitem").filter({ hasText: "Produce" });
 	await produce.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
 	await expect(page.getByText("Classification deleted and refreshed.")).toBeVisible();
-	await expect(page.getByRole("listitem").filter({ hasText: "Produce" })).toHaveCount(0);
+	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toHaveCount(0);
 	expect(state.classificationReads).toBeGreaterThanOrEqual(readsBeforeDelete + 2);
 });
 
@@ -247,7 +374,7 @@ test("older item reads and user lookups cannot overwrite newer state", async ({ 
 	await expect(page.locator("[data-admin-user]")).toContainText("latest@example.test"); await page.waitForTimeout(250); await expect(page.locator("[data-admin-user]")).toContainText("latest@example.test");
 });
 
-test("older classification mutations and refreshes cannot overwrite the latest projection", async ({ page }) => {
+test("a pending classification mutation blocks duplicate submission", async ({ page }) => {
 	let releaseSlowMutation = () => {};
 	let completeSlowMutation = () => {};
 	const slowMutationCompleted = new Promise<void>((resolve) => { completeSlowMutation = resolve; });
@@ -256,12 +383,12 @@ test("older classification mutations and refreshes cannot overwrite the latest p
 	await name.fill("Slow category");
 	const slowRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/admin/classifications/food_category") && request.method() === "POST" && request.postDataJSON().name === "Slow category");
 	await form.evaluate((element: HTMLFormElement) => element.requestSubmit()); await slowRequest;
-	await name.fill("Latest category"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
-	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+	await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
 	releaseSlowMutation();
 	await slowMutationCompleted;
-	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible();
-	await expect(page.getByRole("listitem").filter({ hasText: "Slow category" })).toHaveCount(0);
+	await expect(page.getByRole("treeitem").filter({ hasText: "Slow category" })).toBeVisible();
+	expect(state.classificationMutations).toBe(1);
 });
 
 test("admin views remain keyboard-accessible, responsive, and theme-safe", async ({ page }, testInfo) => {

@@ -3,6 +3,7 @@
 	import { adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
 	import type { AdminClassification, AdminItem, AdminUser } from "../api/generated";
 	import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
+	import { classificationHierarchy } from "../classification-hierarchy";
 
 	// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel authoritative administration workflows.
 
@@ -10,6 +11,7 @@
 	let { api = adminApi }: Props = $props();
 
 	const allergenOptions = ["animal_product", "dairy", "egg", "gluten", "meat", "peanut", "tree_nut"];
+	const classificationKinds: ClassificationKind[] = ["food_category", "culinary_role"];
 	const emptyForm = (): AdminItemForm => ({ name: "", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "", carbohydrates: "", fat: "", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "" });
 	let form = $state<AdminItemForm>(emptyForm());
 	let itemId = $state("");
@@ -23,8 +25,12 @@
 	let classificationKind = $state<ClassificationKind>("food_category");
 	let classificationName = $state("");
 	let classificationId = $state("");
-	let classificationParentId = $state<string | undefined>();
-	let classificationBusy = $state(false);
+	let classificationParentId = $state("");
+	let classificationMutationBusy = $state(false);
+	let classificationReadBusy = $state(false);
+	let classificationRefreshRequired = $state(false);
+	let savedClassification = $state<AdminClassification | undefined>();
+	let classificationBusy = $derived(classificationMutationBusy || classificationReadBusy);
 	let classificationMessage = $state("");
 	let classificationError = $state("");
 	let userQuery = $state("");
@@ -39,26 +45,32 @@
 	let confirmationOpener: HTMLElement | undefined;
 	let confirmationContext: HTMLElement | undefined;
 	let itemGeneration = 0;
-	let classificationGeneration = 0;
+	let classificationMutationGeneration = 0;
+	let classificationReadGeneration = 0;
 	let userGeneration = 0;
 	let itemController: AbortController | undefined;
-	let classificationController: AbortController | undefined;
+	let classificationMutationController: AbortController | undefined;
+	let classificationReadController: AbortController | undefined;
 	let userController: AbortController | undefined;
 
 	onMount(() => { void refreshClassifications(); });
-	onDestroy(() => { itemController?.abort(); classificationController?.abort(); userController?.abort(); });
+	onDestroy(() => { itemController?.abort(); classificationMutationController?.abort(); classificationReadController?.abort(); userController?.abort(); });
 
 	function beginItemOperation(): { generation: number; controller: AbortController } {
 		itemController?.abort(); const controller = new AbortController(); itemController = controller; return { generation: ++itemGeneration, controller };
 	}
-	function beginClassificationOperation(): { generation: number; controller: AbortController } {
-		classificationController?.abort(); const controller = new AbortController(); classificationController = controller; return { generation: ++classificationGeneration, controller };
+	function beginClassificationMutation(): { generation: number; controller: AbortController } {
+		const controller = new AbortController(); classificationMutationController = controller; return { generation: ++classificationMutationGeneration, controller };
+	}
+	function beginClassificationRead(): { generation: number; controller: AbortController } {
+		classificationReadController?.abort(); const controller = new AbortController(); classificationReadController = controller; return { generation: ++classificationReadGeneration, controller };
 	}
 	function beginUserOperation(): { generation: number; controller: AbortController } {
 		userController?.abort(); const controller = new AbortController(); userController = controller; return { generation: ++userGeneration, controller };
 	}
 	function currentItemOperation(generation: number, controller: AbortController): boolean { return generation === itemGeneration && !controller.signal.aborted; }
-	function currentClassificationOperation(generation: number, controller: AbortController): boolean { return generation === classificationGeneration && !controller.signal.aborted; }
+	function currentClassificationMutation(generation: number, controller: AbortController): boolean { return generation === classificationMutationGeneration && !controller.signal.aborted; }
+	function currentClassificationRead(generation: number, controller: AbortController): boolean { return generation === classificationReadGeneration && !controller.signal.aborted; }
 	function currentUserOperation(generation: number, controller: AbortController): boolean { return generation === userGeneration && !controller.signal.aborted; }
 	function aborted(error: unknown): boolean { return error instanceof Error && error.name === "AbortError"; }
 	async function classificationProjection(signal: AbortSignal): Promise<Record<ClassificationKind, AdminClassification[]>> {
@@ -66,13 +78,35 @@
 		return { food_category: foodCategories, culinary_role: culinaryRoles };
 	}
 
-	async function refreshClassifications(): Promise<void> {
-		const { generation, controller } = beginClassificationOperation(); classificationBusy = true;
+	async function refreshClassifications(preserveError = false): Promise<void> {
+		const { generation, controller } = beginClassificationRead(); classificationReadBusy = true;
 		try {
 			const projection = await classificationProjection(controller.signal);
-			if (currentClassificationOperation(generation, controller)) classifications = projection;
-		} catch (error) { if (currentClassificationOperation(generation, controller) && !aborted(error)) classificationError = message(error); }
-		finally { if (generation === classificationGeneration) classificationBusy = false; }
+			if (currentClassificationRead(generation, controller)) {
+				if (savedClassification && !projectionContains(projection, savedClassification)) {
+					classificationMessage = "Saved, but the list could not be refreshed";
+					return;
+				}
+				classifications = projection;
+				const completedSave = classificationRefreshRequired && savedClassification !== undefined;
+				classificationRefreshRequired = false;
+				savedClassification = undefined;
+				if (!preserveError) classificationError = "";
+				if (completedSave) {
+					resetClassificationEditor();
+					classificationMessage = "Classification saved and refreshed.";
+				}
+			}
+		} catch (error) {
+			if (currentClassificationRead(generation, controller) && !aborted(error)) {
+				if (classificationRefreshRequired) classificationMessage = savedClassification ? "Saved, but the list could not be refreshed" : "Deleted, but the list could not be refreshed";
+				else classificationError = message(error);
+			}
+		} finally { if (generation === classificationReadGeneration) classificationReadBusy = false; }
+	}
+
+	function projectionContains(projection: Record<ClassificationKind, AdminClassification[]>, saved: AdminClassification): boolean {
+		return projection[saved.kind].some((value) => value.id === saved.id && value.name === saved.name && (value.parentId ?? "") === (saved.parentId ?? ""));
 	}
 
 	async function loadItem(): Promise<void> {
@@ -139,35 +173,55 @@
 	async function saveClassification(event: SubmitEvent): Promise<void> {
 		event.preventDefault(); const name = classificationName.trim();
 		if (!name || name.length > 120) { classificationError = "Enter a classification name of at most 120 characters."; return; }
-		const id = classificationId; const kind = classificationKind; const { generation, controller } = beginClassificationOperation(); classificationBusy = true; classificationError = ""; classificationMessage = "";
+		if (classificationMutationBusy || classificationRefreshRequired) return;
+		const id = classificationId; const kind = classificationKind; const { generation, controller } = beginClassificationMutation(); classificationMutationBusy = true; classificationError = ""; classificationMessage = "";
 		try {
-			if (id) await api.replaceClassification(id, { name, parentId: classificationParentId ?? null }, { signal: controller.signal });
-			else await api.createClassification(kind, { name }, { signal: controller.signal });
-			const projection = await classificationProjection(controller.signal);
-			if (currentClassificationOperation(generation, controller)) { classifications = projection; classificationName = ""; classificationId = ""; classificationParentId = undefined; classificationMessage = "Classification saved and refreshed."; }
+			const saved = id
+				? await api.replaceClassification(id, { name, parentId: classificationParentId || null }, { signal: controller.signal })
+				: await api.createClassification(kind, { name, parentId: classificationParentId || null }, { signal: controller.signal });
+			if (!currentClassificationMutation(generation, controller)) return;
+			savedClassification = saved;
+			classificationKind = saved.kind;
+			classificationId = saved.id;
+			classificationName = saved.name;
+			classificationParentId = saved.parentId ?? "";
+			classificationRefreshRequired = true;
+			classificationMessage = "Classification saved. Refreshing list…";
+			await refreshClassifications();
 		} catch (error) {
-			if (currentClassificationOperation(generation, controller) && !aborted(error)) {
+			if (currentClassificationMutation(generation, controller) && !aborted(error)) {
 				classificationError = message(error);
-				try { const projection = await classificationProjection(controller.signal); if (currentClassificationOperation(generation, controller)) classifications = projection; } catch { /* Preserve the mutation error and latest known state. */ }
+				void refreshClassifications(true);
 			}
-		} finally { if (generation === classificationGeneration) classificationBusy = false; }
+		} finally { if (generation === classificationMutationGeneration) classificationMutationBusy = false; }
 	}
 
-	function editClassification(value: AdminClassification): void { classificationKind = value.kind; classificationId = value.id; classificationName = value.name; classificationParentId = value.parentId; classificationError = ""; }
+	function editClassification(value: AdminClassification): void {
+		if (classificationRefreshRequired) return;
+		classificationKind = value.kind; classificationId = value.id; classificationName = value.name; classificationParentId = value.parentId ?? ""; classificationError = ""; classificationMessage = "";
+	}
+
+	function resetClassificationEditor(): void {
+		classificationName = ""; classificationId = ""; classificationParentId = "";
+	}
 
 	async function deleteClassification(target: Confirmation): Promise<void> {
 		if (target.action !== "classification" || !Object.values(classifications).flat().some(({ id }) => id === target.id)) { classificationError = "The confirmed classification is no longer current. Reload before deleting."; return; }
-		const { generation, controller } = beginClassificationOperation(); classificationBusy = true; classificationError = ""; classificationMessage = "";
+		if (classificationMutationBusy || classificationRefreshRequired) return;
+		const { generation, controller } = beginClassificationMutation(); classificationMutationBusy = true; classificationError = ""; classificationMessage = "";
 		try {
 			await api.deleteClassification(target.id, { signal: controller.signal });
-			const projection = await classificationProjection(controller.signal);
-			if (currentClassificationOperation(generation, controller)) { classifications = projection; classificationMessage = "Classification deleted and refreshed."; }
+			if (!currentClassificationMutation(generation, controller)) return;
+			classificationRefreshRequired = true;
+			classificationMessage = "Deleted, but the list could not be refreshed";
+			await refreshClassifications();
+			if (!classificationRefreshRequired) classificationMessage = "Classification deleted and refreshed.";
 		} catch (error) {
-			if (currentClassificationOperation(generation, controller) && !aborted(error)) {
+			if (currentClassificationMutation(generation, controller) && !aborted(error)) {
 				classificationError = message(error);
-				try { const projection = await classificationProjection(controller.signal); if (currentClassificationOperation(generation, controller)) classifications = projection; } catch { /* Preserve the mutation error and latest known state. */ }
+				void refreshClassifications(true);
 			}
-		} finally { if (generation === classificationGeneration) classificationBusy = false; }
+		} finally { if (generation === classificationMutationGeneration) classificationMutationBusy = false; }
 	}
 
 	async function lookupUsers(): Promise<void> {
@@ -211,7 +265,11 @@
 
 	function confirm(target: Confirmation, opener: HTMLElement): void {
 		if (target.action === "item") { itemController?.abort(); ++itemGeneration; itemBusy = false; }
-		else if (target.action === "classification") { classificationController?.abort(); ++classificationGeneration; classificationBusy = false; }
+		else if (target.action === "classification") {
+			classificationMutationController?.abort(); classificationReadController?.abort();
+			++classificationMutationGeneration; ++classificationReadGeneration;
+			classificationMutationBusy = false; classificationReadBusy = false;
+		}
 		else { userController?.abort(); ++userGeneration; userBusy = false; }
 		confirmationOpener = opener;
 		confirmationContext = opener.closest("section") ?? undefined;
@@ -292,13 +350,38 @@
 		{#if itemError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
 	</section>
 
-	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="classifications-title">
-		<h2 id="classifications-title" class="text-lg font-bold">Food Categories and Culinary Roles</h2>
-		<form class="grid gap-3 sm:grid-cols-[12rem_1fr_auto]" onsubmit={saveClassification} aria-label="Classification form"><label class="grid gap-1 text-sm">Kind<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationKind} disabled={Boolean(classificationId)}><option value="food_category">Food Category</option><option value="culinary_role">Culinary Role</option></select></label><label class="grid gap-1 text-sm">Name<input maxlength="120" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationName} /></label><button type="submit" class="self-end rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy}>{classificationId ? "Save rename" : "Create"}</button></form>
-		{#if classificationId}<button type="button" class="w-fit text-sm underline transition-all duration-200 motion-reduce:transition-none" onclick={() => { classificationId = ""; classificationName = ""; classificationParentId = undefined; }}>Cancel rename</button>{/if}
-		<div class="grid gap-4 md:grid-cols-2" data-admin-classification-grid>{#each ["food_category", "culinary_role"] as kind}<div class="grid content-start gap-2"><h3 class="font-bold">{kind === "food_category" ? "Food Categories" : "Culinary Roles"}</h3><ul class="grid gap-2">{#each classifications[kind as ClassificationKind] as value (value.id)}<li class="flex items-center justify-between gap-2 rounded border border-[var(--color-border)] p-2"><span>{value.name}</span><span class="flex gap-2"><button type="button" class="rounded border px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy} onclick={() => editClassification(value)}>Rename</button><button type="button" class="rounded border border-[var(--color-error)] px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy} onclick={(event) => confirm({ action: "classification", id: value.id, label: value.name }, event.currentTarget)}>Delete</button></span></li>{/each}</ul></div>{/each}</div>
-		{#if classificationError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-classification-error>{classificationError}</p>{:else if classificationMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{classificationMessage}</p>{/if}
-	</section>
+		<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="classifications-title">
+			<div><h2 id="classifications-title" class="text-lg font-bold">Food Categories and Culinary Roles</h2><p class="text-sm text-[var(--color-muted)]">Create, rename, reparent, or detach classifications. The server validates the complete hierarchy.</p></div>
+			<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveClassification} aria-label="Classification form">
+				<label class="grid gap-1 text-sm">Kind<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationKind} disabled={Boolean(classificationId) || classificationBusy || classificationRefreshRequired}><option value="food_category">Food Category</option><option value="culinary_role">Culinary Role</option></select></label>
+				<label class="grid gap-1 text-sm">Name<input maxlength="120" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationName} disabled={classificationBusy || classificationRefreshRequired} /></label>
+				<label class="grid gap-1 text-sm">Parent<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationParentId} disabled={classificationBusy || classificationRefreshRequired}><option value="">No parent</option>{#each classificationHierarchy(classifications[classificationKind]).filter(({ value }) => value.id !== classificationId) as { value, parentName }}<option value={value.id}>{value.name}{parentName ? ` — child of ${parentName}` : ""}</option>{/each}</select></label>
+				<button type="submit" class="self-end rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired}>{classificationId ? "Save classification" : "Create"}</button>
+			</form>
+			{#if classificationId && !classificationRefreshRequired}<button type="button" class="w-fit text-sm underline transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={resetClassificationEditor}>Cancel edit</button>{/if}
+			{#if classificationRefreshRequired}
+				<div class="grid gap-2 rounded border border-[var(--color-border)] p-3" data-admin-classification-recovery>
+					{#if savedClassification}<p class="text-sm">Confirmed classification: <strong>{savedClassification.name}</strong> <span class="break-all font-data">({savedClassification.id})</span></p>{/if}
+					<button type="button" class="w-fit rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void refreshClassifications()} disabled={classificationReadBusy}>Retry list refresh</button>
+				</div>
+			{/if}
+			<div class="grid gap-4 md:grid-cols-2" data-admin-classification-grid>
+				{#each classificationKinds as kind}
+					<div class="grid content-start gap-2">
+						<h3 class="font-bold">{kind === "food_category" ? "Food Categories" : "Culinary Roles"}</h3>
+						<ul class="grid gap-2" role="tree" aria-label={kind === "food_category" ? "Food Category hierarchy" : "Culinary Role hierarchy"}>
+							{#each classificationHierarchy(classifications[kind]) as row (row.value.id)}
+								<li class="grid gap-2 rounded border border-[var(--color-border)] p-2 sm:grid-cols-[1fr_auto]" role="treeitem" aria-level={row.depth + 1} aria-selected={classificationId === row.value.id} data-classification-id={row.value.id}>
+									<span class="min-w-0"><span aria-hidden="true">{"— ".repeat(row.depth)}</span><strong>{row.value.name}</strong>{#if row.parentName}<span class="block text-xs text-[var(--color-muted)]">Child of {row.parentName}</span>{/if}<span class="block break-all font-data text-xs text-[var(--color-muted)]">{row.value.id}</span></span>
+									<span class="flex items-start gap-2"><button type="button" class="rounded border px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired} onclick={() => editClassification(row.value)}>Edit</button><button type="button" class="rounded border border-[var(--color-error)] px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired} onclick={(event) => confirm({ action: "classification", id: row.value.id, label: row.value.name }, event.currentTarget)}>Delete</button></span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/each}
+			</div>
+			{#if classificationError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-classification-error>{classificationError}</p>{:else if classificationMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{classificationMessage}</p>{/if}
+		</section>
 
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="user-admin-title">
 		<div><h2 id="user-admin-title" class="text-lg font-bold">Restricted user lookup</h2><p class="text-sm text-[var(--color-muted)]">Exact lookup returns only the approved account and deletion summary.</p></div>

@@ -25,9 +25,23 @@ test("binds confirmations to immutable targets and guards authoritative refresh 
 	expect(source).toContain("event.preventDefault(); target.focus()");
 	expect(source).not.toContain("<dialog open");
 	expect(source).toContain("currentItemOperation(generation, controller)");
-	expect(source).toContain("currentClassificationOperation(generation, controller)");
+	expect(source).toContain("currentClassificationMutation(generation, controller)");
+	expect(source).toContain("currentClassificationRead(generation, controller)");
 	expect(source).toContain("currentUserOperation(generation, controller)");
 	expect(source).toContain("api.getItem(saved.id, controller.signal)");
+});
+
+test("separates confirmed classification mutations from recoverable hierarchy reads", () => {
+	expect(source).toContain('"Saved, but the list could not be refreshed"');
+	expect(source).toContain("savedClassification = saved");
+	expect(source).toContain("classificationRefreshRequired = true");
+	expect(source).toContain("Retry list refresh");
+	expect(source).toContain("classificationMutationBusy || classificationRefreshRequired");
+	expect(source).toContain("projectionContains(projection, savedClassification)");
+	expect(source).toContain("parentId: classificationParentId || null");
+	expect(source).toContain('value.id !== classificationId');
+	expect(source).toContain('role="tree"');
+	expect(source).toContain("aria-level={row.depth + 1}");
 });
 
 test("uses responsive layouts, keyboard focus, safe alerts, and design traceability", () => {
