@@ -529,7 +529,7 @@ Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
 | `src/lib/alternative-diet-save.ts`          | Phase 07.01  |   100.00% |  95.56% | `57-58`                             | `F5`          |
 | `src/lib/api/account-data-client.ts`        | Phase 08     |   100.00% |  98.11% | `-`                                 | `F1`          |
 | `src/lib/api/admin-client.ts`               | Phase 08     |    95.95% | 100.00% | `-`                                 | `F2`          |
-| `src/lib/api/auth-client.ts`                | Phase 06.01  |    88.89% |  81.31% | `224-233,237-250,255-269`           | `F4`          |
+| `src/lib/api/auth-client.ts`                | Phase 06.01  |    89.47% |  82.46% | `247-256,260-273,278-292`           | `F4`          |
 | `src/lib/api/daily-diet-client.ts`          | Phase 07     |    95.83% |  95.26% | `292-302`                           | `F4`          |
 | `src/lib/api/entitlement-client.ts`         | Phase 06     |    88.24% |  79.03% | `248-257,275-287,292-306`           | `F4`          |
 | `src/lib/api/generated.ts`                  | Phase 08     |   100.00% |  99.06% | `185`                               | `F3`          |
