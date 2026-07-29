@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
@@ -30,12 +31,21 @@ type importExecutorStub struct {
 	repository.AdminMutationExecutor
 }
 
+type evidenceResolverStub struct {
+	identity providerregistry.Identity
+	err      error
+}
+
+func (s evidenceResolverStub) Resolve(string) (providerregistry.Identity, error) {
+	return s.identity, s.err
+}
+
 func TestServiceConfirmNormalizesDraftAndMapsResult(t *testing.T) {
 	foodID, importID := uuid.New(), uuid.New()
 	store := &importStoreStub{result: repository.CuratedImportConfirmationResult{ImportID: importID, Item: repository.FoodItemEntity{ID: foodID, Name: "Curated tofu", PhysicalState: repository.PhysicalStateSolid}}}
 	service := NewService(store)
 	result, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "ignored-natural-key", Request{
-		SourceProvider: " USDA ", ExternalID: " fdc-1 ", Request: validRequest(" Curated tofu "),
+		SelectedRecord: providerregistry.Identity{Provider: "usda", ExternalID: "fdc-1"}, Request: validRequest(" Curated tofu "),
 	})
 	if err != nil || result.ImportID != importID || result.FoodItemID != foodID || store.calls != 1 {
 		t.Fatalf("result=%+v calls=%d err=%v", result, store.calls, err)
@@ -45,10 +55,53 @@ func TestServiceConfirmNormalizesDraftAndMapsResult(t *testing.T) {
 	}
 }
 
+func TestServiceDerivesImportedDensityFromSelectedServerRecord(t *testing.T) {
+	store := &importStoreStub{result: repository.CuratedImportConfirmationResult{ImportID: uuid.New(), Item: repository.FoodItemEntity{ID: uuid.New(), Name: "Drink", PhysicalState: repository.PhysicalStateLiquid}}}
+	identity := providerregistry.Identity{Provider: "usda", ExternalID: "171265"}
+	service := NewService(store, evidenceResolverStub{identity: identity})
+	request := Request{ExternalRecordToken: "opaque", Request: customitem.Request{
+		Name: "Drink", PhysicalState: repository.PhysicalStateLiquid, DensityGramsPerMilliliter: 1.03, DensitySourceKind: "imported",
+		MacrosPer100: repository.MacroValues{}, Micros: repository.MicroValues{}, FoodCategoryIDs: []uuid.UUID{}, CulinaryRoleIDs: []uuid.UUID{},
+	}}
+	if _, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "", request); err != nil {
+		t.Fatal(err)
+	}
+	if store.claim.SourceProvider != identity.Provider || store.claim.ExternalID != identity.ExternalID ||
+		store.claim.Item.DensitySourceProvider != identity.Provider || store.claim.Item.DensitySourceFoodID != identity.ExternalID ||
+		store.claim.Item.DensitySourceKind != "imported" {
+		t.Fatalf("trusted claim = %+v", store.claim)
+	}
+	request.SelectedRecord = providerregistry.Identity{Provider: "usda", ExternalID: "different"}
+	if _, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "", request); !errors.Is(err, ErrExternalRecordEvidence) {
+		t.Fatalf("mismatched evidence error = %v", err)
+	}
+}
+
+func TestServiceRejectsUnknownMalformedAndStaleEvidenceBeforePersistence(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		service *Service
+		request Request
+	}{
+		{name: "unknown token", service: NewService(&importStoreStub{}, evidenceResolverStub{err: errors.New("unknown")}), request: Request{ExternalRecordToken: "unknown", Request: validRequest("Food")}},
+		{name: "resolver unavailable", service: NewService(&importStoreStub{}), request: Request{ExternalRecordToken: "malformed", Request: validRequest("Food")}},
+		{name: "unregistered provider", service: NewService(&importStoreStub{}, evidenceResolverStub{identity: providerregistry.Identity{Provider: "fixture", ExternalID: "1"}}), request: Request{ExternalRecordToken: "stale", Request: validRequest("Food")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := test.service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "valid-key", test.request); !errors.Is(err, ErrExternalRecordEvidence) {
+				t.Fatalf("error = %v", err)
+			}
+			if test.service.store.(*importStoreStub).calls != 0 {
+				t.Fatal("invalid evidence reached persistence")
+			}
+		})
+	}
+}
+
 func TestServiceConfirmUsesTypedCurationNormalizationBeforePersistence(t *testing.T) {
 	store := &importStoreStub{result: repository.CuratedImportConfirmationResult{ImportID: uuid.New(), Item: repository.FoodItemEntity{ID: uuid.New(), Name: "Café au lait", PhysicalState: repository.PhysicalStateSolid}}}
 	service := NewService(store)
-	req := Request{SourceProvider: " USDA ", ExternalID: " fdc-typed-1 ", Request: validRequest("  Cafe\u0301   au lait  ")}
+	req := Request{SelectedRecord: providerregistry.Identity{Provider: "usda", ExternalID: "fdc-typed-1"}, Request: validRequest("  Cafe\u0301   au lait  ")}
 	req.ImageURL = " https://images.example.com/cafe.jpg "
 
 	if _, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "ignored-natural-key", req); err != nil {
@@ -67,8 +120,8 @@ func TestServiceConfirmRejectsInvalidDraftsBeforePersistence(t *testing.T) {
 		key  string
 		req  Request
 	}{
-		{name: "half identity", key: "", req: Request{SourceProvider: "usda", Request: validRequest("Food")}},
-		{name: "unsupported provider", req: Request{SourceProvider: "other", ExternalID: "1", Request: validRequest("Food")}},
+		{name: "half identity", key: "", req: Request{SelectedRecord: providerregistry.Identity{Provider: "usda"}, Request: validRequest("Food")}},
+		{name: "unsupported provider", req: Request{SelectedRecord: providerregistry.Identity{Provider: "other", ExternalID: "1"}, Request: validRequest("Food")}},
 		{name: "missing key", req: Request{Request: validRequest("Food")}},
 		{name: "liquid density", key: "valid-key", req: Request{Request: customitem.Request{Name: "Drink", PhysicalState: repository.PhysicalStateLiquid, MacrosPer100: repository.MacroValues{}, Micros: repository.MicroValues{}, FoodCategoryIDs: []uuid.UUID{}, CulinaryRoleIDs: []uuid.UUID{}}}},
 		{name: "control character", key: "valid-key", req: Request{Request: validRequest("Oat\nMilk")}},
@@ -107,7 +160,7 @@ func TestServiceConfirmMapsConflictClasses(t *testing.T) {
 	}
 	for _, test := range cases {
 		service := NewService(&importStoreStub{err: test.storeErr})
-		_, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "", Request{SourceProvider: "usda", ExternalID: uuid.NewString(), Request: validRequest("Food")})
+		_, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "", Request{SelectedRecord: providerregistry.Identity{Provider: "usda", ExternalID: uuid.NewString()}, Request: validRequest("Food")})
 		if !errors.Is(err, test.want) {
 			t.Fatalf("error=%v want=%v", err, test.want)
 		}

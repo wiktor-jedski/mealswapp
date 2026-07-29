@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 )
 
 // Implements DESIGN-009 DataImporter conflict outcomes.
@@ -308,8 +309,14 @@ func validateCuratedImportConfirmation(claim CuratedImportConfirmation, tx Admin
 		return validationError("curated import transaction and admin are required")
 	}
 	provider, externalID := strings.ToLower(strings.TrimSpace(claim.SourceProvider)), strings.TrimSpace(claim.ExternalID)
-	if (provider == "") != (externalID == "") || (provider != "" && provider != "usda" && provider != "openfoodfacts") {
+	if (provider == "") != (externalID == "") {
 		return validationError("curated import provider identity is invalid")
+	}
+	if provider != "" {
+		identity, err := providerregistry.Default().Normalize(provider, externalID)
+		if err != nil || identity.Provider != claim.SourceProvider || identity.ExternalID != claim.ExternalID {
+			return validationError("curated import provider identity is invalid")
+		}
 	}
 	if provider == "" && (len(strings.TrimSpace(claim.IdempotencyKey)) < 8 || len(claim.IdempotencyKey) > 255 || strings.ContainsRune(claim.IdempotencyKey, '\x00')) {
 		return validationError("curated import idempotency key is invalid")

@@ -420,7 +420,6 @@ func TestPostgresCustomFoodItemRepositoryValidation(t *testing.T) {
 		PhysicalState:                   PhysicalStateLiquid,
 		AverageServingVolumeMilliliters: 250,
 		DensityGramsPerMilliliter:       1.03,
-		DensitySourceProvider:           "manual-entry",
 		DensitySourceKind:               "manual",
 		MacrosPer100:                    MacroValues{Protein: 1, Carbohydrates: 8, Fat: 2},
 		Micros:                          MicroValues{"Sodium": 4},
@@ -446,6 +445,7 @@ func TestPostgresCustomFoodItemRepositoryValidation(t *testing.T) {
 		{name: "invalid micronutrient", item: CustomFoodItemEntity{OwnerID: ownerID, FoodItemEntity: FoodItemEntity{Name: "Alias", PhysicalState: PhysicalStateSolid, Micros: MicroValues{"Na": 1}}}, kind: ErrorKindInvalidMicronutrientKey},
 		{name: "missing liquid density", item: CustomFoodItemEntity{OwnerID: ownerID, FoodItemEntity: FoodItemEntity{Name: "No Density", PhysicalState: PhysicalStateLiquid}}, kind: ErrorKindValidation},
 		{name: "missing liquid provenance", item: CustomFoodItemEntity{OwnerID: ownerID, FoodItemEntity: FoodItemEntity{Name: "No Provenance", PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1}}, kind: ErrorKindValidation},
+		{name: "forged imported provenance", item: CustomFoodItemEntity{OwnerID: ownerID, FoodItemEntity: FoodItemEntity{Name: "Forged", PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "imported", DensitySourceProvider: "usda", DensitySourceFoodID: "171265"}}, kind: ErrorKindValidation},
 	}
 	nulProvenance := validLiquid
 	nulProvenance.Name = "NUL provenance"

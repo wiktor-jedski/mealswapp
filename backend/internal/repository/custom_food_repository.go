@@ -209,6 +209,9 @@ func createCustomFoodItemInTransaction(ctx context.Context, db transactionalExec
 	if item.OwnerID == uuid.Nil {
 		return uuid.Nil, validationError("custom food item owner id is required")
 	}
+	if err := validatePrivateDensityAuthority(item.FoodItemEntity); err != nil {
+		return uuid.Nil, err
+	}
 	if err := NewPostgresFoodItemRepository(db).validateFoodItem(ctx, item.FoodItemEntity); err != nil {
 		return uuid.Nil, err
 	}
@@ -279,6 +282,9 @@ func (r *PostgresCustomFoodItemRepository) Update(ctx context.Context, item Cust
 	if err := validateCustomFoodIdentity(item.OwnerID, item.ID); err != nil {
 		return err
 	}
+	if err := validatePrivateDensityAuthority(item.FoodItemEntity); err != nil {
+		return err
+	}
 	if err := NewPostgresFoodItemRepository(r.db).validateFoodItem(ctx, item.FoodItemEntity); err != nil {
 		return err
 	}
@@ -300,6 +306,15 @@ func (r *PostgresCustomFoodItemRepository) Update(ctx context.Context, item Cust
 		}
 		return NewPostgresCustomFoodItemRepository(db).replaceClassifications(ctx, item.ID, item.FoodCategories, item.CulinaryRoles)
 	})
+}
+
+// validatePrivateDensityAuthority prevents users from claiming provider provenance.
+// Implements DESIGN-012 DataNormalizer private custom-item trust boundary.
+func validatePrivateDensityAuthority(item FoodItemEntity) error {
+	if item.DensitySourceKind == "imported" || item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" {
+		return validationError("private food density cannot contain imported provenance")
+	}
+	return nil
 }
 
 // Delete soft-deletes a private food item only when it belongs to ownerID.

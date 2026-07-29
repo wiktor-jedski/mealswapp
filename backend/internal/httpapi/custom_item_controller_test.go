@@ -307,7 +307,11 @@ func TestProfileControllerCustomItemRejectsEscapedNULProvenanceBeforeService(t *
 		}
 		envelope := decodeEnvelope(t, resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != "validation_failed" || service.createUser != uuid.Nil {
+		wantCode := "invalid_json"
+		if field == "densitySourceKind" {
+			wantCode = "validation_failed"
+		}
+		if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != wantCode || service.createUser != uuid.Nil {
 			t.Fatalf("escaped NUL %s = %d %+v serviceUser=%s", field, resp.StatusCode, envelope, service.createUser)
 		}
 	}

@@ -10,7 +10,7 @@
 	let { api = adminApi }: Props = $props();
 
 	const allergenOptions = ["animal_product", "dairy", "egg", "gluten", "meat", "peanut", "tree_nut"];
-	const emptyForm = (): AdminItemForm => ({ name: "", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "", carbohydrates: "", fat: "", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "" });
+	const emptyForm = (): AdminItemForm => ({ name: "", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "", carbohydrates: "", fat: "", density: "", densitySourceKind: "", micros: "{}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "" });
 	let form = $state<AdminItemForm>(emptyForm());
 	let itemId = $state("");
 	let currentItem = $state<AdminItem | undefined>();
@@ -94,7 +94,7 @@
 			averageServingVolumeMilliliters: item.averageServingVolumeMilliliters === undefined ? "" : String(item.averageServingVolumeMilliliters),
 			protein: String(item.macrosPer100.protein), carbohydrates: String(item.macrosPer100.carbohydrates), fat: String(item.macrosPer100.fat),
 			density: item.densityGramsPerMilliliter === undefined ? "" : String(item.densityGramsPerMilliliter),
-			densitySourceProvider: item.densitySourceProvider ?? "", densitySourceFoodId: item.densitySourceFoodId ?? "", densitySourceKind: item.densitySourceKind ?? "",
+			densitySourceKind: item.densitySourceKind === "estimated" ? "estimated" : item.densityGramsPerMilliliter === undefined ? "" : "manual",
 			micros: JSON.stringify(item.micros), foodCategoryIds: item.foodCategoryIds ?? item.foodCategories.map(({ id }) => id), culinaryRoleIds: item.culinaryRoleIds ?? item.culinaryRoles.map(({ id }) => id), allergenKeys: item.allergenKeys, imageUrl: item.imageUrl ?? ""
 		};
 	}
@@ -275,9 +275,7 @@
 			{#if form.physicalState === "liquid"}
 				<label class="grid gap-1 text-sm">Average serving volume (ml)<input inputmode="decimal" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.averageServingVolumeMilliliters} /></label>
 				<label class="grid gap-1 text-sm">Density (g/ml)<input inputmode="decimal" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.density} /></label>
-				<label class="grid gap-1 text-sm">Density source<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.densitySourceKind}><option value="">Manual (default)</option><option value="manual">Manual</option><option value="estimated">Estimated</option><option value="imported">Imported</option></select></label>
-				<label class="grid gap-1 text-sm">Density source provider<input maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.densitySourceProvider} /></label>
-				<label class="grid gap-1 text-sm sm:col-span-2">Density source food ID<input maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.densitySourceFoodId} /></label>
+				<label class="grid gap-1 text-sm">Density source<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.densitySourceKind}><option value="">Manual (default)</option><option value="manual">Manual</option><option value="estimated">Estimated</option></select></label>
 			{/if}
 			<label class="grid gap-1 text-sm">Protein per 100<input inputmode="decimal" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.protein} /></label>
 			<label class="grid gap-1 text-sm">Carbohydrates per 100<input inputmode="decimal" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.carbohydrates} /></label>

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
@@ -16,14 +17,17 @@ const DefaultExternalSearchPageSize = 20
 // ExternalCandidate is the bounded, non-persisted projection shown to administrators.
 // Implements DESIGN-009 ExternalSearchProxy ExternalCandidate.
 type ExternalCandidate struct {
-	Provider       string                   `json:"provider"`
-	ExternalID     string                   `json:"externalId"`
-	Name           string                   `json:"name"`
-	PhysicalState  repository.PhysicalState `json:"physicalState"`
-	MacrosPer100   repository.MacroValues   `json:"macrosPer100"`
-	Micronutrients repository.MicroValues   `json:"micronutrients"`
-	ImageURL       string                   `json:"imageUrl,omitempty"`
-	Warnings       []string                 `json:"warnings"`
+	Provider                  string                   `json:"provider"`
+	ExternalID                string                   `json:"externalId"`
+	RecordToken               string                   `json:"recordToken"`
+	Name                      string                   `json:"name"`
+	PhysicalState             repository.PhysicalState `json:"physicalState"`
+	DensityGramsPerMilliliter float64                  `json:"densityGramsPerMilliliter,omitempty"`
+	DensitySourceKind         DensitySourceKind        `json:"densitySourceKind,omitempty"`
+	MacrosPer100              repository.MacroValues   `json:"macrosPer100"`
+	Micronutrients            repository.MicroValues   `json:"micronutrients"`
+	ImageURL                  string                   `json:"imageUrl,omitempty"`
+	Warnings                  []string                 `json:"warnings"`
 }
 
 // ExternalSearchResponse contains only normalized candidates and closed warning values.
@@ -40,12 +44,17 @@ type ExternalSearchProxy struct {
 	providers  ProviderSet
 	limits     *RateLimitHandler
 	normalizer *DataNormalizer
+	evidence   *RecordEvidenceStore
 }
 
 // NewExternalSearchProxy creates a read-only provider orchestration boundary.
 // Implements DESIGN-009 ExternalSearchProxy.
-func NewExternalSearchProxy(providers ProviderSet, limits *RateLimitHandler, normalizer *DataNormalizer) *ExternalSearchProxy {
-	return &ExternalSearchProxy{providers: providers, limits: limits, normalizer: normalizer}
+func NewExternalSearchProxy(providers ProviderSet, limits *RateLimitHandler, normalizer *DataNormalizer, evidence ...*RecordEvidenceStore) *ExternalSearchProxy {
+	store := NewRecordEvidenceStore(providerregistry.Default())
+	if len(evidence) > 0 && evidence[0] != nil {
+		store = evidence[0]
+	}
+	return &ExternalSearchProxy{providers: providers, limits: limits, normalizer: normalizer, evidence: store}
 }
 
 // Search queries selected providers, normalizes one workflow snapshot, and returns deterministic bounded data.
@@ -70,9 +79,14 @@ func (p *ExternalSearchProxy) Search(ctx context.Context, query ExternalSearchQu
 	response := ExternalSearchResponse{Candidates: make([]ExternalCandidate, 0, len(candidates)), Warnings: warnings, Page: query.Page}
 	for _, candidate := range candidates {
 		candidate.Warnings = sortedUniqueStrings(candidate.Warnings)
+		recordToken, err := p.evidence.Register(candidate.Provider, candidate.ExternalID)
+		if err != nil {
+			return ExternalSearchResponse{}, err
+		}
 		response.Candidates = append(response.Candidates, ExternalCandidate{
-			Provider: candidate.Provider, ExternalID: candidate.ExternalID, Name: candidate.Name,
+			Provider: candidate.Provider, ExternalID: candidate.ExternalID, RecordToken: recordToken, Name: candidate.Name,
 			PhysicalState: candidate.PhysicalState, MacrosPer100: candidate.MacrosPer100,
+			DensityGramsPerMilliliter: candidate.DensityGramsPerMilliliter, DensitySourceKind: candidate.DensitySourceKind,
 			Micronutrients: candidate.Micros, ImageURL: candidate.ImageURL, Warnings: candidate.Warnings,
 		})
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/itemcurator"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/queue"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
@@ -104,7 +105,8 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	adminAudit := repository.NewPostgresAdminImportAuditRepository(pg)
 	manualItems := itemcurator.NewService(repository.NewPostgresManualFoodItemRepository(pg))
 	globalCatalogExport := catalogexport.NewService(repository.NewPostgresGlobalCatalogExportRepository(pg))
-	curatedImports := dataimporter.NewService(adminAudit).WithTelemetry(adminExternalTelemetry)
+	recordEvidence := externaldata.NewRecordEvidenceStore(providerregistry.Default())
+	curatedImports := dataimporter.NewService(adminAudit, recordEvidence).WithTelemetry(adminExternalTelemetry)
 	adminUserService := useradmin.NewService(repository.NewPostgresAdminUserRepository(pg), adminAudit, encryption, digests)
 	adminUserController := httpapi.NewUserAdminController(adminUserService)
 	dailyDietService := dailydiet.NewService(savedRepo, mealRepo, foodRepo)
@@ -135,6 +137,7 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		providers,
 		externaldata.NewRateLimitHandler(nil, nil).WithTelemetry(adminExternalTelemetry),
 		externaldata.NewDataNormalizer(repository.NewPostgresMicronutrientVocabularyRepository(pg)).WithTelemetry(adminExternalTelemetry),
+		recordEvidence,
 	)
 	var searchResponseCache search.SearchResponseCache
 	var similarityCache search.SimilarityCalculationCache

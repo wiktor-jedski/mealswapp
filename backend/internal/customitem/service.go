@@ -32,8 +32,8 @@ type Request struct {
 	AverageUnitWeightGrams          float64                  `json:"averageUnitWeightGrams,omitempty"`
 	AverageServingVolumeMilliliters float64                  `json:"averageServingVolumeMilliliters,omitempty"`
 	DensityGramsPerMilliliter       float64                  `json:"densityGramsPerMilliliter,omitempty"`
-	DensitySourceProvider           string                   `json:"densitySourceProvider,omitempty"`
-	DensitySourceFoodID             string                   `json:"densitySourceFoodId,omitempty"`
+	DensitySourceProvider           string                   `json:"-"`
+	DensitySourceFoodID             string                   `json:"-"`
 	DensitySourceKind               string                   `json:"densitySourceKind,omitempty"`
 	MacrosPer100                    repository.MacroValues   `json:"macrosPer100"`
 	Micros                          repository.MicroValues   `json:"micros"`
@@ -259,8 +259,6 @@ func createResultFromClaim(claim repository.CustomFoodItemCreateClaimResult) (Cr
 // Implements DESIGN-008 ProfileController custom-item request normalization.
 func ValidateRequest(req Request) (Request, error) {
 	req.Name = strings.TrimSpace(req.Name)
-	req.DensitySourceProvider = strings.TrimSpace(req.DensitySourceProvider)
-	req.DensitySourceFoodID = strings.TrimSpace(req.DensitySourceFoodID)
 	req.DensitySourceKind = strings.TrimSpace(req.DensitySourceKind)
 	req.ImageURL = strings.TrimSpace(req.ImageURL)
 	if !validText(req.Name, 200, true) {
@@ -278,7 +276,7 @@ func ValidateRequest(req Request) (Request, error) {
 	if !validOptionalPositive(req.AverageUnitWeightGrams) || !validOptionalPositive(req.AverageServingVolumeMilliliters) || !validOptionalPositive(req.DensityGramsPerMilliliter) {
 		return Request{}, validationError("custom item physical measures are invalid")
 	}
-	if !validText(req.DensitySourceProvider, 200, false) || !validText(req.DensitySourceFoodID, 200, false) || !validText(req.DensitySourceKind, 20, false) || !validText(req.ImageURL, 2048, false) {
+	if req.DensitySourceProvider != "" || req.DensitySourceFoodID != "" || !validText(req.DensitySourceKind, 20, false) || !validText(req.ImageURL, 2048, false) {
 		return Request{}, validationError("custom item text field is too long")
 	}
 	if req.ImageURL != "" {
@@ -344,11 +342,8 @@ func validateDensity(req Request) error {
 		}
 		return nil
 	}
-	if req.DensityGramsPerMilliliter <= 0 || (req.DensitySourceKind != "imported" && req.DensitySourceKind != "manual" && req.DensitySourceKind != "estimated") {
+	if req.DensityGramsPerMilliliter <= 0 || (req.DensitySourceKind != "manual" && req.DensitySourceKind != "estimated") {
 		return validationError("liquid custom item density is invalid")
-	}
-	if req.DensitySourceKind == "imported" && ((req.DensitySourceProvider != "usda" && req.DensitySourceProvider != "openfoodfacts") || req.DensitySourceFoodID == "") {
-		return validationError("imported liquid density requires trusted provider evidence")
 	}
 	return nil
 }

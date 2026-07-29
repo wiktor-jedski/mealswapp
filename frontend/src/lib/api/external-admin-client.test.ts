@@ -46,8 +46,7 @@ function cancellableResponse(status: number, headers: Record<string, string> = {
 }
 
 const draft: CuratedImportRequest = {
-	sourceProvider: "usda",
-	externalId: "100",
+	externalRecordToken: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 	name: "Apple",
 	physicalState: "solid",
 	macrosPer100: { protein: 1, carbohydrates: 20, fat: 0 },
@@ -56,8 +55,8 @@ const draft: CuratedImportRequest = {
 	culinaryRoleIds: []
 };
 
-test("searches USDA, OpenFoodFacts, and combined providers with bounded page parameters", async () => {
-	for (const provider of ["usda", "openfoodfacts", "all"] as const) {
+test("passes bounded server-owned provider selections and pagination", async () => {
+	for (const provider of ["fixture-provider", "all"] as const) {
 		const fetchMock = mock(async (input: string | URL | Request) => {
 			expect(String(input)).toBe(`/api/v1/admin/external-search?query=green+apple&provider=${provider}&page=2`);
 			return response(200, { status: "ok", requestId: "search", data: { candidates: [], warnings: [], page: 2 } });
@@ -205,6 +204,7 @@ test("rejects malformed nested search candidates and provider warnings", async (
 	const validCandidate = {
 		provider: "usda",
 		externalId: "100",
+		recordToken: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
 		name: "Apple",
 		physicalState: "solid",
 		macrosPer100: { protein: 1, carbohydrates: 20, fat: 0 },
@@ -357,7 +357,7 @@ test("rejects an invalid candidate image URI", async () => {
 		status: "ok",
 		requestId: "search",
 		data: {
-			candidates: [{ provider: "usda", externalId: "100", name: "Apple", physicalState: "solid", macrosPer100: { protein: 1, carbohydrates: 20, fat: 0 }, micronutrients: {}, imageUrl: "not a URI", warnings: [] }],
+			candidates: [{ provider: "usda", externalId: "100", recordToken: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", name: "Apple", physicalState: "solid", macrosPer100: { protein: 1, carbohydrates: 20, fat: 0 }, micronutrients: {}, imageUrl: "not a URI", warnings: [] }],
 			warnings: [],
 			page: 1
 		}

@@ -15,8 +15,8 @@
 ### 1. Data Structures & Types
 - `interface AdminContext { userId: UUID; role: "admin"; requestId: string }`
 - `interface ExternalSearchRequest { query: string; provider: "usda" | "openfoodfacts" | "all"; page: number }`
-- `interface ExternalCandidate { provider: string; externalId: string; name: string; macrosPer100: MacroValues; imageUrl?: string; raw: map[string]any }`
-- `interface CuratedItemDraft { sourceProvider?: string; externalId?: string; name: string; physicalState: PhysicalState; macrosPer100: MacroValues; foodCategoryIds: UUID[]; culinaryRoleIds: UUID[]; imageUrl?: string }`
+- `interface ExternalCandidate { provider: string; externalId: string; recordToken: string; name: string; macrosPer100: MacroValues; imageUrl?: string }`
+- `interface CuratedItemDraft { externalRecordToken?: string; name: string; physicalState: PhysicalState; densitySourceKind?: "imported" | "manual" | "estimated"; macrosPer100: MacroValues; foodCategoryIds: UUID[]; culinaryRoleIds: UUID[]; imageUrl?: string }`
 - `interface AdminAuditEntry { actorKind: "administrator" | "operator"; adminUserId?: UUID; action: string; entityType: string; entityId?: UUID; before?: any; after?: any; createdAt: time.Time }`
 - `interface GlobalCatalogDocumentV1 { schema: "mealswapp.global-catalog.v1"; items: GlobalCatalogEntryV1[] }`
 - `interface GlobalCatalogEntryV1 { idempotencyKey: string; item: metric AdminItemRequest plus portable classification names or explicit classification UUIDs and optional informational export metadata }`
@@ -24,9 +24,9 @@
 ### 2. Logic & Algorithms (Step-by-Step)
 1. API gateway authenticates the request; `AdminController` verifies role `admin`.
 2. External search requests are sent to `ExternalSearchProxy`, which calls ARCH-012 instead of the local repository.
-3. Normalize provider results enough for admin display but do not persist them until curation is confirmed.
+3. Normalize provider results enough for admin display and issue an opaque, short-lived server-record token; do not persist food or audit state until curation is confirmed.
 4. Admin edits required fields, classifications, macro values, physical state, and image URL.
-5. `DataImporter` validates the curated draft against repository rules and saves it through ARCH-005.
+5. `DataImporter` resolves the selected server record, derives canonical import and imported-density identity from it, validates the curated draft against repository rules, and saves it through ARCH-005. Private and manual-administrator item requests accept only manual or estimated density and cannot submit provider identity.
 6. Item CRUD operations load current state, apply the mutation, and write an `AdminAuditEntry`.
 7. `TagManager` creates and updates global Food Category and Culinary Role classifications, preventing duplicate names within each kind.
 8. User admin actions are role-restricted and audited with before/after snapshots where appropriate. Exact email lookup uses the same canonical-plus-exact-legacy resolver as authentication and bootstrap, reindexing only an unambiguous legacy account and refusing collisions.
@@ -48,6 +48,7 @@
 - `external_search_loading`: external query in progress.
 - `external_source_unavailable`: return empty candidate list with warning.
 - `draft_invalid`: required curated fields are missing or inconsistent.
+- `external_record_evidence_invalid`: selected provider evidence is malformed, unknown, expired, mismatched, or no longer registered; no mutation or audit occurs.
 - `import_conflict`: external item or normalized name already exists; require admin confirmation to merge.
 - `audit_write_failed`: abort mutating operation unless audit can be persisted in the same transaction.
 - `bootstrap_denied`: reject environment mismatch, missing production confirmation, ambiguous/missing target, canonical email collision, absent target, unverified target, unusable credential, or an existing different administrator without exposing PII.

@@ -158,8 +158,8 @@ func decodeCustomItemRequest(body []byte) (customitem.Request, error) {
 	}
 	allowed := map[string]struct{}{
 		"name": {}, "physicalState": {}, "prepTimeMinutes": {}, "averageUnitWeightGrams": {},
-		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {}, "densitySourceProvider": {},
-		"densitySourceFoodId": {}, "densitySourceKind": {}, "macrosPer100": {}, "micros": {},
+		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {},
+		"densitySourceKind": {}, "macrosPer100": {}, "micros": {},
 		"foodCategoryIds": {}, "culinaryRoleIds": {}, "imageUrl": {},
 	}
 	for field, value := range raw {
