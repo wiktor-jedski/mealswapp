@@ -183,5 +183,5 @@ func validateMicronutrientKey(ctx *fiber.Ctx) error {
 // Implements DESIGN-005 MicronutrientVocabulary transactional audit behavior.
 func micronutrientAuditJSON(entry repository.MicronutrientVocabularyEntry) ([]byte, error) {
 	digest := sha256.Sum256([]byte(entry.Key))
-	return json.Marshal(map[string]any{"keyDigest": fmt.Sprintf("%x", digest), "unit": entry.Unit, "active": entry.Active})
+	return json.Marshal(map[string]any{"active": entry.Active, "keyDigest": fmt.Sprintf("%x", digest), "unit": entry.Unit})
 }
