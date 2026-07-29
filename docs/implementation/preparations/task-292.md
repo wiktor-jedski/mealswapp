@@ -42,9 +42,12 @@ Earlier committed Task 292 implementation and repair commits remain preserved:
 | `cd frontend && ... bun run typecheck` | PASS |
 | `python3 -m unittest scripts/test_run_task283_acceptance.py` | PASS; 28 tests |
 | `python3 -m py_compile scripts/run-task283-acceptance.py` | PASS |
-| `npx --no-install redocly lint api/openapi.yaml` | NOT RUN; local npx resolution returned `This is not the package you're looking for` |
+| `npx --no-install redocly lint api/openapi.yaml` | PASS exit status; the local resolver still emits `This is not the package you're looking for` before completing, so the output is environment-noisy |
+| `cd backend && ... go test ./internal/repository ./internal/httpapi ./internal/itemcurator` | PASS |
+| `cd backend && ... go vet ./...` | PASS |
+| `python3 scripts/check.py --quick` | FAIL, unrelated phase-wide acceptance/UAT fixtures: stale `docs/implementation/02_TASK_LIST.md` hash and unsynchronized `P08-SWR054-ACCEPT-01`; the Task 292 validators and changed-area checks pass |
 
-The managed Task 283 run produced real-stack create/update/search evidence and no admin private-item POST 403. Its remaining non-pass criteria are linked to the pre-existing `P08-FIND-283-001` global/private-owner finding, which is outside Task 292's picker/search implementation scope.
+The retained managed Task 283 evidence (`logs/phase08-acceptance/task283-38b14c5e78cc60d1a3b46df3-sw-req-056/` and the paired `sw-req-033` report) produced real-stack evidence without the admin private-item POST 403. Its non-pass criteria remain linked to `P08-FIND-283-001` (global/private-owner acceptance) and `P08-FIND-283-005` (standardized-storage/discovery acceptance). Neither finding is closed by this preparation; Task 292's picker implementation is the planned remediation surface for `P08-FIND-283-005`, while Task 302 owns the final isolated retest and closure decision.
 
 ## Criterion results
 
@@ -53,9 +56,8 @@ The managed Task 283 run produced real-stack create/update/search evidence and n
 - Blank-query stale response cancellation and later-page deletion recovery: PASS by focused frontend regression coverage from the implementation repair cycle.
 - Macro projection contract: PASS; picker uses the canonical `MacroProfile` contract.
 - Private-item exclusion and administrator authorization: PASS by backend/API and managed browser evidence; the Task 283 harness now seeds a private fixture read-only boundary instead of attempting an unauthorized admin private-item mutation.
-- OpenAPI lint: unavailable in this environment; generated API drift check passes.
+- OpenAPI lint: command exits 0, but its resolver output is noisy as noted above; generated API drift check passes.
 
 ## Risks and blockers
 
-The Task 283 managed acceptance report still records `P08-FIND-283-001` for the separate requirement that created manual items be private/owner-scoped; Task 292 requires global ownerless manual items and therefore cannot resolve that product-contract finding without contradicting its own scope. The OpenAPI lint executable is unavailable through the configured local `npx --no-install` path. No Task 292 implementation blocker remains.
-
+The current acceptance ledger still records `P08-FIND-283-001` and `P08-FIND-283-005` as open/non-pass findings; this report does not hide or close them. The phase-wide quick gate also exposes an unrelated stale UAT hash and unsynchronized `P08-SWR054-ACCEPT-01`; those are not Task 292 evidence and remain outside this repair. Task 292 requires global ownerless manual items and therefore cannot resolve the private-owner tracker without contradicting its own scope. No additional Task 292 implementation blocker remains.
