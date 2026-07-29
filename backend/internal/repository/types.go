@@ -773,6 +773,17 @@ type MicronutrientVocabularyRepository interface {
 	Upsert(ctx context.Context, entry MicronutrientVocabularyEntry) error
 }
 
+// MicronutrientVocabularyAdminRepository defines transaction-scoped canonical vocabulary management.
+// Implements DESIGN-005 MicronutrientVocabulary administrator management.
+type MicronutrientVocabularyAdminRepository interface {
+	ListAll(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
+	Get(ctx context.Context, key string) (MicronutrientVocabularyEntry, error)
+	Create(ctx context.Context, entry MicronutrientVocabularyEntry) (MicronutrientVocabularyEntry, error)
+	UpdateDisplayName(ctx context.Context, key, displayName string) (MicronutrientVocabularyEntry, error)
+	UpdateUnit(ctx context.Context, key, unit string) (MicronutrientVocabularyEntry, error)
+	SetActive(ctx context.Context, key string, active bool) (MicronutrientVocabularyEntry, error)
+}
+
 // UserProfileRepository defines user profile and preference persistence behavior.
 // Implements DESIGN-008 PreferenceManager.
 type UserProfileRepository interface {

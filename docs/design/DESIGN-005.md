@@ -43,6 +43,9 @@
 14. Apply meal-search `LIMIT` and `OFFSET` in SQL after a filter-equivalent count query; hydrate only IDs in the requested page so iterative consumers never rehydrate earlier pages.
 15. Require a non-null owner for every custom food item and include that owner in every custom-item read, update, and delete predicate. An ID owned by another user returns `not_found`, without disclosing its existence.
 16. Custom-item names are unique, after trimming and case folding, among one owner's active custom items. Different owners and the global curated catalog may use the same name; soft deletion releases the owner's active-name reservation.
+17. Verified administrators may list active and inactive micronutrient vocabulary entries, create canonical entries, update display names or units, deactivate unused entries, and reactivate entries. Canonical keys are immutable after creation and no hard-delete operation exists.
+18. Canonical keys match `[A-Z][A-Za-z0-9]{2,119}` (rejecting abbreviations such as `Na`), display names are trimmed non-control text of at most 120 characters, and units are limited to `g`, `mg`, or `mcg`.
+19. Unit changes and deactivation lock the vocabulary row and fail with `constraint_violation` when the canonical key occurs in the micronutrient JSON object of any global or private food item. Reactivation and display-name changes do not alter stored measurements.
 
 ### 3. State Management & Error Handling
 - `not_found`: repository returns typed not-found errors; controllers map to 404.
@@ -59,6 +62,7 @@
 - `type MealRepository interface { GetByID(ctx context.Context, id UUID, rc RepositoryContext) (MealEntity, error); Search(ctx context.Context, q RepositoryQuery) ([]MealEntity, int, error); CalculateMacros(ctx context.Context, mealID UUID) (MacroValues, error); Create(ctx context.Context, meal MealEntity) (UUID, error); Update(ctx context.Context, meal MealEntity) error; Delete(ctx context.Context, id UUID) error }`
 - `type ClassificationRepository interface { List(ctx context.Context, kind string) ([]ClassificationEntity, error); Upsert(ctx context.Context, classification ClassificationEntity) (UUID, error); IsInUse(ctx context.Context, id UUID) (bool, error); SoftDelete(ctx context.Context, id UUID) error }`
 - `type MicronutrientVocabularyRepository interface { ListActive(ctx context.Context) ([]MicronutrientVocabularyEntry, error); IsAllowed(ctx context.Context, key string) (bool, error); Upsert(ctx context.Context, entry MicronutrientVocabularyEntry) error }`
+- `type MicronutrientVocabularyAdminRepository interface { ListAll(ctx context.Context) ([]MicronutrientVocabularyEntry, error); Get(ctx context.Context, key string) (MicronutrientVocabularyEntry, error); Create(ctx context.Context, entry MicronutrientVocabularyEntry) (MicronutrientVocabularyEntry, error); UpdateDisplayName(ctx context.Context, key, displayName string) (MicronutrientVocabularyEntry, error); UpdateUnit(ctx context.Context, key, unit string) (MicronutrientVocabularyEntry, error); SetActive(ctx context.Context, key string, active bool) (MicronutrientVocabularyEntry, error) }`
 - `func NormalizeMacros(value MacroValues, quantity float64, state PhysicalState) MacroValues`
 - `func ValidateMicronutrientKeys(values MicroValues, vocabulary []MicronutrientVocabularyEntry) error`
 - `func ConvertUnit(value float64, fromUnit string, toUnit string) (float64, error)`

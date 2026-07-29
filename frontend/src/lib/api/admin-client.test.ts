@@ -1,7 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
 import {
-	createAdminClassification, createAdminItem, deleteAdminClassification, deleteAdminItem, getAdminItem,
-	listAdminClassifications, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion
+	createAdminClassification, createAdminItem, createAdminMicronutrient, deleteAdminClassification, deleteAdminItem, getAdminItem,
+	listAdminClassifications, listAdminMicronutrients, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion,
+	setAdminMicronutrientActive, updateAdminMicronutrientDisplayName, updateAdminMicronutrientUnit
 } from "./admin-client";
 import type { AdminItemRequest } from "./generated";
 
@@ -34,6 +35,37 @@ test("uses documented generated-contract routes, methods, CSRF, and idempotency"
 	expect(calls[4]!.url).toBe("/api/v1/admin/classifications?kind=food_category");
 	expect(calls[8]!.url).toContain("email=user%2Btag%40example.test");
 	expect(calls[9]!.url).toBe(`/api/v1/admin/users/${userId}/deletion-requests/${requestId}/retry`);
+});
+
+test("uses the closed micronutrient lifecycle routes and strictly decodes authoritative entries", async () => {
+	const calls: Array<{ url: string; init: RequestInit }> = [];
+	const active = { key: "VitaminK", displayName: "Vitamin K", unit: "mcg", active: true };
+	const queued = [
+		response(200, envelope({ micronutrients: [active, { ...active, key: "Zinc", displayName: "Zinc", unit: "mg", active: false }] })),
+		response(201, envelope({ micronutrient: active })),
+		response(200, envelope({ micronutrient: { ...active, displayName: "Vitamin K1" } })),
+		response(200, envelope({ micronutrient: { ...active, unit: "mg" } })),
+		response(200, envelope({ micronutrient: { ...active, active: false } })),
+		response(200, envelope({ micronutrient: active }))
+	];
+	globalThis.fetch = ((input: string | URL | Request, init = {}) => { calls.push({ url: String(input), init }); return Promise.resolve(queued.shift()!); }) as typeof fetch;
+
+	expect(await listAdminMicronutrients()).toHaveLength(2);
+	await createAdminMicronutrient({ key: "VitaminK", displayName: "Vitamin K", unit: "mcg" }, { csrfToken: "csrf" });
+	await updateAdminMicronutrientDisplayName("VitaminK", "Vitamin K1", { csrfToken: "csrf" });
+	await updateAdminMicronutrientUnit("VitaminK", "mg", { csrfToken: "csrf" });
+	await setAdminMicronutrientActive("VitaminK", false, { csrfToken: "csrf" });
+	await setAdminMicronutrientActive("VitaminK", true, { csrfToken: "csrf" });
+
+	expect(calls.map(({ url }) => url)).toEqual([
+		"/api/v1/admin/micronutrients",
+		"/api/v1/admin/micronutrients",
+		"/api/v1/admin/micronutrients/VitaminK/display-name",
+		"/api/v1/admin/micronutrients/VitaminK/unit",
+		"/api/v1/admin/micronutrients/VitaminK/deactivate",
+		"/api/v1/admin/micronutrients/VitaminK/reactivate"
+	]);
+	expect(calls.slice(1).every(({ init }) => (init.headers as Record<string, string>)["X-CSRF-Token"] === "csrf")).toBe(true);
 });
 
 test("rejects conflicts, audit failures, malformed privacy projections, and false-success statuses", async () => {
