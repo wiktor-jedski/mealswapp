@@ -1985,6 +1985,16 @@ export interface AdminMicronutrientCreateRequest {
 	unit: AdminMicronutrient["unit"];
 }
 
+/** @openapi-description AdminMicronutrientDisplayNameRequest */
+export interface AdminMicronutrientDisplayNameRequest {
+	displayName: string;
+}
+
+/** @openapi-description AdminMicronutrientUnitRequest */
+export interface AdminMicronutrientUnitRequest {
+	unit: AdminMicronutrient["unit"];
+}
+
 export type AdminMicronutrientEnvelope = OkEnvelope<{ micronutrient: AdminMicronutrient }>;
 export type AdminMicronutrientCollectionEnvelope = OkEnvelope<{ micronutrients: AdminMicronutrient[] }>;
 

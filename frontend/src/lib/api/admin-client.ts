@@ -6,6 +6,8 @@ import type {
 	AdminItemRequest,
 	AdminMicronutrient,
 	AdminMicronutrientCreateRequest,
+	AdminMicronutrientDisplayNameRequest,
+	AdminMicronutrientUnitRequest,
 	AdminUser,
 	AdminUserPageData,
 	AppError,
@@ -95,12 +97,14 @@ export async function createAdminMicronutrient(body: AdminMicronutrientCreateReq
 
 /** Updates only a canonical entry's display name. */
 export async function updateAdminMicronutrientDisplayName(key: string, displayName: string, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
-	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/display-name`, "PUT", { displayName }, options), 200);
+	const body: AdminMicronutrientDisplayNameRequest = { displayName };
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/display-name`, "PUT", body, options), 200);
 }
 
 /** Updates the unit of one unused canonical entry. */
 export async function updateAdminMicronutrientUnit(key: string, unit: AdminMicronutrient["unit"], options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
-	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/unit`, "PUT", { unit }, options), 200);
+	const body: AdminMicronutrientUnitRequest = { unit };
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/unit`, "PUT", body, options), 200);
 }
 
 /** Deactivates or reactivates one canonical entry without deleting it. */
