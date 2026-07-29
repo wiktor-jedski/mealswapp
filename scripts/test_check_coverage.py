@@ -4,6 +4,8 @@
 
 import threading
 import unittest
+import errno
+import io
 from types import SimpleNamespace
 from unittest import mock
 
@@ -78,6 +80,17 @@ class Phase08BackendCoverageContractTests(unittest.TestCase):
 		with self.assertRaisesRegex(SystemExit, "unjustified reason B1"):
 			self.validate(document(backend_rows=backend_row(), backend_reasons=""))
 
+	def test_task277_backend_metrics_are_current(self) -> None:
+		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+		contract = check.marked_contract(section, "phase08-backend-coverage-contract")
+		rows = check.parse_backend_exceptions(contract)
+		self.assertIn("Measured Phase 08 scope: `4645/4986` statements (`93.2%`).", contract)
+		self.assertEqual(rows["internal/app/app.go"][0], check.GoCoverage(110, 116, "98.86-100.4,117.69-122.18,122.18-124.5,130.17-132.4,165.4-169.10"))
+		self.assertEqual(rows["internal/httpapi/manual_item_controller.go"][0].covered, 105)
+		self.assertEqual(rows["internal/itemcurator/service.go"][0].total, 97)
+		self.assertEqual(rows["internal/repository/compliance_repository.go"][0], check.GoCoverage(277, 280, "546.31-547.31,547.31-549.4,550.10-551.56"))
+		self.assertEqual(rows["internal/repository/manual_food_repository.go"][0].total, 120)
+
 
 class FrontendCoverageContractTests(unittest.TestCase):
 	def validate(self, doc: str, measured_output: str = frontend_output()) -> None:
@@ -109,6 +122,12 @@ class FrontendCoverageContractTests(unittest.TestCase):
 			with self.assertRaisesRegex(SystemExit, "not phase-bound"):
 				check.validate_phase08_frontend_coverage(frontend_output(), document(frontend_rows=frontend_row(phase="Phase 07")))
 
+	def test_task277_frontend_metrics_are_current(self) -> None:
+		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+		rows = check.parse_frontend_exceptions(check.marked_contract(section, "frontend-coverage-contract"))
+		self.assertEqual(rows["src/lib/admin-workflows.ts"][1], check.FrontendCoverage("83.33", "98.55", "-"))
+		self.assertEqual(rows["src/lib/api/admin-client.ts"][1], check.FrontendCoverage("95.95", "100.00", "-"))
+
 
 class CoverageReportTests(unittest.TestCase):
 	def test_phase08_summary_is_derived_from_the_machine_checked_contract(self) -> None:
@@ -134,6 +153,28 @@ class CoverageReportTests(unittest.TestCase):
 
 
 class CheckOrchestrationTests(unittest.TestCase):
+	def test_gate_output_retries_nonblocking_descriptors_without_losing_bytes(self) -> None:
+		stream = mock.Mock()
+		stream.fileno.return_value = 9
+		writes = [
+			BlockingIOError(errno.EAGAIN, "busy"),
+			2,
+			3,
+		]
+		with (
+			mock.patch.object(check.os, "write", side_effect=writes) as write,
+			mock.patch.object(check.select, "select", return_value=([], [9], [])) as wait,
+		):
+			check._write_text(stream, "hello")
+
+		self.assertEqual([call.args[1] for call in write.call_args_list], [b"hello", b"hello", b"llo"])
+		wait.assert_called_once_with([], [9], [], 1)
+
+	def test_gate_output_supports_redirected_streams_without_fileno(self) -> None:
+		stream = io.StringIO()
+		check._write_text(stream, "complete")
+		self.assertEqual(stream.getvalue(), "complete")
+
 	def test_independent_steps_overlap(self) -> None:
 		barrier = threading.Barrier(2)
 
@@ -215,7 +256,7 @@ class CheckOrchestrationTests(unittest.TestCase):
 
 	def test_phase07_exact_functions_come_from_isolated_package_profiles(self) -> None:
 		documented = (
-			"`internal/queue/job_queue.go:276 Reserve` | `60.0%`\n"
+			"`internal/queue/job_queue.go:276 Reserve`       |  `60.0%`\n"
 			"queue 60.0%\n"
 		)
 

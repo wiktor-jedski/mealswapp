@@ -1,0 +1,25 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR032-STEP-01",
+    "P08-SWR032-STEP-02",
+    "P08-SWR032-STEP-03"
+  ],
+  "kind": "item",
+  "entityId": "28d9035b-e67e-4fc8-be48-e1994d0b7ece",
+  "name": "Task 283 units source real-stack-desktop-chromium",
+  "idempotencyKey": "3b071b8f-ee72-4a22-a84d-d632e8c6e1de",
+  "requestIds": [
+    "328f1bfc-9f1a-4e88-ae3f-a435bbaba895",
+    "ea98ed6e-bf4e-4fa4-af65-cee8fccf72da",
+    "188e0a40-77d6-4da2-a613-ee82139cad77",
+    "abec9c78-6094-4ae3-bcf5-f87b740f1fea"
+  ],
+  "expected": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "idempotencyCount": 1
+  }
+}

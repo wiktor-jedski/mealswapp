@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -177,7 +178,7 @@ func validateManualItemBody(ctx *fiber.Ctx) error {
 	if err := rejectDuplicateJSONKeys(ctx.Body()); err != nil {
 		return invalidCustomItemBodyError()
 	}
-	req, err := decodeCustomItemRequest(ctx.Body())
+	req, err := decodeManualItemRequest(ctx.Body())
 	if err != nil {
 		return err
 	}
@@ -191,8 +192,54 @@ func manualItemRequest(ctx *fiber.Ctx) (itemcurator.Request, error) {
 	if req, ok := ctx.Locals("manualItemRequest").(itemcurator.Request); ok {
 		return req, nil
 	}
-	req, err := decodeCustomItemRequest(ctx.Body())
-	return itemcurator.Request(req), err
+	return decodeManualItemRequest(ctx.Body())
+}
+
+// decodeManualItemRequest extends the private-item fields only with canonical allergen keys.
+// Implements DESIGN-009 ItemCurator global catalog import contract.
+func decodeManualItemRequest(body []byte) (itemcurator.Request, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return itemcurator.Request{}, invalidCustomItemBodyError()
+	}
+	allergenJSON, ok := raw["allergenKeys"]
+	if !ok || bytes.Equal(bytes.TrimSpace(allergenJSON), []byte("null")) {
+		return itemcurator.Request{}, AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
+	}
+	delete(raw, "allergenKeys")
+	baseJSON, err := json.Marshal(raw)
+	if err != nil {
+		return itemcurator.Request{}, invalidCustomItemBodyError()
+	}
+	base, err := decodeCustomItemRequest(baseJSON)
+	if err != nil {
+		return itemcurator.Request{}, err
+	}
+	var keys []string
+	if err := json.Unmarshal(allergenJSON, &keys); err != nil || hasDuplicateString(keys) {
+		return itemcurator.Request{}, AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
+	}
+	return itemcurator.Request{
+		Name: base.Name, PhysicalState: base.PhysicalState, PrepTimeMinutes: base.PrepTimeMinutes,
+		AverageUnitWeightGrams: base.AverageUnitWeightGrams, AverageServingVolumeMilliliters: base.AverageServingVolumeMilliliters,
+		DensityGramsPerMilliliter: base.DensityGramsPerMilliliter, DensitySourceProvider: base.DensitySourceProvider,
+		DensitySourceFoodID: base.DensitySourceFoodID, DensitySourceKind: base.DensitySourceKind, MacrosPer100: base.MacrosPer100,
+		Micros: base.Micros, FoodCategoryIDs: base.FoodCategoryIDs, CulinaryRoleIDs: base.CulinaryRoleIDs,
+		AllergenKeys: keys, ImageURL: base.ImageURL,
+	}, nil
+}
+
+// hasDuplicateString reports duplicate canonical keys rejected by OpenAPI uniqueItems.
+// Implements DESIGN-009 ItemCurator global catalog import contract.
+func hasDuplicateString(values []string) bool {
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			return true
+		}
+		seen[value] = struct{}{}
+	}
+	return false
 }
 
 // validateManualItemID validates a global-item path identifier.
@@ -215,13 +262,37 @@ func parseManualItemID(value string) (uuid.UUID, error) {
 // manualItemData maps the owner-free item projection into the shared envelope.
 // Implements DESIGN-009 ItemCurator response boundary.
 func manualItemData(item itemcurator.Item) map[string]any {
-	return map[string]any{
-		"id": item.ID, "name": item.Name, "physicalState": item.PhysicalState, "prepTimeMinutes": item.PrepTimeMinutes,
-		"averageUnitWeightGrams": item.AverageUnitWeightGrams, "averageServingVolumeMilliliters": item.AverageServingVolumeMilliliters,
-		"densityGramsPerMilliliter": item.DensityGramsPerMilliliter, "densitySourceProvider": item.DensitySourceProvider,
-		"densitySourceFoodId": item.DensitySourceFoodID, "densitySourceKind": item.DensitySourceKind, "macrosPer100": item.MacrosPer100,
-		"micros": item.Micros, "foodCategories": item.FoodCategories, "culinaryRoles": item.CulinaryRoles, "imageUrl": item.ImageURL,
+	allergenKeys := item.AllergenKeys
+	if allergenKeys == nil {
+		allergenKeys = []string{}
 	}
+	data := map[string]any{
+		"id": item.ID, "name": item.Name, "physicalState": item.PhysicalState, "prepTimeMinutes": item.PrepTimeMinutes,
+		"macrosPer100": item.MacrosPer100, "micros": item.Micros, "foodCategories": item.FoodCategories,
+		"culinaryRoles": item.CulinaryRoles, "allergenKeys": allergenKeys,
+	}
+	if item.AverageUnitWeightGrams > 0 {
+		data["averageUnitWeightGrams"] = item.AverageUnitWeightGrams
+	}
+	if item.AverageServingVolumeMilliliters > 0 {
+		data["averageServingVolumeMilliliters"] = item.AverageServingVolumeMilliliters
+	}
+	if item.DensityGramsPerMilliliter > 0 {
+		data["densityGramsPerMilliliter"] = item.DensityGramsPerMilliliter
+	}
+	if item.DensitySourceProvider != "" {
+		data["densitySourceProvider"] = item.DensitySourceProvider
+	}
+	if item.DensitySourceFoodID != "" {
+		data["densitySourceFoodId"] = item.DensitySourceFoodID
+	}
+	if item.DensitySourceKind != "" {
+		data["densitySourceKind"] = item.DensitySourceKind
+	}
+	if item.ImageURL != "" {
+		data["imageUrl"] = item.ImageURL
+	}
+	return data
 }
 
 // manualItemAuditSnapshot emits only bounded enum/boolean curation state.

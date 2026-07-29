@@ -1,0 +1,24 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-ACCEPT-07"
+  ],
+  "kind": "audit_rollback",
+  "name": "Task 283 audit rollback real-stack-desktop-chromium",
+  "idempotencyKey": "e84fbef9-7c21-4966-bcec-cb8167d4bd5f",
+  "requestIds": [
+    "0e93e855-1f2e-483b-9981-6895ff747906"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "idempotencyCount": 0,
+    "generationBefore": "14",
+    "generationAfter": "14",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "7b8106eb-a124-4743-b9d4-e750943a43c5",
+    "generationAfter": "d3e4d0f5-3a2f-4be0-81c2-b4d2bdc1d518"
+  }
+}

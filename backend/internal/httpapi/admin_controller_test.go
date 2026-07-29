@@ -157,7 +157,7 @@ func TestAdminMutationControlOrderAtomicAuditAndSanitizedEnvelopes(t *testing.T)
 	if status != fiber.StatusOK || mutationCalls != 1 || adminAudit.committed != 1 || len(adminAudit.entries) != 1 {
 		t.Fatalf("successful mutation status=%d body=%+v mutation=%d audit=%d", status, body, mutationCalls, adminAudit.committed)
 	}
-	if !isServerRequestID(body.RequestID, "client-controlled-request-id") || adminAudit.entries[0].RequestID != body.RequestID || adminAudit.entries[0].AdminUserID != adminID {
+	if !isServerRequestID(body.RequestID, "client-controlled-request-id") || adminAudit.entries[0].RequestID != body.RequestID || adminAudit.entries[0].AdminUserID == nil || *adminAudit.entries[0].AdminUserID != adminID || adminAudit.entries[0].ActorKind != repository.AdminAuditActorAdministrator {
 		t.Fatalf("correlation body=%+v audit=%+v", body, adminAudit.entries[0])
 	}
 	status, body = send(`{"valid":true}`, token)

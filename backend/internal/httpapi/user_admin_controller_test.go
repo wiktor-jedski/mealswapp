@@ -162,7 +162,7 @@ func TestUserAdminRetryRequiresScopeCSRFAndCommitsSafeAudit(t *testing.T) {
 	if status != fiber.StatusOK || service.retryCalls != 1 || service.retryUserID != userID || service.retryRequest != requestID || audit.committed != 1 {
 		t.Fatalf("retry status=%d body=%+v calls=%d audit=%d", status, body, service.retryCalls, audit.committed)
 	}
-	if len(audit.entries) != 1 || audit.entries[0].AdminUserID != adminID || audit.entries[0].Action != "retry_deletion" || audit.entries[0].EntityType != "deletion_request" || audit.changes[0].EntityID == nil || *audit.changes[0].EntityID != requestID {
+	if len(audit.entries) != 1 || audit.entries[0].AdminUserID == nil || *audit.entries[0].AdminUserID != adminID || audit.entries[0].ActorKind != repository.AdminAuditActorAdministrator || audit.entries[0].Action != "retry_deletion" || audit.entries[0].EntityType != "deletion_request" || audit.changes[0].EntityID == nil || *audit.changes[0].EntityID != requestID {
 		t.Fatalf("retry audit entry=%+v changes=%+v", audit.entries, audit.changes)
 	}
 	encoded := string(mustJSON(t, body))

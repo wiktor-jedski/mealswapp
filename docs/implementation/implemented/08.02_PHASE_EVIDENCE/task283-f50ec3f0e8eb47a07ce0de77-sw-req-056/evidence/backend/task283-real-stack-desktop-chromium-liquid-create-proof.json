@@ -1,0 +1,60 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "deleted": false,
+    "density": 0.92,
+    "densitySourceKind": "manual",
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 6.25,
+      "fat": 1.75,
+      "protein": 2.5
+    },
+    "metricBasis": "100ml",
+    "micros": {},
+    "name": "Task 283 liquid real-stack-desktop-chromium",
+    "ownerless": true,
+    "physicalState": "liquid",
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-01",
+      "P08-SWR056-STEP-02",
+      "P08-SWR056-ACCEPT-01",
+      "P08-SWR033-STEP-05"
+    ],
+    "entityId": "50841c79-a857-4ee1-a9fb-a7f52e50f8cb",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "density": 0.92,
+      "densitySourceKind": "manual",
+      "idempotencyCount": 1,
+      "macros": {
+        "carbohydrates": 6.25,
+        "fat": 1.75,
+        "protein": 2.5
+      },
+      "metricBasis": "100ml",
+      "ownerless": true,
+      "physicalState": "liquid"
+    },
+    "idempotencyKey": "f76e0104-7688-4ad8-b911-9377f2259d55",
+    "kind": "item",
+    "name": "Task 283 liquid real-stack-desktop-chromium",
+    "requestIds": [
+      "8a98e6f9-1564-458d-995b-e1ceb92a1c6c",
+      "12a30b49-8225-4936-95f0-545078864424"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

@@ -25,6 +25,10 @@ type PasswordHashParams struct {
 	MinLength   int
 }
 
+// maxStoredPasswordHashBytes bounds parser allocation and checked int-to-uint32 conversion.
+// Implements DESIGN-006 PasswordHasher stored credential format.
+const maxStoredPasswordHashBytes = 64
+
 // PasswordHasher hashes and verifies passwords with Argon2id.
 // Implements DESIGN-006 PasswordHasher.
 type PasswordHasher struct {
@@ -41,7 +45,7 @@ func DefaultPasswordHashParams() PasswordHashParams {
 // NewPasswordHasher creates an Argon2id password hasher.
 // Implements DESIGN-006 PasswordHasher.
 func NewPasswordHasher(params PasswordHashParams) (*PasswordHasher, error) {
-	if params.MemoryKiB < 19*1024 || params.Iterations == 0 || params.Parallelism == 0 || params.KeyLength < 16 || params.SaltLength < 16 || params.MinLength < 8 {
+	if params.MemoryKiB < 19*1024 || params.Iterations == 0 || params.Parallelism == 0 || params.KeyLength < 16 || params.KeyLength > maxStoredPasswordHashBytes || params.SaltLength < 16 || params.MinLength < 8 {
 		return nil, errors.New("password hash parameters are invalid")
 	}
 	return &PasswordHasher{params: params, randomness: rand.Reader}, nil
@@ -75,16 +79,33 @@ func (h *PasswordHasher) HashPassword(password string) (string, string, error) {
 // VerifyPassword verifies a password against an encoded Argon2id hash and salt.
 // Implements DESIGN-006 PasswordHasher.
 func (h *PasswordHasher) VerifyPassword(password string, encodedHash string, encodedSalt string) bool {
-	params, expectedHash, err := parseEncodedHash(encodedHash)
+	params, expectedHash, salt, err := parseStoredPasswordCredential(encodedHash, encodedSalt)
 	if err != nil {
 		return false
 	}
-	salt, err := base64.RawStdEncoding.DecodeString(encodedSalt)
-	if err != nil || len(salt) == 0 {
-		return false
-	}
-	actualHash := argon2.IDKey([]byte(password), salt, params.Iterations, params.MemoryKiB, params.Parallelism, uint32(len(expectedHash)))
+	actualHash := argon2.IDKey([]byte(password), salt, params.Iterations, params.MemoryKiB, params.Parallelism, params.KeyLength)
 	return subtle.ConstantTimeCompare(actualHash, expectedHash) == 1
+}
+
+// IsUsablePasswordCredential reports whether stored material matches the authentication parser and minimum parameters.
+// Implements DESIGN-006 PasswordHasher and DESIGN-009 AdminController bootstrap eligibility.
+func IsUsablePasswordCredential(encodedHash string, encodedSalt string) bool {
+	_, _, _, err := parseStoredPasswordCredential(encodedHash, encodedSalt)
+	return err == nil
+}
+
+// parseStoredPasswordCredential parses the exact credential format accepted by authentication.
+// Implements DESIGN-006 PasswordHasher and DESIGN-009 AdminController bootstrap eligibility.
+func parseStoredPasswordCredential(encodedHash string, encodedSalt string) (PasswordHashParams, []byte, []byte, error) {
+	params, hash, err := parseEncodedHash(encodedHash)
+	if err != nil || params.MemoryKiB < 19*1024 || params.Iterations == 0 || params.Parallelism == 0 {
+		return PasswordHashParams{}, nil, nil, errors.New("password credential is malformed")
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(encodedSalt)
+	if err != nil || len(salt) < 16 {
+		return PasswordHashParams{}, nil, nil, errors.New("password credential is malformed")
+	}
+	return params, hash, salt, nil
 }
 
 // parseEncodedHash parses this package's Argon2id hash format.
@@ -99,10 +120,10 @@ func parseEncodedHash(encodedHash string) (PasswordHashParams, []byte, error) {
 		return PasswordHashParams{}, nil, err
 	}
 	hash, err := base64.RawStdEncoding.DecodeString(parts[3])
-	if err != nil || len(hash) < 16 {
+	if err != nil || len(hash) < 16 || len(hash) > maxStoredPasswordHashBytes {
 		return PasswordHashParams{}, nil, errors.New("password hash is malformed")
 	}
-	params.KeyLength = uint32(len(hash))
+	params.KeyLength = uint32(len(hash)) // #nosec G115 -- decoded length is bounded above by maxStoredPasswordHashBytes.
 	return params, hash, nil
 }
 
@@ -110,11 +131,13 @@ func parseEncodedHash(encodedHash string) (PasswordHashParams, []byte, error) {
 // Implements DESIGN-006 PasswordHasher.
 func parseHashParams(value string) (PasswordHashParams, error) {
 	params := PasswordHashParams{}
+	seen := map[string]bool{}
 	for part := range strings.SplitSeq(value, ",") {
 		key, raw, ok := strings.Cut(part, "=")
-		if !ok {
+		if !ok || seen[key] {
 			return PasswordHashParams{}, errors.New("password hash parameters are malformed")
 		}
+		seen[key] = true
 		parsed, err := strconv.ParseUint(raw, 10, 32)
 		if err != nil {
 			return PasswordHashParams{}, errors.New("password hash parameters are malformed")
@@ -133,7 +156,7 @@ func parseHashParams(value string) (PasswordHashParams, error) {
 			return PasswordHashParams{}, errors.New("password hash parameters are malformed")
 		}
 	}
-	if params.MemoryKiB == 0 || params.Iterations == 0 || params.Parallelism == 0 {
+	if len(seen) != 3 || params.MemoryKiB == 0 || params.Iterations == 0 || params.Parallelism == 0 {
 		return PasswordHashParams{}, errors.New("password hash parameters are malformed")
 	}
 	return params, nil

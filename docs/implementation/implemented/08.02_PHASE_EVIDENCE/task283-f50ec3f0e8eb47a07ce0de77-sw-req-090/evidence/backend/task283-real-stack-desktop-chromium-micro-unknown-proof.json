@@ -1,0 +1,38 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "28",
+    "generationBefore": "28",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR090-STEP-03",
+      "P08-SWR090-ACCEPT-01"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "28",
+      "generationBefore": "28",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "005cbc84-42ea-40e7-9022-74b722cb8bf2",
+      "generationBefore": "503bef68-087b-458a-ac07-cef85f7fb421"
+    },
+    "idempotencyKey": "8aaa9422-f330-4c24-85a8-c0cb0a521346",
+    "kind": "rejected_item",
+    "name": "Task 283 micro unknown real-stack-desktop-chromium",
+    "requestIds": [
+      "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

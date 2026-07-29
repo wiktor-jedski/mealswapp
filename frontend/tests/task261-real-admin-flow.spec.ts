@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 
 // Verifies IT-ARCH-009-004 and IT-ARCH-009-005 through the real generated-client,
@@ -10,26 +9,23 @@ test.skip(!runRealFlow, "Run scripts/verify-task-261-ui.sh for the real task-261
 
 test("Admin Panel generated client deletes exported private data and publishes a dynamic filter", async ({ page }) => {
 	test.setTimeout(60_000);
-	const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-	const email = `task-261-${nonce}@example.test`;
-	const password = "StrongerPassword1!";
-	const classification = `Task 261 dynamic ${nonce}`;
-	const privateItem = `Task 261 private ${nonce}`;
-	const globalItem = `Task 261 global ${nonce}`;
+	const email = requiredFixture("MEALSWAPP_E2E_EMAIL");
+	const password = requiredFixture("MEALSWAPP_E2E_PASSWORD");
+	const userId = requiredFixture("MEALSWAPP_E2E_USER_ID");
+	const classification = requiredFixture("MEALSWAPP_E2E_CLASSIFICATION");
+	const privateItem = requiredFixture("MEALSWAPP_E2E_PRIVATE_ITEM");
+	const globalItem = requiredFixture("MEALSWAPP_E2E_GLOBAL_ITEM");
+	expect(userId).toMatch(/^[0-9a-f-]{36}$/i);
 
-	const registerResponse = await register(page, email, password);
-	const registerBody = await registerResponse.json() as { data?: { userId?: string } };
-	const userId = registerBody.data?.userId;
-	if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) throw new Error("registration did not return a safe user ID");
-	promoteToAdmin(userId);
-	await verifyEmailFixture(page);
-
-	// Registration keeps the unverified-login modal open; re-authentication obtains fresh admin claims.
-	await page.getByRole("group", { name: "Authentication mode" }).getByRole("button", { name: "Sign in" }).click();
+	await page.goto("/");
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
 	await page.locator("[data-login-view]").getByLabel("Email").fill(email);
 	await page.locator("[data-login-view]").getByLabel("Password").fill(password);
 	await page.locator("[data-login-view]").getByRole("button", { name: "Sign in" }).click();
 	await expect(page.getByRole("button", { name: "Administration" })).toBeVisible();
+	if (process.env.MEALSWAPP_E2E_INJECT_ASSERTION_FAILURE === "1") {
+		expect("injected Task 279 failure").toBe("successful assertion");
+	}
 
 	const itemId = await createPrivateItemFixture(page, privateItem);
 	await page.getByRole("button", { name: "Administration" }).click();
@@ -47,7 +43,9 @@ test("Admin Panel generated client deletes exported private data and publishes a
 	await classificationForm.getByLabel("Name").fill(classification);
 	const classificationResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/classifications/food_category") && response.request().method() === "POST");
 	await classificationForm.getByRole("button", { name: "Create", exact: true }).click();
-	expect((await classificationResponse).status()).toBe(201);
+	const createdClassification = await classificationResponse;
+	expect(createdClassification.status()).toBe(201);
+	expect(await responseID(createdClassification)).toMatch(/^[0-9a-f-]{36}$/i);
 	const itemForm = page.getByRole("form", { name: "Manual global item form" });
 	await itemForm.getByLabel("Name").fill(globalItem);
 	await itemForm.getByLabel("Protein per 100").fill("18");
@@ -55,7 +53,9 @@ test("Admin Panel generated client deletes exported private data and publishes a
 	await itemForm.getByLabel("Fat per 100").fill("8");
 	const itemResponse = page.waitForResponse((response) => response.url().endsWith("/api/v1/admin/items") && response.request().method() === "POST");
 	await itemForm.getByRole("button", { name: "Create item" }).click();
-	expect((await itemResponse).status()).toBe(201);
+	const createdGlobalItem = await itemResponse;
+	expect(createdGlobalItem.status()).toBe(201);
+	expect(await responseID(createdGlobalItem)).toMatch(/^[0-9a-f-]{36}$/i);
 
 	await page.goto("/?mode=substitution");
 	await page.getByLabel("Food search").fill(globalItem);
@@ -67,35 +67,15 @@ test("Admin Panel generated client deletes exported private data and publishes a
 	await expect(page.locator("[data-substitution-include-options]")).toContainText(classification);
 });
 
-async function register(page: Page, email: string, password: string) {
-	await page.goto("/");
-	await page.getByRole("button", { name: "Sign in", exact: true }).click();
-	await page.getByRole("group", { name: "Authentication mode" }).getByRole("button", { name: "Create account" }).click();
-	const form = page.locator("[data-register-view]");
-	await form.getByLabel("Email").fill(email);
-	await form.getByLabel("Password", { exact: true }).fill(password);
-	await form.getByLabel("Confirm password").fill(password);
-	await form.getByLabel(/I accept the current Privacy Policy and Terms of Service/i).check();
-	const response = page.waitForResponse((candidate) => candidate.url().endsWith("/api/v1/auth/register"));
-	await form.getByRole("button", { name: "Create account" }).click();
-	const registered = await response;
-	expect(registered.status()).toBe(201);
-	await expect(page.getByText("Registration complete. Your browser session is authenticated.")).toBeVisible();
-	return registered;
+function requiredFixture(name: string): string {
+	const value = process.env[name];
+	if (!value) throw new Error(`isolated fixture ${name} is required`);
+	return value;
 }
 
-function promoteToAdmin(userId: string): void {
-	const sql = `UPDATE users SET role='admin' WHERE id='${userId}'::uuid`;
-	execFileSync("docker", ["compose", "exec", "-T", "postgres", "psql", "-U", "mealswapp", "-d", "mealswapp", "-v", "ON_ERROR_STOP=1", "-c", sql], { cwd: "..", stdio: "pipe" });
-}
-
-async function verifyEmailFixture(page: Page): Promise<void> {
-	await page.evaluate(async () => {
-		const csrfResponse = await fetch("/api/v1/auth/csrf-token", { credentials: "include", headers: { Accept: "application/json" } });
-		const csrf = await csrfResponse.json() as { data?: { csrfToken?: string } };
-		const response = await fetch("/api/v1/auth/verify-email", { method: "POST", credentials: "include", headers: { Accept: "application/json", "X-CSRF-Token": csrf.data?.csrfToken ?? "" } });
-		if (response.status !== 200) throw new Error(`verification fixture failed with ${response.status}`);
-	});
+async function responseID(response: { json(): Promise<unknown> }): Promise<string> {
+	const body = await response.json() as { data?: { id?: string; classification?: { id?: string } } };
+	return body.data?.id ?? body.data?.classification?.id ?? "";
 }
 
 async function createPrivateItemFixture(page: Page, name: string): Promise<string> {

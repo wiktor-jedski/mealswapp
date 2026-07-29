@@ -1,0 +1,34 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-STEP-01",
+    "P08-SWR056-STEP-02",
+    "P08-SWR056-ACCEPT-01",
+    "P08-SWR033-STEP-05"
+  ],
+  "kind": "item",
+  "entityId": "50841c79-a857-4ee1-a9fb-a7f52e50f8cb",
+  "name": "Task 283 liquid real-stack-desktop-chromium",
+  "idempotencyKey": "f76e0104-7688-4ad8-b911-9377f2259d55",
+  "requestIds": [
+    "8a98e6f9-1564-458d-995b-e1ceb92a1c6c",
+    "12a30b49-8225-4936-95f0-545078864424"
+  ],
+  "expected": {
+    "active": true,
+    "ownerless": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "idempotencyCount": 1,
+    "physicalState": "liquid",
+    "metricBasis": "100ml",
+    "density": 0.92,
+    "densitySourceKind": "manual",
+    "macros": {
+      "protein": 2.5,
+      "carbohydrates": 6.25,
+      "fat": 1.75
+    }
+  }
+}

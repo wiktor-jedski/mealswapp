@@ -1,0 +1,18 @@
+{
+  "run_id": "7e90a8f191987741e6caac1f",
+  "request_ids": [
+    "5fee8ec5-b234-4421-9e04-621ebda786d9",
+    "862aec2a-d7d1-40ef-8ebb-9281774e597a",
+    "9e8fd918-deca-4c28-b3b5-9503cca5c102"
+  ],
+  "events": [
+    "database_created",
+    "redis_ready",
+    "migrations_applied",
+    "provider_fixture_ready",
+    "application_ready",
+    "browser_product_nonpass",
+    "task282_results_finalized"
+  ],
+  "result": "product_nonpass"
+}

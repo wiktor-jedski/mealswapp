@@ -1,0 +1,37 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "2",
+    "generationBefore": "2",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-03"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "2",
+      "generationBefore": "2",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "1642ee3a-b1c8-40ee-8e15-4bb6c591875e",
+      "generationBefore": "f0dedd2d-801b-45b3-ab63-1c7d42a56bf3"
+    },
+    "idempotencyKey": "04f4e4af-c5c8-4b63-86dc-303533c5134c",
+    "kind": "rejected_item",
+    "name": "Task 283 invalid nutrition real-stack-desktop-chromium",
+    "requestIds": [
+      "8ca9a4b0-f98f-4af5-8e20-bb783f889b53"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

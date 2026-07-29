@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -63,6 +64,30 @@ type manualItemInvalidatorStub struct{ calls atomic.Int32 }
 
 func (s *manualItemInvalidatorStub) Invalidate() { s.calls.Add(1) }
 
+func TestManualItemDataOmitsAbsentOptionalFields(t *testing.T) {
+	item := itemcurator.Item{
+		ID: uuid.New(), Name: "Rice", PhysicalState: repository.PhysicalStateSolid,
+		MacrosPer100: repository.MacroValues{}, Micros: repository.MicroValues{},
+		FoodCategories: []itemcurator.ClassificationSummary{}, CulinaryRoles: []itemcurator.ClassificationSummary{},
+	}
+	data := manualItemData(item)
+	for _, field := range []string{
+		"averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter",
+		"densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "imageUrl",
+	} {
+		if _, exists := data[field]; exists {
+			t.Fatalf("absent optional field %q emitted as %#v", field, data[field])
+		}
+	}
+
+	item.AverageUnitWeightGrams = 100
+	item.ImageURL = "https://example.test/rice.jpg"
+	data = manualItemData(item)
+	if data["averageUnitWeightGrams"] != float64(100) || data["imageUrl"] != item.ImageURL {
+		t.Fatalf("present optional fields not emitted: %#v", data)
+	}
+}
+
 type manualItemAuditObserver struct {
 	invalidations *atomic.Int32
 	err           error
@@ -98,11 +123,21 @@ func TestManualItemAdminHTTPValidCRUDReplayAndAuditSnapshots(t *testing.T) {
 	controller := NewManualItemAdminController(audit, service, invalidator)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Audit: &auditSink{}, Routes: controller.Routes()})
 	csrf, csrfCookies := fetchCSRFToken(t, app)
-	body := `{"name":"Manual tofu","physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+	body := `{"name":"Manual tofu","physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[],"allergenKeys":["peanut"]}`
 
 	create := manualItemHTTPRequest(t, app, fiber.MethodPost, "/api/v1/admin/items", body, authCookies, csrfCookies, csrf, "create-key-0001")
 	if create.StatusCode != fiber.StatusCreated || audit.committed != 1 || invalidator.calls.Load() != 1 || len(audit.changes) != 1 || audit.changes[0].EntityID == nil || *audit.changes[0].EntityID != itemID || !strings.Contains(string(audit.changes[0].After), `"active":true`) {
 		t.Fatalf("create status=%d invalidations=%d audit=%+v", create.StatusCode, invalidator.calls.Load(), audit)
+	}
+	var envelope struct {
+		Status string `json:"status"`
+		Data   struct {
+			ID           uuid.UUID `json:"id"`
+			AllergenKeys []string  `json:"allergenKeys"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(create.Body).Decode(&envelope); err != nil || envelope.Status != "ok" || envelope.Data.ID != itemID {
+		t.Fatalf("manual item success envelope=%+v err=%v", envelope, err)
 	}
 	create.Body.Close()
 	replay := manualItemHTTPRequest(t, app, fiber.MethodPost, "/api/v1/admin/items", body, authCookies, csrfCookies, csrf, "replay-key-0001")
@@ -135,13 +170,14 @@ func TestManualItemAdminHTTPRejectsConflictsDuplicatesInvalidFieldsAndOwnership(
 	controller := NewManualItemAdminController(&adminAuditCoordinator{}, service, invalidator)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Audit: &auditSink{}, Routes: controller.Routes()})
 	csrf, csrfCookies := fetchCSRFToken(t, app)
-	valid := `{"name":"Manual tofu","physicalState":"solid","macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+	valid := `{"name":"Manual tofu","physicalState":"solid","macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[],"allergenKeys":[]}`
 	cases := []string{
 		strings.Replace(valid, `"name":"Manual tofu"`, `"name":"First","name":"Second"`, 1),
 		strings.Replace(valid, `"foodCategoryIds":[]`, `"foodCategoryIds":["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"]`, 1),
 		strings.Replace(valid, `"protein":10`, `"protein":-1`, 1),
 		strings.Replace(valid, `"physicalState":"solid"`, `"physicalState":"liquid"`, 1),
 		strings.Replace(valid, `"micros":{}`, `"micros":{"bad\u0000key":1}`, 1),
+		strings.Replace(valid, `"allergenKeys":[]`, `"allergenKeys":["dairy","dairy"]`, 1),
 		strings.Replace(valid, `"name":"Manual tofu"`, `"name":"Manual tofu","ownerId":"`+uuid.NewString()+`"`, 1),
 		strings.Replace(valid, `"name":"Manual tofu"`, `"name":"Manual tofu","imageUrl":"ftp://example.test/a"`, 1),
 	}
@@ -188,7 +224,7 @@ func TestManualItemInvalidationRunsOnlyAfterSuccessfulAuditCommit(t *testing.T) 
 	controller := NewManualItemAdminController(audit, service, invalidator)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Audit: &auditSink{}, Routes: controller.Routes()})
 	csrf, csrfCookies := fetchCSRFToken(t, app)
-	body := `{"name":"Manual tofu","physicalState":"solid","macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+	body := `{"name":"Manual tofu","physicalState":"solid","macrosPer100":{"protein":10,"carbohydrates":2,"fat":3},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[],"allergenKeys":[]}`
 
 	committed := manualItemHTTPRequest(t, app, fiber.MethodPost, "/api/v1/admin/items", body, authCookies, csrfCookies, csrf, "commit-key-0001")
 	committed.Body.Close()

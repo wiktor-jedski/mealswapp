@@ -9,7 +9,8 @@
 	interface Props { api?: AdminApi }
 	let { api = adminApi }: Props = $props();
 
-	const emptyForm = (): AdminItemForm => ({ name: "", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "", carbohydrates: "", fat: "", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{}", foodCategoryIds: [], culinaryRoleIds: [], imageUrl: "" });
+	const allergenOptions = ["animal_product", "dairy", "egg", "gluten", "meat", "peanut", "tree_nut"];
+	const emptyForm = (): AdminItemForm => ({ name: "", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "", carbohydrates: "", fat: "", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "" });
 	let form = $state<AdminItemForm>(emptyForm());
 	let itemId = $state("");
 	let currentItem = $state<AdminItem | undefined>();
@@ -94,7 +95,7 @@
 			protein: String(item.macrosPer100.protein), carbohydrates: String(item.macrosPer100.carbohydrates), fat: String(item.macrosPer100.fat),
 			density: item.densityGramsPerMilliliter === undefined ? "" : String(item.densityGramsPerMilliliter),
 			densitySourceProvider: item.densitySourceProvider ?? "", densitySourceFoodId: item.densitySourceFoodId ?? "", densitySourceKind: item.densitySourceKind ?? "",
-			micros: JSON.stringify(item.micros), foodCategoryIds: item.foodCategoryIds ?? item.foodCategories.map(({ id }) => id), culinaryRoleIds: item.culinaryRoleIds ?? item.culinaryRoles.map(({ id }) => id), imageUrl: item.imageUrl ?? ""
+			micros: JSON.stringify(item.micros), foodCategoryIds: item.foodCategoryIds ?? item.foodCategories.map(({ id }) => id), culinaryRoleIds: item.culinaryRoleIds ?? item.culinaryRoles.map(({ id }) => id), allergenKeys: item.allergenKeys, imageUrl: item.imageUrl ?? ""
 		};
 	}
 
@@ -285,6 +286,7 @@
 			<label class="grid gap-1 text-sm sm:col-span-2">Image URL<input maxlength="2048" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.imageUrl} /></label>
 			<label class="grid gap-1 text-sm">Food Categories<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.foodCategoryIds}>{#each classifications.food_category as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm">Culinary Roles<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.culinaryRoleIds}>{#each classifications.culinary_role as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
+			<label class="grid gap-1 text-sm sm:col-span-2">Allergens<select multiple size="7" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.allergenKeys}>{#each allergenOptions as key}<option value={key}>{key.replaceAll("_", " ")}</option>{/each}</select></label>
 			<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
 		</form>
 		{#if itemError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}

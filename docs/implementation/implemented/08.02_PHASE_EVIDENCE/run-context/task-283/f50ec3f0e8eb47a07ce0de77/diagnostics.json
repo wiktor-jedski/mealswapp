@@ -1,0 +1,16 @@
+{
+  "run_id": "f50ec3f0e8eb47a07ce0de77",
+  "request_ids": [
+    "5fab6b57-f7dc-41b3-be82-57d79986cc8b",
+    "67376404-6cfd-4ddc-a635-f2039e9c4920",
+    "95154d40-ccc4-48c6-b8e8-966392efaa60"
+  ],
+  "events": [
+    "database_created",
+    "redis_ready",
+    "second_api_ready",
+    "administrator_bootstrapped",
+    "task283_results_finalized"
+  ],
+  "result": "passed"
+}

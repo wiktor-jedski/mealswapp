@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"testing"
 
@@ -62,6 +63,24 @@ func TestRunErrors(t *testing.T) {
 	}
 }
 
+func TestDevelopmentClassificationIDsMatchPublicUUIDContract(t *testing.T) {
+	matches := regexp.MustCompile(`\('20000000-0000-0000-0000-[0-9a-f]{12}', '(20[0-9a-f-]{34})'\)`).FindAllStringSubmatch(developmentSQL, -1)
+	if len(matches) == 0 {
+		t.Fatal("development seed has no deterministic classification UUIDs")
+	}
+	seen := map[uuid.UUID]struct{}{}
+	for _, match := range matches {
+		id, err := uuid.Parse(match[1])
+		if err != nil || id.Version() < 1 || id.Version() > 5 || id.Variant() != uuid.RFC4122 {
+			t.Fatalf("development classification UUID %q violates the public contract", match[1])
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) != 4 {
+		t.Fatalf("development classification UUID count = %d, want 4", len(seen))
+	}
+}
+
 func openSeedTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	migrationDir, err := filepath.Abs("../../../database/migrations")
@@ -79,6 +98,7 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	// which conflicts with the deterministic active-name fixture insert.
 	insertLegacyActiveFoodFixture(t, ctx, db, "Oat Milk")
 	insertLegacyActiveFoodFixture(t, ctx, db, "Cow Milk")
+	legacyClassificationFoodID := insertLegacyClassificationFixture(t, ctx, db)
 
 	if err := Run(ctx, db); err != nil {
 		t.Fatalf("Run() first error = %v", err)
@@ -93,6 +113,13 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	}
 	if firstCounts.Meals != 27 {
 		t.Fatalf("seeded meal count = %d, want 27", firstCounts.Meals)
+	}
+	var seededAdministrators int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM users WHERE role = 'admin'`).Scan(&seededAdministrators); err != nil {
+		t.Fatalf("count seeded administrators: %v", err)
+	}
+	if seededAdministrators != 0 {
+		t.Fatalf("seeded administrators = %d, want 0", seededAdministrators)
 	}
 	wantReplacementMeals := []string{
 		"Almonds", "Avocado", "Banana", "Boiled Potatoes", "Cheddar Cheese",
@@ -204,6 +231,29 @@ func TestRunIsIdempotentAndSeedsRepositoryFixtures(t *testing.T) {
 	if len(foodCategories) < 2 || len(culinaryRoles) < 2 {
 		t.Fatalf("seeded classifications food_category=%#v culinary_role=%#v", foodCategories, culinaryRoles)
 	}
+	for _, classification := range append(foodCategories, culinaryRoles...) {
+		if classification.ID.Version() < 1 || classification.ID.Version() > 5 || classification.ID.Variant() != uuid.RFC4122 {
+			t.Fatalf("seeded classification violates public UUID contract: %#v", classification)
+		}
+	}
+	var migratedReferences, legacyClassifications int
+	if err := db.QueryRow(ctx, `
+		SELECT count(*)
+		FROM food_item_classifications
+		WHERE food_item_id = $1 AND classification_id = '20000000-0000-4000-8000-000000000001'
+	`, legacyClassificationFoodID).Scan(&migratedReferences); err != nil {
+		t.Fatalf("query migrated classification reference: %v", err)
+	}
+	if err := db.QueryRow(ctx, `
+		SELECT count(*)
+		FROM classifications
+		WHERE id::text LIKE '20000000-0000-0000-0000-%'
+	`).Scan(&legacyClassifications); err != nil {
+		t.Fatalf("query legacy classification UUIDs: %v", err)
+	}
+	if migratedReferences != 1 || legacyClassifications != 0 {
+		t.Fatalf("classification UUID repair references=%d legacy=%d", migratedReferences, legacyClassifications)
+	}
 
 	entitlement, err := entitlementRepo.GetLatest(ctx, userID)
 	if err != nil {
@@ -243,6 +293,30 @@ func insertLegacyActiveFoodFixture(t *testing.T, ctx context.Context, db *pgxpoo
 	if err != nil {
 		t.Fatalf("insert legacy active food fixture %q: %v", name, err)
 	}
+}
+
+func insertLegacyClassificationFixture(t *testing.T, ctx context.Context, db *pgxpool.Pool) uuid.UUID {
+	t.Helper()
+	foodID := uuid.New()
+	if _, err := db.Exec(ctx, `
+		INSERT INTO classifications (id, name, kind)
+		VALUES ('20000000-0000-0000-0000-000000000001', 'Fruit', 'food_category')
+	`); err != nil {
+		t.Fatalf("insert legacy classification fixture: %v", err)
+	}
+	if _, err := db.Exec(ctx, `
+		INSERT INTO food_items (id, name, physical_state, protein_per_100, carbohydrates_per_100, fat_per_100)
+		VALUES ($1, 'Legacy classified pear', 'solid', 1, 1, 1)
+	`, foodID); err != nil {
+		t.Fatalf("insert legacy classification food fixture: %v", err)
+	}
+	if _, err := db.Exec(ctx, `
+		INSERT INTO food_item_classifications (food_item_id, classification_id)
+		VALUES ($1, '20000000-0000-0000-0000-000000000001')
+	`, foodID); err != nil {
+		t.Fatalf("insert legacy classification reference fixture: %v", err)
+	}
+	return foodID
 }
 
 func containsFoodID(items []repository.FoodItemEntity, id uuid.UUID) bool {

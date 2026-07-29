@@ -4,6 +4,7 @@ package useradmin
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -117,13 +118,32 @@ func (s *Service) Lookup(ctx context.Context, actor Actor, request LookupRequest
 	if s.users == nil || s.audit == nil || s.decrypter == nil || s.digester == nil {
 		return Page{}, repository.NewError(repository.ErrorKindConnection, "user administration dependency unavailable", nil)
 	}
-	lookup, exact, err := s.lookupRequest(ctx, request)
+	lookup, legacyDigest, exact, err := s.lookupRequest(ctx, request)
 	if err != nil {
 		return Page{}, err
 	}
-	records, err := s.users.LookupAdminUsers(ctx, lookup)
-	if err != nil {
-		return Page{}, err
+	var records []repository.AdminUserRecord
+	if lookup.EmailDigest != nil {
+		record, resolveErr := repository.ResolveCanonicalEmailIdentity(
+			ctx,
+			*lookup.EmailDigest,
+			legacyDigest,
+			s.lookupUserByEmailDigest,
+			func(record repository.AdminUserRecord) uuid.UUID { return record.ID },
+			s.users.ReindexUserEmailDigest,
+		)
+		if resolveErr != nil {
+			if !repository.IsKind(resolveErr, repository.ErrorKindNotFound) {
+				return Page{}, resolveErr
+			}
+		} else {
+			records = []repository.AdminUserRecord{record}
+		}
+	} else {
+		records, err = s.users.LookupAdminUsers(ctx, lookup)
+		if err != nil {
+			return Page{}, err
+		}
 	}
 	hasNext := !exact && len(records) > lookup.Limit-1
 	if hasNext {
@@ -146,7 +166,8 @@ func (s *Service) Lookup(ctx context.Context, actor Actor, request LookupRequest
 		id := records[0].ID
 		entityID = &id
 	}
-	if _, err := s.audit.PersistAuditEntry(ctx, repository.AdminAuditEntry{AdminUserID: actor.UserID, Action: "lookup_users", EntityType: "user", EntityID: entityID, RequestID: actor.RequestID, CreatedAt: s.now()}); err != nil {
+	adminUserID := actor.UserID
+	if _, err := s.audit.PersistAuditEntry(ctx, repository.AdminAuditEntry{ActorKind: repository.AdminAuditActorAdministrator, AdminUserID: &adminUserID, Action: "lookup_users", EntityType: "user", EntityID: entityID, RequestID: actor.RequestID, CreatedAt: s.now()}); err != nil {
 		return Page{}, err
 	}
 	page := Page{Users: users}
@@ -175,34 +196,56 @@ func (s *Service) RetryDeletion(ctx context.Context, actor Actor, userID uuid.UU
 
 // lookupRequest normalizes selectors and adds one private lookahead row for pagination.
 // Implements DESIGN-009 UserAdminPanel.
-func (s *Service) lookupRequest(ctx context.Context, request LookupRequest) (repository.AdminUserLookup, bool, error) {
+func (s *Service) lookupRequest(ctx context.Context, request LookupRequest) (repository.AdminUserLookup, *repository.LookupDigest, bool, error) {
 	if request.UserID != nil && request.Email != "" || request.Cursor != nil && (request.UserID != nil || request.Email != "") {
-		return repository.AdminUserLookup{}, false, repository.NewError(repository.ErrorKindValidation, "user lookup scope is invalid", nil)
+		return repository.AdminUserLookup{}, nil, false, repository.NewError(repository.ErrorKindValidation, "user lookup scope is invalid", nil)
 	}
 	limit := request.Limit
 	if limit == 0 {
 		limit = DefaultPageSize
 	}
 	if limit < 1 || limit > MaxPageSize {
-		return repository.AdminUserLookup{}, false, repository.NewError(repository.ErrorKindValidation, "user lookup limit is invalid", nil)
+		return repository.AdminUserLookup{}, nil, false, repository.NewError(repository.ErrorKindValidation, "user lookup limit is invalid", nil)
 	}
 	lookup := repository.AdminUserLookup{UserID: request.UserID, AfterID: request.Cursor, Limit: limit + 1}
 	exact := request.UserID != nil || request.Email != ""
+	var legacyDigest *repository.LookupDigest
 	if request.Email != "" {
 		normalized, err := security.NormalizeInput(security.InputFieldEmail, request.Email)
 		if err != nil {
-			return repository.AdminUserLookup{}, false, repository.NewError(repository.ErrorKindValidation, "user lookup email is invalid", nil)
+			return repository.AdminUserLookup{}, nil, false, repository.NewError(repository.ErrorKindValidation, "user lookup email is invalid", nil)
 		}
 		digest, err := s.digester.DigestForWrite(ctx, []byte(normalized.Value))
 		if err != nil {
-			return repository.AdminUserLookup{}, false, err
+			return repository.AdminUserLookup{}, nil, false, err
 		}
 		lookup.EmailDigest = &repository.LookupDigest{KeyVersion: digest.KeyVersion, Value: digest.Value}
+		legacyValue := strings.TrimSpace(request.Email)
+		if legacyValue != normalized.Value {
+			legacy, err := s.digester.DigestForWrite(ctx, []byte(legacyValue))
+			if err != nil {
+				return repository.AdminUserLookup{}, nil, false, err
+			}
+			legacyDigest = &repository.LookupDigest{KeyVersion: legacy.KeyVersion, Value: legacy.Value}
+		}
 	}
 	if exact {
 		lookup.Limit = 1
 	}
-	return lookup, exact, nil
+	return lookup, legacyDigest, exact, nil
+}
+
+// lookupUserByEmailDigest adapts exact administration lookup to the shared collision-safe resolver.
+// Implements DESIGN-009 UserAdminPanel and DESIGN-013 InputNormalizer.
+func (s *Service) lookupUserByEmailDigest(ctx context.Context, digest repository.LookupDigest) (repository.AdminUserRecord, error) {
+	records, err := s.users.LookupAdminUsers(ctx, repository.AdminUserLookup{EmailDigest: &digest, Limit: 1})
+	if err != nil {
+		return repository.AdminUserRecord{}, err
+	}
+	if len(records) == 0 {
+		return repository.AdminUserRecord{}, repository.NewError(repository.ErrorKindNotFound, "administrative user not found", nil)
+	}
+	return records[0], nil
 }
 
 // authorize enforces the service-level verified-admin boundary.

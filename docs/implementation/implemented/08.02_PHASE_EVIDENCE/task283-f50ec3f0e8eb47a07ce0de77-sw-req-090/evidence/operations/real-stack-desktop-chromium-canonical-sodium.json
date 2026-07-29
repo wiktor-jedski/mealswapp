@@ -1,0 +1,24 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR090-STEP-01",
+    "P08-SWR090-ACCEPT-01"
+  ],
+  "kind": "item",
+  "entityId": "390afe8c-eb00-4d3c-ba6b-ebd40867ba94",
+  "name": "Task 283 Sodium real-stack-desktop-chromium",
+  "idempotencyKey": "b2251e14-28ef-4f76-9162-b7fb37093647",
+  "requestIds": [
+    "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1"
+  ],
+  "expected": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "idempotencyCount": 1,
+    "micros": {
+      "Sodium": 125.5
+    }
+  }
+}

@@ -32,6 +32,7 @@ type OAuthIdentityStore interface {
 	CreateUser(context.Context, repository.EncryptedAuthUser) (uuid.UUID, error)
 	GetUserByNormalizedEmailDigest(context.Context, repository.LookupDigest) (repository.EncryptedAuthUser, error)
 	GetEncryptedUserByID(context.Context, uuid.UUID) (repository.EncryptedAuthUser, error)
+	ReindexUserEmailDigest(context.Context, uuid.UUID, repository.LookupDigest) error
 	UpsertOAuthIdentity(context.Context, repository.EncryptedOAuthIdentity) (uuid.UUID, error)
 	GetOAuthIdentity(context.Context, string, repository.LookupDigest) (repository.EncryptedOAuthIdentity, error)
 }
@@ -84,7 +85,11 @@ func (s *CoreAuthService) CompleteOAuth(ctx context.Context, expectedProvider st
 	if err != nil {
 		return OAuthResult{}, err
 	}
-	if existing, err := store.GetUserByNormalizedEmailDigest(ctx, emailDigest); err == nil {
+	canonicalDigest, legacyDigest, err := s.emailLookupDigests(ctx, profile.Email, normalized.Email)
+	if err != nil {
+		return OAuthResult{}, err
+	}
+	if existing, err := lookupAndReindexUserByEmail(ctx, store, canonicalDigest, legacyDigest); err == nil {
 		return OAuthResult{}, &OAuthLinkRequired{UserID: existing.ID}
 	} else if !repository.IsKind(err, repository.ErrorKindNotFound) {
 		return OAuthResult{}, err

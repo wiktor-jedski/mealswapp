@@ -1,0 +1,9 @@
+{
+  "administratorActorCount": 2,
+  "classificationAuditCount": 2,
+  "classificationMutationCount": 2,
+  "expectedMutationCount": 2,
+  "fixtureScope": "owned-isolated-test-database",
+  "redisState": "reachable",
+  "validated": true
+}

@@ -9,15 +9,22 @@ import {
 	BILLING_CHECKOUT_ENDPOINT,
 	BILLING_ENTITLEMENT_ENDPOINT,
 	BILLING_PORTAL_ENDPOINT,
+	ACCOUNT_ENDPOINT,
+	CUSTOM_ITEMS_ENDPOINT,
 	DAILY_DIETS_ENDPOINT,
 	DISCLAIMER_ENDPOINT,
 	OPTIMIZATION_JOBS_ENDPOINT,
 	PROFILE_ENDPOINT,
 	buildBillingPortalCreateRequestInit,
+	buildAccountDeletionRequestInit,
+	buildAccountExportRequestInit,
+	buildAccountExportUrl,
 	buildCsrfTokenRequestInit,
 	buildDisclaimerRequestInit,
 	buildDisclaimerUrl,
 	buildCheckoutCreateRequestInit,
+	buildCustomItemMutationRequestInit,
+	buildCustomItemUrl,
 	buildDailyDietCreateRequestInit,
 	buildEntitlementStatusRequestInit,
 	buildLoginRequestInit,
@@ -38,11 +45,56 @@ import {
 	type DisclaimerEnvelope,
 	type EntitlementStatusEnvelope,
 	type DailyDietCreateRequest,
+	type ExportBundle,
 	type DietOptimizationRequest,
 	type OptimizationJobAcknowledgementEnvelope,
 	type OptimizationJobData,
 	type OptimizationAlternative
 } from "./generated";
+
+// Implements DESIGN-008 AccountDeleter, DataExporter, and ProfileController generated helper verification.
+test("generated private-data helpers build closed owner-scoped request contracts", () => {
+	const request = {
+		name: "Private oats",
+		physicalState: "solid" as const,
+		prepTimeMinutes: 0,
+		macrosPer100: { protein: 10, carbohydrates: 20, fat: 5 },
+		micros: {},
+		foodCategoryIds: [],
+		culinaryRoleIds: []
+	};
+	const create = buildCustomItemMutationRequestInit("POST", request, "csrf-token", {
+		idempotencyKey: "00000000-0000-4000-8000-000000000001"
+	});
+	const replace = buildCustomItemMutationRequestInit("PUT", request, "csrf-token");
+	const deletion = buildAccountDeletionRequestInit("csrf-token");
+	const exported: ExportBundle = {
+		user: {}, consent: [], savedItems: [], history: [], customItems: [],
+		savedDiets: [{
+			id: "00000000-0000-4000-8000-000000000284",
+			name: "Portable diet", entries: [],
+			createdAt: "2026-07-28T00:00:00Z", updatedAt: "2026-07-28T00:00:00Z"
+		}]
+	};
+
+	expect(CUSTOM_ITEMS_ENDPOINT).toBe("/api/v1/custom-items");
+	expect(buildCustomItemUrl("private/id")).toBe("/api/v1/custom-items/private%2Fid");
+	expect(create.method).toBe("POST");
+	expect(create.headers["Idempotency-Key"]).toBe("00000000-0000-4000-8000-000000000001");
+	expect(JSON.parse(create.body)).toEqual(request);
+	expect(replace.method).toBe("PUT");
+	expect(replace.headers["Idempotency-Key"]).toBeUndefined();
+	expect(buildAccountExportUrl("csv")).toBe("/api/v1/account/export?format=csv");
+	expect(buildAccountExportRequestInit("json").headers.Accept).toBe("application/json");
+	expect(buildAccountExportRequestInit("csv").headers.Accept).toBe("text/csv");
+	expect(ACCOUNT_ENDPOINT).toBe("/api/v1/account");
+	expect(deletion).toMatchObject({
+		method: "DELETE",
+		credentials: "include",
+		headers: { Accept: "application/json", "X-CSRF-Token": "csrf-token" }
+	});
+	expect(exported.savedDiets[0].name).toBe("Portable diet");
+});
 
 // Implements DESIGN-018 AuthApiClient generated contract verification.
 test("generated auth contracts are importable for the frontend auth surface", () => {

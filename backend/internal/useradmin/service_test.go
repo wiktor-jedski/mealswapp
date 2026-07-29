@@ -17,19 +17,31 @@ import (
 )
 
 type memoryAdminUsers struct {
-	records     []repository.AdminUserRecord
-	lookup      repository.AdminUserLookup
-	lookupCalls int
-	retry       repository.AdminDeletionRetry
-	retryErr    error
-	retryCalls  int
-	retryUserID uuid.UUID
-	retryID     uuid.UUID
+	records         []repository.AdminUserRecord
+	recordsByDigest map[string][]repository.AdminUserRecord
+	lookup          repository.AdminUserLookup
+	lookupCalls     int
+	reindexedUserID uuid.UUID
+	reindexedDigest repository.LookupDigest
+	reindexErr      error
+	retry           repository.AdminDeletionRetry
+	retryErr        error
+	retryCalls      int
+	retryUserID     uuid.UUID
+	retryID         uuid.UUID
 }
 
 func (r *memoryAdminUsers) LookupAdminUsers(_ context.Context, lookup repository.AdminUserLookup) ([]repository.AdminUserRecord, error) {
 	r.lookup, r.lookupCalls = lookup, r.lookupCalls+1
+	if lookup.EmailDigest != nil && r.recordsByDigest != nil {
+		return append([]repository.AdminUserRecord(nil), r.recordsByDigest[lookup.EmailDigest.Value]...), nil
+	}
 	return append([]repository.AdminUserRecord(nil), r.records...), nil
+}
+
+func (r *memoryAdminUsers) ReindexUserEmailDigest(_ context.Context, userID uuid.UUID, digest repository.LookupDigest) error {
+	r.reindexedUserID, r.reindexedDigest = userID, digest
+	return r.reindexErr
 }
 
 func (r *memoryAdminUsers) RetryAdminDeletion(_ context.Context, _ repository.AdminMutationExecutor, userID uuid.UUID, requestID uuid.UUID) (repository.AdminDeletionRetry, error) {
@@ -59,13 +71,20 @@ func (d *recordingDecrypter) DecryptPII(_ context.Context, envelope security.Enc
 }
 
 type recordingDigester struct {
-	input []byte
-	err   error
+	input  []byte
+	inputs [][]byte
+	values map[string]string
+	err    error
 }
 
 func (d *recordingDigester) DigestForWrite(_ context.Context, input []byte) (security.LookupDigest, error) {
 	d.input = append([]byte(nil), input...)
-	return security.LookupDigest{KeyVersion: "lookup-v1", Value: "safe-digest"}, d.err
+	d.inputs = append(d.inputs, append([]byte(nil), input...))
+	value := "safe-digest"
+	if configured, ok := d.values[string(input)]; ok {
+		value = configured
+	}
+	return security.LookupDigest{KeyVersion: "lookup-v1", Value: value}, d.err
 }
 
 type recordingLookupAudit struct {
@@ -108,7 +127,7 @@ func TestLookupProjectsOnlyApprovedFieldsWithBoundedPaginationAndAudit(t *testin
 	if repo.lookup.Limit != 3 || repo.lookup.UserID != nil || repo.lookup.EmailDigest != nil {
 		t.Fatalf("repository lookup = %+v, want bounded lookahead", repo.lookup)
 	}
-	if len(audit.entries) != 1 || audit.entries[0].AdminUserID != adminID || audit.entries[0].Action != "lookup_users" || audit.entries[0].EntityID != nil || len(audit.entries[0].Before)+len(audit.entries[0].After) != 0 {
+	if len(audit.entries) != 1 || audit.entries[0].AdminUserID == nil || *audit.entries[0].AdminUserID != adminID || audit.entries[0].ActorKind != repository.AdminAuditActorAdministrator || audit.entries[0].Action != "lookup_users" || audit.entries[0].EntityID != nil || len(audit.entries[0].Before)+len(audit.entries[0].After) != 0 {
 		t.Fatalf("lookup audit = %+v", audit.entries)
 	}
 	encoded := strings.Join([]string{page.Users[0].Email, page.Users[1].Email, page.Users[1].Deletion.Status, page.Users[1].Deletion.FailureCategory}, " ")
@@ -130,11 +149,43 @@ func TestLookupExactEmailNormalizesDigestAndAuditsEntity(t *testing.T) {
 	if err != nil || len(page.Users) != 1 {
 		t.Fatalf("Lookup() page=%+v error=%v", page, err)
 	}
-	if string(digester.input) != "User@Example.com" || repo.lookup.EmailDigest == nil || repo.lookup.EmailDigest.Value != "safe-digest" || repo.lookup.Limit != 1 {
-		t.Fatalf("exact lookup=%+v digest input=%q", repo.lookup, digester.input)
+	if len(digester.inputs) != 2 || string(digester.inputs[0]) != "user@example.com" || string(digester.inputs[1]) != "User@Example.com" || repo.lookup.EmailDigest == nil || repo.lookup.EmailDigest.Value != "safe-digest" || repo.lookup.Limit != 1 {
+		t.Fatalf("exact lookup=%+v digest inputs=%q", repo.lookup, digester.inputs)
 	}
 	if len(audit.entries) != 1 || audit.entries[0].EntityID == nil || *audit.entries[0].EntityID != userID {
 		t.Fatalf("exact audit = %+v", audit.entries)
+	}
+}
+
+func TestLookupExactEmailReindexesLegacyMixedCaseDigest(t *testing.T) {
+	userID := uuid.New()
+	repo := &memoryAdminUsers{recordsByDigest: map[string][]repository.AdminUserRecord{
+		"legacy-digest": {{ID: userID, Email: repository.EncryptedField{KeyVersion: "v1", Ciphertext: []byte("User@Example.com")}}},
+	}}
+	digester := &recordingDigester{values: map[string]string{"user@example.com": "canonical-digest", "User@Example.com": "legacy-digest"}}
+	service := NewService(repo, &recordingLookupAudit{}, &recordingDecrypter{}, digester)
+
+	page, err := service.Lookup(context.Background(), Actor{UserID: uuid.New(), Role: "admin", RequestID: "request-legacy"}, LookupRequest{Email: " User@Example.com "})
+	if err != nil || len(page.Users) != 1 || page.Users[0].ID != userID {
+		t.Fatalf("Lookup() page=%+v error=%v", page, err)
+	}
+	if repo.lookupCalls != 2 || repo.reindexedUserID != userID || repo.reindexedDigest.Value != "canonical-digest" {
+		t.Fatalf("legacy resolution calls=%d user=%s digest=%+v", repo.lookupCalls, repo.reindexedUserID, repo.reindexedDigest)
+	}
+}
+
+func TestLookupExactEmailRefusesCanonicalLegacyCollision(t *testing.T) {
+	canonicalID, legacyID := uuid.New(), uuid.New()
+	repo := &memoryAdminUsers{recordsByDigest: map[string][]repository.AdminUserRecord{
+		"canonical-digest": {{ID: canonicalID}},
+		"legacy-digest":    {{ID: legacyID}},
+	}}
+	digester := &recordingDigester{values: map[string]string{"user@example.com": "canonical-digest", "User@Example.com": "legacy-digest"}}
+	service := NewService(repo, &recordingLookupAudit{}, &recordingDecrypter{}, digester)
+
+	page, err := service.Lookup(context.Background(), Actor{UserID: uuid.New(), Role: "admin", RequestID: "request-collision"}, LookupRequest{Email: "User@Example.com"})
+	if !errors.Is(err, repository.ErrCanonicalEmailCollision) || len(page.Users) != 0 || repo.reindexedUserID != uuid.Nil {
+		t.Fatalf("Lookup() page=%+v error=%v reindexed=%s", page, err, repo.reindexedUserID)
 	}
 }
 

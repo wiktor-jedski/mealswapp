@@ -36,6 +36,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 		MacrosPer100: MacroValues{Protein: 18, Carbohydrates: 3, Fat: 9}, Micros: MicroValues{}, ImageURL: "https://images.example.test/tofu.png",
 		FoodCategories: []ClassificationEntity{{ID: categoryID, Kind: ClassificationKindFoodCategory}},
 		CulinaryRoles:  []ClassificationEntity{{ID: roleID, Kind: ClassificationKindCulinaryRole}},
+		AllergenKeys:   []string{"peanut"},
 	}
 	claim := ManualFoodItemCreateClaim{AdminUserID: adminID, Key: "manual-global-key-0001", BodyHash: strings.Repeat("a", 64), Item: item}
 	encode := func(entity FoodItemEntity) ([]byte, error) {
@@ -43,7 +44,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	}
 	var created ManualFoodItemCreateClaimResult
 	var itemID uuid.UUID
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		var mutationErr error
 		created, mutationErr = manualRepo.ClaimCreate(ctx, tx, claim, encode)
 		if mutationErr != nil {
@@ -62,13 +63,13 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 		t.Fatalf("create result=%+v id=%s err=%v", created, itemID, err)
 	}
 	stored, err := manualRepo.GetByID(ctx, itemID, false)
-	if err != nil || stored.Name != item.Name || stored.ImageURL != item.ImageURL || len(stored.FoodCategories) != 1 || len(stored.CulinaryRoles) != 1 {
+	if err != nil || stored.Name != item.Name || stored.ImageURL != item.ImageURL || len(stored.FoodCategories) != 1 || len(stored.CulinaryRoles) != 1 || len(stored.AllergenKeys) != 1 || stored.AllergenKeys[0] != "peanut" {
 		t.Fatalf("stored=%+v err=%v", stored, err)
 	}
 	assertManualFoodSearch(t, ctx, foodRepo, item.Name, itemID, true)
 
 	var replay ManualFoodItemCreateClaimResult
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		var replayErr error
 		replay, replayErr = manualRepo.ClaimCreate(ctx, tx, claim, encode)
 		return AdminAuditChanges{Replayed: replay.Replayed}, replayErr
@@ -84,7 +85,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	changedClaim := claim
 	changedClaim.BodyHash = strings.Repeat("b", 64)
 	changedClaim.Item.Name = "Changed key body"
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		_, mutationErr := manualRepo.ClaimCreate(ctx, tx, changedClaim, encode)
 		return AdminAuditChanges{}, mutationErr
 	})
@@ -94,7 +95,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	duplicateClaim := claim
 	duplicateClaim.Key = "manual-duplicate-key"
 	duplicateClaim.BodyHash = strings.Repeat("c", 64)
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		_, mutationErr := manualRepo.ClaimCreate(ctx, tx, duplicateClaim, encode)
 		return AdminAuditChanges{}, mutationErr
 	})
@@ -107,10 +108,11 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 		{Name: "Invalid micro", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, Micros: MicroValues{"not_allowed": 1}},
 		{Name: "Invalid classification", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, Micros: MicroValues{}, FoodCategories: []ClassificationEntity{{ID: uuid.New(), Kind: ClassificationKindFoodCategory}}},
 		{Name: "Invalid liquid", PhysicalState: PhysicalStateLiquid, MacrosPer100: MacroValues{}, Micros: MicroValues{}},
+		{Name: "Invalid allergen", PhysicalState: PhysicalStateSolid, MacrosPer100: MacroValues{}, Micros: MicroValues{}, AllergenKeys: []string{"unknown"}},
 	}
 	for index, invalid := range invalidItems {
 		invalidClaim := ManualFoodItemCreateClaim{AdminUserID: adminID, Key: "manual-invalid-key-000" + string(rune('a'+index)), BodyHash: strings.Repeat("d", 64), Item: invalid}
-		err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+		err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 			_, mutationErr := manualRepo.ClaimCreate(ctx, tx, invalidClaim, encode)
 			return AdminAuditChanges{}, mutationErr
 		})
@@ -121,7 +123,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 
 	liquid := FoodItemEntity{Name: "Manual global milk", PhysicalState: PhysicalStateLiquid, AverageServingVolumeMilliliters: 250, DensityGramsPerMilliliter: 1.03, DensitySourceKind: "manual", MacrosPer100: MacroValues{Protein: 3}, Micros: MicroValues{}}
 	liquidClaim := ManualFoodItemCreateClaim{AdminUserID: adminID, Key: "manual-liquid-key", BodyHash: strings.Repeat("f", 64), Item: liquid}
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		result, mutationErr := manualRepo.ClaimCreate(ctx, tx, liquidClaim, encode)
 		if mutationErr != nil {
 			return AdminAuditChanges{}, mutationErr
@@ -155,7 +157,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 
 	updated := stored
 	updated.Name = "Manual global tempeh"
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_update", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_update", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		before, mutationErr := manualRepo.GetByIDInMutation(ctx, tx, itemID, false)
 		if mutationErr != nil {
 			return AdminAuditChanges{}, mutationErr
@@ -178,7 +180,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	rollbackItem := item
 	rollbackItem.Name = "Manual audit rollback"
 	rollbackClaim := ManualFoodItemCreateClaim{AdminUserID: adminID, Key: "manual-rollback-key", BodyHash: strings.Repeat("9", 64), Item: rollbackItem}
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		result, mutationErr := manualRepo.ClaimCreate(ctx, tx, rollbackClaim, encode)
 		if mutationErr != nil {
 			return AdminAuditChanges{}, mutationErr
@@ -194,7 +196,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	}
 	assertManualFoodSearch(t, ctx, foodRepo, rollbackItem.Name, uuid.Nil, false)
 
-	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{AdminUserID: adminID, Action: "manual_delete", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
+	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_delete", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		if mutationErr := manualRepo.Delete(ctx, tx, itemID); mutationErr != nil {
 			return AdminAuditChanges{}, mutationErr
 		}

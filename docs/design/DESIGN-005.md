@@ -63,3 +63,14 @@
 - `func ValidateMicronutrientKeys(values MicroValues, vocabulary []MicronutrientVocabularyEntry) error`
 - `func ConvertUnit(value float64, fromUnit string, toUnit string) (float64, error)`
 - `func ScaleMacros(base MacroValues, quantity float64, basis float64) MacroValues`
+
+### 5. Isolated Real-Stack Verification Boundary
+
+<!-- Implements DESIGN-005 RepositoryInterfaces isolated real-stack test persistence. -->
+
+- Administration E2E runs use one generated `mealswapp_e2e_<opaque-run-id>_test` database and matching ownership comment. Database teardown requires both exact markers.
+- Migrations run against that database without development seeds. Fixture users are created through the run-owned API and administrator bootstrap uses the operator-only bootstrap interface; test code never promotes roles with SQL.
+- Each run uses a label-owned disposable Redis container on a loopback port. Teardown never targets shared Redis and never uses broad flush operations.
+- API and frontend processes use independently allocated loopback ports. Vite receives its API proxy target from the harness.
+- Persistent diagnostics use an allowlist of opaque run IDs, request IDs, lifecycle events, and resource ownership metadata. Raw logs, request/response bodies, credentials, cookies, CSRF values, database URLs, fixture emails/names, traces, and screenshots do not cross the teardown boundary.
+- Recovery of a process killed before teardown is explicit and age-bounded. It repeats all database, Redis, and process ownership checks and is idempotent.

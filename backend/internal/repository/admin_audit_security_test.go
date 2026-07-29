@@ -12,7 +12,8 @@ import (
 )
 
 func TestAdminAuditSnapshotsRejectUnsafeOrUnboundedData(t *testing.T) {
-	base := AdminAuditEntry{AdminUserID: uuid.New(), Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString()}
+	adminID := uuid.New()
+	base := AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString()}
 	tests := []struct {
 		name     string
 		snapshot []byte
@@ -99,8 +100,9 @@ func TestAdminAuditSnapshotValidationRollsBackTransaction(t *testing.T) {
 	tx := &fakeTx{}
 	repo := NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{tx: tx})
 	mutationCalled := false
+	adminID := uuid.New()
 	err := repo.WithMutationAudit(context.Background(), AdminAuditEntry{
-		AdminUserID: uuid.New(), Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString(),
+		ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString(),
 	}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
 		mutationCalled = true
 		return AdminAuditChanges{After: []byte(`{"password":"must-not-persist"}`)}, nil
@@ -114,8 +116,9 @@ func TestAdminAuditPersistenceErrorPreservesCause(t *testing.T) {
 	cause := errors.New("audit insert unavailable")
 	tx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: cause}}}
 	repo := NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{tx: tx})
+	adminID := uuid.New()
 	err := repo.WithMutationAudit(context.Background(), AdminAuditEntry{
-		AdminUserID: uuid.New(), Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString(),
+		ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString(),
 	}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
 		return AdminAuditChanges{After: []byte(`{"status":"published"}`)}, nil
 	})
@@ -127,8 +130,9 @@ func TestAdminAuditPersistenceErrorPreservesCause(t *testing.T) {
 func TestAdminMutationAuditSuccessfulCommitPath(t *testing.T) {
 	tx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{uuid.New()}}}}
 	repo := NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{tx: tx})
+	adminID := uuid.New()
 	err := repo.WithMutationAudit(context.Background(), AdminAuditEntry{
-		AdminUserID: uuid.New(), Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString(),
+		ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "fixture.update", EntityType: "fixture", RequestID: uuid.NewString(),
 	}, func(AdminMutationExecutor) (AdminAuditChanges, error) {
 		return AdminAuditChanges{After: []byte(`{"status":"published","active":true}`)}, nil
 	})
@@ -140,7 +144,8 @@ func TestAdminMutationAuditSuccessfulCommitPath(t *testing.T) {
 func TestAdminMutationAuditReplayCommitsWithoutDuplicateAudit(t *testing.T) {
 	tx := &fakeTx{}
 	repo := NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{tx: tx})
-	entry := AdminAuditEntry{AdminUserID: uuid.New(), Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}
+	adminID := uuid.New()
+	entry := AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}
 	if err := repo.WithMutationAudit(context.Background(), entry, func(AdminMutationExecutor) (AdminAuditChanges, error) {
 		return AdminAuditChanges{Replayed: true}, nil
 	}); err != nil || tx.rowN != 0 {
