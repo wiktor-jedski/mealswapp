@@ -19,7 +19,8 @@ import {
 	refreshAuthSession,
 	refreshAuthStateAfterOAuthReturn,
 	refreshEntitlementAfterAuth,
-	registerWithEmail
+	registerWithEmail,
+	updateProfileSession
 } from "./auth-client";
 
 // Implements DESIGN-018 AuthApiClient frontend wrapper verification.
@@ -253,6 +254,27 @@ test("logout, refresh, profile, and entitlement wrappers use generated endpoints
 	for (const call of fetchMock.calls) {
 		expect(call.init.credentials).toBe("include");
 	}
+});
+
+// Implements DESIGN-008 PreferenceManager generated profile update verification.
+test("profile updates use PUT with CSRF and return the confirmed authoritative preference", async () => {
+	globalThis.fetch = fetchMock.fetch as typeof fetch;
+	fetchMock.enqueueResponse(
+		jsonResponse(200, {
+			...profileEnvelope(),
+			data: { ...profileEnvelope().data, unitSystem: "imperial" }
+		})
+	);
+
+	const profile = await updateProfileSession(
+		{ displayName: "User One", unitSystem: "imperial", themePreference: "system" },
+		{ csrfToken: "csrf-token" }
+	);
+
+	expect(profile.unitSystem).toBe("imperial");
+	expect(fetchMock.calls[0]?.url).toBe("/api/v1/profile");
+	expect(fetchMock.calls[0]?.init.method).toBe("PUT");
+	expect((fetchMock.calls[0]?.init.headers as Record<string, string>)["X-CSRF-Token"]).toBe("csrf-token");
 });
 
 test("getOAuthStartUrl returns generated provider start URLs without provider secrets", () => {

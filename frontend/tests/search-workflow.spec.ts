@@ -178,7 +178,24 @@ function entitlementEnvelope(overrides: Partial<EntitlementStatusEnvelope["data"
 }
 
 async function stubEntitlement(page: Page, envelope: EntitlementStatusEnvelope): Promise<void> {
-  await page.route(/\/api\/v1\/profile$/, (route) => fulfillJson(route, 200, profileEnvelope));
+  await page.route(/\/api\/v1\/profile$/, async (route) => {
+    if (route.request().method() === "PUT") {
+      const request = (await route.request().postDataJSON()) as { unitSystem: "metric" | "imperial" };
+      await fulfillJson(route, 200, {
+        ...profileEnvelope,
+        data: { ...profileEnvelope.data, unitSystem: request.unitSystem }
+      } satisfies ProfileEnvelope);
+      return;
+    }
+    await fulfillJson(route, 200, profileEnvelope);
+  });
+  await page.route(/\/api\/v1\/auth\/csrf-token$/, (route) =>
+    fulfillJson(route, 200, {
+      status: "ok",
+      requestId: "csrf-workflow-0001",
+      data: { csrfToken: "csrf-token" }
+    })
+  );
   await page.route(/\/api\/v1\/auth\/refresh$/, (route) => fulfillJson(route, 200, authSessionEnvelope));
   await page.route(/\/api\/v1\/search-history$/, (route) =>
     fulfillJson(route, 200, { status: "ok", requestId: "history-empty-workflow-0001", data: { history: [] } })

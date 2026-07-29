@@ -10,8 +10,8 @@
 - `AutocompleteDropdown`: owns ranked suggestion display, keyboard focus movement, selection, and dismissal rules.
 - `ThemeProvider`: owns resolved theme state and delegates token application to ARCH-016.
 - `OfflineBanner`: owns online/offline and stale-data indicators.
-- `SettingsPanel`: owns unit preference and theme preference controls.
-- `LocalStorageManager`: owns client persistence for settings, recent searches, and query metadata.
+- `SettingsPanel`: owns unit preference and theme preference controls. The server profile is authoritative for an authenticated user's unit preference; the control updates only after a confirmed profile response and exposes recoverable load/save failures.
+- `LocalStorageManager`: owns client persistence for anonymous-device settings, recent searches, and query metadata. It never stores an authenticated account's unit preference.
 - `ServiceWorker`: owns offline asset/API interception and delegates cache policy to ARCH-011.
 - Authenticated browser-session creation is delegated to DESIGN-018. `SearchView` and `SidebarComponent` consume its frontend-safe session projection only for display, anonymous fallbacks, and protected-action routing.
 
@@ -28,7 +28,7 @@
 - `interface CachedQuery { key: string; request: SearchRequest; response: SearchResponse; storedAt: string; staleAt: string }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
-1. On app startup, load `AppSettings` from `LocalStorageManager`; default to `mode = "catalog"` with metric units unless a saved preference exists.
+1. On app startup, load the anonymous-device `AppSettings` from `LocalStorageManager`; default to `mode = "catalog"` with metric units unless an anonymous preference exists.
 2. Register the service worker and subscribe to `online` and `offline` browser events.
 3. Initialize Svelte stores for search state, settings, offline status, DESIGN-018 auth session projection, and current user entitlement.
 4. When the search input changes, trim the value, update state immediately, and start a 150ms debounce timer.
@@ -36,7 +36,7 @@
 6. If online, execute the request through TanStack Query against ARCH-010; use query keys derived from mode, query, filters, page, and Substitution Input IDs and quantities.
 7. Render `AutocompleteDropdown` for active text input; keyboard navigation changes `selectedIndex` and Enter selects the highlighted option.
 8. Render `ResultsGrid` with stable card dimensions, image fallback handling, similarity badges, pagination controls, and empty-state text.
-9. Persist theme and unit preference changes to localStorage, then update CSS variables through ARCH-016.
+9. Persist anonymous unit preference changes to localStorage immediately. After authentication, cancel stale account requests, load the current account's authoritative profile preference, and update authenticated unit changes only after the profile API confirms them. Signing out restores the anonymous-device preference. Keep metric/imperial rendering and input conversion in the frontend and include the displayed unit in each quantity-bearing request.
 10. Route authenticated-only actions, including saved-data and checkout entry points, through DESIGN-018 `AuthenticatedActionGuard` before calling protected APIs.
 11. Surface network, timeout, entitlement, auth, and validation failures through ARCH-017 instead of local ad hoc messages.
 12. Push canonical URLs for top-level navigation and Search-mode changes, restore state on `popstate` and refresh, and replace consumed billing-return URLs with `/subscription`.
@@ -54,6 +54,9 @@
 - `session_expired`: DESIGN-018 reports expired cookies; clear authenticated-only UI state and request sign-in before protected actions.
 - `timeout`: request exceeds 10 seconds; show retry action and keep previous state.
 - `storage_unavailable`: localStorage or Cache API fails; continue online-only and log a client warning.
+- `preference_loading`: disable the unit control while the current account profile is loading; a later account transition cancels and invalidates the request.
+- `preference_saving`: keep the confirmed unit visible and disable duplicate changes until the profile API confirms the update.
+- `preference_error`: keep the prior confirmed value (or metric while an account is first loading), announce a safe error, and expose a retry action.
 
 ### 4. Component Interfaces
 - `function buildSearchRequest(state: SearchState): SearchRequest`

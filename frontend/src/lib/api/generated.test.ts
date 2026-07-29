@@ -34,6 +34,7 @@ import {
 	buildOptimizationJobUrl,
 	buildOptimizationSubmissionRequestInit,
 	buildProfileRequestInit,
+	buildProfileUpdateRequestInit,
 	buildRefreshSessionRequestInit,
 	buildRegisterRequestInit,
 	type BillingErrorEnvelope,
@@ -167,6 +168,10 @@ test("generated auth helpers build credentialed request init objects", () => {
 	const logoutInit = buildLogoutRequestInit({ csrfToken: "csrf-token" });
 	const refreshInit = buildRefreshSessionRequestInit();
 	const profileInit = buildProfileRequestInit();
+	const profileUpdateInit = buildProfileUpdateRequestInit(
+		{ unitSystem: "imperial", themePreference: "system" },
+		"csrf-token"
+	);
 	const disclaimerInit = buildDisclaimerRequestInit();
 
 	expect(csrfInit.method).toBe("GET");
@@ -192,6 +197,13 @@ test("generated auth helpers build credentialed request init objects", () => {
 	expect(refreshInit.credentials).toBe("include");
 	expect(profileInit.method).toBe("GET");
 	expect(profileInit.credentials).toBe("include");
+	expect(profileUpdateInit.method).toBe("PUT");
+	expect(profileUpdateInit.credentials).toBe("include");
+	expect(profileUpdateInit.headers["X-CSRF-Token"]).toBe("csrf-token");
+	expect(JSON.parse(profileUpdateInit.body)).toEqual({
+		unitSystem: "imperial",
+		themePreference: "system"
+	});
 	expect(disclaimerInit.headers.Accept).toBe("application/json");
 });
 
