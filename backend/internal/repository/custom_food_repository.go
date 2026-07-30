@@ -107,6 +107,9 @@ type PostgresCustomFoodItemRepository struct {
 // Implements DESIGN-005 FoodItemEntity compile-time custom repository contract.
 var _ CustomFoodItemRepository = (*PostgresCustomFoodItemRepository)(nil)
 
+// Implements DESIGN-008 AccountDeleter maintenance repository contract.
+var _ CustomFoodItemMaintenanceRepository = (*PostgresCustomFoodItemRepository)(nil)
+
 // NewPostgresCustomFoodItemRepository creates a PostgreSQL-backed private food-item repository.
 // Implements DESIGN-005 FoodItemEntity owner-scoped custom-item persistence.
 func NewPostgresCustomFoodItemRepository(db transactionalExecutor) *PostgresCustomFoodItemRepository {

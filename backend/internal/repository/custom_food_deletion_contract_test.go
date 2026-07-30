@@ -19,8 +19,14 @@ func TestCustomFoodDeletionSQLContracts(t *testing.T) {
 	if !strings.Contains(strings.ToUpper(customFoodDeleteLockSQL), "FOR UPDATE") {
 		t.Fatal("deletion must lock the private item row")
 	}
+	if !strings.Contains(customFoodDeleteLockSQL, "deletion_requested_at IS NULL") {
+		t.Fatal("account erasure must take precedence over item deletion")
+	}
 	if !strings.Contains(customFoodDeleteReferencesSQL, "custom_food_item_id=$1") || !strings.Contains(customFoodDeleteReferencesSQL, "d.user_id=$2") {
 		t.Fatal("deletion references must be owner-scoped to the item")
+	}
+	if !strings.Contains(strings.ToUpper(customFoodDeleteReferencesSQL), "SELECT DISTINCT") {
+		t.Fatal("deletion conflict summaries must be distinct diets")
 	}
 	if !strings.Contains(customFoodDeleteRetryMarkersSQL, "response_body->>'id' = $2::text") {
 		t.Fatal("retry markers must be limited to the deleted item")
