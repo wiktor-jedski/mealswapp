@@ -389,7 +389,7 @@
 			{#if classificationRefreshRequired}
 				<div class="grid gap-2 rounded border border-[var(--color-border)] p-3" data-admin-classification-recovery>
 					{#if savedClassification}<p class="text-sm">Confirmed classification: <strong>{savedClassification.name}</strong> <span class="break-all font-data">({savedClassification.id})</span></p>{/if}
-					<button type="button" class="w-fit rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void refreshClassifications()} disabled={classificationReadBusy}>Retry list refresh</button>
+					<button type="button" class="w-fit rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void refreshClassifications()}>Retry list refresh</button>
 				</div>
 			{/if}
 			<div class="grid gap-4 md:grid-cols-2" data-admin-classification-grid>
