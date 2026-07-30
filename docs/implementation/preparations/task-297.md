@@ -28,6 +28,8 @@
 | Command | Result |
 |---|---|
 | `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bunx playwright test tests/daily-diet-workflow.spec.ts` | PASS: `20` desktop/mobile tests. Includes empty-state resolution, retry recovery, and two-owner custom-food isolation. |
+| `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun test src/lib/components/DailyDietCollection.test.ts` | PASS: `12` component contract tests, including explicit custom-food loading, empty, error, and retry rendering states. |
+| `cd frontend && MEALSWAPP_PLAYWRIGHT_WORKERS=1 ... bunx playwright test tests/daily-diet-workflow.spec.ts --grep "custom-food API"` | PASS: `4` tests across Desktop Chrome and Pixel 5 mobile; actual `/api/v1/custom-items` empty and retryable error/success responses are exercised. |
 | `python3 scripts/generate-api-types.py --check` | PASS: generated API types are current. |
 | `python3 scripts/validate-traceability.py` | PASS. |
 | `python3 scripts/validate-task-list.py` | PASS: 302 sequential tasks; Task 297 row unchanged. |
