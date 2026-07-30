@@ -394,27 +394,28 @@ test("overlapping canceled classification reads accept the newest projection and
 	const mutationsBeforeDelayedRefresh = state.classificationMutations;
 	state.classificationReadPlans = {
 		food_category: [
-			{ delay: 250, values: state.categories.map((value) => ({ ...value })) },
-			{ delay: 0, values: state.categories }
+			{ delay: 250, values: state.categories.map((value) => ({ ...value })) }
 		],
 		culinary_role: [
-			{ delay: 250, values: state.roles.map((value) => ({ ...value })) },
-			{ delay: 0, values: state.roles.map((value) => ({ ...value })) }
+			{ delay: 250, values: state.roles.map((value) => ({ ...value })) }
 		]
 	};
 	await page.getByLabel("Name", { exact: true }).last().fill("Late projection");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 	await page.locator('form[aria-label="Classification form"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
 	expect(state.classificationMutations).toBe(mutationsBeforeDelayedRefresh + 1);
-	await page.waitForTimeout(35);
-	await page.reload();
-	await expect(page.locator("[data-admin-data-management]")).toBeVisible();
-	await expect(page.getByRole("treeitem").filter({ hasText: "Late projection" })).toBeVisible();
+	await expect(page.getByText("Saved, but the list could not be refreshed")).toBeVisible();
+	await expect(page.locator("[data-admin-classification-recovery]")).toContainText("Late projection");
+	await expect(page.locator("[data-admin-classification-recovery]")).toContainText("00000000-0000-4000-8000-000000000107");
+	await expect(page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem")).toHaveText([/Food/, /Produce/]);
+	await page.locator('form[aria-label="Classification form"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
+	expect(state.classificationMutations).toBe(mutationsBeforeDelayedRefresh + 1);
+	const readsBeforeRetry = state.classificationReads;
+	await page.getByRole("button", { name: "Retry list refresh" }).click();
+	await expect(page.getByText("Classification saved and refreshed.")).toBeVisible();
 	await expect(page.locator(`[data-classification-id="00000000-0000-4000-8000-000000000107"]`)).toBeVisible();
-	await expect(page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem")).toContainText(["Food", "Produce", "Late projection"]);
-	await page.waitForTimeout(300);
-	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toBeVisible();
 	await expect(page.getByRole("treeitem").filter({ hasText: "Late projection" })).toBeVisible();
+	expect(state.classificationReads).toBe(readsBeforeRetry + 2);
 	expect(state.classificationMutations).toBe(mutationsBeforeDelayedRefresh + 1);
 });
 
