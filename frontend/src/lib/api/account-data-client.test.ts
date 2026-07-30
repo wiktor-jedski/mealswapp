@@ -43,10 +43,11 @@ test("rejects ownership leakage, malformed identifiers, oversized exports, and n
 		globalThis.fetch = mock(async () => new Response(JSON.stringify(leaking), { status: 200 })) as typeof fetch;
 		await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
 	}
-	for (const key of ["", "x".repeat(121)]) {
+	for (const [key, valid] of [["", false], ["x".repeat(121), false], ["😀".repeat(120), true], ["😀".repeat(121), false]] as const) {
 		const invalidMicronutrientKey = { ...exportBundle, customItems: [{ ...exportBundle.customItems[0], micros: { [key]: 4 } }] };
 		globalThis.fetch = mock(async () => new Response(JSON.stringify(invalidMicronutrientKey), { status: 200 })) as typeof fetch;
-		await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
+		if (valid) await expect(loadAccountExport()).resolves.toEqual(invalidMicronutrientKey);
+		else await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
 	}
 	globalThis.fetch = mock(async () => new Response(JSON.stringify({ ...exportBundle, savedDiets: undefined }), { status: 200 })) as typeof fetch;
 	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
