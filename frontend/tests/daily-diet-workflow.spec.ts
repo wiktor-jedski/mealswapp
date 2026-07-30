@@ -150,7 +150,8 @@ function customItem(id: typeof CUSTOM_A_ID | typeof CUSTOM_B_ID): CustomItem {
 async function stubAuthenticatedDailyDiet(
   page: Page,
   tier: "free" | "paid" = "paid",
-  listBehavior?: (route: Route) => Promise<void>
+  listBehavior?: (route: Route) => Promise<void>,
+  visibleCustomItems: CustomItem[] = [customItem(CUSTOM_A_ID), customItem(CUSTOM_B_ID)]
 ): Promise<{
   createBodies: () => Array<Record<string, unknown>>;
   replaceBodies: () => Array<Record<string, unknown>>;
@@ -173,7 +174,7 @@ async function stubAuthenticatedDailyDiet(
   await page.route(/\/api\/v1\/custom-items$/, (route) => fulfillJson(route, 200, {
     status: "ok",
     requestId: "daily-diet-custom-items",
-    data: { items: [customItem(CUSTOM_A_ID), customItem(CUSTOM_B_ID)] }
+    data: { items: visibleCustomItems }
   } satisfies CustomItemCollectionEnvelope));
   await page.route(new RegExp(`/api/v1/custom-items/(${CUSTOM_A_ID}|${CUSTOM_B_ID})$`), (route) => {
     const id = route.request().url().endsWith(CUSTOM_A_ID) ? CUSTOM_A_ID : CUSTOM_B_ID;
@@ -322,6 +323,28 @@ test("owner custom foods are disambiguated, saved, and rehydrated", async ({ pag
   await page.getByLabel("Search saved Daily Diets").fill("private");
   await page.getByLabel("Search saved Daily Diets").press("Enter");
   await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
+});
+
+test("custom-food selection is isolated between authenticated owners", async ({ browser }) => {
+  const ownerAContext = await browser.newContext();
+  const ownerBContext = await browser.newContext();
+  const ownerAPage = await ownerAContext.newPage();
+  const ownerBPage = await ownerBContext.newPage();
+  try {
+    await stubAuthenticatedDailyDiet(ownerAPage, "paid", undefined, [customItem(CUSTOM_A_ID)]);
+    await stubAuthenticatedDailyDiet(ownerBPage, "paid", undefined, [customItem(CUSTOM_B_ID)]);
+    await Promise.all([ownerAPage.goto("/?mode=daily_diet"), ownerBPage.goto("/?mode=daily_diet")]);
+    const ownerAPicker = ownerAPage.getByLabel("Add one of your custom foods");
+    const ownerBPicker = ownerBPage.getByLabel("Add one of your custom foods");
+    await expect(ownerAPicker.locator("option")).toHaveCount(2);
+    await expect(ownerBPicker.locator("option")).toHaveCount(2);
+    await expect(ownerAPicker.locator(`option[value="${CUSTOM_A_ID}"]`)).toHaveCount(1);
+    await expect(ownerAPicker.locator(`option[value="${CUSTOM_B_ID}"]`)).toHaveCount(0);
+    await expect(ownerBPicker.locator(`option[value="${CUSTOM_B_ID}"]`)).toHaveCount(1);
+    await expect(ownerBPicker.locator(`option[value="${CUSTOM_A_ID}"]`)).toHaveCount(0);
+  } finally {
+    await Promise.all([ownerAContext.close(), ownerBContext.close()]);
+  }
 });
 
 test("logout clears the authenticated user's unsaved Daily Diet draft", async ({ page }) => {

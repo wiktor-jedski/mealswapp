@@ -300,6 +300,7 @@ PHASE08_FRONTEND_SOURCES = {
 	"src/lib/admin-workflows.ts",
 	"src/lib/api/account-data-client.ts",
 	"src/lib/api/admin-client.ts",
+	"src/lib/api/custom-item-client.ts",
 	"src/lib/api/external-admin-client.ts",
 	"src/lib/api/filter-options-client.ts",
 	"src/lib/api/generated.ts",
