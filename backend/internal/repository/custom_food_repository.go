@@ -78,6 +78,11 @@ var customFoodDeleteRetryMarkersSQL string
 //go:embed sql/custom_food_create_marker_check.sql
 var customFoodCreateMarkerCheckSQL string
 
+// Implements DESIGN-008 AccountDeleter create/delete owner lock query.
+//
+//go:embed sql/custom_food_create_owner_lock.sql
+var customFoodCreateOwnerLockSQL string
+
 // Implements DESIGN-008 AccountDeleter expired retry-marker purge query.
 //
 //go:embed sql/custom_food_purge_markers.sql
@@ -178,11 +183,18 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 	}
 	var result CustomFoodItemCreateClaimResult
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
-		var marker int
-		if err := db.QueryRow(ctx, customFoodCreateMarkerCheckSQL, claim.UserID, claim.Key).Scan(&marker); err == nil {
-			return NewError(ErrorKindConflict, "custom food create retry is no longer valid", nil)
-		} else if !errors.Is(err, pgx.ErrNoRows) {
-			return mapPostgresError(err, "check custom food create retry marker")
+		if err := rejectDeletedCustomFoodCreateRetry(ctx, db, claim.UserID, claim.Key); err != nil {
+			return err
+		}
+		var ownerID uuid.UUID
+		if err := db.QueryRow(ctx, customFoodCreateOwnerLockSQL, claim.UserID).Scan(&ownerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return NewError(ErrorKindNotFound, "account is unavailable", nil)
+			}
+			return mapPostgresError(err, "lock custom food create owner")
+		}
+		if err := rejectDeletedCustomFoodCreateRetry(ctx, db, claim.UserID, claim.Key); err != nil {
+			return err
 		}
 		_, claimErr := scanCustomFoodCreateClaim(db.QueryRow(ctx, customFoodCreateClaimSQL, claim.UserID, claim.Key, claim.BodyHash))
 		if claimErr == nil {
@@ -222,6 +234,18 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 		return nil
 	})
 	return result, err
+}
+
+// rejectDeletedCustomFoodCreateRetry checks the payload-free tombstone before and after owner locking.
+// Implements DESIGN-008 AccountDeleter create/delete serialization.
+func rejectDeletedCustomFoodCreateRetry(ctx context.Context, db transactionalExecutor, userID uuid.UUID, key string) error {
+	var marker int
+	if err := db.QueryRow(ctx, customFoodCreateMarkerCheckSQL, userID, key).Scan(&marker); err == nil {
+		return NewError(ErrorKindConflict, "custom food create retry is no longer valid", nil)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return mapPostgresError(err, "check custom food create retry marker")
+	}
+	return nil
 }
 
 // Create validates and persists a private food item for its mandatory owner.

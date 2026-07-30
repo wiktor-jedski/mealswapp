@@ -23,19 +23,24 @@ func RunDeletedCustomFoodCreateKeyPurger(ctx context.Context, repo repository.Cu
 	if interval <= 0 {
 		return repository.NewError(repository.ErrorKindValidation, "maintenance interval must be positive", nil)
 	}
-	if err := PurgeDeletedCustomFoodCreateKeys(ctx, repo); err != nil {
-		return err
+	backoff := interval
+	if backoff > time.Second {
+		backoff = time.Second
 	}
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 	for {
+		err := PurgeDeletedCustomFoodCreateKeys(ctx, repo)
+		wait := interval
+		if err != nil {
+			wait = backoff
+		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			if err := PurgeDeletedCustomFoodCreateKeys(ctx, repo); err != nil {
-				return err
+			if !timer.Stop() {
+				<-timer.C
 			}
+			return nil
+		case <-timer.C:
 		}
 	}
 }
