@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS deleted_custom_food_create_keys (
     PRIMARY KEY (user_id, key)
 );
 -- Legacy soft-deleted private items are no longer recoverable after this migration.
-DELETE FROM custom_food_items WHERE deleted_at IS NOT NULL;
+DELETE FROM custom_food_items i
+WHERE i.deleted_at IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM saved_diet_meal_entries e WHERE e.custom_food_item_id = i.id);
 CREATE INDEX IF NOT EXISTS deleted_custom_food_create_keys_expiry_idx
     ON deleted_custom_food_create_keys (expires_at);
 INSERT INTO schema_migrations (version) VALUES (31) ON CONFLICT (version) DO NOTHING;
