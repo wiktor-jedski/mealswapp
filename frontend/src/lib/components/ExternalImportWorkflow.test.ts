@@ -32,6 +32,7 @@ test("provides editable drafts, normalization warnings, density, and classificat
 	expect(source).toContain("foodCategoryIds");
 	expect(source).toContain("culinaryRoleIds");
 	expect(source).toContain("densitySourceKind");
+	expect(source).toContain("External provider supplied");
 	expect(source).toContain("updateDensity");
 	expect(source).toContain("updatePhysicalState");
 	expect(source).toContain("Density provenance");

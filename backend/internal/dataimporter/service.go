@@ -62,7 +62,7 @@ type Store interface {
 // EvidenceResolver resolves opaque search-result references to canonical server records.
 // Implements DESIGN-012 DataNormalizer trusted external provenance.
 type EvidenceResolver interface {
-	Resolve(string) (providerregistry.Identity, error)
+	ResolveContext(context.Context, string) (providerregistry.Identity, error)
 }
 
 // Service validates editable drafts and coordinates durable confirmation.
@@ -104,7 +104,7 @@ func (s *Service) Confirm(ctx context.Context, tx repository.AdminMutationExecut
 	if err != nil {
 		return Result{}, err
 	}
-	identity, err := s.resolveRecord(req)
+	identity, err := s.resolveRecord(ctx, req)
 	if err != nil {
 		return Result{}, err
 	}
@@ -146,13 +146,13 @@ func (s *Service) Confirm(ctx context.Context, tx repository.AdminMutationExecut
 
 // resolveRecord accepts trusted internal records or resolves an opaque client selection.
 // Implements DESIGN-012 DataNormalizer exact selected-record identity.
-func (s *Service) resolveRecord(req Request) (providerregistry.Identity, error) {
+func (s *Service) resolveRecord(ctx context.Context, req Request) (providerregistry.Identity, error) {
 	identity := req.SelectedRecord
 	if req.ExternalRecordToken != "" {
 		if s == nil || s.evidence == nil {
 			return providerregistry.Identity{}, ErrExternalRecordEvidence
 		}
-		resolved, err := s.evidence.Resolve(req.ExternalRecordToken)
+		resolved, err := s.evidence.ResolveContext(ctx, req.ExternalRecordToken)
 		if err != nil || identity.Provider != "" && identity != resolved {
 			return providerregistry.Identity{}, ErrExternalRecordEvidence
 		}

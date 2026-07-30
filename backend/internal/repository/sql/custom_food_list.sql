@@ -6,4 +6,4 @@ SELECT id, name, physical_state, prep_time_minutes, average_unit_weight_grams,
        deleted_at, created_at, updated_at
 FROM custom_food_items
 WHERE owner_id = $1 AND ($2::boolean OR deleted_at IS NULL)
-ORDER BY created_at, id;
+ORDER BY normalized_name, id;

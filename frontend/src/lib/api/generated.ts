@@ -368,7 +368,10 @@ export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
 /** Distinguishes Food Items from Meals in Daily Diet entries. */
-export type FoodObjectType = "food_item" | "meal";
+export type FoodObjectType = "food_item" | "meal" | "custom_food_item";
+
+/** Distinguishes global Food Items from Meals at public search boundaries. */
+export type GlobalFoodObjectType = Exclude<FoodObjectType, "custom_food_item">;
 
 /** One ordered Food Object quantity supplied to a saved Daily Diet. */
 export interface FoodObjectQuantity {
@@ -798,6 +801,17 @@ export function buildCustomItemUrl(itemId: string): string {
 	return `${CUSTOM_ITEMS_ENDPOINT}/${encodeURIComponent(itemId)}`;
 }
 
+export interface CustomItemListRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" };
+}
+
+/** Builds an owner-scoped active private-item list request. */
+export function buildCustomItemListRequestInit(options: { signal?: AbortSignal } = {}): CustomItemListRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: "application/json" }, signal: options.signal };
+}
+
 export interface CustomItemMutationRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
 	method: "POST" | "PUT";
 	credentials: "include";
@@ -1151,7 +1165,7 @@ export type SubstitutionUnit = CanonicalQuantityUnit;
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 	foodObjectId: string;
-	foodObjectType?: FoodObjectType;
+	foodObjectType?: GlobalFoodObjectType;
 	quantity: number;
 	unit: SubstitutionUnit;
 }
@@ -1203,6 +1217,9 @@ export interface CustomItem extends CustomItemRequest {
 
 /** Successful custom-item response envelope. */
 export type CustomItemEnvelope = OkEnvelope<CustomItem>;
+
+/** Successful active owner-scoped custom-item collection response. */
+export type CustomItemCollectionEnvelope = OkEnvelope<{ items: CustomItem[] }>;
 
 // Implements DESIGN-009 AdminController retry metadata contract.
 /** Positive whole seconds from a Retry-After response header. */
@@ -1383,7 +1400,7 @@ export interface SourceSummary {
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
 	id: string;
-	objectType: FoodObjectType;
+	objectType: GlobalFoodObjectType;
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
@@ -1458,7 +1475,7 @@ export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRej
 /** Ranked autocomplete suggestion. */
 export interface RankedAutocomplete {
 	itemId: string;
-	objectType: FoodObjectType;
+	objectType: GlobalFoodObjectType;
 	label: string;
 	exactMatch: boolean;
 	levenshteinDistance: number;

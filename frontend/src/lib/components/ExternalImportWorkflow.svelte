@@ -246,7 +246,7 @@
     draft = { ...draft, densityGramsPerMilliliter: normalizedDensity, ...normalizedDensity && normalizedDensity > 0 && !draft.densitySourceKind ? { densitySourceKind: "manual" as const } : {} };
   }
 
-  function updateDensitySourceKind(kind: "manual" | "estimated"): void {
+  function updateDensitySourceKind(kind: "imported" | "manual" | "estimated"): void {
     if (!draft) return;
     draft = { ...draft, densitySourceKind: kind };
   }
@@ -435,7 +435,7 @@
         <label class="grid gap-1 text-sm font-medium">Image URL<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="url" bind:value={draft.imageUrl} /></label>
         {#if draft.physicalState === "liquid"}
           <label class="grid gap-1 text-sm font-medium">Density (g/ml)<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0.001" step="any" value={draft.densityGramsPerMilliliter ?? ""} oninput={(event) => updateDensity(event.currentTarget.valueAsNumber)} required /></label>
-          <label class="grid gap-1 text-sm font-medium">Density provenance<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value={draft.densitySourceKind ?? ""} onchange={(event) => updateDensitySourceKind(event.currentTarget.value as "manual" | "estimated")} required><option value="" disabled>Select provenance</option><option value="manual">Administrator supplied</option><option value="estimated">Administrator estimate</option></select></label>
+          <label class="grid gap-1 text-sm font-medium">Density provenance<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value={draft.densitySourceKind ?? ""} onchange={(event) => updateDensitySourceKind(event.currentTarget.value as "imported" | "manual" | "estimated")} required><option value="" disabled>Select provenance</option>{#if draft.densitySourceKind === "imported"}<option value="imported">External provider supplied</option>{/if}<option value="manual">Administrator supplied</option><option value="estimated">Administrator estimate</option></select></label>
           {#if hasValidLiquidDensity(draft)}<p class="text-sm text-[var(--color-muted)]" data-density-curation-state>Liquid density and provenance supplied.</p>{/if}
         {/if}
       </div>

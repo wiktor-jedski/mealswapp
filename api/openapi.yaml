@@ -626,6 +626,23 @@ paths:
           $ref: "#/components/responses/Error"
   # Implements DESIGN-008 ProfileController authenticated custom-item contract.
   /api/v1/custom-items:
+    get:
+      operationId: getApiV1CustomItems
+      summary: List the authenticated user's active private custom food items
+      description: Returns only active private items owned by the authenticated session identity, in deterministic name and id order.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/CustomItemCollection"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
     post:
       operationId: postApiV1CustomItem
       summary: Create an authenticated user's private custom food item
@@ -1035,7 +1052,7 @@ paths:
     post:
       operationId: postApiV1AdminImport
       summary: Confirm an edited external candidate for local import
-      description: Provider identity supplies natural idempotency. Idempotency-Key is required only when sourceProvider and externalId are absent. Raw provider payloads and audit snapshots are never accepted or returned.
+      description: Server-issued external-record evidence supplies natural idempotency. Idempotency-Key is required only for manual administrator imports without external evidence. Raw provider payloads and audit snapshots are never accepted or returned.
       security:
         - cookieAuth: []
           csrfHeader: []
@@ -1436,7 +1453,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Stable administrator-generated retry key. Required for curated imports without sourceProvider and externalId; otherwise provider identity is the natural idempotency key.
+      description: Stable administrator-generated retry key. Required for manual curated imports without external evidence; otherwise the selected server record supplies the natural idempotency key.
       schema:
         type: string
         minLength: 8
@@ -1600,6 +1617,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/CustomItemEnvelope"
+    CustomItemCollection:
+      description: Deterministic active custom-item list for the authenticated owner.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CustomItemCollectionEnvelope"
     AdminItem:
       description: Ownerless global food item. Private ownership and audit state are structurally absent.
       content:
@@ -2585,6 +2608,9 @@ components:
       description: Explicit mass or volume unit. The server rejects cross-basis units and normalizes supported imperial input exactly once before calculation.
     FoodObjectType:
       type: string
+      enum: [food_item, meal, custom_food_item]
+    GlobalFoodObjectType:
+      type: string
       enum: [food_item, meal]
     FoodObjectQuantity:
       type: object
@@ -2871,6 +2897,25 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/CustomItem"
+    CustomItemCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          additionalProperties: false
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CustomItem"
     # Implements DESIGN-004 JobStatusTracker optimization contract.
     OptimizationStatus:
       type: string
@@ -3194,7 +3239,7 @@ components:
           type: string
           format: uuid
         foodObjectType:
-          $ref: "#/components/schemas/FoodObjectType"
+          $ref: "#/components/schemas/GlobalFoodObjectType"
         quantity:
           type: number
           exclusiveMinimum: 0
@@ -3288,7 +3333,7 @@ components:
           type: string
           format: uuid
         objectType:
-          $ref: "#/components/schemas/FoodObjectType"
+          $ref: "#/components/schemas/GlobalFoodObjectType"
         name:
           type: string
         physicalState:
@@ -3442,7 +3487,7 @@ components:
           type: string
           format: uuid
         objectType:
-          $ref: "#/components/schemas/FoodObjectType"
+          $ref: "#/components/schemas/GlobalFoodObjectType"
         label:
           type: string
         exactMatch:

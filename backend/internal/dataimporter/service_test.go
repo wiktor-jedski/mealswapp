@@ -36,7 +36,7 @@ type evidenceResolverStub struct {
 	err      error
 }
 
-func (s evidenceResolverStub) Resolve(string) (providerregistry.Identity, error) {
+func (s evidenceResolverStub) ResolveContext(context.Context, string) (providerregistry.Identity, error) {
 	return s.identity, s.err
 }
 

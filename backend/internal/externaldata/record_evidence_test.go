@@ -1,11 +1,29 @@
 package externaldata
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 )
+
+type evidenceBackendStub struct {
+	provider, externalID, token string
+	expiresAt                   time.Time
+}
+
+func (b *evidenceBackendStub) StoreRecordEvidence(_ context.Context, token, provider, externalID string, expiresAt time.Time) error {
+	b.token, b.provider, b.externalID, b.expiresAt = token, provider, externalID, expiresAt
+	return nil
+}
+
+func (b *evidenceBackendStub) ResolveRecordEvidence(_ context.Context, token string, now time.Time) (string, string, error) {
+	if token != b.token || !b.expiresAt.After(now) {
+		return "", "", ErrRecordEvidenceInvalid
+	}
+	return b.provider, b.externalID, nil
+}
 
 // Implements DESIGN-012 DataNormalizer trusted external provenance verification.
 func TestRecordEvidenceStoreResolvesExactCanonicalIdentityAndRejectsInvalidEvidence(t *testing.T) {
@@ -28,5 +46,20 @@ func TestRecordEvidenceStoreResolvesExactCanonicalIdentityAndRejectsInvalidEvide
 	now = now.Add(RecordEvidenceTTL)
 	if _, err := store.Resolve(token); err == nil {
 		t.Fatal("expired evidence accepted")
+	}
+}
+
+// Implements DESIGN-012 DataNormalizer deployment-shared evidence verification.
+func TestRecordEvidenceStoreDelegatesToSharedBackend(t *testing.T) {
+	backend := &evidenceBackendStub{}
+	store := NewRecordEvidenceStore(providerregistry.Default(), backend)
+	store.now = func() time.Time { return time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC) }
+	token, err := store.RegisterContext(context.Background(), "usda", "00171265")
+	if err != nil || token != backend.token || backend.provider != "usda" || backend.externalID != "171265" {
+		t.Fatalf("shared registration token=%q backend=%+v err=%v", token, backend, err)
+	}
+	identity, err := store.ResolveContext(context.Background(), token)
+	if err != nil || identity != (providerregistry.Identity{Provider: "usda", ExternalID: "171265"}) {
+		t.Fatalf("shared resolution identity=%+v err=%v", identity, err)
 	}
 }

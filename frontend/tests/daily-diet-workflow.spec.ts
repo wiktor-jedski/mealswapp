@@ -4,6 +4,8 @@ import type {
   AuthSessionEnvelope,
   AutocompleteEnvelope,
   CSRFTokenEnvelope,
+  CustomItem,
+  CustomItemCollectionEnvelope,
   DailyDiet,
   DailyDietCollectionEnvelope,
   DailyDietEnvelope,
@@ -19,6 +21,8 @@ import type {
 const DIET_ID = "00000000-0000-0000-0000-000000000031";
 const APPLE_ID = "00000000-0000-0000-0000-000000000032";
 const OATS_ID = "00000000-0000-0000-0000-000000000033";
+const CUSTOM_A_ID = "00000000-0000-4000-8000-000000000041";
+const CUSTOM_B_ID = "00000000-0000-4000-8000-000000000042";
 const ENTRY_IDS = ["00000000-0000-0000-0000-000000000034", "00000000-0000-0000-0000-000000000035"] as const;
 
 function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
@@ -128,6 +132,21 @@ function searchEnvelope(): SearchResponseEnvelope {
   };
 }
 
+function customItem(id: typeof CUSTOM_A_ID | typeof CUSTOM_B_ID): CustomItem {
+  return {
+    id,
+    name: "Family shake",
+    physicalState: "liquid",
+    prepTimeMinutes: 0,
+    densityGramsPerMilliliter: 1,
+    densitySourceKind: "manual",
+    macrosPer100: { protein: 2, carbohydrates: 3, fat: 4 },
+    micros: {},
+    foodCategories: [],
+    culinaryRoles: []
+  };
+}
+
 async function stubAuthenticatedDailyDiet(
   page: Page,
   tier: "free" | "paid" = "paid",
@@ -151,6 +170,15 @@ async function stubAuthenticatedDailyDiet(
   await page.route(new RegExp(`/api/v1/food-objects/${APPLE_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(APPLE_ID)));
   await page.route(new RegExp(`/api/v1/food-objects/${OATS_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(OATS_ID)));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
+  await page.route(/\/api\/v1\/custom-items$/, (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "daily-diet-custom-items",
+    data: { items: [customItem(CUSTOM_A_ID), customItem(CUSTOM_B_ID)] }
+  } satisfies CustomItemCollectionEnvelope));
+  await page.route(new RegExp(`/api/v1/custom-items/(${CUSTOM_A_ID}|${CUSTOM_B_ID})$`), (route) => {
+    const id = route.request().url().endsWith(CUSTOM_A_ID) ? CUSTOM_A_ID : CUSTOM_B_ID;
+    return fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-custom-item", data: customItem(id) });
+  });
   await page.route(/\/api\/v1\/daily-diets$/, async (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -268,6 +296,32 @@ test("authenticated user builds, edits, saves, and selects a two-meal Daily Diet
 
   const axe = await new AxeBuilder({ page }).include("[data-daily-diet-alternative-controls]").analyze();
   expect(axe.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical")).toEqual([]);
+});
+
+test("owner custom foods are disambiguated, saved, and rehydrated", async ({ page }) => {
+  const api = await stubAuthenticatedDailyDiet(page);
+  await page.goto("/?mode=daily_diet");
+  const picker = page.getByLabel("Add one of your custom foods");
+  await expect(picker.locator("option")).toHaveCount(3);
+  await expect(picker.locator("option").filter({ hasText: "Family shake · liquid · 00000041" })).toHaveCount(1);
+  await expect(picker.locator("option").filter({ hasText: "Family shake · liquid · 00000042" })).toHaveCount(1);
+  await picker.selectOption(CUSTOM_B_ID);
+  await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
+  await selectMeal(page, "apple", "Apple");
+  await page.getByLabel("Collection name").fill("Private breakfast");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator("[data-daily-diet-server-total]")).toBeVisible();
+  expect(api.createBodies()[0]).toMatchObject({
+    entries: [
+      { foodObjectId: CUSTOM_B_ID, foodObjectType: "custom_food_item", unit: "ml", position: 0 },
+      { foodObjectId: APPLE_ID, foodObjectType: "food_item", unit: "g", position: 1 }
+    ]
+  });
+
+  await page.reload();
+  await page.getByLabel("Search saved Daily Diets").fill("private");
+  await page.getByLabel("Search saved Daily Diets").press("Enter");
+  await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
 });
 
 test("logout clears the authenticated user's unsaved Daily Diet draft", async ({ page }) => {

@@ -1,6 +1,7 @@
 package externaldata
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -28,6 +29,13 @@ type recordEvidence struct {
 	expiresAt time.Time
 }
 
+// RecordEvidenceBackend is the deployment-shared persistence seam for evidence.
+// Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
+type RecordEvidenceBackend interface {
+	StoreRecordEvidence(context.Context, string, string, string, time.Time) error
+	ResolveRecordEvidence(context.Context, string, time.Time) (string, string, error)
+}
+
 // RecordEvidenceStore issues and resolves opaque references to server-normalized search records.
 // Implements DESIGN-012 DataNormalizer trusted external provenance boundary.
 type RecordEvidenceStore struct {
@@ -36,17 +44,28 @@ type RecordEvidenceStore struct {
 	now      func() time.Time
 	ttl      time.Duration
 	registry *providerregistry.Registry
+	backend  RecordEvidenceBackend
 }
 
-// NewRecordEvidenceStore creates a process-local, short-lived evidence store.
+// NewRecordEvidenceStore creates short-lived evidence storage, optionally backed by shared persistence.
 // Implements DESIGN-012 DataNormalizer selected external-record boundary.
-func NewRecordEvidenceStore(registry *providerregistry.Registry) *RecordEvidenceStore {
-	return &RecordEvidenceStore{records: map[string]recordEvidence{}, now: time.Now, ttl: RecordEvidenceTTL, registry: registry}
+func NewRecordEvidenceStore(registry *providerregistry.Registry, backend ...RecordEvidenceBackend) *RecordEvidenceStore {
+	store := &RecordEvidenceStore{records: map[string]recordEvidence{}, now: time.Now, ttl: RecordEvidenceTTL, registry: registry}
+	if len(backend) > 0 {
+		store.backend = backend[0]
+	}
+	return store
 }
 
 // Register records a canonical server-selected provider identity and returns an opaque token.
 // Implements DESIGN-012 DataNormalizer exact selected-record provenance.
 func (s *RecordEvidenceStore) Register(provider, externalID string) (string, error) {
+	return s.RegisterContext(context.Background(), provider, externalID)
+}
+
+// RegisterContext records evidence in the deployment-shared backend when configured.
+// Implements DESIGN-012 DataNormalizer exact selected-record provenance.
+func (s *RecordEvidenceStore) RegisterContext(ctx context.Context, provider, externalID string) (string, error) {
 	if s == nil || s.registry == nil {
 		return "", ErrRecordEvidenceInvalid
 	}
@@ -54,14 +73,20 @@ func (s *RecordEvidenceStore) Register(provider, externalID string) (string, err
 	if err != nil {
 		return "", ErrRecordEvidenceInvalid
 	}
-	random := make([]byte, 24)
-	if _, err := rand.Read(random); err != nil {
+	now := s.now()
+	tokenBytes := make([]byte, 24)
+	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", ErrRecordEvidenceInvalid
 	}
-	token := base64.RawURLEncoding.EncodeToString(random)
+	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
+	if s.backend != nil {
+		if err := s.backend.StoreRecordEvidence(ctx, token, identity.Provider, identity.ExternalID, now.Add(s.ttl)); err != nil {
+			return "", ErrRecordEvidenceInvalid
+		}
+		return token, nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.now()
 	for key, evidence := range s.records {
 		if !evidence.expiresAt.After(now) {
 			delete(s.records, key)
@@ -74,11 +99,28 @@ func (s *RecordEvidenceStore) Register(provider, externalID string) (string, err
 // Resolve returns only canonical identity from live server-issued evidence.
 // Implements DESIGN-012 DataNormalizer malformed, unknown, and stale evidence rejection.
 func (s *RecordEvidenceStore) Resolve(token string) (providerregistry.Identity, error) {
+	return s.ResolveContext(context.Background(), token)
+}
+
+// ResolveContext resolves evidence from the deployment-shared backend when configured.
+// Implements DESIGN-012 DataNormalizer stale and unknown evidence rejection.
+func (s *RecordEvidenceStore) ResolveContext(ctx context.Context, token string) (providerregistry.Identity, error) {
 	if s == nil || len(token) != 32 {
 		return providerregistry.Identity{}, ErrRecordEvidenceInvalid
 	}
 	if _, err := base64.RawURLEncoding.DecodeString(token); err != nil {
 		return providerregistry.Identity{}, ErrRecordEvidenceInvalid
+	}
+	if s.backend != nil {
+		provider, externalID, err := s.backend.ResolveRecordEvidence(ctx, token, s.now())
+		if err != nil {
+			return providerregistry.Identity{}, ErrRecordEvidenceInvalid
+		}
+		identity, err := s.registry.Normalize(provider, externalID)
+		if err != nil {
+			return providerregistry.Identity{}, ErrRecordEvidenceInvalid
+		}
+		return identity, nil
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -79,7 +79,7 @@ func (p *ExternalSearchProxy) Search(ctx context.Context, query ExternalSearchQu
 	response := ExternalSearchResponse{Candidates: make([]ExternalCandidate, 0, len(candidates)), Warnings: warnings, Page: query.Page}
 	for _, candidate := range candidates {
 		candidate.Warnings = sortedUniqueStrings(candidate.Warnings)
-		recordToken, err := p.evidence.Register(candidate.Provider, candidate.ExternalID)
+		recordToken, err := p.evidence.RegisterContext(ctx, candidate.Provider, candidate.ExternalID)
 		if err != nil {
 			return ExternalSearchResponse{}, err
 		}
