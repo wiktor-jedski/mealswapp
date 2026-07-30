@@ -139,6 +139,17 @@ class Task290AcceptanceTests(unittest.TestCase):
         for forbidden in ("password", "cookie", "csrf", "databaseurl", "postgres://", "@example.test"):
             self.assertNotIn(forbidden, serialized.lower())
 
+    def test_committed_run_evidence_bundle_is_cross_linked_and_sanitized(self) -> None:
+        evidence_dir = SCRIPTS.parent / "docs/implementation/evidence/task-290-acceptance"
+        documents = HARNESS.validate_run_evidence(evidence_dir)
+        run_id = documents["manifest.json"]["runId"]
+        for name, document in documents.items():
+            self.assertEqual(document["runId"], run_id)
+            serialized = json.dumps(document)
+            for forbidden in ("password", "cookie", "csrf", "databaseurl", "postgres://", "@example.test"):
+                self.assertNotIn(forbidden, serialized.lower(), name)
+        self.assertEqual(documents["manifest.json"]["acceptanceArtifact"], "../task-290-acceptance.json")
+
 
 if __name__ == "__main__":
     unittest.main()

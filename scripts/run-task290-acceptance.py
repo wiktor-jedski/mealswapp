@@ -189,6 +189,61 @@ def validate_acceptance_artifact(value: object) -> dict[str, object]:
     return value
 
 
+def validate_run_evidence(directory: Path) -> dict[str, object]:
+    """Validate the cross-linked sanitized manifest, state, diagnostics, and result files."""
+    names = {"manifest.json", "state.json", "diagnostics.json", "audit-rows.json", "final-state.json"}
+    if {path.name for path in directory.iterdir() if path.is_file()} < names:
+        raise AcceptanceError("run evidence is incomplete")
+    try:
+        documents = {
+            name: json.loads((directory / name).read_text(encoding="utf-8"))
+            for name in names
+        }
+    except (OSError, ValueError, UnicodeError) as error:
+        raise AcceptanceError("run evidence is invalid") from error
+    manifest = documents["manifest.json"]
+    if (
+        not isinstance(manifest, dict)
+        or set(manifest) != {"schema", "runId", "result", "acceptanceArtifact", "stateArtifact", "diagnosticsArtifact", "auditArtifact", "finalStateArtifact"}
+        or manifest["schema"] != "mealswapp.task290-run-manifest.v1"
+        or not isinstance(manifest["runId"], str)
+        or not RUN_ID_PATTERN.fullmatch(manifest["runId"])
+        or manifest["result"] != "passed"
+        or manifest["acceptanceArtifact"] != "../task-290-acceptance.json"
+        or manifest["stateArtifact"] != "state.json"
+        or manifest["diagnosticsArtifact"] != "diagnostics.json"
+        or manifest["auditArtifact"] != "audit-rows.json"
+        or manifest["finalStateArtifact"] != "final-state.json"
+    ):
+        raise AcceptanceError("run manifest is invalid")
+    run_id = manifest["runId"]
+    state = documents["state.json"]
+    if not isinstance(state, dict) or set(state) != {"schema", "runId", "status", "processCount", "databaseCleanup", "redisCleanup"} or state["schema"] != "mealswapp.task290-state.v1" or state["runId"] != run_id or state["status"] != "cleaned" or state["processCount"] != 1 or state["databaseCleanup"] is not True or state["redisCleanup"] is not True:
+        raise AcceptanceError("run state is invalid")
+    diagnostics = documents["diagnostics.json"]
+    expected_events = ["redis_ready", "task290_api_started", "task290_migrations_applied", "task290_commands_passed", "task290_audit_verified", "task290_final_state_verified"]
+    if not isinstance(diagnostics, dict) or set(diagnostics) != {"schema", "runId", "result", "events"} or diagnostics["schema"] != "mealswapp.task290-diagnostics.v1" or diagnostics["runId"] != run_id or diagnostics["result"] != "passed" or diagnostics["events"] != expected_events:
+        raise AcceptanceError("run diagnostics are invalid")
+    rows = documents["audit-rows.json"]
+    if not isinstance(rows, dict) or set(rows) != {"schema", "runId", "rows"} or rows["schema"] != "mealswapp.task290-audit-rows.v1" or rows["runId"] != run_id or not isinstance(rows["rows"], list):
+        raise AcceptanceError("run audit evidence is invalid")
+    if any(not isinstance(row, dict) or set(row) != {"action", "entityType"} for row in rows["rows"]):
+        raise AcceptanceError("run audit evidence is invalid")
+    parse_audit_rows("\n".join(f"{row['action']}\t{row['entityType']}" for row in rows["rows"]))
+    final = documents["final-state.json"]
+    if not isinstance(final, dict) or set(final) != {"schema", "runId", "state"} or final["schema"] != "mealswapp.task290-final-state.v1" or final["runId"] != run_id:
+        raise AcceptanceError("run final-state evidence is invalid")
+    validate_acceptance_artifact({
+        "schema": ARTIFACT_SCHEMA,
+        "runId": run_id,
+        "commands": COMMAND_NAMES,
+        "auditRows": rows["rows"],
+        "finalState": final["state"],
+        "cleanupVerified": True,
+    })
+    return documents
+
+
 def execute(args: argparse.Namespace) -> tuple[str, tuple[str, str, bool]]:
     """Perform every command, dry-run branch, and optional read-only audit proof."""
     if os.environ.get("MEALSWAPP_TASK290_DISPOSABLE") != "1":

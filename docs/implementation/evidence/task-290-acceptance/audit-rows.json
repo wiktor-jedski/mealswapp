@@ -1,0 +1,11 @@
+{
+  "schema": "mealswapp.task290-audit-rows.v1",
+  "runId": "e565f3b003c09aa4d1c1af6a",
+  "rows": [
+    {"action": "micronutrient.create", "entityType": "micronutrient_vocabulary"},
+    {"action": "micronutrient.display_name.update", "entityType": "micronutrient_vocabulary"},
+    {"action": "micronutrient.unit.update", "entityType": "micronutrient_vocabulary"},
+    {"action": "micronutrient.deactivate", "entityType": "micronutrient_vocabulary"},
+    {"action": "micronutrient.reactivate", "entityType": "micronutrient_vocabulary"}
+  ]
+}
