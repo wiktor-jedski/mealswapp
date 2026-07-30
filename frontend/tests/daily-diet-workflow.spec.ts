@@ -325,16 +325,13 @@ test("owner custom foods are disambiguated, saved, and rehydrated", async ({ pag
   await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
 });
 
-test("custom-food selection is isolated between authenticated owners", async ({ browser }) => {
-  const ownerAContext = await browser.newContext();
-  const ownerBContext = await browser.newContext();
-  const ownerAPage = await ownerAContext.newPage();
-  const ownerBPage = await ownerBContext.newPage();
+test("custom-food selection is isolated between authenticated owners", async ({ page }) => {
+  const ownerBPage = await page.context().newPage();
   try {
-    await stubAuthenticatedDailyDiet(ownerAPage, "paid", undefined, [customItem(CUSTOM_A_ID)]);
+    await stubAuthenticatedDailyDiet(page, "paid", undefined, [customItem(CUSTOM_A_ID)]);
     await stubAuthenticatedDailyDiet(ownerBPage, "paid", undefined, [customItem(CUSTOM_B_ID)]);
-    await Promise.all([ownerAPage.goto("/?mode=daily_diet"), ownerBPage.goto("/?mode=daily_diet")]);
-    const ownerAPicker = ownerAPage.getByLabel("Add one of your custom foods");
+    await Promise.all([page.goto("/?mode=daily_diet"), ownerBPage.goto("http://localhost:4173/?mode=daily_diet")]);
+    const ownerAPicker = page.getByLabel("Add one of your custom foods");
     const ownerBPicker = ownerBPage.getByLabel("Add one of your custom foods");
     await expect(ownerAPicker.locator("option")).toHaveCount(2);
     await expect(ownerBPicker.locator("option")).toHaveCount(2);
@@ -343,7 +340,7 @@ test("custom-food selection is isolated between authenticated owners", async ({ 
     await expect(ownerBPicker.locator(`option[value="${CUSTOM_B_ID}"]`)).toHaveCount(1);
     await expect(ownerBPicker.locator(`option[value="${CUSTOM_A_ID}"]`)).toHaveCount(0);
   } finally {
-    await Promise.all([ownerAContext.close(), ownerBContext.close()]);
+    await ownerBPage.close();
   }
 });
 

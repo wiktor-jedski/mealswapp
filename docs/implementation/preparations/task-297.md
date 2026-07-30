@@ -11,7 +11,7 @@
 
 | Path | Repair surface |
 |---|---|
-| `frontend/tests/daily-diet-workflow.spec.ts` | Added two authenticated browser contexts with disjoint custom-food responses; asserts each owner’s picker contains only its own private item on desktop and mobile. Existing loading, empty, retry, duplicate-name, edit, and reload scenarios remain covered. |
+| `frontend/tests/daily-diet-workflow.spec.ts` | Added two authenticated browser pages with disjoint custom-food responses; the Playwright project context runs this test as Desktop Chrome and Pixel 5 mobile. It asserts each owner’s picker contains only its own private item. Existing loading, empty, retry, duplicate-name, edit, and reload scenarios remain covered. |
 | `scripts/check.py` | Added `src/lib/api/custom-item-client.ts` to the Phase 08 frontend coverage source set. |
 | `docs/implementation/04_OPEN.md` | Refreshed exact backend/frontend measured coverage rows and summaries after Task 297 sources changed. |
 | `docs/implementation/preparations/task-297.md` | Added this scoped preparation and verification ledger. |
