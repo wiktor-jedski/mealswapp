@@ -23,4 +23,6 @@ test("fails closed before every authoritative refresh and distinguishes deletion
 	expect(source).toContain("if (!isCurrent(current)) return");
 	expect(source).toContain("The private item was deleted, but current account data could not be verified.");
 	expect(source.indexOf("const current = beginOperation()")).toBeLessThan(source.indexOf("await api.loadExport(current.controller.signal)"));
+	expect(source).toContain("affectedDiets");
+	expect(source).toContain("Affected saved diets:");
 });
