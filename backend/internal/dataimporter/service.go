@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/curation"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/externaldata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -30,6 +31,8 @@ var (
 	ErrNameConfirmation = errors.New("normalized name conflict requires explicit confirmation")
 	// ErrExternalRecordEvidence indicates missing, malformed, stale, or mismatched server evidence.
 	ErrExternalRecordEvidence = errors.New("external record evidence is invalid")
+	// ErrExternalRecordEvidenceUnavailable indicates a retryable evidence dependency failure.
+	ErrExternalRecordEvidenceUnavailable = errors.New("external record evidence is unavailable")
 )
 
 // Request is the editable curated draft plus confirmation metadata.
@@ -153,6 +156,9 @@ func (s *Service) resolveRecord(ctx context.Context, req Request) (providerregis
 			return providerregistry.Identity{}, ErrExternalRecordEvidence
 		}
 		resolved, err := s.evidence.ResolveContext(ctx, req.ExternalRecordToken)
+		if errors.Is(err, externaldata.ErrRecordEvidenceUnavailable) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return providerregistry.Identity{}, ErrExternalRecordEvidenceUnavailable
+		}
 		if err != nil || identity.Provider != "" && identity != resolved {
 			return providerregistry.Identity{}, ErrExternalRecordEvidence
 		}

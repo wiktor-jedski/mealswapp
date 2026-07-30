@@ -2,15 +2,18 @@ package externaldata
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
 type evidenceBackendStub struct {
 	provider, externalID, token string
 	expiresAt                   time.Time
+	err                         error
 }
 
 func (b *evidenceBackendStub) StoreRecordEvidence(_ context.Context, token, provider, externalID string, expiresAt time.Time) error {
@@ -19,10 +22,33 @@ func (b *evidenceBackendStub) StoreRecordEvidence(_ context.Context, token, prov
 }
 
 func (b *evidenceBackendStub) ResolveRecordEvidence(_ context.Context, token string, now time.Time) (string, string, error) {
+	if b.err != nil {
+		return "", "", b.err
+	}
 	if token != b.token || !b.expiresAt.After(now) {
 		return "", "", ErrRecordEvidenceInvalid
 	}
 	return b.provider, b.externalID, nil
+}
+
+// Implements DESIGN-012 DataNormalizer retryable shared-evidence dependency verification.
+func TestRecordEvidenceStoreClassifiesBackendOutageAndCancellation(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want error
+	}{
+		{name: "database outage", err: repository.NewError(repository.ErrorKindConnection, "database down", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database cancellation", err: repository.NewError(repository.ErrorKindCanceled, "query canceled", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "cancellation", err: context.Canceled, want: context.Canceled},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := NewRecordEvidenceStore(providerregistry.Default(), &evidenceBackendStub{token: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", err: test.err})
+			if _, err := store.ResolveContext(context.Background(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); !errors.Is(err, test.want) {
+				t.Fatalf("ResolveContext() error=%v, want %v", err, test.want)
+			}
+		})
+	}
 }
 
 // Implements DESIGN-012 DataNormalizer trusted external provenance verification.

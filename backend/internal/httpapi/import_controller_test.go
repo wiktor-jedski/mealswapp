@@ -118,6 +118,11 @@ func TestCuratedImportHTTPValidationAndConflictMapping(t *testing.T) {
 	if !errors.As(curatedImportError(dataimporter.ErrExternalRecordEvidence), &evidenceError) || evidenceError.HTTPStatus != fiber.StatusUnprocessableEntity || evidenceError.Code != "external_record_evidence_invalid" {
 		t.Fatalf("evidence error mapped=%+v", evidenceError)
 	}
+	dependencyError := curatedImportError(dataimporter.ErrExternalRecordEvidenceUnavailable)
+	var unavailable AppError
+	if !errors.As(dependencyError, &unavailable) || unavailable.HTTPStatus != fiber.StatusServiceUnavailable || unavailable.Code != "external_record_evidence_unavailable" || !unavailable.Retryable {
+		t.Fatalf("evidence dependency error mapped=%+v", dependencyError)
+	}
 }
 
 func TestCuratedImportHTTPNormalizesAndRejectsAdversarialDraftsBeforeDispatch(t *testing.T) {

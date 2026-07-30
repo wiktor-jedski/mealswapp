@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
 
 // RecordEvidenceTTL bounds how long an external-search result can authorize an import.
@@ -20,6 +21,9 @@ var (
 	// ErrRecordEvidenceInvalid identifies malformed, unknown, or expired record evidence.
 	// Implements DESIGN-012 DataNormalizer fail-closed external evidence.
 	ErrRecordEvidenceInvalid = errors.New("external record evidence is invalid")
+	// ErrRecordEvidenceUnavailable identifies a shared evidence backend outage.
+	// Implements DESIGN-012 DataNormalizer retryable evidence dependency failure.
+	ErrRecordEvidenceUnavailable = errors.New("external record evidence is unavailable")
 )
 
 // recordEvidence binds a canonical server-selected identity to its expiry.
@@ -114,6 +118,12 @@ func (s *RecordEvidenceStore) ResolveContext(ctx context.Context, token string) 
 	if s.backend != nil {
 		provider, externalID, err := s.backend.ResolveRecordEvidence(ctx, token, s.now())
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return providerregistry.Identity{}, err
+			}
+			if repository.IsKind(err, repository.ErrorKindConnection) || repository.IsKind(err, repository.ErrorKindCanceled) || errors.Is(err, ErrRecordEvidenceUnavailable) {
+				return providerregistry.Identity{}, ErrRecordEvidenceUnavailable
+			}
 			return providerregistry.Identity{}, ErrRecordEvidenceInvalid
 		}
 		identity, err := s.registry.Normalize(provider, externalID)

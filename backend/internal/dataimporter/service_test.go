@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/externaldata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 )
@@ -95,6 +96,15 @@ func TestServiceRejectsUnknownMalformedAndStaleEvidenceBeforePersistence(t *test
 				t.Fatal("invalid evidence reached persistence")
 			}
 		})
+	}
+}
+
+// Implements DESIGN-012 DataNormalizer retryable evidence dependency verification.
+func TestServiceClassifiesEvidenceDependencyFailureAsRetryable(t *testing.T) {
+	service := NewService(&importStoreStub{}, evidenceResolverStub{err: externaldata.ErrRecordEvidenceUnavailable})
+	request := Request{ExternalRecordToken: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", Request: validRequest("Food")}
+	if _, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "valid-key", request); !errors.Is(err, ErrExternalRecordEvidenceUnavailable) {
+		t.Fatalf("error=%v, want retryable evidence dependency failure", err)
 	}
 }
 

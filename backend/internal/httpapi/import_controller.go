@@ -141,6 +141,8 @@ func curatedImportError(err error) error {
 		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "name_conflict_confirmation_required", Message: "an existing item with this name requires explicit confirmation"}
 	case errors.Is(err, dataimporter.ErrExternalRecordEvidence):
 		return AppError{HTTPStatus: fiber.StatusUnprocessableEntity, Category: "validation", Code: "external_record_evidence_invalid", Message: "select a current external search result and retry"}
+	case errors.Is(err, dataimporter.ErrExternalRecordEvidenceUnavailable):
+		return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "external_record_evidence_unavailable", Message: "external search evidence is temporarily unavailable; retry", Retryable: true}
 	case repository.IsKind(err, repository.ErrorKindValidation), repository.IsKind(err, repository.ErrorKindInvalidMicronutrientKey):
 		return curationValidationError()
 	default:
