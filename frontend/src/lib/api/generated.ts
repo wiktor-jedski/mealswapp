@@ -24,6 +24,20 @@ export interface AppError {
 	data?: Record<string, unknown>;
 }
 
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Bounded owner-scoped saved-diet reference that blocks permanent deletion. */
+export interface SavedDietDeletionReference {
+	id: string;
+	name: string;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Structured conflict details returned when a private item is still referenced. */
+export interface CustomItemInUseError extends AppError {
+	code: "custom_item_in_use";
+	data: { affectedDiets: SavedDietDeletionReference[] };
+}
+
 // Implements DESIGN-009 AdminController audit-safe frontend error boundary.
 /** Strict error envelope; response data and audit/provider payloads are structurally absent. */
 export interface ErrorEnvelope {

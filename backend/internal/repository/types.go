@@ -735,6 +735,12 @@ type CustomFoodItemRepository interface {
 	Delete(ctx context.Context, ownerID uuid.UUID, id uuid.UUID) error
 }
 
+// CustomFoodItemMaintenanceRepository defines scheduled private-item marker maintenance.
+// Implements DESIGN-008 AccountDeleter marker retention.
+type CustomFoodItemMaintenanceRepository interface {
+	PurgeExpiredDeletedCustomFoodCreateKeys(context.Context) error
+}
+
 // CustomFoodDeletionConflict reports saved diets that prevent permanent deletion.
 // Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
 type CustomFoodDeletionConflict struct {

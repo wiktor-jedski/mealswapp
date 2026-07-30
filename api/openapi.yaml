@@ -747,6 +747,8 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/CustomItemInUse"
         "500":
           $ref: "#/components/responses/Error"
         "503":
@@ -1572,6 +1574,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    CustomItemInUse:
+      description: Permanent deletion was rejected because owner-scoped saved diets still reference the private item.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CustomItemInUseErrorEnvelope"
     # Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter shared admission contract.
     TooManyRequests:
       description: Retryable rate or admission rejection with a positive whole-second delay.
@@ -1744,6 +1752,48 @@ components:
         data:
           type: object
           additionalProperties: true
+    CustomItemInUseErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, error]
+      properties:
+        status:
+          type: string
+          const: error
+        requestId:
+          type: string
+          maxLength: 120
+        error:
+          type: object
+          additionalProperties: false
+          required: [category, code, message, retryable, data]
+          properties:
+            category:
+              type: string
+              const: validation
+            code:
+              type: string
+              const: custom_item_in_use
+            message:
+              type: string
+            retryable:
+              type: boolean
+              const: false
+            data:
+              type: object
+              additionalProperties: false
+              required: [affectedDiets]
+              properties:
+                affectedDiets:
+                  type: array
+                  maxItems: 25
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [id, name]
+                    properties:
+                      id: {type: string, format: uuid}
+                      name: {type: string, minLength: 1, maxLength: 200}
     # Implements DESIGN-009 AdminController audit-safe error boundary.
     ErrorEnvelope:
       type: object
