@@ -237,6 +237,8 @@ func importTelemetryOutcome(result Result, err error) string {
 		return "provider_conflict"
 	case errors.Is(err, ErrNameConfirmation):
 		return "name_conflict"
+	case errors.Is(err, ErrExternalRecordEvidenceUnavailable):
+		return "dependency_failed"
 	case repository.IsKind(err, repository.ErrorKindConnection):
 		return "dependency_failed"
 	default:

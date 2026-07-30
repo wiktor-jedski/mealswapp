@@ -149,6 +149,7 @@ func classifyRecordEvidenceBackendError(err error) error {
 	if repository.IsKind(err, repository.ErrorKindConnection) ||
 		repository.IsKind(err, repository.ErrorKindCanceled) ||
 		repository.IsKind(err, repository.ErrorKindRetryable) ||
+		repository.IsKind(err, repository.ErrorKindInternal) ||
 		errors.Is(err, ErrRecordEvidenceUnavailable) {
 		return ErrRecordEvidenceUnavailable
 	}

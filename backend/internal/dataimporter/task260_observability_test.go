@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/externaldata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -32,5 +33,19 @@ func TestTask260ImportTelemetryDistinguishesCreatedAndConflict(t *testing.T) {
 	metrics, _ := sink.Snapshot()
 	if len(metrics) != 2 || metrics[0].Labels["outcome"] != "created" || metrics[1].Labels["outcome"] != "provider_conflict" {
 		t.Fatalf("import metrics=%+v", metrics)
+	}
+}
+
+// Implements DESIGN-012 DataNormalizer and DESIGN-014 MetricsCollector retryable evidence telemetry.
+func TestTask299EvidenceOutageEmitsDependencyFailedTelemetry(t *testing.T) {
+	sink := &observability.MemorySink{}
+	service := NewService(&importStoreStub{}, evidenceResolverStub{err: externaldata.ErrRecordEvidenceUnavailable}).WithTelemetry(observability.NewAdminExternalTelemetry(sink, sink))
+	request := Request{ExternalRecordToken: "opaque", Request: validRequest("Food")}
+	if _, err := service.Confirm(context.Background(), importExecutorStub{}, uuid.New(), "", request); err != ErrExternalRecordEvidenceUnavailable {
+		t.Fatalf("error=%v, want evidence dependency failure", err)
+	}
+	metrics, _ := sink.Snapshot()
+	if len(metrics) != 1 || metrics[0].Name != observability.MetricAdminImportOutcomes || metrics[0].Labels["outcome"] != "dependency_failed" {
+		t.Fatalf("evidence outage telemetry=%+v", metrics)
 	}
 }

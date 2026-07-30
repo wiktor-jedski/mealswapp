@@ -44,6 +44,8 @@ func TestRecordEvidenceStoreClassifiesBackendOutageAndCancellation(t *testing.T)
 		{name: "database outage", err: repository.NewError(repository.ErrorKindConnection, "database down", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "database cancellation", err: repository.NewError(repository.ErrorKindCanceled, "query canceled", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "database retryable failure", err: repository.NewError(repository.ErrorKindRetryable, "serialization failure", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database permission failure", err: repository.NewError(repository.ErrorKindInternal, "permission denied", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database schema failure", err: repository.NewError(repository.ErrorKindInternal, "relation missing", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "cancellation", err: context.Canceled, want: context.Canceled},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -65,6 +67,8 @@ func TestRecordEvidenceStoreClassifiesRegistrationBackendFailures(t *testing.T) 
 		{name: "database outage", err: repository.NewError(repository.ErrorKindConnection, "database down", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "database cancellation", err: repository.NewError(repository.ErrorKindCanceled, "query canceled", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "database retryable failure", err: repository.NewError(repository.ErrorKindRetryable, "serialization failure", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database permission failure", err: repository.NewError(repository.ErrorKindInternal, "permission denied", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database schema failure", err: repository.NewError(repository.ErrorKindInternal, "relation missing", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "cancellation", err: context.Canceled, want: context.Canceled},
 		{name: "invalid token state", err: errors.New("invalid evidence"), want: ErrRecordEvidenceInvalid},
 	} {
