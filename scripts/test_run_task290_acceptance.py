@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 import unittest
@@ -81,13 +82,62 @@ class Task290AcceptanceTests(unittest.TestCase):
         ])
 
     def test_audit_psql_uses_options_before_database_target(self) -> None:
-        completed = Namespace(stdout="micronutrient.create\n", stderr="", returncode=0)
+        completed = Namespace(
+            stdout="\n".join(f"{action}\tmicronutrient_vocabulary" for action in HARNESS.REQUIRED_ACTIONS) + "\n",
+            stderr="", returncode=0,
+        )
         with mock.patch.object(HARNESS.subprocess, "run", return_value=completed) as run:
-            self.assertEqual(HARNESS.read_audit_actions("postgres://redacted"), {"micronutrient.create"})
+            self.assertEqual(HARNESS.read_audit_actions("postgres://redacted"), HARNESS.REQUIRED_ACTIONS)
         command = run.call_args.args[0]
         self.assertEqual(command[:3], ["psql", "-X", "-Atqc"])
         self.assertEqual(command[-1], "postgres://redacted")
         self.assertIn("cwd=self.source_root / \"backend\"", (Path(HARNESS.__file__).read_text() if HARNESS.__file__ else ""))
+
+    def artifact(self) -> dict[str, object]:
+        return {
+            "schema": HARNESS.ARTIFACT_SCHEMA,
+            "runId": "0123456789abcdef01234567",
+            "commands": HARNESS.COMMAND_NAMES,
+            "auditRows": [
+                {"action": action, "entityType": "micronutrient_vocabulary"}
+                for action in sorted(HARNESS.REQUIRED_ACTIONS)
+            ],
+            "finalState": {
+                "key": "Task290abcdef12345678",
+                "displayName": "Task 290 acceptance updated",
+                "unit": "mcg",
+                "active": True,
+            },
+            "cleanupVerified": True,
+        }
+
+    def test_acceptance_artifact_requires_exact_audit_rows_and_final_tuple(self) -> None:
+        self.assertEqual(HARNESS.validate_acceptance_artifact(self.artifact()), self.artifact())
+        for invalid in (
+            {**self.artifact(), "auditRows": self.artifact()["auditRows"][:-1]},
+            {**self.artifact(), "auditRows": [{"action": "micronutrient.create", "entityType": "users"}] * 5},
+            {**self.artifact(), "finalState": {**self.artifact()["finalState"], "unit": "mg"}},
+            {**self.artifact(), "finalState": {**self.artifact()["finalState"], "active": False}},
+            {**self.artifact(), "secret": "password-secret"},
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(HARNESS.AcceptanceError):
+                    HARNESS.validate_acceptance_artifact(invalid)
+
+    def test_audit_projection_rejects_raw_or_incomplete_rows(self) -> None:
+        valid = "\n".join(f"{action}\tmicronutrient_vocabulary" for action in HARNESS.REQUIRED_ACTIONS)
+        self.assertEqual(len(HARNESS.parse_audit_rows(valid)), 5)
+        for invalid in (valid.replace("micronutrient.create", "password-secret"), valid.split("\n", 1)[0]):
+            with self.assertRaises(HARNESS.AcceptanceError):
+                HARNESS.parse_audit_rows(invalid)
+
+    def test_committed_passing_artifact_validates_and_contains_no_secret_fields(self) -> None:
+        artifact_path = SCRIPTS.parent / "docs/implementation/evidence/task-290-acceptance.json"
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        self.assertEqual(HARNESS.validate_acceptance_artifact(artifact), artifact)
+        serialized = json.dumps(artifact)
+        for forbidden in ("password", "cookie", "csrf", "databaseurl", "postgres://", "@example.test"):
+            self.assertNotIn(forbidden, serialized.lower())
 
 
 if __name__ == "__main__":

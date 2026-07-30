@@ -11,11 +11,11 @@ MEALSWAPP_TASK290_DISPOSABLE=1 python3 scripts/run-task290-acceptance.py \
   --api-source-root /home/wiktor/Work/worktrees/mealswapp/289
 ```
 
-Run ID: `ce39997eb0e77209dc4b89c7`
+Run ID: `e565f3b003c09aa4d1c1af6a`
 
 Result: `task290_real_api=passed audit=verified_or_not_requested`
 
-The run-owned artifact directory was `logs/real-stack-e2e/ce39997eb0e77209dc4b89c7/` and recorded `status: cleaned`, `result: passed`, and these bounded lifecycle events:
+The run-owned artifact directory was `logs/real-stack-e2e/e565f3b003c09aa4d1c1af6a/` and recorded `status: cleaned`, `result: passed`, and these bounded lifecycle events:
 
 - `redis_ready`
 - `task290_api_started`
@@ -24,11 +24,23 @@ The run-owned artifact directory was `logs/real-stack-e2e/ce39997eb0e77209dc4b89
 - `task290_audit_verified`
 - `task290_final_state_verified`
 
+The independently inspectable `task290-acceptance.json` artifact contains these exact persisted audit rows:
+
+| action | entityType |
+|---|---|
+| `micronutrient.create` | `micronutrient_vocabulary` |
+| `micronutrient.display_name.update` | `micronutrient_vocabulary` |
+| `micronutrient.unit.update` | `micronutrient_vocabulary` |
+| `micronutrient.deactivate` | `micronutrient_vocabulary` |
+| `micronutrient.reactivate` | `micronutrient_vocabulary` |
+
+Its final state tuple is `(displayName="Task 290 acceptance updated", unit="mcg", active=true)` for the generated canonical key, and `cleanupVerified=true`. The artifact contains no database URL, email, password, cookie, CSRF value, raw body, or process diagnostic.
+
 The runner created and migrated an owned PostgreSQL database, started Redis and the API from the selected Task 289 source root, bootstrapped a run-owned administrator, performed list, add dry-run, add, existing-key dry-run, display-name update, unit update, deactivate, and reactivate through the operator, verified all five `micronutrient.*` actions on entity type `micronutrient_vocabulary`, checked the final `(display name, unit, active)` projection, and dropped the owned database and Redis container during cleanup.
 
 ## Focused validation
 
-- 18 Task 290 operator and acceptance-harness tests passed.
+- 20 Task 290 operator and acceptance-harness tests passed.
 - Python compilation passed.
 - Traceability validation passed.
 - Task-list validation passed without editing status rows.

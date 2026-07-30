@@ -27,6 +27,9 @@ REQUIRED_ACTIONS = {
     "micronutrient.deactivate",
     "micronutrient.reactivate",
 }
+COMMAND_NAMES = ["list", "add-dry-run", "add", "add-existing-dry-run", "update-display-name", "update-unit", "deactivate", "reactivate"]
+ARTIFACT_SCHEMA = "mealswapp.task290-acceptance.v1"
+RUN_ID_PATTERN = re.compile(r"^[0-9a-f]{24}$")
 
 
 def load_real_stack() -> object:
@@ -128,9 +131,22 @@ def list_state(args: argparse.Namespace) -> dict[str, tuple[str, str, bool]]:
     return state
 
 
-def read_audit_actions(database_url: str) -> set[str]:
-    """Read only bounded action names from the disposable database, never from the operator."""
-    query = "SELECT DISTINCT action FROM admin_audit_entries WHERE entity_type='micronutrient_vocabulary'"
+def parse_audit_rows(output: str) -> list[dict[str, str]]:
+    """Validate the exact five-row action/entity projection without raw database data."""
+    rows: list[dict[str, str]] = []
+    for line in output.splitlines():
+        fields = line.split("\t")
+        if len(fields) != 2 or fields[1] != "micronutrient_vocabulary" or fields[0] not in REQUIRED_ACTIONS:
+            raise AcceptanceError("disposable audit projection is invalid")
+        rows.append({"action": fields[0], "entityType": fields[1]})
+    if len(rows) != len(REQUIRED_ACTIONS) or {row["action"] for row in rows} != REQUIRED_ACTIONS:
+        raise AcceptanceError("disposable audit projection is incomplete")
+    return rows
+
+
+def read_audit_rows(database_url: str) -> list[dict[str, str]]:
+    """Read only bounded action/entity rows from the disposable database."""
+    query = "SELECT action || E'\\t' || entity_type FROM admin_audit_entries WHERE entity_type='micronutrient_vocabulary' ORDER BY created_at, id"
     try:
         result = subprocess.run(
             ["psql", "-X", "-Atqc", query, database_url],
@@ -141,10 +157,39 @@ def read_audit_actions(database_url: str) -> set[str]:
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise AcceptanceError("disposable audit read failed") from error
-    return {line for line in result.stdout.splitlines() if line}
+    return parse_audit_rows(result.stdout)
 
 
-def execute(args: argparse.Namespace) -> None:
+def read_audit_actions(database_url: str) -> set[str]:
+    """Return action names for focused tests and external acceptance callers."""
+    return {row["action"] for row in read_audit_rows(database_url)}
+
+
+def validate_acceptance_artifact(value: object) -> dict[str, object]:
+    """Validate the closed, secret-free committed acceptance report schema."""
+    if not isinstance(value, dict) or set(value) != {"schema", "runId", "commands", "auditRows", "finalState", "cleanupVerified"}:
+        raise AcceptanceError("acceptance artifact is invalid")
+    if value["schema"] != ARTIFACT_SCHEMA or not isinstance(value["runId"], str) or not RUN_ID_PATTERN.fullmatch(value["runId"]):
+        raise AcceptanceError("acceptance artifact is invalid")
+    if value["commands"] != COMMAND_NAMES or not isinstance(value["cleanupVerified"], bool):
+        raise AcceptanceError("acceptance artifact is invalid")
+    rows = value["auditRows"]
+    if not isinstance(rows, list) or len(rows) != 5:
+        raise AcceptanceError("acceptance artifact is invalid")
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"action", "entityType"} or row["action"] not in REQUIRED_ACTIONS or row["entityType"] != "micronutrient_vocabulary":
+            raise AcceptanceError("acceptance artifact is invalid")
+    if {row["action"] for row in rows} != REQUIRED_ACTIONS:
+        raise AcceptanceError("acceptance artifact is invalid")
+    final = value["finalState"]
+    if not isinstance(final, dict) or set(final) != {"key", "displayName", "unit", "active"} or not isinstance(final["key"], str) or not KEY_PATTERN.fullmatch(final["key"]):
+        raise AcceptanceError("acceptance artifact is invalid")
+    if not isinstance(final["displayName"], str) or final["displayName"] != "Task 290 acceptance updated" or final["unit"] != "mcg" or final["active"] is not True:
+        raise AcceptanceError("acceptance artifact is invalid")
+    return value
+
+
+def execute(args: argparse.Namespace) -> tuple[str, tuple[str, str, bool]]:
     """Perform every command, dry-run branch, and optional read-only audit proof."""
     if os.environ.get("MEALSWAPP_TASK290_DISPOSABLE") != "1":
         raise AcceptanceError("acceptance requires a disposable stack")
@@ -180,11 +225,13 @@ def execute(args: argparse.Namespace) -> None:
             raise AcceptanceError("real API mutation failed")
     if key not in list_keys(args):
         raise AcceptanceError("real API final vocabulary state is missing")
-    if list_state(args).get(key) != ("Task 290 acceptance updated", "mcg", True):
+    final_state = list_state(args).get(key)
+    if final_state != ("Task 290 acceptance updated", "mcg", True):
         raise AcceptanceError("real API final vocabulary state is incorrect")
     if args.database_url:
         if not REQUIRED_ACTIONS.issubset(read_audit_actions(args.database_url)):
             raise AcceptanceError("real API audit entries are incomplete")
+    return key, final_state
 
 
 class Task290Harness:
@@ -248,7 +295,7 @@ class Task290Harness:
             })
             try:
                 try:
-                    execute(argparse.Namespace(
+                    key, final_state = execute(argparse.Namespace(
                         environment="development",
                         base_url=f"http://127.0.0.1:{api_port}",
                         database_url=database_url,
@@ -262,12 +309,20 @@ class Task290Harness:
                 os.environ.update(previous)
             rows = self.real_stack.psql(
                 harness.target,
-                "SELECT action || '|' || entity_type FROM admin_audit_entries WHERE entity_type='micronutrient_vocabulary' ORDER BY action",
+                "SELECT action || E'\\t' || entity_type FROM admin_audit_entries WHERE entity_type='micronutrient_vocabulary' ORDER BY created_at, id",
                 database=harness.database,
-            ).splitlines()
-            expected = {f"{action}|micronutrient_vocabulary" for action in REQUIRED_ACTIONS}
-            if not expected.issubset(set(rows)):
-                raise AcceptanceError("audit action or entity names are incomplete")
+            )
+            audit_rows = parse_audit_rows(rows)
+            artifact = {
+                "schema": ARTIFACT_SCHEMA,
+                "runId": self.run_id,
+                "commands": COMMAND_NAMES,
+                "auditRows": audit_rows,
+                "finalState": {"key": key, "displayName": final_state[0], "unit": final_state[1], "active": final_state[2]},
+                "cleanupVerified": False,
+            }
+            validate_acceptance_artifact(artifact)
+            (harness.artifacts / "task290-acceptance.json").write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
             harness.events.extend(["task290_api_started", "task290_migrations_applied", "task290_commands_passed", "task290_audit_verified", "task290_final_state_verified"])
 
         original_execute = harness.execute
@@ -277,6 +332,11 @@ class Task290Harness:
             state = json.loads(harness.state_path.read_text(encoding="utf-8"))
             if state.get("status") not in {"cleaned", "cleaned_diagnostics_failed"}:
                 raise AcceptanceError("disposable cleanup was not recorded")
+            report_path = harness.artifacts / "task290-acceptance.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["cleanupVerified"] = True
+            validate_acceptance_artifact(report)
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         finally:
             harness.execute = original_execute
 
