@@ -80,6 +80,15 @@ class Task290AcceptanceTests(unittest.TestCase):
             "list", "add", "add", "add", "update-display-name", "update-unit", "deactivate", "reactivate", "list", "list",
         ])
 
+    def test_audit_psql_uses_options_before_database_target(self) -> None:
+        completed = Namespace(stdout="micronutrient.create\n", stderr="", returncode=0)
+        with mock.patch.object(HARNESS.subprocess, "run", return_value=completed) as run:
+            self.assertEqual(HARNESS.read_audit_actions("postgres://redacted"), {"micronutrient.create"})
+        command = run.call_args.args[0]
+        self.assertEqual(command[:3], ["psql", "-X", "-Atqc"])
+        self.assertEqual(command[-1], "postgres://redacted")
+        self.assertIn("cwd=self.source_root / \"backend\"", (Path(HARNESS.__file__).read_text() if HARNESS.__file__ else ""))
+
 
 if __name__ == "__main__":
     unittest.main()

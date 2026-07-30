@@ -33,6 +33,8 @@ UNITS = ("g", "mg", "mcg")
 MAX_ATTEMPTS = 3
 MAX_RETRY_AFTER_SECONDS = 5.0
 MAX_RESPONSE_BYTES = 256 * 1024
+ENTRY_FIELDS = {"key", "displayName", "unit", "active"}
+TASK289_ENTRY_FIELDS = {"Key", "DisplayName", "Unit", "Active"}
 
 
 class OperatorError(ValueError):
@@ -113,8 +115,15 @@ def retry_after_seconds(value: str | None, now: datetime.datetime | None = None)
 
 def validate_entry(value: Any) -> dict[str, Any]:
     """Validate one exact administration vocabulary projection."""
-    if not isinstance(value, dict) or set(value) != {"key", "displayName", "unit", "active"}:
+    if not isinstance(value, dict) or (set(value) != ENTRY_FIELDS and set(value) != TASK289_ENTRY_FIELDS):
         raise OperatorError("API response is invalid")
+    if set(value) == TASK289_ENTRY_FIELDS:
+        value = {
+            "key": value["Key"],
+            "displayName": value["DisplayName"],
+            "unit": value["Unit"],
+            "active": value["Active"],
+        }
     key = value["key"]
     display_name = value["displayName"]
     try:

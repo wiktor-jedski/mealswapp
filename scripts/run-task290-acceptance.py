@@ -14,6 +14,7 @@ import re
 import secrets
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,7 +86,7 @@ def run_operator(args: argparse.Namespace, command: list[str]) -> tuple[int, str
         if not line.startswith("Warning: Password input may be echoed.")
         and "GetPassWarning" not in line
         and line.strip() != "passwd = fallback_getpass(prompt, stream)"
-        and line != "Administrator password:"
+        and line.strip() != "Administrator password:"
     )
     if stderr:
         stderr += "\n"
@@ -132,7 +133,7 @@ def read_audit_actions(database_url: str) -> set[str]:
     query = "SELECT DISTINCT action FROM admin_audit_entries WHERE entity_type='micronutrient_vocabulary'"
     try:
         result = subprocess.run(
-            ["psql", database_url, "-Atqc", query],
+            ["psql", "-X", "-Atqc", query, database_url],
             capture_output=True,
             text=True,
             timeout=10,
@@ -210,13 +211,18 @@ class Task290Harness:
         harness.artifacts = self.real_stack.ARTIFACT_ROOT / self.run_id
         harness.state_path = harness.artifacts / "state.json"
 
-        def owned_execute() -> None:
+        def owned_execute(_harness: object) -> None:
             self.real_stack.create_database(harness.target, harness.database, harness.comment)
             redis_port = harness.start_redis()
             api_reservation = self.real_stack.reserve_ports(1)[0]
             frontend_port = self.real_stack.reserve_port()
             database_url = harness.target.database_url(harness.database)
             env = harness.application_environment(database_url, f"redis://127.0.0.1:{redis_port}/0", api_reservation.port, frontend_port)
+            go_tmp = harness.raw_dir / "go-tmp" if harness.raw_dir is not None else None
+            if go_tmp is None:
+                raise AcceptanceError("run-owned build workspace is unavailable")
+            go_tmp.mkdir(mode=0o700)
+            env["GOTMPDIR"] = str(go_tmp)
             self.real_stack.run_command(["go", "run", "./cmd/migrate", "up"], cwd=self.source_root / "backend", env=env, timeout=self.timeout)
             assert harness.raw_dir is not None
             api_binary = harness.raw_dir / "mealswapp-api"
@@ -224,7 +230,7 @@ class Task290Harness:
             for output, command in ((api_binary, "./cmd/api"), (bootstrap_binary, "./cmd/admin-bootstrap")):
                 self.real_stack.run_command(["go", "build", "-o", str(output), command], cwd=self.source_root / "backend", env=env, timeout=self.timeout)
             api_port = api_reservation.port
-            api = harness.start_process("api", [str(api_binary)], ROOT / "backend", env, "api.raw.log", api_reservation)
+            api = harness.start_process("api", [str(api_binary)], self.source_root / "backend", env, "api.raw.log", api_reservation)
             self.real_stack.wait_http(f"http://127.0.0.1:{api_port}/health", api, self.timeout)
             fixture, request_ids = self.real_stack.register_fixture(f"http://127.0.0.1:{api_port}", self.run_id)
             harness.request_ids.extend(request_ids)
@@ -241,19 +247,23 @@ class Task290Harness:
                 "MEALSWAPP_TASK290_ADMIN_PASSWORD": fixture["password"],
             })
             try:
-                execute(argparse.Namespace(
-                    environment="development",
-                    base_url=f"http://127.0.0.1:{api_port}",
-                    database_url=database_url,
-                    start_disposable=False,
-                ))
+                try:
+                    execute(argparse.Namespace(
+                        environment="development",
+                        base_url=f"http://127.0.0.1:{api_port}",
+                        database_url=database_url,
+                        start_disposable=False,
+                    ))
+                except BaseException as error:
+                    harness.events.append(f"task290_command_failure_{type(error).__name__.lower()}")
+                    raise
             finally:
                 os.environ.clear()
                 os.environ.update(previous)
             rows = self.real_stack.psql(
                 harness.target,
-                harness.database,
                 "SELECT action || '|' || entity_type FROM admin_audit_entries WHERE entity_type='micronutrient_vocabulary' ORDER BY action",
+                database=harness.database,
             ).splitlines()
             expected = {f"{action}|micronutrient_vocabulary" for action in REQUIRED_ACTIONS}
             if not expected.issubset(set(rows)):
@@ -261,7 +271,7 @@ class Task290Harness:
             harness.events.extend(["task290_api_started", "task290_migrations_applied", "task290_commands_passed", "task290_audit_verified", "task290_final_state_verified"])
 
         original_execute = harness.execute
-        harness.execute = owned_execute
+        harness.execute = types.MethodType(owned_execute, harness)
         try:
             harness.run()
             state = json.loads(harness.state_path.read_text(encoding="utf-8"))
@@ -288,8 +298,9 @@ def main(argv: list[str] | None = None) -> int:
     except AcceptanceError as error:
         print(str(error), file=sys.stderr)
         return 2
-    except Exception:
-        print("task290_real_api=failed", file=sys.stderr)
+    except Exception as error:
+        detail = f" detail={str(error)}" if isinstance(error, TypeError) else ""
+        print(f"task290_real_api=failed error={type(error).__name__}{detail}", file=sys.stderr)
         return 2
 
 

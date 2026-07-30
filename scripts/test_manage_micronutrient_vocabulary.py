@@ -375,6 +375,15 @@ class VocabularyOperatorTests(unittest.TestCase):
             + b'","data":{"micronutrients":[]}}'
         )
         self.assertEqual(self.run_operator(["list"])[0], 2)
+
+        VocabularyHandler.list_body = envelope("micronutrients", [{
+            "Key": "Iron", "DisplayName": "Iron", "Unit": "mg", "Active": True,
+        }])
+        status, stdout, stderr = self.run_operator(["list"])
+        self.assertEqual(status, 0)
+        self.assertEqual(stdout, "key\tdisplay_name\tunit\tactive\nIron\tIron\tmg\ttrue\n")
+        self.assertEqual(stderr, "")
+
         VocabularyHandler.list_body = b" " * (OPERATOR.MAX_RESPONSE_BYTES + 1)
         self.assertEqual(self.run_operator(["list"])[0], 2)
 
