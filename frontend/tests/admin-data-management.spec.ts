@@ -388,15 +388,12 @@ test("stale successful delete projection is rejected and retried as a read only"
 
 test("overlapping canceled classification reads accept the newest projection and reject late stale replay", async ({ page }) => {
 	const state = await stubApp(page); await openAdmin(page);
-	state.classificationReadFailures = { food_category: 1 };
 	state.classificationReadPlans = {
 		food_category: [
-			{ delay: 250, values: state.categories.map((value) => ({ ...value })) },
-			{ delay: 0, values: state.categories }
+			{ delay: 0, values: state.categories.map((value) => ({ ...value })) }
 		],
 		culinary_role: [
-			{ delay: 250, values: state.roles.map((value) => ({ ...value })) },
-			{ delay: 0, values: state.roles }
+			{ delay: 0, values: state.roles.map((value) => ({ ...value })) }
 		]
 	};
 	await page.getByLabel("Name", { exact: true }).last().fill("Late projection");
@@ -407,8 +404,19 @@ test("overlapping canceled classification reads accept the newest projection and
 	await expect(page.getByRole("tree", { name: "Food Category hierarchy" }).getByRole("treeitem")).toHaveText([/Food/, /Produce/]);
 	await page.locator('form[aria-label="Classification form"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
 	expect(state.classificationMutations).toBe(1);
+	state.classificationReadPlans = {
+		food_category: [
+			{ delay: 250, values: state.categories.map((value) => ({ ...value })) },
+			{ delay: 0, values: state.categories }
+		],
+		culinary_role: [
+			{ delay: 250, values: state.roles.map((value) => ({ ...value })) },
+			{ delay: 0, values: state.roles }
+		]
+	};
+	const delayedRead = page.waitForRequest((request) => request.url().includes("/api/v1/admin/classifications?kind=food_category") && request.method() === "GET");
 	await page.getByRole("button", { name: "Retry list refresh" }).click();
-	await page.waitForTimeout(35);
+	await delayedRead;
 	await page.getByRole("button", { name: "Retry list refresh" }).click();
 	await expect(page.getByText("Classification saved and refreshed.")).toBeVisible();
 	await expect(page.locator(`[data-classification-id="00000000-0000-4000-8000-000000000107"]`)).toBeVisible();
