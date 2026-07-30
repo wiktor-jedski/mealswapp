@@ -13,17 +13,23 @@ import (
 //go:embed sql/record_evidence_store.sql
 var storeRecordEvidenceSQL string
 
+// Implements DESIGN-012 DataNormalizer expired evidence cleanup.
+//
+//go:embed sql/record_evidence_cleanup.sql
+var cleanupRecordEvidenceSQL string
+
 // Implements DESIGN-012 DataNormalizer fail-closed external evidence.
+//
 //go:embed sql/record_evidence_resolve.sql
 var resolveRecordEvidenceSQL string
 
 // PostgresRecordEvidenceRepository coordinates evidence across API instances.
 // Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
-type PostgresRecordEvidenceRepository struct{ db sqlExecutor }
+type PostgresRecordEvidenceRepository struct{ db transactionalExecutor }
 
 // NewPostgresRecordEvidenceRepository creates PostgreSQL-backed record evidence storage.
 // Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
-func NewPostgresRecordEvidenceRepository(db sqlExecutor) *PostgresRecordEvidenceRepository {
+func NewPostgresRecordEvidenceRepository(db transactionalExecutor) *PostgresRecordEvidenceRepository {
 	return &PostgresRecordEvidenceRepository{db: db}
 }
 
@@ -33,8 +39,16 @@ func (r *PostgresRecordEvidenceRepository) StoreRecordEvidence(ctx context.Conte
 	if r == nil || r.db == nil {
 		return NewError(ErrorKindConnection, "record evidence repository is unavailable", nil)
 	}
-	_, err := r.db.Exec(ctx, storeRecordEvidenceSQL, token, provider, externalID, expiresAt)
-	return mapPostgresError(err, "store record evidence")
+	err := withTransaction(ctx, r.db, func(tx transactionalExecutor) error {
+		if _, err := tx.Exec(ctx, cleanupRecordEvidenceSQL, expiresAt); err != nil {
+			return mapPostgresError(err, "cleanup record evidence")
+		}
+		if _, err := tx.Exec(ctx, storeRecordEvidenceSQL, token, provider, externalID, expiresAt); err != nil {
+			return mapPostgresError(err, "store record evidence")
+		}
+		return nil
+	})
+	return err
 }
 
 // ResolveRecordEvidence reads one live token, preserving safe idempotent retries until expiry.
