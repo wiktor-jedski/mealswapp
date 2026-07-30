@@ -13,10 +13,13 @@ import (
 type evidenceBackendStub struct {
 	provider, externalID, token string
 	expiresAt                   time.Time
-	err                         error
+	err, storeErr               error
 }
 
 func (b *evidenceBackendStub) StoreRecordEvidence(_ context.Context, token, provider, externalID string, expiresAt time.Time) error {
+	if b.storeErr != nil {
+		return b.storeErr
+	}
 	b.token, b.provider, b.externalID, b.expiresAt = token, provider, externalID, expiresAt
 	return nil
 }
@@ -40,12 +43,35 @@ func TestRecordEvidenceStoreClassifiesBackendOutageAndCancellation(t *testing.T)
 	}{
 		{name: "database outage", err: repository.NewError(repository.ErrorKindConnection, "database down", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "database cancellation", err: repository.NewError(repository.ErrorKindCanceled, "query canceled", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database retryable failure", err: repository.NewError(repository.ErrorKindRetryable, "serialization failure", nil), want: ErrRecordEvidenceUnavailable},
 		{name: "cancellation", err: context.Canceled, want: context.Canceled},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			store := NewRecordEvidenceStore(providerregistry.Default(), &evidenceBackendStub{token: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", err: test.err})
 			if _, err := store.ResolveContext(context.Background(), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); !errors.Is(err, test.want) {
 				t.Fatalf("ResolveContext() error=%v, want %v", err, test.want)
+			}
+		})
+	}
+}
+
+// Implements DESIGN-012 DataNormalizer retryable shared-evidence registration failure verification.
+func TestRecordEvidenceStoreClassifiesRegistrationBackendFailures(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want error
+	}{
+		{name: "database outage", err: repository.NewError(repository.ErrorKindConnection, "database down", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database cancellation", err: repository.NewError(repository.ErrorKindCanceled, "query canceled", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "database retryable failure", err: repository.NewError(repository.ErrorKindRetryable, "serialization failure", nil), want: ErrRecordEvidenceUnavailable},
+		{name: "cancellation", err: context.Canceled, want: context.Canceled},
+		{name: "invalid token state", err: errors.New("invalid evidence"), want: ErrRecordEvidenceInvalid},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			store := NewRecordEvidenceStore(providerregistry.Default(), &evidenceBackendStub{storeErr: test.err})
+			if _, err := store.RegisterContext(context.Background(), "usda", "171265"); !errors.Is(err, test.want) {
+				t.Fatalf("RegisterContext() error=%v, want %v", err, test.want)
 			}
 		})
 	}

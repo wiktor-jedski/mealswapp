@@ -85,7 +85,7 @@ func (s *RecordEvidenceStore) RegisterContext(ctx context.Context, provider, ext
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
 	if s.backend != nil {
 		if err := s.backend.StoreRecordEvidence(ctx, token, identity.Provider, identity.ExternalID, now.Add(s.ttl)); err != nil {
-			return "", ErrRecordEvidenceInvalid
+			return "", classifyRecordEvidenceBackendError(err)
 		}
 		return token, nil
 	}
@@ -118,13 +118,7 @@ func (s *RecordEvidenceStore) ResolveContext(ctx context.Context, token string) 
 	if s.backend != nil {
 		provider, externalID, err := s.backend.ResolveRecordEvidence(ctx, token, s.now())
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return providerregistry.Identity{}, err
-			}
-			if repository.IsKind(err, repository.ErrorKindConnection) || repository.IsKind(err, repository.ErrorKindCanceled) || errors.Is(err, ErrRecordEvidenceUnavailable) {
-				return providerregistry.Identity{}, ErrRecordEvidenceUnavailable
-			}
-			return providerregistry.Identity{}, ErrRecordEvidenceInvalid
+			return providerregistry.Identity{}, classifyRecordEvidenceBackendError(err)
 		}
 		identity, err := s.registry.Normalize(provider, externalID)
 		if err != nil {
@@ -144,4 +138,19 @@ func (s *RecordEvidenceStore) ResolveContext(ctx context.Context, token string) 
 		return providerregistry.Identity{}, ErrRecordEvidenceInvalid
 	}
 	return identity, nil
+}
+
+// classifyRecordEvidenceBackendError maps shared evidence dependency failures to API-safe classes.
+// Implements DESIGN-012 DataNormalizer retryable shared-evidence dependency classification.
+func classifyRecordEvidenceBackendError(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	if repository.IsKind(err, repository.ErrorKindConnection) ||
+		repository.IsKind(err, repository.ErrorKindCanceled) ||
+		repository.IsKind(err, repository.ErrorKindRetryable) ||
+		errors.Is(err, ErrRecordEvidenceUnavailable) {
+		return ErrRecordEvidenceUnavailable
+	}
+	return ErrRecordEvidenceInvalid
 }
