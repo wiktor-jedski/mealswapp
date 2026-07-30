@@ -12,6 +12,7 @@ func TestPostgresRecordEvidenceStoreAndResolve(t *testing.T) {
 	ctx := context.Background()
 	repo := NewPostgresRecordEvidenceRepository(db)
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return now }
 	token := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 	if err := repo.StoreRecordEvidence(ctx, token, "usda", "171265", now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
@@ -31,6 +32,7 @@ func TestPostgresRecordEvidenceStoreCleansExpiredRowsAndPreservesRetryIdentity(t
 	ctx := context.Background()
 	repo := NewPostgresRecordEvidenceRepository(db)
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	repo.now = func() time.Time { return now }
 	if err := repo.StoreRecordEvidence(ctx, "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", "usda", "1", now.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}

@@ -25,12 +25,15 @@ var resolveRecordEvidenceSQL string
 
 // PostgresRecordEvidenceRepository coordinates evidence across API instances.
 // Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
-type PostgresRecordEvidenceRepository struct{ db transactionalExecutor }
+type PostgresRecordEvidenceRepository struct {
+	db  transactionalExecutor
+	now func() time.Time
+}
 
 // NewPostgresRecordEvidenceRepository creates PostgreSQL-backed record evidence storage.
 // Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
 func NewPostgresRecordEvidenceRepository(db transactionalExecutor) *PostgresRecordEvidenceRepository {
-	return &PostgresRecordEvidenceRepository{db: db}
+	return &PostgresRecordEvidenceRepository{db: db, now: time.Now}
 }
 
 // StoreRecordEvidence persists one opaque server-issued token until its expiry.
@@ -39,8 +42,9 @@ func (r *PostgresRecordEvidenceRepository) StoreRecordEvidence(ctx context.Conte
 	if r == nil || r.db == nil {
 		return NewError(ErrorKindConnection, "record evidence repository is unavailable", nil)
 	}
+	now := r.now()
 	err := withTransaction(ctx, r.db, func(tx transactionalExecutor) error {
-		if _, err := tx.Exec(ctx, cleanupRecordEvidenceSQL, expiresAt); err != nil {
+		if _, err := tx.Exec(ctx, cleanupRecordEvidenceSQL, now); err != nil {
 			return mapPostgresError(err, "cleanup record evidence")
 		}
 		if _, err := tx.Exec(ctx, storeRecordEvidenceSQL, token, provider, externalID, expiresAt); err != nil {
