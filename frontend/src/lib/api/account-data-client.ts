@@ -96,7 +96,7 @@ function assertCustomItem(value: unknown): asserts value is ExportCustomItem {
 	assertExactKeys(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles"], ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter", "densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "imageUrl"]);
 	if (!uuid(value.id) || !nonempty(value.name) || value.name.length > 200 || !["solid", "liquid"].includes(String(value.physicalState)) || !Number.isInteger(value.prepTimeMinutes) || Number(value.prepTimeMinutes) < 0 || !isRecord(value.macrosPer100) || !isRecord(value.micros) || !Array.isArray(value.foodCategories) || !Array.isArray(value.culinaryRoles)) throw new AccountDataClientError();
 	assertExactKeys(value.macrosPer100, ["protein", "carbohydrates", "fat"]);
-	if (!nonnegative(value.macrosPer100.protein) || !nonnegative(value.macrosPer100.carbohydrates) || !nonnegative(value.macrosPer100.fat) || Object.values(value.micros).some((item) => !nonnegative(item))) throw new AccountDataClientError();
+	if (!nonnegative(value.macrosPer100.protein) || !nonnegative(value.macrosPer100.carbohydrates) || !nonnegative(value.macrosPer100.fat) || Object.entries(value.micros).some(([key, item]) => key.length < 1 || key.length > 120 || !nonnegative(item))) throw new AccountDataClientError();
 	value.foodCategories.forEach(assertClassification);
 	value.culinaryRoles.forEach(assertClassification);
 	for (const field of ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter"]) if (field in value && !positive(value[field])) throw new AccountDataClientError();

@@ -43,6 +43,11 @@ test("rejects ownership leakage, malformed identifiers, oversized exports, and n
 		globalThis.fetch = mock(async () => new Response(JSON.stringify(leaking), { status: 200 })) as typeof fetch;
 		await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
 	}
+	for (const key of ["", "x".repeat(121)]) {
+		const invalidMicronutrientKey = { ...exportBundle, customItems: [{ ...exportBundle.customItems[0], micros: { [key]: 4 } }] };
+		globalThis.fetch = mock(async () => new Response(JSON.stringify(invalidMicronutrientKey), { status: 200 })) as typeof fetch;
+		await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
+	}
 	globalThis.fetch = mock(async () => new Response(JSON.stringify({ ...exportBundle, savedDiets: undefined }), { status: 200 })) as typeof fetch;
 	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
 	await expect(deletePrivateCustomItem("not-a-uuid")).rejects.toBeInstanceOf(AccountDataClientError);

@@ -11,7 +11,8 @@ Task 293 declares dependencies `239, 267, 280, 284`. Their current orchestrator 
 ## Repair evidence
 
 - Backend `internal/userdata` coverage: `95.8%`; `export.go` is `99/104` statements (`94.2%`) with the existing documented B1 exception ranges.
-- Frontend full coverage: `537` tests, `2,820` expectations, `All files` at `95.19%` functions and `96.09%` lines; `account-data-client.ts` is `100.00%` functions and `99.12%` lines with no stable uncovered-line range. The exact contract in `docs/implementation/04_OPEN.md` matches this output.
+- Frontend full coverage: `537` tests, `2,822` expectations, `All files` at `95.19%` functions and `96.09%` lines; `account-data-client.ts` is `100.00%` functions and `99.12%` lines with no stable uncovered-line range. The decoder regression covers empty and overlong micronutrient keys against OpenAPI `propertyNames` bounds. The exact contract in `docs/implementation/04_OPEN.md` matches this output.
+- Fresh isolated Task 284 acceptance run `5385496379ca7f2bc0a26d23` completed with `17/17` criteria passing, including owner-free JSON/CSV export projections; the managed PostgreSQL/Redis stack was cleaned after the run.
 - Redocly lint: local `/home/wiktor/Work/mealswapp/node_modules/.bin/redocly lint api/openapi.yaml` passes; the only output is the pre-existing ignored OAuth callback 302-only response warning.
 - Repository coverage-contract tests: `python3 -m unittest scripts/test_check_coverage.py` passes.
 - `python3 scripts/check.py --quick` is not a Task 293 failure: its unrelated Phase 08 acceptance fixtures fail on stale `docs/implementation/02_TASK_LIST.md` evidence hashes and missing dependency-280 synchronized reports. No unrelated fixture or task row was changed.
