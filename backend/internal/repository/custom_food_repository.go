@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -47,10 +48,20 @@ var customFoodCreateClaimCompleteSQL string
 //go:embed sql/custom_food_update.sql
 var customFoodUpdateSQL string
 
-// Implements DESIGN-005 FoodItemEntity owner-scoped custom-item soft-delete query.
+// Implements DESIGN-008 AccountDeleter owner-scoped permanent custom-item delete query.
 //
-//go:embed sql/custom_food_soft_delete.sql
-var customFoodSoftDeleteSQL string
+//go:embed sql/custom_food_delete_permanent.sql
+var customFoodPermanentDeleteSQL string
+
+// Implements DESIGN-008 AccountDeleter payload-free create retry tombstone query.
+//
+//go:embed sql/custom_food_delete_retry_markers.sql
+var customFoodDeleteRetryMarkersSQL string
+
+// Implements DESIGN-008 AccountDeleter delayed-create replay prevention query.
+//
+//go:embed sql/custom_food_create_marker_check.sql
+var customFoodCreateMarkerCheckSQL string
 
 // Implements DESIGN-005 FoodItemEntity custom-item classification replacement query.
 //
@@ -84,11 +95,11 @@ func NewPostgresCustomFoodItemRepository(db transactionalExecutor) *PostgresCust
 
 // GetByID loads a private item only when it belongs to ownerID.
 // Implements DESIGN-005 FoodItemEntity owner-scoped custom-item read.
-func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID uuid.UUID, id uuid.UUID, rc RepositoryContext) (CustomFoodItemEntity, error) {
+func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID uuid.UUID, id uuid.UUID, _ RepositoryContext) (CustomFoodItemEntity, error) {
 	if err := validateCustomFoodIdentity(ownerID, id); err != nil {
 		return CustomFoodItemEntity{}, err
 	}
-	item, err := scanFoodItem(r.db.QueryRow(ctx, customFoodGetByIDSQL, ownerID, id, rc.IncludeDeleted))
+	item, err := scanFoodItem(r.db.QueryRow(ctx, customFoodGetByIDSQL, ownerID, id))
 	if err != nil {
 		if IsKind(err, ErrorKindValidation) {
 			return CustomFoodItemEntity{}, err
@@ -103,11 +114,11 @@ func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID 
 
 // List loads private items belonging only to ownerID in deterministic order.
 // Implements DESIGN-008 DataExporter owner-scoped custom-item export.
-func (r *PostgresCustomFoodItemRepository) List(ctx context.Context, ownerID uuid.UUID, rc RepositoryContext) ([]CustomFoodItemEntity, error) {
+func (r *PostgresCustomFoodItemRepository) List(ctx context.Context, ownerID uuid.UUID, _ RepositoryContext) ([]CustomFoodItemEntity, error) {
 	if ownerID == uuid.Nil {
 		return nil, validationError("custom food item owner id is required")
 	}
-	rows, err := r.db.Query(ctx, customFoodListSQL, ownerID, rc.IncludeDeleted)
+	rows, err := r.db.Query(ctx, customFoodListSQL, ownerID)
 	if err != nil {
 		return nil, mapPostgresError(err, "list custom food items")
 	}
@@ -144,6 +155,12 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 	}
 	var result CustomFoodItemCreateClaimResult
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		var marker int
+		if err := db.QueryRow(ctx, customFoodCreateMarkerCheckSQL, claim.UserID, claim.Key).Scan(&marker); err == nil {
+			return NewError(ErrorKindConflict, "custom food create retry is no longer valid", nil)
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return mapPostgresError(err, "check custom food create retry marker")
+		}
 		_, claimErr := scanCustomFoodCreateClaim(db.QueryRow(ctx, customFoodCreateClaimSQL, claim.UserID, claim.Key, claim.BodyHash))
 		if claimErr == nil {
 			itemID, err := createCustomFoodItemInTransaction(ctx, db, claim.Item)
@@ -302,20 +319,51 @@ func (r *PostgresCustomFoodItemRepository) Update(ctx context.Context, item Cust
 	})
 }
 
-// Delete soft-deletes a private food item only when it belongs to ownerID.
-// Implements DESIGN-005 FoodItemEntity owner-scoped custom-item delete.
+// Delete permanently removes a private food item only when it belongs to ownerID.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
 func (r *PostgresCustomFoodItemRepository) Delete(ctx context.Context, ownerID uuid.UUID, id uuid.UUID) error {
 	if err := validateCustomFoodIdentity(ownerID, id); err != nil {
 		return err
 	}
-	result, err := r.db.Exec(ctx, customFoodSoftDeleteSQL, ownerID, id)
-	if err != nil {
-		return mapPostgresError(err, "delete custom food item")
-	}
-	if result.RowsAffected() == 0 {
-		return NewError(ErrorKindNotFound, "custom food item not found", nil)
-	}
-	return nil
+	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		rows, err := db.Query(ctx, customFoodPermanentDeleteSQL, ownerID, id)
+		if err != nil {
+			return mapPostgresError(err, "delete custom food item")
+		}
+		if rows == nil {
+			return NewError(ErrorKindConnection, "delete custom food item returned no rows", nil)
+		}
+		conflict := &CustomFoodDeletionConflict{}
+		found := false
+		for rows.Next() {
+			found = true
+			var dietID *uuid.UUID
+			var dietName *string
+			var deleted bool
+			if err := rows.Scan(&dietID, &dietName, &deleted); err != nil {
+				rows.Close()
+				return mapPostgresError(err, "scan custom food deletion")
+			}
+			if dietID != nil {
+				conflict.Diets = append(conflict.Diets, SavedDietDeletionReference{ID: *dietID, Name: *dietName})
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return mapPostgresError(err, "iterate custom food deletion")
+		}
+		rows.Close()
+		if len(conflict.Diets) > 0 {
+			return conflict
+		}
+		if !found {
+			return NewError(ErrorKindNotFound, "custom food item not found", nil)
+		}
+		if _, err := db.Exec(ctx, customFoodDeleteRetryMarkersSQL, ownerID); err != nil {
+			return mapPostgresError(err, "mark custom food create retries")
+		}
+		return nil
+	})
 }
 
 // hydrateClassifications loads global classification identities assigned to a private item.

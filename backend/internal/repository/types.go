@@ -735,6 +735,32 @@ type CustomFoodItemRepository interface {
 	Delete(ctx context.Context, ownerID uuid.UUID, id uuid.UUID) error
 }
 
+// CustomFoodDeletionConflict reports saved diets that prevent permanent deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+type CustomFoodDeletionConflict struct {
+	Diets []SavedDietDeletionReference
+}
+
+// Error returns a bounded, non-sensitive conflict message.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+func (e *CustomFoodDeletionConflict) Error() string {
+	return "custom food item is referenced by saved diets"
+}
+
+// Unwrap preserves the standard conflict classification for HTTP mapping.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+func (e *CustomFoodDeletionConflict) Unwrap() error {
+	return NewError(ErrorKindConflict, e.Error(), nil)
+}
+
+// SavedDietDeletionReference identifies one owner-scoped saved diet blocking deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+type SavedDietDeletionReference struct {
+	ID   uuid.UUID
+	Name string
+}
+
 // MealRepository defines meal and recipe persistence behavior.
 // Implements DESIGN-005 RepositoryInterfaces.
 type MealRepository interface {

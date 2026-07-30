@@ -1741,6 +1741,9 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+        data:
+          type: object
+          additionalProperties: true
     # Implements DESIGN-009 AdminController audit-safe error boundary.
     ErrorEnvelope:
       type: object

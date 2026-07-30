@@ -70,13 +70,14 @@ type GatewayContext struct {
 // AppError is a user-safe classified server error.
 // Implements DESIGN-017 GlobalExceptionHandler.
 type AppError struct {
-	HTTPStatus int    `json:"-"`
-	Category   string `json:"category"`
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	Retryable  bool   `json:"retryable"`
-	RequestID  string `json:"requestId,omitempty"`
-	Cause      error  `json:"-"`
+	HTTPStatus int            `json:"-"`
+	Category   string         `json:"category"`
+	Code       string         `json:"code"`
+	Message    string         `json:"message"`
+	Retryable  bool           `json:"retryable"`
+	Data       map[string]any `json:"data,omitempty"`
+	RequestID  string         `json:"requestId,omitempty"`
+	Cause      error          `json:"-"`
 }
 
 // Error returns the safe application error code.

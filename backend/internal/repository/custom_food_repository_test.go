@@ -261,9 +261,8 @@ func TestPostgresCustomFoodItemRepositoryOwnerScopedCRUD(t *testing.T) {
 	if _, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{}); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("GetByID() deleted error = %v, want not found", err)
 	}
-	deleted, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{IncludeDeleted: true})
-	if err != nil || deleted.DeletedAt == nil {
-		t.Fatalf("GetByID() include deleted = %#v, %v", deleted, err)
+	if _, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{IncludeDeleted: true}); !IsKind(err, ErrorKindNotFound) {
+		t.Fatalf("GetByID() include deleted = %v, want not found", err)
 	}
 	item.OwnerID = ownerA
 	item.Name = "Updated Tofu"

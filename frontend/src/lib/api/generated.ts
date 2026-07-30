@@ -21,6 +21,7 @@ export interface AppError {
 	message: string;
 	retryable: boolean;
 	requestId?: string;
+	data?: Record<string, unknown>;
 }
 
 // Implements DESIGN-009 AdminController audit-safe frontend error boundary.

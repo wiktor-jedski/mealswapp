@@ -47,6 +47,10 @@
 			error = deletionAccepted
 				? "The private item was deleted, but current account data could not be verified. Refresh the export before continuing."
 				: cause instanceof Error ? cause.message : "The private item could not be deleted. Try again.";
+			if (!deletionAccepted && cause instanceof Error && "affectedDiets" in cause) {
+				const diets = (cause as Error & { affectedDiets?: Array<{ name: string }> }).affectedDiets;
+				if (diets?.length) error += ` Affected saved diets: ${diets.map((diet) => diet.name).join(", ")}.`;
+			}
 		} finally { if (isCurrent(current)) loading = false; }
 	}
 

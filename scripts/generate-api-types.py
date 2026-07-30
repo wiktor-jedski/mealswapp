@@ -506,6 +506,8 @@ def app_error_contract_mismatches(source: str) -> list[str]:
 		mismatches.append("AppError retryable must remain boolean")
 	if "        requestId:\n          type: string\n" not in block:
 		mismatches.append("AppError requestId must remain string")
+	if "        data:\n          type: object\n" not in block:
+		mismatches.append("AppError data must remain an object")
 	return mismatches
 
 
@@ -659,6 +661,7 @@ export interface AppError {
 \tmessage: string;
 \tretryable: boolean;
 \trequestId?: string;
+\tdata?: Record<string, unknown>;
 }
 
 // Implements DESIGN-009 AdminController audit-safe frontend error boundary.

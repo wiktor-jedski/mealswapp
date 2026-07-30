@@ -1,0 +1,12 @@
+-- Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+CREATE TABLE IF NOT EXISTS deleted_custom_food_create_keys (
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key text NOT NULL,
+    expires_at timestamptz NOT NULL,
+    PRIMARY KEY (user_id, key)
+);
+-- Legacy soft-deleted private items are no longer recoverable after this migration.
+DELETE FROM custom_food_items WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS deleted_custom_food_create_keys_expiry_idx
+    ON deleted_custom_food_create_keys (expires_at);
+INSERT INTO schema_migrations (version) VALUES (31) ON CONFLICT (version) DO NOTHING;

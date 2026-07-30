@@ -13,9 +13,11 @@ const MAX_EXPORT_BYTES = 1024 * 1024;
 
 /** Safe failure exposed by authenticated Account Export operations. */
 export class AccountDataClientError extends Error {
-	constructor(message = "Account data could not be refreshed. Try again.") {
+	readonly affectedDiets?: Array<{ id: string; name: string }>;
+	constructor(message = "Account data could not be refreshed. Try again.", affectedDiets?: Array<{ id: string; name: string }>) {
 		super(message);
 		this.name = "AccountDataClientError";
+		this.affectedDiets = affectedDiets;
 	}
 }
 
@@ -37,7 +39,17 @@ export async function deletePrivateCustomItem(itemId: string, signal?: AbortSign
 	if (!uuid(itemId)) throw new AccountDataClientError("The private item identifier is invalid.");
 	const { csrfToken } = await fetchCsrfToken(signal);
 	const response = await request(buildCustomItemUrl(itemId), buildCustomItemDeleteRequestInit(csrfToken, { signal }));
-	if (response.status !== 204 || (await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
+	if (response.status !== 204) {
+		let affectedDiets: Array<{ id: string; name: string }> | undefined;
+		try {
+			const value = JSON.parse(await readBoundedText(response, MAX_EXPORT_BYTES)) as Record<string, unknown>;
+			const data = value.error && typeof value.error === "object" ? (value.error as Record<string, unknown>).data : undefined;
+			const diets = data && typeof data === "object" ? (data as Record<string, unknown>).affectedDiets : undefined;
+			if (Array.isArray(diets)) affectedDiets = diets.filter((diet): diet is { id: string; name: string } => isRecord(diet) && typeof diet.id === "string" && typeof diet.name === "string");
+		} catch { /* use the bounded generic error */ }
+		throw new AccountDataClientError(affectedDiets?.length ? "Remove this item from the listed saved diets before permanent deletion." : "The private item could not be deleted. Try again.", affectedDiets);
+	}
+	if ((await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
 }
 
 /** Injectable Account Export and private-item mutation operations. */
