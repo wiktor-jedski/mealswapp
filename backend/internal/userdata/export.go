@@ -67,12 +67,21 @@ type ExportPayload struct {
 // ExportBundle contains decrypted account export data at the export boundary.
 // Implements DESIGN-008 DataExporter.
 type ExportBundle struct {
-	User        ExportUser             `json:"user"`
-	Consent     []ExportConsent        `json:"consent"`
-	SavedItems  []repository.SavedItem `json:"savedItems"`
-	SavedDiets  []ExportSavedDiet      `json:"savedDiets"`
-	History     []SearchHistoryEntry   `json:"history"`
-	CustomItems []customitem.Item      `json:"customItems"`
+	User        ExportUser            `json:"user"`
+	Consent     []ExportConsent       `json:"consent"`
+	SavedItems  []ExportSavedItem     `json:"savedItems"`
+	SavedDiets  []ExportSavedDiet     `json:"savedDiets"`
+	History     []ExportSearchHistory `json:"history"`
+	CustomItems []ExportCustomItem    `json:"customItems"`
+}
+
+// ExportSavedItem is a portable saved-data projection without repository ownership.
+// Implements DESIGN-008 DataExporter.
+type ExportSavedItem struct {
+	ID        uuid.UUID `json:"id"`
+	ItemID    uuid.UUID `json:"itemId"`
+	Kind      string    `json:"kind"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ExportSavedDiet is an API-safe saved-diet projection without owner identity.
@@ -88,23 +97,69 @@ type ExportSavedDiet struct {
 // ExportSavedDietEntry is an API-safe saved-diet entry projection.
 // Implements DESIGN-008 DataExporter.
 type ExportSavedDietEntry struct {
-	ID             uuid.UUID                 `json:"id"`
-	FoodObjectID   uuid.UUID                 `json:"foodObjectId"`
-	FoodObjectType repository.FoodObjectType `json:"foodObjectType"`
-	Quantity       float64                   `json:"quantity"`
-	Unit           string                    `json:"unit"`
-	Position       int                       `json:"position"`
+	ID             uuid.UUID `json:"id"`
+	FoodObjectID   uuid.UUID `json:"foodObjectId"`
+	FoodObjectType string    `json:"foodObjectType"`
+	Quantity       float64   `json:"quantity"`
+	Unit           string    `json:"unit"`
+	Position       int       `json:"position"`
+}
+
+// ExportSearchHistory is a portable decrypted history projection without repository ownership.
+// Implements DESIGN-008 DataExporter.
+type ExportSearchHistory struct {
+	ID          uuid.UUID `json:"id"`
+	Query       string    `json:"query"`
+	Mode        string    `json:"mode"`
+	FiltersHash string    `json:"filtersHash"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// ExportCustomItem is a portable private-item projection without repository ownership.
+// Implements DESIGN-008 DataExporter.
+type ExportCustomItem struct {
+	ID                              uuid.UUID                     `json:"id"`
+	Name                            string                        `json:"name"`
+	PhysicalState                   string                        `json:"physicalState"`
+	PrepTimeMinutes                 int                           `json:"prepTimeMinutes"`
+	AverageUnitWeightGrams          float64                       `json:"averageUnitWeightGrams,omitempty"`
+	AverageServingVolumeMilliliters float64                       `json:"averageServingVolumeMilliliters,omitempty"`
+	DensityGramsPerMilliliter       float64                       `json:"densityGramsPerMilliliter,omitempty"`
+	DensitySourceProvider           string                        `json:"densitySourceProvider,omitempty"`
+	DensitySourceFoodID             string                        `json:"densitySourceFoodId,omitempty"`
+	DensitySourceKind               string                        `json:"densitySourceKind,omitempty"`
+	MacrosPer100                    ExportMacros                  `json:"macrosPer100"`
+	Micros                          map[string]float64            `json:"micros"`
+	FoodCategories                  []ExportClassificationSummary `json:"foodCategories"`
+	CulinaryRoles                   []ExportClassificationSummary `json:"culinaryRoles"`
+	ImageURL                        string                        `json:"imageUrl,omitempty"`
+}
+
+// ExportMacros contains portable macronutrients per 100 grams or milliliters.
+// Implements DESIGN-008 DataExporter.
+type ExportMacros struct {
+	Protein       float64 `json:"protein"`
+	Carbohydrates float64 `json:"carbohydrates"`
+	Fat           float64 `json:"fat"`
+}
+
+// ExportClassificationSummary contains portable classification content without hierarchy state.
+// Implements DESIGN-008 DataExporter.
+type ExportClassificationSummary struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Kind string    `json:"kind"`
 }
 
 // ExportUser contains decrypted user/profile fields for export.
 // Implements DESIGN-008 DataExporter.
 type ExportUser struct {
-	UserID          uuid.UUID             `json:"userId"`
-	Email           string                `json:"email"`
-	Role            repository.UserRole   `json:"role"`
-	DisplayName     string                `json:"displayName"`
-	UnitSystem      repository.UnitSystem `json:"unitSystem"`
-	ThemePreference string                `json:"themePreference"`
+	UserID          uuid.UUID `json:"userId"`
+	Email           string    `json:"email"`
+	Role            string    `json:"role"`
+	DisplayName     string    `json:"displayName"`
+	UnitSystem      string    `json:"unitSystem"`
+	ThemePreference string    `json:"themePreference"`
 }
 
 // ExportConsent contains accepted legal versions.
@@ -161,21 +216,29 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 			return ExportBundle{}, err
 		}
 	}
-	saved, err := s.saved.ListItems(ctx, userID, nil)
+	savedRecords, err := s.saved.ListItems(ctx, userID, nil)
 	if err != nil {
 		return ExportBundle{}, err
+	}
+	saved := make([]ExportSavedItem, 0, len(savedRecords))
+	for _, item := range savedRecords {
+		saved = append(saved, ExportSavedItem{
+			ID: item.ID, ItemID: item.ItemID, Kind: string(item.Kind), CreatedAt: item.CreatedAt,
+		})
 	}
 	encryptedHistory, err := s.history.ListEncryptedHistory(ctx, userID, 100)
 	if err != nil {
 		return ExportBundle{}, err
 	}
-	history := make([]SearchHistoryEntry, 0, len(encryptedHistory))
+	history := make([]ExportSearchHistory, 0, len(encryptedHistory))
 	for _, entry := range encryptedHistory {
 		query, err := decryptField(ctx, s.encryption, entry.Query)
 		if err != nil {
 			return ExportBundle{}, err
 		}
-		history = append(history, SearchHistoryEntry{ID: entry.ID, Query: query, Mode: entry.Mode, FiltersHash: entry.FiltersHash})
+		history = append(history, ExportSearchHistory{
+			ID: entry.ID, Query: query, Mode: entry.Mode, FiltersHash: entry.FiltersHash, CreatedAt: entry.CreatedAt,
+		})
 	}
 	consentRecords, err := s.consent.ListConsent(ctx, userID)
 	if err != nil {
@@ -200,7 +263,7 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 					objectID, objectType = entry.MealID, repository.FoodObjectTypeMeal
 				}
 				entries = append(entries, ExportSavedDietEntry{
-					ID: entry.ID, FoodObjectID: objectID, FoodObjectType: objectType,
+					ID: entry.ID, FoodObjectID: objectID, FoodObjectType: string(objectType),
 					Quantity: entry.Quantity, Unit: entry.Unit, Position: entry.Position,
 				})
 			}
@@ -210,11 +273,15 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 			})
 		}
 	}
-	customItems := []customitem.Item{}
+	customItems := []ExportCustomItem{}
 	if s.customItems != nil {
-		customItems, err = s.customItems.List(ctx, userID)
+		items, listErr := s.customItems.List(ctx, userID)
+		err = listErr
 		if err != nil {
 			return ExportBundle{}, err
+		}
+		for _, item := range items {
+			customItems = append(customItems, exportCustomItem(item))
 		}
 	}
 	role := user.Role
@@ -222,9 +289,34 @@ func (s *ExportService) buildBundle(ctx context.Context, userID uuid.UUID) (Expo
 		role = repository.UserRoleUser
 	}
 	return ExportBundle{
-		User:    ExportUser{UserID: userID, Email: email, Role: role, DisplayName: displayName, UnitSystem: profile.UnitSystem, ThemePreference: profile.ThemePreference},
+		User:    ExportUser{UserID: userID, Email: email, Role: string(role), DisplayName: displayName, UnitSystem: string(profile.UnitSystem), ThemePreference: profile.ThemePreference},
 		Consent: consent, SavedItems: saved, SavedDiets: diets, History: history, CustomItems: customItems,
 	}, nil
+}
+
+// exportCustomItem copies an API-safe private item into the export-only boundary.
+// Implements DESIGN-008 DataExporter.
+func exportCustomItem(item customitem.Item) ExportCustomItem {
+	classifications := func(items []customitem.ClassificationSummary) []ExportClassificationSummary {
+		result := make([]ExportClassificationSummary, 0, len(items))
+		for _, item := range items {
+			result = append(result, ExportClassificationSummary{ID: item.ID, Name: item.Name, Kind: string(item.Kind)})
+		}
+		return result
+	}
+	micros := make(map[string]float64, len(item.Micros))
+	for key, value := range item.Micros {
+		micros[key] = value
+	}
+	return ExportCustomItem{
+		ID: item.ID, Name: item.Name, PhysicalState: string(item.PhysicalState), PrepTimeMinutes: item.PrepTimeMinutes,
+		AverageUnitWeightGrams: item.AverageUnitWeightGrams, AverageServingVolumeMilliliters: item.AverageServingVolumeMilliliters,
+		DensityGramsPerMilliliter: item.DensityGramsPerMilliliter, DensitySourceProvider: item.DensitySourceProvider,
+		DensitySourceFoodID: item.DensitySourceFoodID, DensitySourceKind: item.DensitySourceKind,
+		MacrosPer100: ExportMacros{Protein: item.MacrosPer100.Protein, Carbohydrates: item.MacrosPer100.Carbohydrates, Fat: item.MacrosPer100.Fat},
+		Micros:       micros, FoodCategories: classifications(item.FoodCategories), CulinaryRoles: classifications(item.CulinaryRoles),
+		ImageURL: item.ImageURL,
+	}
 }
 
 // decryptField decrypts one repository encrypted field.
@@ -246,38 +338,73 @@ func encodeCSV(bundle ExportBundle) ([]byte, error) {
 		{"section", "field", "value"},
 		{"user", "userId", bundle.User.UserID.String()},
 		{"user", "email", bundle.User.Email},
+		{"user", "role", bundle.User.Role},
 		{"user", "displayName", bundle.User.DisplayName},
-		{"user", "unitSystem", string(bundle.User.UnitSystem)},
+		{"user", "unitSystem", bundle.User.UnitSystem},
 		{"user", "themePreference", bundle.User.ThemePreference},
 	}
 	for _, item := range bundle.SavedItems {
-		rows = append(rows, []string{"savedItems", string(item.Kind), item.ItemID.String()})
-	}
-	for _, diet := range bundle.SavedDiets {
-		rows = append(rows, []string{"savedDiets", diet.Name, diet.ID.String()})
-		for _, entry := range diet.Entries {
-			rows = append(rows, []string{"savedDietEntries", string(entry.FoodObjectType), entry.FoodObjectID.String()})
-		}
-	}
-	for _, entry := range bundle.History {
-		rows = append(rows, []string{"history", entry.Mode, entry.Query})
-	}
-	for _, record := range bundle.Consent {
-		rows = append(rows, []string{"consent", record.PrivacyPolicyVersion, record.TermsVersion})
-	}
-	if len(bundle.CustomItems) == 0 {
-		rows = append(rows, []string{"customItems", "count", "0"})
-	}
-	for _, item := range bundle.CustomItems {
-		payload, err := json.Marshal(item)
+		row, err := exportCSVRow("savedItems", item.ID.String(), item)
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, []string{"customItems", item.ID.String(), string(payload)})
+		rows = append(rows, row)
+	}
+	for _, diet := range bundle.SavedDiets {
+		row, err := exportCSVRow("savedDiets", diet.ID.String(), diet)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	for _, entry := range bundle.History {
+		row, err := exportCSVRow("history", entry.ID.String(), entry)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	for _, record := range bundle.Consent {
+		row, err := exportCSVRow("consent", record.PrivacyPolicyVersion, record)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	for _, item := range bundle.CustomItems {
+		row, err := exportCSVRow("customItems", item.ID.String(), item)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	for _, section := range []struct {
+		name  string
+		count int
+	}{
+		{name: "savedItems", count: len(bundle.SavedItems)},
+		{name: "savedDiets", count: len(bundle.SavedDiets)},
+		{name: "history", count: len(bundle.History)},
+		{name: "consent", count: len(bundle.Consent)},
+		{name: "customItems", count: len(bundle.CustomItems)},
+	} {
+		if section.count == 0 {
+			rows = append(rows, []string{section.name, "count", "0"})
+		}
 	}
 	writer.WriteAll(rows)
 	if err := writer.Error(); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// exportCSVRow serializes one owner-free projection as an escaped CSV JSON cell.
+// Implements DESIGN-008 DataExporter.
+func exportCSVRow(section, field string, value any) ([]string, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	return []string{section, field, string(payload)}, nil
 }

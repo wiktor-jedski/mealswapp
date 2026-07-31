@@ -5,8 +5,8 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const firstItemId = "00000000-0000-4000-8000-000000000267";
 const secondItemId = "00000000-0000-4000-8000-000000000268";
 const ok = (data: unknown) => ({ status: "ok", requestId: "task-267", data });
-const item = (id: string, name: string) => ({ id, name });
-const bundle = (customItems: unknown[]) => ({ user: {}, consent: [], savedItems: [], savedDiets: [], history: [], customItems });
+const item = (id: string, name: string) => ({ id, name, physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 1, fat: 1 }, micros: {}, foodCategories: [], culinaryRoles: [] });
+const bundle = (customItems: unknown[]) => ({ user: { userId: firstItemId, email: "admin@example.test", role: "admin", displayName: "Admin", unitSystem: "metric", themePreference: "system" }, consent: [], savedItems: [], savedDiets: [], history: [], customItems });
 
 async function json(route: Route, status: number, body?: unknown): Promise<void> {
 	await route.fulfill(body === undefined ? { status } : { status, contentType: "application/json", body: JSON.stringify(body) });

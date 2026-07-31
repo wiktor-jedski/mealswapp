@@ -473,12 +473,15 @@ condition. No unowned or disposition-less Phase 07 entry remains.
 - **SUPERSEDED (Task 271, remeasured 2026-07-24):** the Task 262 backend coverage exception was remeasured after the Phase 08.01 manual-item invalidation, strict custom-item JSON, and Go Doc remediations. Its current exact disposition follows.
 - **ACCEPTED EXCEPTION (Task 277, remeasured 2026-07-27; owner: Phase 08 backend maintainer):** `go test ./internal/... -p 1 -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out` passes and measures the Phase 08 Go runtime scope at `93.2%` (`4,638/4,979` statements) after deduplicating cross-package profile blocks by source range. The repository aggregate package profile is `87.4%`; direct package totals include `app 84.8%`, `cache 90.1%`, `curation 90.3%`, `customitem 90.9%`, `dataimporter 88.3%`, `deletionworker 100.0%`, `externaldata 99.8%`, `httpapi 87.3%`, `itemcurator 74.2%`, `observability 85.6%`, `repository 86.3%`, `search 96.5%`, `security 99.7%`, `tagmanager 100.0%`, `useradmin 93.1%`, and `userdata 97.2%`. Exact file counts and uncovered ranges are machine-checked below, including the Task 277 manual-item/allergen persistence surfaces and the newly measured compliance repository row. Remaining statements are defensive dependency/encoder/claim-corruption branches, repeated safe repository/HTTP error mappings, configuration/cache/wiring fallbacks, and instrumentation-only paths. Production tests cover authenticated admin/non-admin and owner isolation, recursive duplicate-key rejection before service dispatch, audited create/replay/rollback/update/delete, atomic allergen persistence, exact shared-generation behavior, peer Catalog/Substitution cache visibility, PostgreSQL atomicity, and safe envelopes/telemetry. No authorization, ownership, private/global isolation, CSRF, idempotency/replay, validation, parameterized persistence, transaction-plus-audit rollback, invalidation, sanitized observability, or search visibility behavior is waived.
 - **ACCEPTED EXCEPTION (Task 284 repair, remeasured 2026-07-28; owner: Phase 08 frontend maintainer):** `bun test --coverage` passes with `537` tests, `2,818` expectations, and `All files | 95.19% funcs | 96.06% lines`. Phase 08 runtime rows are `src/lib/admin-access.ts` (`100.00% funcs, 100.00% lines`), `src/lib/admin-workflows.ts` (`83.33% funcs, 98.55% lines`; Bun reports no stable uncovered-line range), `src/lib/api/account-data-client.ts` (`100.00% funcs, 98.11% lines`; Bun reports no stable uncovered-line range), `src/lib/api/admin-client.ts` (`95.95% funcs, 100.00% lines`; function instrumentation only), `src/lib/api/external-admin-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/filter-options-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/generated.ts` (`100.00% funcs, 99.06% lines`, generated fallback line `185`), `src/lib/shell-routing.ts` (`100.00% funcs, 100.00% lines`), `src/lib/substitution-filter-options.ts` (`100.00% funcs, 100.00% lines`), and Svelte components that do not emit Bun coverage rows. Component tests plus the full Playwright/axe desktop/mobile suite cover administration, import, conflict/retry, private export/deletion, dynamic filters, authorization, modal focus containment, responsive themes, and degraded paths. No generated-contract decoding, admin fail-closed state, authoritative refresh, destructive confirmation, accessibility, or browser workflow is waived.
+- **ACCEPTED EXCEPTION (Task 287, remeasured 2026-07-31; owner: Phase 08 backend maintainer):** the canonical `go test ./internal/... -p 1 -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out` run passes and measures the Phase 08 Go runtime scope at `93.0%` (`4,668/5,017` statements). The newly changed external-provider paths retain exact defensive exceptions: `internal/externaldata/openfoodfacts.go` is `184/192` (`95.8%`) with uncovered ranges `206.62-208.12,228.10-230.4,248.14-250.12,252.26-254.12,260.2-260.17`, and `internal/externaldata/rate_limit.go` is `186/188` (`98.9%`) with uncovered ranges `357.14-359.3,407.46-409.3`. These accepted lines are bounded malformed-payload, scanner, and telemetry/error fallback branches; adversarial provider-key tests and the focused externaldata suite cover the raw JSON boundary and safe rejection behavior. No provider normalization, rate-limit enforcement, cancellation, or privacy behavior is waived.
+- **ACCEPTED EXCEPTION (Task 293 repair, remeasured 2026-07-31; owner: Phase 08 frontend maintainer):** `bun test --coverage` passes with `537` tests, `2,825` expectations, and `All files | 95.19% funcs | 96.12% lines`. Phase 08 runtime rows are `src/lib/admin-access.ts` (`100.00% funcs, 100.00% lines`), `src/lib/admin-workflows.ts` (`83.33% funcs, 98.55% lines`; Bun reports no stable uncovered-line range), `src/lib/api/account-data-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/admin-client.ts` (`95.95% funcs, 100.00% lines`; function instrumentation only), `src/lib/api/external-admin-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/filter-options-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/generated.ts` (`100.00% funcs, 99.06% lines`, generated fallback line `185`), `src/lib/shell-routing.ts` (`100.00% funcs, 100.00% lines`), `src/lib/substitution-filter-options.ts` (`100.00% funcs, 100.00% lines`), and Svelte components that do not emit Bun coverage rows. Component tests plus the full Playwright/axe desktop/mobile suite cover administration, import, conflict/retry, private export/deletion, dynamic filters, authorization, modal focus containment, responsive themes, and degraded paths. No generated-contract decoding, admin fail-closed state, authoritative refresh, destructive confirmation, accessibility, or browser workflow is waived.
+- **ACCEPTED EXCEPTION (Task 293 backend coverage repair, remeasured 2026-07-31; owner: Phase 08 backend/privacy maintainer):** the phase-wide profile records `internal/userdata/export.go` at `130/134` statements (`97.0%`), with only `encodeCSV` defensive JSON-marshal branches for concrete saved-history/consent projections and the `bytes.Buffer` writer-error branch uncovered (`348.17-350.4,362.17-364.4,369.17-371.4,396.39-398.3`). Those branches cannot be induced through the typed export bundle or standard in-memory buffer without weakening production types or introducing a test-only writer seam; all reachable serialization, repository, decryption, JSON, CSV, owner-scoping, and error paths are covered. The measured Phase 08 scope is `4676/5016` statements (`93.2%`).
 
 The following machine-checked contracts are the precise current evidence behind those accepted exceptions. `scripts/check.py` derives the backend rows from the deduplicated cross-package profile, derives frontend rows from Bun's current report, rejects missing or additional exceptions, and requires every metric, uncovered location, phase owner, and justification ID to match.
 
 <!-- phase08-backend-coverage-contract:start -->
 
-Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
+Measured Phase 08 scope: `4676/5016` statements (`93.2%`).
 
 | Runtime file                                          | Covered/statements | Coverage | Exact uncovered statement blocks                                                                                                                                                                                                                                                                                                                                                                                      | Justification |
 | ----------------------------------------------------- | -----------------: | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -489,7 +492,8 @@ Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
 | `internal/curation/validation.go`                     |            `88/93` |  `94.6%` | `145.132-147.4,150.130-152.4,155.120-157.4,171.64-174.3`                                                                                                                                                                                                                                                                                                                                                              | `B1`          |
 | `internal/customitem/service.go`                      |          `153/165` |  `92.7%` | `114.24-116.3,118.73-120.3,129.16-131.3,153.32-155.3,170.32-172.3,174.16-176.3,190.32-192.3,207.16-209.3,243.10-244.17,293.70-295.3,368.16-370.3,395.26-397.4`                                                                                                                                                                                                                                                        | `B1`          |
 | `internal/dataimporter/service.go`                    |            `68/77` |  `88.3%` | `98.68-100.3,103.16-105.3,147.22-149.4,150.20-152.4,164.62-165.29,174.43-176.3,198.23-200.3,202.107-204.4,213.16-215.3`                                                                                                                                                                                                                                                                                               | `B1`          |
-| `internal/externaldata/rate_limit.go`                 |          `184/186` |  `98.9%` | `353.14-355.3,403.46-405.3`                                                                                                                                                                                                                                                                                                                                                                                           | `B4`          |
+| `internal/externaldata/openfoodfacts.go`              |          `184/192` |  `95.8%` | `206.62-208.12,228.10-230.4,248.14-250.12,252.26-254.12,260.2-260.17`                                                                                                                                                                                                                                                                                                                                                 | `B4`          |
+| `internal/externaldata/rate_limit.go`                 |          `186/188` |  `98.9%` | `357.14-359.3,407.46-409.3`                                                                                                                                                                                                                                                                                                                                                                                           | `B4`          |
 | `internal/httpapi/auth_controller.go`                 |           `94/103` |  `91.3%` | `78.92-80.3,95.92-97.3,104.115-106.3,107.66-109.3,123.92-125.3,136.84-138.3,149.88-151.3,165.66-167.3,233.19-235.3`                                                                                                                                                                                                                                                                                                   | `B2`          |
 | `internal/httpapi/classification_admin_controller.go` |            `58/77` |  `75.3%` | `55.66-57.3,64.49-66.3,74.16-76.3,78.16-80.3,88.16-90.3,92.9-94.3,100.16-102.3,110.16-112.3,114.9-116.3,118.16-120.3,122.16-124.3,126.16-128.3,136.16-138.3,144.16-146.3,148.16-150.3,159.36-161.3,168.49-170.3,178.34-180.3,188.108-190.3`                                                                                                                                                                           | `B2`          |
 | `internal/httpapi/curation_validation.go`             |           `99/108` |  `91.7%` | `122.37-124.3,149.65-151.3,159.54-161.3,168.57-170.3,198.16-200.3,210.18-212.5,214.11-216.5,227.49-229.5,231.10-232.71`                                                                                                                                                                                                                                                                                               | `B1`          |
@@ -512,7 +516,7 @@ Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
 | `internal/search/filter_options.go`                   |            `79/80` |  `98.8%` | `98.70-100.3`                                                                                                                                                                                                                                                                                                                                                                                                         | `B1`          |
 | `internal/search/substitution_service.go`             |          `212/225` |  `94.2%` | `60.16-62.3,159.4-159.22,187.53-189.3,191.43-193.4,266.30-268.4,270.17-272.4,275.72-277.5,318.28-321.17,321.17-323.4,334.16-336.3,340.17-342.4`                                                                                                                                                                                                                                                                       | `B1`          |
 | `internal/useradmin/service.go`                       |            `81/87` |  `93.1%` | `118.81-120.3,144.17-146.4,155.17-157.4,219.17-221.4,226.18-228.5,242.16-244.3`                                                                                                                                                                                                                                                                                                                                        | `B1`          |
-| `internal/userdata/export.go`                         |           `99/104` |  `95.2%` | `130.17-132.4,136.16-138.3,192.17-194.4,216.17-218.4,279.39-281.3`                                                                                                                                                                                                                                                                                                                                                   | `B1`          |
+| `internal/userdata/export.go`                         |         `130/134` |  `97.0%` | `348.17-350.4,362.17-364.4,369.17-371.4,396.39-398.3`                                                                                                                                                                                                                                                                                                                                                   | `B1`          |
 
 - `B1` — Defensive dependency, encoder, or claim-corruption branch; evidence: focused unit and HTTP error-path suites.
 - `B2` — Repeated safe repository or HTTP error mapping; evidence: repository, HTTP, and live integration suites.
@@ -527,7 +531,6 @@ Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
 | ------------------------------------------- | ------------ | --------: | ------: | ----------------------------------- | ------------- |
 | `src/lib/admin-workflows.ts`                | Phase 08     |    83.33% |  98.55% | `-`                                 | `F1`          |
 | `src/lib/alternative-diet-save.ts`          | Phase 07.01  |   100.00% |  95.56% | `57-58`                             | `F5`          |
-| `src/lib/api/account-data-client.ts`        | Phase 08     |   100.00% |  98.11% | `-`                                 | `F1`          |
 | `src/lib/api/admin-client.ts`               | Phase 08     |    95.95% | 100.00% | `-`                                 | `F2`          |
 | `src/lib/api/auth-client.ts`                | Phase 06.01  |    89.47% |  82.46% | `247-256,260-273,278-292`           | `F4`          |
 | `src/lib/api/daily-diet-client.ts`          | Phase 07     |    95.83% |  95.26% | `292-302`                           | `F4`          |
@@ -581,7 +584,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run Task 281 on desktop and mobile after the helper opens hidden responsive navigation controls.",
       "closedDate": "2026-07-28",
-      "passingEvidence": "logs/real-stack-e2e/9f13846d58116dcc9473618b/acceptance/prebootstrap.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-281-002",
@@ -615,12 +618,12 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run the isolated Task 281 suite and prove all lifecycle stages, exact PostgreSQL/audit assertions, Redis PONG, cleanup, and report finalization complete.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/9f13846d58116dcc9473618b/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-282-001",
       "rootCauseId": "ROOT-T282-OFF-METADATA",
-      "status": "OPEN DEFECT",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-055"
       ],
@@ -631,7 +634,9 @@ retained in the mandatory append-only
       "expected": "Unsupported provider metadata is ignored while supported numeric nutrients remain strictly validated and the candidate remains available for curation.",
       "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json",
       "owner": "backend-external-data",
-      "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI."
+      "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI.",
+      "closedDate": "2026-07-29",
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-282-002",
@@ -667,12 +672,12 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Rerun Task 282 and require P08-SWR055-ACCEPT-06 PASS plus one food/import/audit and ownerless global persistence evidence.",
       "closedDate": "2026-07-28",
-      "passingEvidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-282-004",
       "rootCauseId": "ROOT-T282-VOCABULARY-DISABLE",
-      "status": "OPEN BLOCKER",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-090"
       ],
@@ -681,9 +686,11 @@ retained in the mandatory append-only
       ],
       "observed": "Administration exposes no production capability to disable and restore a micronutrient vocabulary entry, so the required disabled-entry import scenario cannot be driven without direct database mutation.",
       "expected": "The acceptance flow disables a vocabulary entry through an authorized production boundary, proves import rejection, restores it, and leaves no fixture state.",
-      "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json",
+      "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json; logs/phase08-acceptance/task282-e43e7193f5e3257f0cba65f9-sw-req-090/report.json",
       "owner": "backend-data-curation",
-      "retestCondition": "Provide the authorized vocabulary lifecycle capability and rerun Task 282 without database bypass."
+      "retestCondition": "Provide the authorized vocabulary lifecycle capability and rerun Task 282 without database bypass.",
+      "closedDate": "2026-07-31",
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-283-001",
@@ -698,12 +705,14 @@ retained in the mandatory append-only
       "retestCondition": "Run the complete Task 283 isolated producer and close only when every SW-REQ-056 criterion passes."
     },
     {
-      "id": "P08-FIND-283-002", "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE", "status": "OPEN BLOCKER",
+      "id": "P08-FIND-283-002", "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE", "status": "CLOSED",
       "requirements": ["SW-REQ-057"], "scenarios": ["P08-SWR057-CLASSIFICATIONS"],
-      "observed": "The production UI currently exposes create/rename/delete controls but no reparent control; hierarchy, cycle, detach, and complete conflict semantics remain unavailable at the UI boundary.",
+      "observed": "Resolved by Task 291: the Administration UI exposes create-with-parent, reparent, detach, and hierarchy-conflict behavior, while the backend rejects stale cross-instance item writes with HTTP 409.",
       "expected": "Food Category and Culinary Role lifecycle and stable-ID filter propagation pass in two application instances.",
-      "evidence": "docs/implementation/evidence/task-283-preparation.md", "owner": "phase08-e2e",
-      "retestCondition": "Add the authorized hierarchy lifecycle and rerun both browser contexts with database/cache evidence."
+      "evidence": "logs/phase08-acceptance/task283-b4cf553614048ccd44daac9c-sw-req-057/report.json", "owner": "task291",
+      "retestCondition": "Closed: all SW-REQ-057 criteria and steps pass in both real-stack browser contexts with database/cache evidence.",
+      "closedDate": "2026-07-31",
+      "passingEvidence": "docs/implementation/evidence/task-283-preparation.md"
     },
     {
       "id": "P08-FIND-283-003", "rootCauseId": "ROOT-T283-FILTER-CROSS-INSTANCE", "status": "CLOSED",
@@ -726,12 +735,14 @@ retained in the mandatory append-only
       "passingEvidence": "docs/implementation/evidence/task-283-preparation.md"
     },
     {
-      "id": "P08-FIND-283-005", "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION", "status": "OPEN BLOCKER",
+      "id": "P08-FIND-283-005", "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION", "status": "CLOSED",
       "requirements": ["SW-REQ-033"], "scenarios": ["P08-SWR033-STANDARDIZED-STORAGE"],
       "observed": "The available probes do not establish ownerless global discovery, normalization/partition isolation, Catalog/Substitution visibility, or deletion search exclusion for the newly created manual records.",
       "expected": "Global and private partitions remain isolated while normalized global records are discoverable through both production search surfaces.",
-      "evidence": "docs/implementation/evidence/task-283-preparation.md", "owner": "phase08-e2e",
-      "retestCondition": "Execute partition and search/substitution scenarios with read-only owner/count evidence."
+      "evidence": "docs/implementation/evidence/task-283-preparation.md; logs/phase08-acceptance/task282-e43e7193f5e3257f0cba65f9-sw-req-033/report.json; docs/implementation/preparations/task-292.md", "owner": "phase08-e2e",
+      "retestCondition": "Execute partition and search/substitution scenarios with read-only owner/count evidence.",
+      "closedDate": "2026-07-31",
+      "passingEvidence": "docs/implementation/preparations/task-292.md"
     },
     {
       "id": "P08-FIND-283-006", "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION", "status": "OPEN BLOCKER",
@@ -761,12 +772,12 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run Task 282 and prove the disposable stack, loopback fixtures, backend evidence, cleanup, and three Task 280 reports finalize.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-284-001",
       "rootCauseId": "ROOT-T284-EXPORT-OWNER-PROJECTION",
-      "status": "OPEN DEFECT",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-043",
         "SW-REQ-072"
@@ -775,11 +786,13 @@ retained in the mandatory append-only
         "P08-SWR043-PRIVATE-ITEM-ISOLATION",
         "P08-SWR072-DATA-PORTABILITY"
       ],
-      "observed": "The owner-scoped JSON account export includes nested repository projections with UserID ownership fields even though cross-owner access, per-owner contents, CSV parsing, and global-data exclusion otherwise pass.",
+      "observed": "Closed after Account Export moved saved items, saved diets, search history, and custom items to export-only projections and the isolated Task 284 run passed private isolation, parsed JSON/CSV portability, and erasure proof.",
       "expected": "Account Export contains the authenticated account section and owner-scoped data without repeating persistence ownership identifiers in nested saved-item or other resource projections.",
       "evidence": "logs/real-stack-e2e/68bcf9edf41e8867a4b53b31/acceptance/results.json",
       "owner": "backend-privacy",
-      "retestCondition": "Rerun Task 284 and require P08-SWR043-ACCEPT-01 plus P08-SWR072-STEP-04 to pass with no nested owner or UserID fields in parsed JSON/CSV projections."
+      "retestCondition": "Rerun Task 284 and require P08-SWR043-ACCEPT-01 plus P08-SWR072-STEP-04 to pass with no nested owner or UserID fields in parsed JSON/CSV projections.",
+      "closedDate": "2026-07-29",
+      "passingEvidence": "docs/implementation/evidence/task-284-preparation.md"
     },
     {
       "id": "P08-FIND-285-001",
@@ -835,12 +848,12 @@ retained in the mandatory append-only
 <!-- phase08-acceptance-findings:end -->
 
 - **ACCEPTED OUT OF SCOPE (project-owner decision, 2026-07-29):** no implementation task will be created for `P08-FIND-281-002`. The stale-refresh behavior is not important for the current Phase 08 scope. The finding remains in the append-only acceptance ledger because its failed test result is historical evidence; this disposition does not claim that the behavior passed a retest.
-- **PLANNED (Tasks 289-290, accepted 2026-07-29; owner: backend/frontend/data-curation/tooling maintainers):** resolve `P08-FIND-282-004` with verified-administrator micronutrient vocabulary management in both the Administration UI and an authenticated operator CLI. Canonical keys remain stable, hard deletion is not exposed, and unit changes or deactivation are blocked while the key is in use.
+- **IMPLEMENTED (Tasks 289-290, verified 2026-07-31; owner: backend/frontend/data-curation/tooling maintainers):** resolved `P08-FIND-282-004` with verified-administrator micronutrient vocabulary management in both the Administration UI and authenticated operator CLI. Canonical keys remain stable, hard deletion is not exposed, and the integrated Task 282 run proves disable/restore and rejection behavior.
 - **TRACKING (Task 302, project-owner decision, 2026-07-29):** `P08-FIND-283-001` is a broad manual-catalog acceptance tracker, not one implementation defect. Do not create a duplicate implementation task for it. Task 302 owns the final isolated real-stack retest and may close this tracker only with mapped passing evidence after the specific product tasks are complete.
-- **PLANNED (Task 291, accepted 2026-07-29; owner: frontend/data-curation maintainers):** resolve `P08-FIND-283-002` by exposing the existing classification create-with-parent, reparent, detach, and hierarchy-conflict behavior in the Administration UI, then rerun the isolated SW-REQ-057 acceptance scenario.
-- **PLANNED (Task 292, accepted 2026-07-29; owner: backend/frontend/data-curation maintainers):** resolve `P08-FIND-283-005` with an administrator-only, global-only paginated item search contract and accessible picker, while retaining direct UUID loading as a secondary advanced tool. The isolated retest must prove ownerlessness, private partition isolation, Catalog and Substitution visibility, and deletion exclusion.
+- **CLOSED (Task 291, verified 2026-07-31; owner: frontend/data-curation maintainers):** resolved `P08-FIND-283-002` by exposing classification create-with-parent, reparent, detach, and hierarchy-conflict behavior in the Administration UI. The isolated SW-REQ-057 acceptance scenario passes all criteria and steps in both real-stack browser contexts; the cross-instance stale-write regression returns HTTP 409 with no duplicate mutation or audit.
+- **IMPLEMENTED (Task 292, verified 2026-07-31; owner: backend/frontend/data-curation maintainers):** resolved `P08-FIND-283-005` with an administrator-only, global-only paginated item search contract and accessible picker, while retaining direct UUID loading as a secondary advanced tool. Integrated Task 282 provider evidence and Task 292 real-stack proofs establish ownerlessness, private partition isolation, Catalog and Substitution visibility, and deletion exclusion.
 - **TRACKING (Task 302, project-owner decision, 2026-07-29):** `P08-FIND-283-006` is a real-stack evidence gap, not a confirmed separate product defect. Do not create a duplicate product task. Task 302 must prove valid and invalid micronutrient, allergen, and classification behavior together with exact persistence, audit, rollback, and Redis-generation counts.
-- **PLANNED (Task 293, accepted 2026-07-29; owner: backend/privacy/frontend maintainers):** resolve `P08-FIND-284-001` with export-only nested projections. Keep the account identity only in the top-level user section and remove repeated persistence ownership fields from nested JSON and CSV data, then rerun the isolated private-isolation and portability scenarios.
+- **IMPLEMENTED (Task 293, verified 2026-07-29; owner: backend/privacy/frontend maintainers):** `P08-FIND-284-001` is closed. Account Export now uses strict export-only projections for saved items, saved diets, search history, and custom items, retains the authenticated account identity only in the top-level user section, rejects nested ownership fields recursively in the frontend decoder, and preserves portable content in deterministic JSON and escaped JSON-in-CSV records. The isolated Task 284 run passed SW-REQ-043, SW-REQ-072, and SW-REQ-073 with user-A/user-B PostgreSQL, browser, worker, and cache evidence.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-001` to Phase 09 planning. It requires an approved deployed test origin, bounded GCP Cloud Logging scope, least-privilege reader, and retention evidence. No task is created now. Local console output remains invalid evidence.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/E2E/observability maintainers):** move `P08-FIND-285-002` to Phase 09 planning. It requires safe deployed fixtures for authentication, provider, administration, validation, dependency, and audit-failure actions. No task is created now, and no public fault-injection API is approved.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-003` to Phase 09 planning. Its missing, duplicate, malformed, inconsistent, or privacy-unsafe centralized-log behavior can be evaluated only after the deployed environment exists. No task is created now.
@@ -853,7 +866,7 @@ retained in the mandatory append-only
 - **PLANNED (Task 288, accepted 2026-07-29; owner: backend/external-data/domain maintainers):** make USDA search tolerant of incomplete optional portion evidence instead of reporting the whole provider as unavailable. A live authenticated `olive oil` request returned `200`, 20 foods, 106,874 bytes in 1.66 seconds, but the first valid FNDDS result contained measures such as `{"gramWeight":224,"disseminationText":"1 cup","amount":null,"measureUnit":null}`. `decodeUSDASearch` decodes the absent amount as zero, rejects that measure, then aborts the entire provider page. Separate the concepts explicitly: the USDA top-level `servingSize`/`servingSizeUnit` pair may populate `AverageUnitWeightGrams` for a solid or serving volume for a liquid; a structured `foodMeasures` entry is additional portion evidence used primarily for measured conversions and trusted liquid-density derivation, and must not automatically be treated as the manual form’s “Average unit weight (g).” Validate required food identity and supported numeric nutrients strictly, but skip or warn on unusable optional measures, retain valid measures from the same food, and isolate an invalid candidate so other valid results remain visible. Consider safely parsing supported `disseminationText` forms only when unambiguous, without guessing from arbitrary provider prose. Add live-shape fixtures for null amount/unit, text-only cup/tablespoon measures, mixed valid/invalid measures, candidate-level corruption, exact FDC-ID search, broad name search, timeout/rate-limit distinction, and UI feedback that differentiates partial normalization from provider unavailability.
 - **PLANNED (Task 294, accepted 2026-07-29; owner: backend/API/frontend maintainers):** `manualItemData` already omits absent optional measurements, provenance, and image fields while retaining required empty collections. Task 294 owns the remaining ambiguous-outcome UX: treat an undecodable `2xx` as potentially committed, preserve a safe request ID and immutable request/key, require authoritative recovery before retry, prevent duplicate submission, reuse only the stable idempotency key, and verify persisted state, audit count, cache invalidation, recovery, and field-specific validation feedback.
 - **PLANNED (Task 292, accepted 2026-07-29; owner: product/frontend/backend maintainers):** replace the Manual global items panel’s UUID-only discovery workflow with a searchable global-catalog item picker. The current `Item ID` plus `Load` form assumes an administrator already knows an internal UUID that the product UI never exposes; obtaining it from PostgreSQL, browser network responses, audit records, or a prior create response is a developer workaround rather than usable administration. Make human-readable Catalog-style search the primary workflow through an administrator-only global-item search contract. Show bounded paginated results with name, relevant classifications, macro summary, and an explicit `Edit` action; selecting a result should use its `itemId` to load the authoritative `GET /api/v1/admin/items/{itemId}` projection into the form. Preserve load-by-ID only as a clearly secondary advanced/audit tool. Include debounce or explicit-submit behavior consistent with Catalog Search, stale-request cancellation, keyboard navigation, accessible loading/empty/error states, pagination, cache freshness after mutations, duplicate-name disambiguation, and strict exclusion of user-owned private items. Resolve the existing manual-item optional-field response-contract defect first or alongside this work so selecting a result cannot produce another false `malformed_admin_response`; define a separate administrator-only discovery path if future restore/purge decisions require searching soft-deleted items.
-- **PLANNED (Task 291 expansion accepted 2026-07-29; owner: backend/seed/API/frontend maintainers):** the four deterministic development classifications already use RFC-version/variant-conforming UUIDs and migrate existing references safely. Task 291 also owns the remaining mutation-refresh UX: once create/update commits, preserve its safe identity, report `Saved, but the list could not be refreshed`, retry only the read, never imply rollback, prevent duplicate resubmission, retain the last safe list, and verify partial/failed refresh, request IDs, exact audit/cache effects, and recovery without stale or blank columns.
+- **IMPLEMENTED (Task 291 expansion, verified 2026-07-31; owner: backend/seed/API/frontend maintainers):** the four deterministic development classifications use RFC-version/variant-conforming UUIDs and migrate existing references safely. Mutation-refresh UX preserves safe identity and the last safe list, reports `Saved, but the list could not be refreshed`, retries only the read, prevents duplicate resubmission, and recovers without stale or blank columns. Focused frontend/backend checks and the isolated SW-REQ-057 acceptance evidence pass.
 - **PLANNED (Tasks 295-296, accepted 2026-07-29; owner: architecture/backend/frontend maintainers):** make metric units the invariant for persistence, repository entities, domain services, exports, and metric-named API fields. Remove repository-boundary display mutation and `RepositoryContext.UnitSystem`. Keep all display conversion in the frontend. The authenticated profile preference is authoritative after sign-in; a separate browser-local preference is authoritative while anonymous and is restored on sign-out. Quantity-bearing requests keep an explicit unit and the backend normalizes supported input exactly once before calculations or persistence. Do not rewrite or reinterpret existing stored values.
 - **PLANNED (Tasks 297-298, accepted 2026-07-29; owner: product/privacy/backend/frontend maintainers):** extend Daily Diets to support owner-scoped private custom food items. A referenced custom item cannot be deleted; the UI identifies the owner's affected diets and requires removal of those references first. After references are removed, Delete permanently removes the item and its classification links, permits immediate name reuse, and provides no Trash or Restore workflow. Lists and Account Export exclude the item immediately. Only a payload-free, time-bounded retry marker may remain to prevent a delayed create replay; account erasure removes it immediately.
 - **PLANNED (Task 299, accepted 2026-07-29; owner: architecture/backend/security maintainers):** private custom-item and administrator manual-item requests may set only `manual` or `estimated` density provenance. Only the server import workflow may set `imported`, using provider identity and external food ID derived from its server-controlled external record. Separate the request types, keep provider identities in one external-data registry, and record the authenticated administrator in the audit event rather than density provenance.

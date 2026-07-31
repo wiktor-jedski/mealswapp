@@ -4,6 +4,12 @@ import type {
 	AdminClassificationRequest,
 	AdminItem,
 	AdminItemRequest,
+	AdminItemSearchPageData,
+	AdminItemSearchSummary,
+	AdminMicronutrient,
+	AdminMicronutrientCreateRequest,
+	AdminMicronutrientDisplayNameRequest,
+	AdminMicronutrientUnitRequest,
 	AdminUser,
 	AdminUserPageData,
 	AppError,
@@ -19,11 +25,15 @@ export type ClassificationKind = AdminClassification["kind"];
 export interface AdminMutationOptions {
 	csrfToken?: string;
 	signal?: AbortSignal;
+	headers?: Record<string, string>;
 }
+
+/** Transport certainty available after an administration request fails. */
+export type AdminFailureOutcome = "confirmed_response" | "pre_response" | "possibly_committed";
 
 /** Safe normalized failure returned by an administration API call. */
 export class AdminClientError extends Error {
-	constructor(readonly status: number, readonly appError: AppError) {
+	constructor(readonly status: number, readonly appError: AppError, readonly outcome: AdminFailureOutcome = "confirmed_response") {
 		super(appError.message);
 		this.name = "AdminClientError";
 	}
@@ -40,14 +50,25 @@ export async function getAdminItem(itemId: string, signal?: AbortSignal): Promis
 	return decodeItem(await request(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, { method: "GET", signal }), 200);
 }
 
+/** Searches active ownerless global items by normalized name with bounded pagination. */
+export async function searchAdminItems(query: { name: string; page?: number; pageSize?: number }, signal?: AbortSignal): Promise<AdminItemSearchPageData> {
+	const page = query.page ?? 1; const pageSize = query.pageSize ?? 20;
+	if (!boundedString(query.name, 1, 200, false) || !query.name.trim() || !positiveInteger(page) || page > 10_000 || !positiveInteger(pageSize) || pageSize > 50) throw invalidRequest();
+	const parameters = new URLSearchParams({ query: query.name, page: String(page), pageSize: String(pageSize) });
+	const response = await request(`/api/v1/admin/items?${parameters}`, { method: "GET", signal, cache: "no-store" });
+	const data = decodeData(await json(response, 200), response.status);
+	if (!exact(data, ["items", "page", "pageSize", "total"]) || !Array.isArray(data.items) || data.items.length > 50 || !positiveInteger(data.page) || data.page > 10_000 || !positiveInteger(data.pageSize) || data.pageSize > 50 || !nonnegativeInteger(data.total) || data.items.length > data.pageSize) throw malformed(response.status);
+	return { items: data.items.map((value) => decodeItemSearchSummary(value, response.status)), page: data.page, pageSize: data.pageSize, total: data.total };
+}
+
 /** Creates one global item with a caller-owned retry-stable idempotency key. */
 export async function createAdminItem(requestBody: AdminItemRequest, idempotencyKey: IdempotencyKey, options: AdminMutationOptions = {}): Promise<AdminItem> {
-	return decodeItem(await mutation("/api/v1/admin/items", "POST", requestBody, options, { "Idempotency-Key": idempotencyKey }), 201);
+	return decodeItem(await mutation("/api/v1/admin/items", "POST", requestBody, options, { "Idempotency-Key": idempotencyKey }), 201, true);
 }
 
 /** Replaces one global item and returns only the server projection. */
 export async function replaceAdminItem(itemId: string, requestBody: AdminItemRequest, options: AdminMutationOptions = {}): Promise<AdminItem> {
-	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options), 200);
+	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options, options.headers), 200);
 }
 
 /** Soft-deletes one global item only after an empty 204 response. */
@@ -78,6 +99,37 @@ export async function deleteAdminClassification(id: string, options: AdminMutati
 	await emptyMutation(`/api/v1/admin/classifications/${encodeURIComponent(id)}`, "DELETE", options);
 }
 
+/** Lists active and inactive canonical micronutrient entries in server order. */
+export async function listAdminMicronutrients(signal?: AbortSignal): Promise<AdminMicronutrient[]> {
+	const response = await request("/api/v1/admin/micronutrients", { method: "GET", signal });
+	const data = decodeData(await json(response, 200), response.status);
+	if (!exact(data, ["micronutrients"]) || !Array.isArray(data.micronutrients) || data.micronutrients.length > 1000) throw malformed(response.status);
+	return data.micronutrients.map((value) => decodeMicronutrient(value, response.status));
+}
+
+/** Creates or exactly replays one immutable canonical micronutrient entry. */
+export async function createAdminMicronutrient(body: AdminMicronutrientCreateRequest, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	return decodeMicronutrientEnvelope(await mutation("/api/v1/admin/micronutrients", "POST", body, options), 201);
+}
+
+/** Updates only a canonical entry's display name. */
+export async function updateAdminMicronutrientDisplayName(key: string, displayName: string, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	const body: AdminMicronutrientDisplayNameRequest = { displayName };
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/display-name`, "PUT", body, options), 200);
+}
+
+/** Updates the unit of one unused canonical entry. */
+export async function updateAdminMicronutrientUnit(key: string, unit: AdminMicronutrient["unit"], options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	const body: AdminMicronutrientUnitRequest = { unit };
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/unit`, "PUT", body, options), 200);
+}
+
+/** Deactivates or reactivates one canonical entry without deleting it. */
+export async function setAdminMicronutrientActive(key: string, active: boolean, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	const action = active ? "reactivate" : "deactivate";
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/${action}`, "POST", undefined, options), 200);
+}
+
 /** Performs an exact or bounded privacy-minimized user lookup. */
 export async function lookupAdminUsers(query: { userId?: string; email?: string; cursor?: string; limit?: number }, signal?: AbortSignal): Promise<AdminUserPageData> {
 	const parameters = new URLSearchParams();
@@ -102,6 +154,7 @@ export async function retryAdminDeletion(userId: string, requestId: string, opti
 /** Injectable administration operations for item, classification, and user workflows. */
 export interface AdminApi {
 	getItem: typeof getAdminItem;
+	searchItems: typeof searchAdminItems;
 	createItem: typeof createAdminItem;
 	replaceItem: typeof replaceAdminItem;
 	deleteItem: typeof deleteAdminItem;
@@ -109,6 +162,11 @@ export interface AdminApi {
 	createClassification: typeof createAdminClassification;
 	replaceClassification: typeof replaceAdminClassification;
 	deleteClassification: typeof deleteAdminClassification;
+	listMicronutrients: typeof listAdminMicronutrients;
+	createMicronutrient: typeof createAdminMicronutrient;
+	updateMicronutrientDisplayName: typeof updateAdminMicronutrientDisplayName;
+	updateMicronutrientUnit: typeof updateAdminMicronutrientUnit;
+	setMicronutrientActive: typeof setAdminMicronutrientActive;
 	lookupUsers: typeof lookupAdminUsers;
 	retryDeletion: typeof retryAdminDeletion;
 }
@@ -116,6 +174,7 @@ export interface AdminApi {
 /** The administration API operations exposed to the UserAdminPanel. */
 export const adminApi: AdminApi = {
 	getItem: getAdminItem,
+	searchItems: searchAdminItems,
 	createItem: createAdminItem,
 	replaceItem: replaceAdminItem,
 	deleteItem: deleteAdminItem,
@@ -123,6 +182,11 @@ export const adminApi: AdminApi = {
 	createClassification: createAdminClassification,
 	replaceClassification: replaceAdminClassification,
 	deleteClassification: deleteAdminClassification,
+	listMicronutrients: listAdminMicronutrients,
+	createMicronutrient: createAdminMicronutrient,
+	updateMicronutrientDisplayName: updateAdminMicronutrientDisplayName,
+	updateMicronutrientUnit: updateAdminMicronutrientUnit,
+	setMicronutrientActive: setAdminMicronutrientActive,
 	lookupUsers: lookupAdminUsers,
 	retryDeletion: retryAdminDeletion
 };
@@ -135,7 +199,7 @@ async function mutation(url: string, method: "POST" | "PUT", body: unknown, opti
 	return request(url, {
 		method,
 		credentials: "include",
-		headers: { Accept: "application/json", "Content-Type": "application/json", "X-CSRF-Token": csrfToken, ...headers },
+		headers: { Accept: "application/json", "Content-Type": "application/json", "X-CSRF-Token": csrfToken, ...options.headers, ...headers },
 		...(payload === undefined ? {} : { body: payload }),
 		signal: options.signal
 	});
@@ -154,7 +218,7 @@ async function request(url: string, init: RequestInit): Promise<Response> {
 		response = await fetch(url, { credentials: "include", headers: { Accept: "application/json", ...init.headers }, ...init });
 	} catch (error) {
 		if (isAbort(error)) throw error;
-		throw new AdminClientError(0, { category: "network", code: "network_error", message: "The administration service could not be reached. Try again.", retryable: true });
+		throw new AdminClientError(0, { category: "network", code: "network_error", message: "The administration service could not be reached. Try again.", retryable: true }, "pre_response");
 	}
 	if (!response.ok) throw await responseError(response);
 	return response;
@@ -166,15 +230,19 @@ async function json(response: Response, expectedStatus: number): Promise<unknown
 }
 
 function decodeData(value: unknown, status: number): unknown {
-	if (!exact(value, ["status", "requestId", "data"]) || value.status !== "ok" || !boundedString(value.requestId, 1, 128, false)) throw malformed(status);
+	if (!exact(value, ["status", "requestId", "data"]) || value.status !== "ok" || !safeRequestId(value.requestId)) throw malformed(status, requestIdFrom(value));
 	return value.data;
 }
 
-function decodeItem(responsePromise: Promise<Response> | Response, expectedStatus: number): Promise<AdminItem> {
-	return Promise.resolve(responsePromise).then(async (response) => {
-		const value = decodeData(await json(response, expectedStatus), response.status);
+async function decodeItem(responsePromise: Promise<Response> | Response, expectedStatus: number, mutationResponse = false): Promise<AdminItem> {
+	const response = await responsePromise;
+	let raw: unknown;
+	try {
+		raw = await json(response, expectedStatus);
+		const requestId = requestIdFrom(raw);
+		const value = decodeData(raw, response.status);
 		const optional = ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter", "densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "foodCategoryIds", "culinaryRoleIds", "imageUrl"];
-		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], optional) || !uuid(value.id) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status);
+		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], [...optional, "updatedAt"]) || !uuid(value.id) || (value.updatedAt !== undefined && !dateTime(value.updatedAt)) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status);
 		if (!optionalPositive(value.averageUnitWeightGrams) || !optionalPositive(value.averageServingVolumeMilliliters) || !optionalPositive(value.densityGramsPerMilliliter) || !optionalBoundedString(value.densitySourceProvider, 200) || !optionalBoundedString(value.densitySourceFoodId, 200) || (value.densitySourceKind !== undefined && !["imported", "manual", "estimated"].includes(String(value.densitySourceKind))) || !optionalBoundedString(value.imageUrl, 2048) || (value.imageUrl !== undefined && !safeUriReference(value.imageUrl))) throw malformed(response.status);
 		if (!optionalUuidCollection(value.foodCategoryIds) || !optionalUuidCollection(value.culinaryRoleIds)) throw malformed(response.status);
 		if (value.physicalState === "solid" && (value.macrosPer100.protein as number) + (value.macrosPer100.carbohydrates as number) + (value.macrosPer100.fat as number) > 100) throw malformed(response.status);
@@ -184,7 +252,24 @@ function decodeItem(responsePromise: Promise<Response> | Response, expectedStatu
 		value.foodCategories.forEach((classification) => decodeClassificationSummary(classification, "food_category", response.status));
 		value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", response.status));
 		return value as unknown as AdminItem;
-	});
+	} catch (error) {
+		if (!mutationResponse || !(error instanceof AdminClientError) || error.appError.code !== "malformed_admin_response") throw error;
+		throw malformed(response.status, error.appError.requestId ?? requestIdFrom(raw), "possibly_committed");
+	}
+}
+
+function decodeItemSearchSummary(value: unknown, status: number): AdminItemSearchSummary {
+	if (!exact(value, ["itemId", "name", "physicalState", "macrosPer100", "foodCategories", "culinaryRoles"]) || !uuid(value.itemId) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !macroProfile(value.macrosPer100) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100) throw malformed(status);
+	value.foodCategories.forEach((classification) => decodeClassificationSummary(classification, "food_category", status));
+	value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", status));
+	return value as unknown as AdminItemSearchSummary;
+}
+
+function decodeItemSearchSummary(value: unknown, status: number): AdminItemSearchSummary {
+	if (!exact(value, ["itemId", "name", "physicalState", "macrosPer100", "foodCategories", "culinaryRoles"]) || !uuid(value.itemId) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !macroProfile(value.macrosPer100) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100) throw malformed(status);
+	value.foodCategories.forEach((classification) => decodeClassificationSummary(classification, "food_category", status));
+	value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", status));
+	return value as unknown as AdminItemSearchSummary;
 }
 
 async function decodeClassificationEnvelope(responsePromise: Promise<Response> | Response, expectedStatus: number): Promise<AdminClassification> {
@@ -192,6 +277,18 @@ async function decodeClassificationEnvelope(responsePromise: Promise<Response> |
 	const data = decodeData(await json(response, expectedStatus), response.status);
 	if (!exact(data, ["classification"])) throw malformed(response.status);
 	return decodeClassification(data.classification, response.status);
+}
+
+async function decodeMicronutrientEnvelope(responsePromise: Promise<Response> | Response, expectedStatus: number): Promise<AdminMicronutrient> {
+	const response = await responsePromise;
+	const data = decodeData(await json(response, expectedStatus), response.status);
+	if (!exact(data, ["micronutrient"])) throw malformed(response.status);
+	return decodeMicronutrient(data.micronutrient, response.status);
+}
+
+function decodeMicronutrient(value: unknown, status: number): AdminMicronutrient {
+	if (!exact(value, ["key", "displayName", "unit", "active"]) || !boundedString(value.key, 3, 120) || !/^[A-Z][A-Za-z0-9]{2,119}$/.test(value.key) || !boundedString(value.displayName, 1, 120) || !["g", "mg", "mcg"].includes(String(value.unit)) || typeof value.active !== "boolean") throw malformed(status);
+	return value as unknown as AdminMicronutrient;
 }
 
 function decodeClassification(value: unknown, status: number): AdminClassification {
@@ -210,26 +307,43 @@ function decodeUser(value: unknown, status: number): AdminUser {
 
 async function responseError(response: Response): Promise<AdminClientError> {
 	let code = "admin_request_failed";
+	let requestId: string | undefined;
 	try {
 		const value = JSON.parse(await readBoundedText(response, MAX_ERROR_BYTES)) as unknown;
 		if (record(value) && record(value.error) && typeof value.error.code === "string" && SAFE_ERROR_CODES.has(value.error.code)) code = value.error.code;
+		requestId = requestIdFrom(value);
 	} catch { /* Status and approved code provide the safe fallback. */ }
 	const status = safeErrorStatus(response.status);
 	const conflict = status === 409;
-	return new AdminClientError(status, {
-		category: conflict ? "validation" : status >= 500 ? "server" : "unknown",
+	const validation = status === 400 || status === 422;
+	const appError: AppError = {
+		category: conflict || validation ? "validation" : status >= 500 ? "server" : "unknown",
 		code,
-		message: conflict ? "The record changed or conflicts with authoritative data. It has been refreshed." : "The administration action did not complete. No change was shown as successful.",
+		message: conflict ? "The record changed or conflicts with authoritative data. It has been refreshed." : validation ? "Check the submitted fields and correct the validation problem." : "The administration action did not complete. No change was shown as successful.",
 		retryable: conflict || status >= 500
+	};
+	if (requestId) appError.requestId = requestId;
+	return new AdminClientError(status, {
+		...appError
 	});
 }
 
-function malformed(status: number): AdminClientError {
-	return new AdminClientError(Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0, { category: "server", code: "malformed_admin_response", message: "The administration service returned an invalid response. No change was shown as successful.", retryable: true });
+function malformed(status: number, requestId?: string, outcome: AdminFailureOutcome = "confirmed_response"): AdminClientError {
+	const appError: AppError = { category: "server", code: "malformed_admin_response", message: outcome === "possibly_committed" ? "The server accepted the item request but returned an invalid confirmation. Verify the saved state before retrying." : "The administration service returned an invalid response. No change was shown as successful.", retryable: true };
+	if (requestId) appError.requestId = requestId;
+	return new AdminClientError(Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0, appError, outcome);
 }
 
 function invalidRequest(): AdminClientError {
 	return new AdminClientError(0, { category: "validation", code: "invalid_admin_request", message: "The administration request is too large or cannot be encoded.", retryable: false });
+}
+
+function requestIdFrom(value: unknown): string | undefined {
+	return record(value) && safeRequestId(value.requestId) ? value.requestId : undefined;
+}
+
+function safeRequestId(value: unknown): value is string {
+	return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 }
 
 async function cancelResponseBody(response: Response): Promise<void> {
@@ -285,6 +399,7 @@ function allergenKeys(value: unknown): value is string[] {
 function optionalPositive(value: unknown): boolean { return value === undefined || finiteBetween(value, Number.MIN_VALUE, MAX_NUTRITION_VALUE); }
 function optionalBoundedString(value: unknown, maximum: number): boolean { return value === undefined || boundedString(value, 0, maximum, false); }
 function finiteBetween(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum; }
+function positiveInteger(value: unknown): value is number { return Number.isSafeInteger(value) && (value as number) > 0; }
 function nonnegativeInteger(value: unknown): value is number { return Number.isSafeInteger(value) && (value as number) >= 0; }
 function boundedString(value: unknown, minimum: number, maximum: number, trim = true): value is string { return typeof value === "string" && value.length >= minimum && value.length <= maximum && !value.includes("\0") && (!trim || value.trim() === value); }
 function email(value: unknown): value is string { return boundedString(value, 3, 320) && /^[^\s@]+@[^\s@]+$/.test(value); }

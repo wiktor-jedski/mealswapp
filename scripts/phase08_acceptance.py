@@ -518,7 +518,13 @@ def synchronize_results(
         root = result["rootCauseId"]
         if root is not None:
             finding = by_root.get(root)
-            if finding is None or finding["status"] == "CLOSED":
+            if finding is None or (
+                finding["status"] == "CLOSED"
+                and (
+                    criterion["requirement"] not in finding["requirements"]
+                    or criterion["scenarioId"] not in finding["scenarios"]
+                )
+            ):
                 raise ValidationError(f"{result['criterionId']}: non-pass root cause has no unresolved finding")
             if (
                 criterion["requirement"] not in finding["requirements"]

@@ -42,3 +42,10 @@ test("composes generated-client private-data controls inside the allowed adminis
 	expect(source).toContain("<AdminPrivateData />");
 	expect(source.indexOf("<AdminPrivateData")).toBeGreaterThan(source.indexOf("{:else}"));
 });
+
+// Implements DESIGN-005 MicronutrientVocabulary administration composition verification.
+test("composes canonical vocabulary controls only inside the allowed administration branch", () => {
+	expect(source).toContain('import AdminMicronutrientVocabulary from "./AdminMicronutrientVocabulary.svelte"');
+	expect(source).toContain("<AdminMicronutrientVocabulary />");
+	expect(source.indexOf("<AdminMicronutrientVocabulary")).toBeGreaterThan(source.indexOf("{:else}"));
+});

@@ -1,0 +1,10 @@
+{
+  "schema": "mealswapp.task290-run-manifest.v1",
+  "runId": "e565f3b003c09aa4d1c1af6a",
+  "result": "passed",
+  "acceptanceArtifact": "../task-290-acceptance.json",
+  "stateArtifact": "state.json",
+  "diagnosticsArtifact": "diagnostics.json",
+  "auditArtifact": "audit-rows.json",
+  "finalStateArtifact": "final-state.json"
+}

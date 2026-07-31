@@ -43,10 +43,10 @@ type MicroValues map[string]float64
 // MicronutrientVocabularyEntry stores one canonical micronutrient definition.
 // Implements DESIGN-005 MicronutrientVocabulary.
 type MicronutrientVocabularyEntry struct {
-	Key         string
-	DisplayName string
-	Unit        string
-	Active      bool
+	Key         string `json:"key"`
+	DisplayName string `json:"displayName"`
+	Unit        string `json:"unit"`
+	Active      bool   `json:"active"`
 }
 
 // ClassificationKind identifies Food Category and Culinary Role classification groups.
@@ -71,6 +71,7 @@ type ClassificationEntity struct {
 // FoodItemEntity stores normalized food item data owned by repositories.
 // Implements DESIGN-005 FoodItemEntity.
 type FoodItemEntity struct {
+	ExpectedUpdatedAt               *time.Time
 	ID                              uuid.UUID
 	Name                            string
 	PhysicalState                   PhysicalState
@@ -770,6 +771,17 @@ type MicronutrientVocabularyRepository interface {
 	ListActive(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
 	IsAllowed(ctx context.Context, key string) (bool, error)
 	Upsert(ctx context.Context, entry MicronutrientVocabularyEntry) error
+}
+
+// MicronutrientVocabularyAdminRepository defines transaction-scoped canonical vocabulary management.
+// Implements DESIGN-005 MicronutrientVocabulary administrator management.
+type MicronutrientVocabularyAdminRepository interface {
+	ListAll(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
+	Get(ctx context.Context, key string) (MicronutrientVocabularyEntry, error)
+	Create(ctx context.Context, entry MicronutrientVocabularyEntry) (MicronutrientVocabularyEntry, error)
+	UpdateDisplayName(ctx context.Context, key, displayName string) (MicronutrientVocabularyEntry, error)
+	UpdateUnit(ctx context.Context, key, unit string) (MicronutrientVocabularyEntry, error)
+	SetActive(ctx context.Context, key string, active bool) (MicronutrientVocabularyEntry, error)
 }
 
 // UserProfileRepository defines user profile and preference persistence behavior.

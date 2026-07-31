@@ -70,7 +70,12 @@ test("generated private-data helpers build closed owner-scoped request contracts
 	const replace = buildCustomItemMutationRequestInit("PUT", request, "csrf-token");
 	const deletion = buildAccountDeletionRequestInit("csrf-token");
 	const exported: ExportBundle = {
-		user: {}, consent: [], savedItems: [], history: [], customItems: [],
+		user: {
+			userId: "00000000-0000-4000-8000-000000000284",
+			email: "owner@example.test", role: "user", displayName: "Owner",
+			unitSystem: "metric", themePreference: "system"
+		},
+		consent: [], savedItems: [], history: [], customItems: [],
 		savedDiets: [{
 			id: "00000000-0000-4000-8000-000000000284",
 			name: "Portable diet", entries: [],
