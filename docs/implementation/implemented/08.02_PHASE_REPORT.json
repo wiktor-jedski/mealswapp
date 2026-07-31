@@ -19,6 +19,10 @@
       "sha256": "02d807eb31963413afd213e68e145683ce578c161ef29630cf8812f12fb0873d"
     },
     {
+      "path": "docs/implementation/evidence/task-288-preparation.md",
+      "sha256": "c8658b9d18a23cbb5f446469264a76797f9012772f6320b009d5a0e80a8614a2"
+    },
+    {
       "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/SW-REQ-055.json",
       "sha256": "e026fe7c262dacd8777846482b2d36e8d89528463406fafc3d88183446e7c2c9"
     }
@@ -26,11 +30,11 @@
   "controls": [
     {
       "path": "docs/implementation/02_TASK_LIST.md",
-      "sha256": "9a31bc303c750894161d0048e09c764c331413f34fd1ac6bba264892d28b1372"
+      "sha256": "b1d07c78263de78f48ebb784ff5407f2f4c9c8c6b44df352cfaedc7519ba40d2"
     },
     {
       "path": "docs/implementation/04_OPEN.md",
-      "sha256": "45981363b212777475f396c9d93735a0b68a5f2caaf12fba43f1e5710b8991a5"
+      "sha256": "aa5c5731d7ad4e7d6928493a1528cffbb005e40d3b61087fee4b67b3b9b947e8"
     },
     {
       "path": "docs/testing/phase08/acceptance-manifest.json",
@@ -42,8 +46,8 @@
     }
   ],
   "counts": {
-    "BLOCKED": 11,
-    "FAIL": 8,
+    "BLOCKED": 12,
+    "FAIL": 7,
     "PASS": 72
   },
   "gateStatus": "FAIL",
@@ -54,7 +58,6 @@
   },
   "openFindings": [
     "P08-FIND-281-002",
-    "P08-FIND-282-002",
     "P08-FIND-282-004",
     "P08-FIND-283-001",
     "P08-FIND-283-002",
@@ -68,11 +71,11 @@
   "renderedArtifacts": [
     {
       "path": "docs/implementation/implemented/08.02_PHASE_REPORT.html",
-      "sha256": "acbf793cf1ec8176b6df078b1183865b54de1ecc77e4d4fd82a97bef6f3d0ae0"
+      "sha256": "4e642a01d124967f967e85ab9994f99c96cfc110911e7060cb7133a3dd648bc6"
     },
     {
       "path": "docs/implementation/implemented/08.02_PHASE_UAT.md",
-      "sha256": "7c56f4ee8c752318dad23efc1715ba209e47af4df9aef0d3fd7b9d506274c614"
+      "sha256": "9e3efc279f14e50fd74a7da5c0a53d7b9ede0c6b3d04de0b4c1838d71a6dd395"
     }
   ],
   "results": [
@@ -507,13 +510,11 @@
     {
       "criterionId": "P08-SWR033-STEP-02",
       "findingIds": [
-        "P08-FIND-282-002",
         "P08-FIND-283-005"
       ],
       "kind": "step",
       "requirement": "SW-REQ-033",
       "rootCauseIds": [
-        "ROOT-T282-USDA-OPTIONAL-PORTION",
         "ROOT-T283-DISCOVERY-PARTITION"
       ],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
@@ -533,8 +534,8 @@
           "requestIds": [
             "7858a3ea-bef8-4958-b82c-e7ab2717bf0a"
           ],
-          "rootCauseId": "ROOT-T282-USDA-OPTIONAL-PORTION",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 282
         },
         {
@@ -547,7 +548,7 @@
           "taskId": 283
         }
       ],
-      "status": "FAIL",
+      "status": "BLOCKED",
       "text": "Import a liquid provider item."
     },
     {
