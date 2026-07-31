@@ -4,6 +4,8 @@ import type {
 	AdminClassificationRequest,
 	AdminItem,
 	AdminItemRequest,
+	AdminItemSearchPageData,
+	AdminItemSearchSummary,
 	AdminMicronutrient,
 	AdminMicronutrientCreateRequest,
 	AdminMicronutrientDisplayNameRequest,
@@ -42,6 +44,17 @@ const SAFE_ERROR_CODES = new Set(["classification_in_use", "audit_write_failed",
 /** Reads one active ownerless global item. */
 export async function getAdminItem(itemId: string, signal?: AbortSignal): Promise<AdminItem> {
 	return decodeItem(await request(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, { method: "GET", signal }), 200);
+}
+
+/** Searches active ownerless global items by normalized name with bounded pagination. */
+export async function searchAdminItems(query: { name: string; page?: number; pageSize?: number }, signal?: AbortSignal): Promise<AdminItemSearchPageData> {
+	const page = query.page ?? 1; const pageSize = query.pageSize ?? 20;
+	if (!boundedString(query.name, 1, 200, false) || !query.name.trim() || !positiveInteger(page) || page > 10_000 || !positiveInteger(pageSize) || pageSize > 50) throw invalidRequest();
+	const parameters = new URLSearchParams({ query: query.name, page: String(page), pageSize: String(pageSize) });
+	const response = await request(`/api/v1/admin/items?${parameters}`, { method: "GET", signal, cache: "no-store" });
+	const data = decodeData(await json(response, 200), response.status);
+	if (!exact(data, ["items", "page", "pageSize", "total"]) || !Array.isArray(data.items) || data.items.length > 50 || !positiveInteger(data.page) || data.page > 10_000 || !positiveInteger(data.pageSize) || data.pageSize > 50 || !nonnegativeInteger(data.total) || data.items.length > data.pageSize) throw malformed(response.status);
+	return { items: data.items.map((value) => decodeItemSearchSummary(value, response.status)), page: data.page, pageSize: data.pageSize, total: data.total };
 }
 
 /** Creates one global item with a caller-owned retry-stable idempotency key. */
@@ -137,6 +150,7 @@ export async function retryAdminDeletion(userId: string, requestId: string, opti
 /** Injectable administration operations for item, classification, and user workflows. */
 export interface AdminApi {
 	getItem: typeof getAdminItem;
+	searchItems: typeof searchAdminItems;
 	createItem: typeof createAdminItem;
 	replaceItem: typeof replaceAdminItem;
 	deleteItem: typeof deleteAdminItem;
@@ -156,6 +170,7 @@ export interface AdminApi {
 /** The administration API operations exposed to the UserAdminPanel. */
 export const adminApi: AdminApi = {
 	getItem: getAdminItem,
+	searchItems: searchAdminItems,
 	createItem: createAdminItem,
 	replaceItem: replaceAdminItem,
 	deleteItem: deleteAdminItem,
@@ -230,6 +245,13 @@ function decodeItem(responsePromise: Promise<Response> | Response, expectedStatu
 		value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", response.status));
 		return value as unknown as AdminItem;
 	});
+}
+
+function decodeItemSearchSummary(value: unknown, status: number): AdminItemSearchSummary {
+	if (!exact(value, ["itemId", "name", "physicalState", "macrosPer100", "foodCategories", "culinaryRoles"]) || !uuid(value.itemId) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !macroProfile(value.macrosPer100) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100) throw malformed(status);
+	value.foodCategories.forEach((classification) => decodeClassificationSummary(classification, "food_category", status));
+	value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", status));
+	return value as unknown as AdminItemSearchSummary;
 }
 
 async function decodeClassificationEnvelope(responsePromise: Promise<Response> | Response, expectedStatus: number): Promise<AdminClassification> {
@@ -342,6 +364,7 @@ function allergenKeys(value: unknown): value is string[] {
 function optionalPositive(value: unknown): boolean { return value === undefined || finiteBetween(value, Number.MIN_VALUE, MAX_NUTRITION_VALUE); }
 function optionalBoundedString(value: unknown, maximum: number): boolean { return value === undefined || boundedString(value, 0, maximum, false); }
 function finiteBetween(value: unknown, minimum: number, maximum: number): value is number { return typeof value === "number" && Number.isFinite(value) && value >= minimum && value <= maximum; }
+function positiveInteger(value: unknown): value is number { return Number.isSafeInteger(value) && (value as number) > 0; }
 function nonnegativeInteger(value: unknown): value is number { return Number.isSafeInteger(value) && (value as number) >= 0; }
 function boundedString(value: unknown, minimum: number, maximum: number, trim = true): value is string { return typeof value === "string" && value.length >= minimum && value.length <= maximum && !value.includes("\0") && (!trim || value.trim() === value); }
 function email(value: unknown): value is string { return boundedString(value, 3, 320) && /^[^\s@]+@[^\s@]+$/.test(value); }

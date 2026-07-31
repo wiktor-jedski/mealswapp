@@ -21,6 +21,7 @@ import (
 // Implements DESIGN-009 ItemCurator HTTP test boundary.
 type fakeManualItemService struct {
 	item      itemcurator.Item
+	searchErr error
 	createErr error
 	updateErr error
 	deleteErr error
@@ -40,6 +41,65 @@ func (s *fakeManualItemService) Create(_ context.Context, _ repository.AdminMuta
 func (s *fakeManualItemService) Get(_ context.Context, _ uuid.UUID) (itemcurator.Item, error) {
 	s.calls = append(s.calls, "get")
 	return s.item, nil
+}
+
+func (s *fakeManualItemService) Search(_ context.Context, query itemcurator.SearchQuery) (itemcurator.SearchPage, error) {
+	s.calls = append(s.calls, "search")
+	if s.searchErr != nil {
+		return itemcurator.SearchPage{}, s.searchErr
+	}
+	return itemcurator.SearchPage{Items: []itemcurator.SearchSummary{{
+		ItemID: s.item.ID, Name: s.item.Name, PhysicalState: s.item.PhysicalState, MacrosPer100: s.item.MacrosPer100,
+		FoodCategories: s.item.FoodCategories, CulinaryRoles: s.item.CulinaryRoles,
+	}}, Page: query.Page, PageSize: query.PageSize, Total: 1}, nil
+}
+
+func TestManualItemAdminSearchIsAuthorizedBoundedAndUnaudited(t *testing.T) {
+	cfg := testConfig()
+	adminAuthenticator, adminCookies := testJWTAuthRole(t, cfg, uuid.New(), string(repository.UserRoleAdmin), nil)
+	itemID := uuid.New()
+	service := &fakeManualItemService{item: itemcurator.Item{
+		ID: itemID, Name: "Manual tofu", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 18},
+		FoodCategories: []itemcurator.ClassificationSummary{}, CulinaryRoles: []itemcurator.ClassificationSummary{},
+	}}
+	audit := &adminAuditCoordinator{}
+	controller := NewManualItemAdminController(audit, service)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: adminAuthenticator, Audit: &auditSink{}, Routes: controller.Routes()})
+
+	unauthorized := manualItemHTTPRequest(t, app, fiber.MethodGet, "/api/v1/admin/items?query=tofu&page=1&pageSize=10", "", nil, nil, "", "")
+	unauthorized.Body.Close()
+	if unauthorized.StatusCode != fiber.StatusUnauthorized {
+		t.Fatalf("unauthorized search status=%d", unauthorized.StatusCode)
+	}
+	valid := manualItemHTTPRequest(t, app, fiber.MethodGet, "/api/v1/admin/items?query=%20TOFU%20&page=1&pageSize=10", "", adminCookies, nil, "", "")
+	var envelope struct {
+		Data struct {
+			Items []itemcurator.SearchSummary `json:"items"`
+			Total int                         `json:"total"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(valid.Body).Decode(&envelope); err != nil {
+		t.Fatal(err)
+	}
+	valid.Body.Close()
+	if valid.StatusCode != fiber.StatusOK || valid.Header.Get(fiber.HeaderCacheControl) != "no-store" || envelope.Data.Total != 1 || len(envelope.Data.Items) != 1 || envelope.Data.Items[0].ItemID != itemID || audit.committed != 0 {
+		t.Fatalf("valid search status=%d envelope=%+v audit=%+v", valid.StatusCode, envelope, audit)
+	}
+	for _, query := range []string{"", "query=tofu&page=0", "query=tofu&pageSize=51", "query=tofu&page=not-a-number"} {
+		response := manualItemHTTPRequest(t, app, fiber.MethodGet, "/api/v1/admin/items?"+query, "", adminCookies, nil, "", "")
+		response.Body.Close()
+		if response.StatusCode != fiber.StatusBadRequest {
+			t.Fatalf("invalid query %q status=%d", query, response.StatusCode)
+		}
+	}
+
+	userAuthenticator, userCookies := testJWTAuthRole(t, cfg, uuid.New(), string(repository.UserRoleUser), nil)
+	userApp := mustNewRouter(t, Dependencies{Config: cfg, Auth: userAuthenticator, Audit: &auditSink{}, Routes: controller.Routes()})
+	forbidden := manualItemHTTPRequest(t, userApp, fiber.MethodGet, "/api/v1/admin/items?query=tofu", "", userCookies, nil, "", "")
+	forbidden.Body.Close()
+	if forbidden.StatusCode != fiber.StatusForbidden || len(service.calls) != 1 {
+		t.Fatalf("forbidden status=%d service calls=%v", forbidden.StatusCode, service.calls)
+	}
 }
 
 func (s *fakeManualItemService) Update(_ context.Context, _ repository.AdminMutationExecutor, _ uuid.UUID, req itemcurator.Request) (itemcurator.MutationResult, error) {

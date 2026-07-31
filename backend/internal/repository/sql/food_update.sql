@@ -1,6 +1,6 @@
 -- Implements DESIGN-005 FoodItemEntity update query.
 UPDATE food_items
-SET name = $2,
+SET name = regexp_replace(btrim($2), '[[:space:]]+', ' ', 'g'),
     physical_state = $3,
     prep_time_minutes = $4,
     average_unit_weight_grams = $5,

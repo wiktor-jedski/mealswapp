@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from "svelte";
 	import { adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
-	import type { AdminClassification, AdminItem, AdminUser } from "../api/generated";
+	import type { AdminClassification, AdminItem, AdminItemSearchSummary, AdminUser } from "../api/generated";
 	import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
 
 	// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel authoritative administration workflows.
@@ -19,6 +19,14 @@
 	let itemError = $state("");
 	let createKey = $state("");
 	let createBody = $state("");
+	let itemSearchQuery = $state("");
+	let itemSearchItems = $state<AdminItemSearchSummary[]>([]);
+	let itemSearchPage = $state(1);
+	let itemSearchPageSize = $state(10);
+	let itemSearchTotal = $state(0);
+	let itemSearchStatus = $state<"idle" | "loading" | "success" | "empty" | "error">("idle");
+	let itemSearchError = $state("");
+	let itemSearchPages = $derived(Math.max(1, Math.ceil(itemSearchTotal / itemSearchPageSize)));
 	let classifications = $state<Record<ClassificationKind, AdminClassification[]>>({ food_category: [], culinary_role: [] });
 	let classificationKind = $state<ClassificationKind>("food_category");
 	let classificationName = $state("");
@@ -42,11 +50,13 @@
 	let classificationGeneration = 0;
 	let userGeneration = 0;
 	let itemController: AbortController | undefined;
+	let itemSearchController: AbortController | undefined;
+	let itemSearchGeneration = 0;
 	let classificationController: AbortController | undefined;
 	let userController: AbortController | undefined;
 
 	onMount(() => { void refreshClassifications(); });
-	onDestroy(() => { itemController?.abort(); classificationController?.abort(); userController?.abort(); });
+	onDestroy(() => { itemController?.abort(); itemSearchController?.abort(); classificationController?.abort(); userController?.abort(); });
 
 	function beginItemOperation(): { generation: number; controller: AbortController } {
 		itemController?.abort(); const controller = new AbortController(); itemController = controller; return { generation: ++itemGeneration, controller };
@@ -54,10 +64,14 @@
 	function beginClassificationOperation(): { generation: number; controller: AbortController } {
 		classificationController?.abort(); const controller = new AbortController(); classificationController = controller; return { generation: ++classificationGeneration, controller };
 	}
+	function beginItemSearch(): { generation: number; controller: AbortController } {
+		itemSearchController?.abort(); const controller = new AbortController(); itemSearchController = controller; return { generation: ++itemSearchGeneration, controller };
+	}
 	function beginUserOperation(): { generation: number; controller: AbortController } {
 		userController?.abort(); const controller = new AbortController(); userController = controller; return { generation: ++userGeneration, controller };
 	}
 	function currentItemOperation(generation: number, controller: AbortController): boolean { return generation === itemGeneration && !controller.signal.aborted; }
+	function currentItemSearch(generation: number, controller: AbortController): boolean { return generation === itemSearchGeneration && !controller.signal.aborted; }
 	function currentClassificationOperation(generation: number, controller: AbortController): boolean { return generation === classificationGeneration && !controller.signal.aborted; }
 	function currentUserOperation(generation: number, controller: AbortController): boolean { return generation === userGeneration && !controller.signal.aborted; }
 	function aborted(error: unknown): boolean { return error instanceof Error && error.name === "AbortError"; }
@@ -82,6 +96,37 @@
 		try { const item = await api.getItem(id, controller.signal); if (currentItemOperation(generation, controller)) { applyItem(item); itemMessage = "Authoritative item loaded."; } }
 		catch (error) { if (currentItemOperation(generation, controller) && !aborted(error)) { currentItem = undefined; itemError = message(error); } }
 		finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function searchItems(page = 1): Promise<boolean> {
+		const { generation, controller } = beginItemSearch();
+		const name = itemSearchQuery.trim();
+		if (!name) {
+			itemSearchItems = []; itemSearchPage = 1; itemSearchTotal = 0;
+			itemSearchError = "Enter an item name."; itemSearchStatus = "error"; return false;
+		}
+		itemSearchStatus = "loading"; itemSearchError = "";
+		try {
+			const result = await api.searchItems({ name, page, pageSize: itemSearchPageSize }, controller.signal);
+			if (!currentItemSearch(generation, controller)) return false;
+			const resultPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+			if (page > resultPages) return searchItems(resultPages);
+			itemSearchItems = result.items; itemSearchPage = result.page; itemSearchPageSize = result.pageSize; itemSearchTotal = result.total;
+			itemSearchStatus = result.items.length ? "success" : "empty";
+			return true;
+		} catch (error) {
+			if (currentItemSearch(generation, controller) && !aborted(error)) { itemSearchError = message(error); itemSearchStatus = "error"; }
+			return false;
+		}
+	}
+
+	async function loadSearchResult(item: AdminItemSearchSummary): Promise<void> {
+		itemId = item.itemId;
+		await loadItem();
+	}
+
+	async function refreshItemSearch(): Promise<boolean> {
+		return !itemSearchQuery.trim() || searchItems(Math.min(itemSearchPage, itemSearchPages));
 	}
 
 	function applyItem(item: AdminItem): void {
@@ -114,7 +159,11 @@
 				saved = await api.createItem(parsed.request, createKey, { signal: controller.signal });
 			}
 			const projection = await api.getItem(saved.id, controller.signal);
-			if (currentItemOperation(generation, controller)) { applyItem(projection); createKey = ""; createBody = ""; itemMessage = wasEditing ? "Item saved and refreshed." : "Item created and refreshed."; }
+			if (currentItemOperation(generation, controller)) {
+				applyItem(projection); createKey = ""; createBody = "";
+				const refreshed = await refreshItemSearch();
+				if (currentItemOperation(generation, controller)) itemMessage = refreshed ? (wasEditing ? "Item saved and refreshed." : "Item created and refreshed.") : (wasEditing ? "Item saved, but search results could not be refreshed." : "Item created, but search results could not be refreshed.");
+			}
 		} catch (error) {
 			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = message(error); if (targetId) await refreshCurrentItem(targetId, generation, controller); }
 		} finally { if (generation === itemGeneration) itemBusy = false; }
@@ -131,7 +180,15 @@
 	async function deleteItem(target: Confirmation): Promise<void> {
 		if (target.action !== "item" || currentItem?.id !== target.id) { itemError = "The confirmed item is no longer current. Reload it before deleting."; return; }
 		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = "";
-		try { await api.deleteItem(target.id, { signal: controller.signal }); if (currentItemOperation(generation, controller)) { resetItemState(); itemMessage = "Item deleted after server confirmation."; } }
+		try {
+			await api.deleteItem(target.id, { signal: controller.signal });
+			if (currentItemOperation(generation, controller)) {
+				resetItemState();
+				const hadSearch = Boolean(itemSearchQuery.trim());
+				const refreshed = await refreshItemSearch();
+				if (currentItemOperation(generation, controller)) itemMessage = !hadSearch ? "Item deleted after server confirmation." : refreshed ? "Item deleted and search results refreshed." : "Item deleted, but search results could not be refreshed.";
+			}
+		}
 		catch (error) { if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = message(error); await refreshCurrentItem(target.id, generation, controller); } }
 		finally { if (generation === itemGeneration) itemBusy = false; }
 	}
@@ -265,8 +322,26 @@
 <div class="grid gap-6" data-admin-data-management bind:this={adminRoot} tabindex="-1">
 	<div class="contents" data-admin-background inert={confirmation ? true : undefined}>
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="manual-items-title">
-		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Create an ownerless item or load one by ID to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy}>New item</button></div>
-		<form class="flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void loadItem(); }} aria-label="Load global item"><label class="grid flex-1 gap-1 text-sm">Item ID<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemId} /></label><button type="submit" class="self-end rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>Load</button></form>
+		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Search active ownerless items by name, then load the authoritative item to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy}>New item</button></div>
+		<form class="flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void searchItems(1); }} aria-label="Search global items"><label class="grid flex-1 gap-1 text-sm">Item name<input maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemSearchQuery} /></label><button type="submit" class="self-end rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchStatus === "loading"}>Search</button></form>
+		<div class="grid gap-2" aria-live="polite" aria-busy={itemSearchStatus === "loading"} data-admin-item-search-results>
+			{#if itemSearchStatus === "loading"}<p role="status" class="text-sm text-[var(--color-muted)]">Loading matching global items…</p>
+			{:else if itemSearchStatus === "error"}<div class="flex flex-wrap items-center gap-2"><p role="alert" class="text-sm text-[var(--color-error)]">{itemSearchError}</p>{#if itemSearchQuery.trim()}<button type="button" class="rounded border px-3 py-1 text-sm transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void searchItems(itemSearchPage)}>Retry search</button>{/if}</div>
+			{:else if itemSearchStatus === "empty"}<p role="status" class="text-sm text-[var(--color-muted)]">No active global items matched this name.</p>
+			{:else if itemSearchStatus === "success"}
+				<p class="text-sm text-[var(--color-muted)]">Showing {itemSearchItems.length} of {itemSearchTotal} matching items. IDs distinguish duplicate names.</p>
+				<ul class="grid gap-2">
+					{#each itemSearchItems as item (item.itemId)}
+						<li class="grid gap-2 rounded border border-[var(--color-border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]" data-admin-item-search-result>
+							<div class="grid min-w-0 gap-1"><h3 class="font-bold">{item.name}</h3><p class="break-all font-data text-xs text-[var(--color-muted)]">ID {item.itemId}</p><p class="text-sm">{item.physicalState === "solid" ? "Solid" : "Liquid"} · P {item.macrosPer100.protein} · C {item.macrosPer100.carbohydrates} · F {item.macrosPer100.fat}</p><p class="text-sm">Food Categories: {item.foodCategories.length ? item.foodCategories.map(({ name }) => name).join(", ") : "None"} · Culinary Roles: {item.culinaryRoles.length ? item.culinaryRoles.map(({ name }) => name).join(", ") : "None"}</p></div>
+							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>Edit {item.name}</button>
+						</li>
+					{/each}
+				</ul>
+				<nav class="flex items-center justify-between gap-3" aria-label="Global item search pages"><button type="button" class="rounded border px-3 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchPage <= 1} onclick={() => void searchItems(itemSearchPage - 1)}>Previous</button><span class="font-data text-sm">Page {itemSearchPage} of {itemSearchPages}</span><button type="button" class="rounded border px-3 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchPage >= itemSearchPages} onclick={() => void searchItems(itemSearchPage + 1)}>Next</button></nav>
+			{:else}<p class="text-sm text-[var(--color-muted)]">Enter a human-readable item name to begin.</p>{/if}
+		</div>
+		<details class="rounded border border-[var(--color-border)] p-3"><summary class="cursor-pointer font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]">Advanced: load by item ID</summary><form class="mt-3 flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void loadItem(); }} aria-label="Load global item"><label class="grid flex-1 gap-1 text-sm">Item ID<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-data focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemId} /></label><button type="submit" class="self-end rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>Load by ID</button></form></details>
 		<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveItem} aria-label="Manual global item form">
 			<label class="grid gap-1 text-sm sm:col-span-2">Name<input required maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.name} /></label>
 			<label class="grid gap-1 text-sm">Physical state<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.physicalState}><option value="solid">Solid</option><option value="liquid">Liquid</option></select></label>
