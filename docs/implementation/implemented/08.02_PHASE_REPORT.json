@@ -19,18 +19,26 @@
       "sha256": "02d807eb31963413afd213e68e145683ce578c161ef29630cf8812f12fb0873d"
     },
     {
+      "path": "docs/implementation/evidence/task-284-preparation.md",
+      "sha256": "01cead9dfe96a523890ca6ff68494b91db2ae1dd945048036421306fb64f4666"
+    },
+    {
       "path": "docs/implementation/evidence/task-288-preparation.md",
       "sha256": "c8658b9d18a23cbb5f446469264a76797f9012772f6320b009d5a0e80a8614a2"
+    },
+    {
+      "path": "docs/implementation/preparations/task-292.md",
+      "sha256": "aab352c5e40affeb70dc260e8a3186d45829837b0fcf4cae545b9cfd04c5d8b6"
     }
   ],
   "controls": [
     {
       "path": "docs/implementation/02_TASK_LIST.md",
-      "sha256": "b1d07c78263de78f48ebb784ff5407f2f4c9c8c6b44df352cfaedc7519ba40d2"
+      "sha256": "397957169d5110e34431139a4fb59101a255e43d3e023610e987f794196f3e4c"
     },
     {
       "path": "docs/implementation/04_OPEN.md",
-      "sha256": "58bfec757decb666d9980e0149310506fcd16a1325951449bc32c761f00b6f0e"
+      "sha256": "bbab440a3c73f17104cfd98056a4e9f9c6465e86e359fc66f15e6298db044bee"
     },
     {
       "path": "docs/testing/phase08/acceptance-manifest.json",
@@ -42,9 +50,9 @@
     }
   ],
   "counts": {
-    "BLOCKED": 12,
-    "FAIL": 7,
-    "PASS": 72
+    "BLOCKED": 8,
+    "FAIL": 3,
+    "PASS": 80
   },
   "gateStatus": "FAIL",
   "generatedAtUtc": "2026-07-29T10:15:00Z",
@@ -54,12 +62,8 @@
   },
   "openFindings": [
     "P08-FIND-281-002",
-    "P08-FIND-282-004",
     "P08-FIND-283-001",
-    "P08-FIND-283-002",
-    "P08-FIND-283-005",
     "P08-FIND-283-006",
-    "P08-FIND-284-001",
     "P08-FIND-285-001",
     "P08-FIND-285-002",
     "P08-FIND-285-003"
@@ -67,11 +71,11 @@
   "renderedArtifacts": [
     {
       "path": "docs/implementation/implemented/08.02_PHASE_REPORT.html",
-      "sha256": "4e642a01d124967f967e85ab9994f99c96cfc110911e7060cb7133a3dd648bc6"
+      "sha256": "47f4d172ca989d39f8c592e81a0540f0f732ddd3fce0e4f869c9436f6cef9e45"
     },
     {
       "path": "docs/implementation/implemented/08.02_PHASE_UAT.md",
-      "sha256": "9e3efc279f14e50fd74a7da5c0a53d7b9ede0c6b3d04de0b4c1838d71a6dd395"
+      "sha256": "4578c9e080e2635d823bdd6f5d711c500207366f030412940fbc40fef1feef71"
     }
   ],
   "results": [
@@ -447,14 +451,10 @@
     },
     {
       "criterionId": "P08-SWR033-STEP-01",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -495,24 +495,20 @@
           "evidence": [],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
-          "status": "BLOCKED",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Import a solid provider item."
     },
     {
       "criterionId": "P08-SWR033-STEP-02",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -539,24 +535,20 @@
           "evidence": [],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
-          "status": "BLOCKED",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Import a liquid provider item."
     },
     {
       "criterionId": "P08-SWR033-STEP-03",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -597,24 +589,20 @@
           "evidence": [],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
-          "status": "BLOCKED",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Compare displayed/stored macro bases with 100g and 100ml."
     },
     {
       "criterionId": "P08-SWR033-STEP-04",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -655,12 +643,12 @@
           "evidence": [],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
-          "status": "BLOCKED",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Verify changing display units does not change canonical nutritional values."
     },
     {
@@ -765,14 +753,10 @@
     },
     {
       "criterionId": "P08-SWR043-ACCEPT-01",
-      "findingIds": [
-        "P08-FIND-284-001"
-      ],
+      "findingIds": [],
       "kind": "criterion",
       "requirement": "SW-REQ-043",
-      "rootCauseIds": [
-        "ROOT-T284-EXPORT-OWNER-PROJECTION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
       "sources": [
         {
@@ -787,12 +771,12 @@
           ],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T284-EXPORT-OWNER-PROJECTION",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 284
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Accept when B cannot discover whether A\u2019s item exists and each export includes only its owner\u2019s data."
     },
     {
@@ -3022,14 +3006,10 @@
     },
     {
       "criterionId": "P08-SWR057-ACCEPT-05",
-      "findingIds": [
-        "P08-FIND-283-002"
-      ],
+      "findingIds": [],
       "kind": "criterion",
       "requirement": "SW-REQ-057",
-      "rootCauseIds": [
-        "ROOT-T283-CLASSIFICATION-LIFECYCLE"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR057-CLASSIFICATIONS",
       "sources": [
         {
@@ -3097,12 +3077,12 @@
             "e5acd1ec-b3fd-4563-8154-1c98a766e594",
             "f5666077-5cfe-4054-8f24-5889999c4306"
           ],
-          "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Changes appear across application instances without a restart."
     },
     {
@@ -3547,14 +3527,10 @@
     },
     {
       "criterionId": "P08-SWR057-STEP-08",
-      "findingIds": [
-        "P08-FIND-283-002"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-057",
-      "rootCauseIds": [
-        "ROOT-T283-CLASSIFICATION-LIFECYCLE"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR057-CLASSIFICATIONS",
       "sources": [
         {
@@ -3591,12 +3567,12 @@
             "e5acd1ec-b3fd-4563-8154-1c98a766e594",
             "f5666077-5cfe-4054-8f24-5889999c4306"
           ],
-          "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Open Substitution Search in another browser/application instance."
     },
     {
@@ -3739,14 +3715,10 @@
     },
     {
       "criterionId": "P08-SWR072-STEP-04",
-      "findingIds": [
-        "P08-FIND-284-001"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-072",
-      "rootCauseIds": [
-        "ROOT-T284-EXPORT-OWNER-PROJECTION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR072-DATA-PORTABILITY",
       "sources": [
         {
@@ -3761,12 +3733,12 @@
           ],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T284-EXPORT-OWNER-PROJECTION",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 284
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Confirm all owned data is present."
     },
     {
@@ -4694,13 +4666,11 @@
     {
       "criterionId": "P08-SWR090-STEP-04",
       "findingIds": [
-        "P08-FIND-282-004",
         "P08-FIND-283-006"
       ],
       "kind": "step",
       "requirement": "SW-REQ-090",
       "rootCauseIds": [
-        "ROOT-T282-VOCABULARY-DISABLE",
         "ROOT-T283-MICRONUTRIENT-VALIDATION"
       ],
       "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
@@ -4717,8 +4687,8 @@
           ],
           "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
           "requestIds": [],
-          "rootCauseId": "ROOT-T282-VOCABULARY-DISABLE",
-          "status": "BLOCKED",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 282
         },
         {

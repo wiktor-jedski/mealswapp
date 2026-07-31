@@ -312,7 +312,7 @@ func validateRequest(req Request) (Request, error) {
 	}
 	return Request{
 		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
-		Name: normalized.Name, PhysicalState: normalized.PhysicalState, PrepTimeMinutes: normalized.PrepTimeMinutes,
+		Name:              normalized.Name, PhysicalState: normalized.PhysicalState, PrepTimeMinutes: normalized.PrepTimeMinutes,
 		AverageUnitWeightGrams: normalized.AverageUnitWeightGrams, AverageServingVolumeMilliliters: normalized.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: normalized.DensityGramsPerMilliliter, DensitySourceProvider: normalized.DensitySourceProvider,
 		DensitySourceFoodID: normalized.DensitySourceFoodID, DensitySourceKind: normalized.DensitySourceKind, MacrosPer100: normalized.MacrosPer100,

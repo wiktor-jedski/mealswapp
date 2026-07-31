@@ -690,7 +690,7 @@ retained in the mandatory append-only
       "owner": "backend-data-curation",
       "retestCondition": "Provide the authorized vocabulary lifecycle capability and rerun Task 282 without database bypass.",
       "closedDate": "2026-07-31",
-      "passingEvidence": "Integrated Task 282 SW-REQ-090 report is all PASS, including production disable/restore and rejection evidence."
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-283-001",
@@ -710,7 +710,9 @@ retained in the mandatory append-only
       "observed": "Resolved by Task 291: the Administration UI exposes create-with-parent, reparent, detach, and hierarchy-conflict behavior, while the backend rejects stale cross-instance item writes with HTTP 409.",
       "expected": "Food Category and Culinary Role lifecycle and stable-ID filter propagation pass in two application instances.",
       "evidence": "logs/phase08-acceptance/task283-b4cf553614048ccd44daac9c-sw-req-057/report.json", "owner": "task291",
-      "retestCondition": "Closed: all SW-REQ-057 criteria and steps pass in both real-stack browser contexts with database/cache evidence."
+      "retestCondition": "Closed: all SW-REQ-057 criteria and steps pass in both real-stack browser contexts with database/cache evidence.",
+      "closedDate": "2026-07-31",
+      "passingEvidence": "docs/implementation/evidence/task-283-preparation.md"
     },
     {
       "id": "P08-FIND-283-003", "rootCauseId": "ROOT-T283-FILTER-CROSS-INSTANCE", "status": "CLOSED",
@@ -740,7 +742,7 @@ retained in the mandatory append-only
       "evidence": "docs/implementation/evidence/task-283-preparation.md; logs/phase08-acceptance/task282-e43e7193f5e3257f0cba65f9-sw-req-033/report.json; docs/implementation/preparations/task-292.md", "owner": "phase08-e2e",
       "retestCondition": "Execute partition and search/substitution scenarios with read-only owner/count evidence.",
       "closedDate": "2026-07-31",
-      "passingEvidence": "Task 282 integrated SW-REQ-033 report is all PASS; Task 292 integrated real-stack proofs show ownerless global discovery, private partition exclusion, Catalog/Substitution visibility, and deleted-item exclusion."
+      "passingEvidence": "docs/implementation/preparations/task-292.md"
     },
     {
       "id": "P08-FIND-283-006", "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION", "status": "OPEN BLOCKER",
@@ -790,7 +792,7 @@ retained in the mandatory append-only
       "owner": "backend-privacy",
       "retestCondition": "Rerun Task 284 and require P08-SWR043-ACCEPT-01 plus P08-SWR072-STEP-04 to pass with no nested owner or UserID fields in parsed JSON/CSV projections.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/71523b12517ff6b4d870302a/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-284-preparation.md"
     },
     {
       "id": "P08-FIND-285-001",
