@@ -346,7 +346,7 @@ func searchExternalRecords(ctx context.Context, query ExternalSearchQuery, provi
 			records = records[:query.PageSize]
 		}
 		all = append(all, records...)
-		if result.RejectedCandidates {
+		if result.RejectedCandidates > 0 {
 			warnings = append(warnings, ExternalDataWarning{item.name, string(ProviderErrorInvalidPayload), string(ProviderErrorInvalidPayload)})
 		}
 	}
