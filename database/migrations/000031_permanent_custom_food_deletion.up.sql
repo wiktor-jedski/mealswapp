@@ -6,12 +6,22 @@ CREATE TABLE IF NOT EXISTS deleted_custom_food_create_keys (
     PRIMARY KEY (user_id, key)
 );
 CREATE TEMP TABLE task298_legacy_custom_food_items ON COMMIT DROP AS
-SELECT id FROM custom_food_items WHERE deleted_at IS NOT NULL;
+SELECT id, owner_id FROM custom_food_items WHERE deleted_at IS NOT NULL;
+-- Preserve only the owner/key/expiry needed to reject a delayed legacy replay.
+INSERT INTO deleted_custom_food_create_keys (user_id, key, expires_at)
+SELECT m.user_id, m.key, now() + interval '24 hours'
+FROM mutation_idempotency_keys m
+JOIN task298_legacy_custom_food_items legacy
+  ON legacy.id::text = m.response_body->>'id'
+ AND legacy.owner_id = m.user_id
+WHERE m.method = 'POST' AND m.route = '/custom-items'
+ON CONFLICT (user_id, key) DO UPDATE SET expires_at = EXCLUDED.expires_at;
 -- Completed create claims for purged legacy items cannot remain replayable.
 DELETE FROM mutation_idempotency_keys m
 USING task298_legacy_custom_food_items legacy
 WHERE m.method = 'POST' AND m.route = '/custom-items'
-  AND m.response_body->>'id' = legacy.id::text;
+  AND m.response_body->>'id' = legacy.id::text
+  AND m.user_id = legacy.owner_id;
 -- Legacy soft-deleted items cannot remain valid Daily Diet Food Objects. Remove only
 -- their owner-scoped entries first so the hard purge is FK-safe and atomic.
 DELETE FROM saved_diet_meal_entries e

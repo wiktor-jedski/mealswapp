@@ -34,6 +34,13 @@ test("loads the raw generated export and deletes its owner-free custom item with
 });
 
 test("rejects ownership leakage, malformed identifiers, oversized exports, and non-empty deletes", async () => {
+	const customDietExport = {
+		...exportBundle,
+		savedDiets: [{ ...exportBundle.savedDiets[0], entries: [{ ...exportBundle.savedDiets[0].entries[0], foodObjectType: "custom_food_item" }] }]
+	};
+	globalThis.fetch = mock(async () => new Response(JSON.stringify(customDietExport), { status: 200 })) as typeof fetch;
+	await expect(loadAccountExport()).resolves.toEqual(customDietExport);
+
 	for (const leaking of [
 		{ ...exportBundle, customItems: [{ ...exportBundle.customItems[0], ownerId: itemId }] },
 		{ ...exportBundle, savedItems: [{ ...exportBundle.savedItems[0], UserID: itemId }] },
@@ -61,6 +68,14 @@ test("rejects ownership leakage, malformed identifiers, oversized exports, and n
 	let call = 0;
 	globalThis.fetch = mock(async () => ++call === 1
 		? new Response(JSON.stringify({ status: "ok", requestId: "csrf", data: { csrfToken: "csrf-261" } }), { status: 200 })
-		: new Response(JSON.stringify({ status: "ok" }), { status: 200 })) as typeof fetch;
-	await expect(deletePrivateCustomItem(itemId)).rejects.toBeInstanceOf(AccountDataClientError);
+		: new Response(JSON.stringify({
+			status: "error", requestId: "task-298", error: {
+				category: "conflict", code: "custom_item_in_use", message: "in use", retryable: false,
+				data: { affectedDiets: [{ id: objectId, name: "Portable diet" }] }
+			}
+		}), { status: 409 })) as typeof fetch;
+	await expect(deletePrivateCustomItem(itemId)).rejects.toMatchObject({
+		message: "Remove this item from the listed saved diets before permanent deletion.",
+		affectedDiets: [{ id: objectId, name: "Portable diet" }]
+	});
 });

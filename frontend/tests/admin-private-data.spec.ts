@@ -12,12 +12,13 @@ async function json(route: Route, status: number, body?: unknown): Promise<void>
 	await route.fulfill(body === undefined ? { status } : { status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-async function stubAdminShell(page: Page, exportHandler: (route: Route) => Promise<void>, deletedIds: string[] = []): Promise<void> {
+async function stubAdminShell(page: Page, exportHandler: (route: Route) => Promise<void>, deletedIds: string[] = [], deleteHandler?: (route: Route) => Promise<void>): Promise<void> {
 	await page.route("**/api/v1/**", async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
 		if (url.pathname === "/api/v1/account/export") return exportHandler(route);
 		if (url.pathname.startsWith("/api/v1/custom-items/") && request.method() === "DELETE") {
+			if (deleteHandler) return deleteHandler(route);
 			deletedIds.push(url.pathname.split("/").at(-1)!);
 			return json(route, 204);
 		}
@@ -59,12 +60,12 @@ test("failed refresh clears loaded private objects and controls until an owner-f
 	const privateData = await openPrivateData(page);
 	await expect(privateData.getByText("Previously loaded private item")).toBeVisible();
 	await privateData.getByRole("button", { name: "Delete private item" }).click();
-	await expect(privateData.getByRole("button", { name: "Confirm private item deletion" })).toBeVisible();
+	await expect(privateData.getByRole("button", { name: "Permanently delete private item" })).toBeVisible();
 	await privateData.getByRole("button", { name: "Refresh export" }).click();
 	await expect(privateData.getByText("Loading authoritative account export…")).toBeVisible();
 	await expect(privateData.getByText("Previously loaded private item")).toHaveCount(0);
 	await expect(privateData.getByRole("button", { name: "Delete private item" })).toHaveCount(0);
-	await expect(privateData.getByRole("button", { name: "Confirm private item deletion" })).toHaveCount(0);
+	await expect(privateData.getByRole("button", { name: "Permanently delete private item" })).toHaveCount(0);
 
 	releaseFailure();
 	await expect(privateData.getByRole("alert")).toContainText("Account data could not be refreshed");
@@ -103,7 +104,7 @@ test("accepted deletion reports verification-required failure and claims success
 
 	const privateData = await openPrivateData(page);
 	await privateData.getByRole("listitem").filter({ hasText: "Delete then verify" }).getByRole("button", { name: "Delete private item" }).click();
-	await privateData.getByRole("button", { name: "Confirm private item deletion" }).click();
+	await privateData.getByRole("button", { name: "Permanently delete private item" }).click();
 	await expect(privateData.getByText("Loading authoritative account export…")).toBeVisible();
 	await expect(privateData.getByRole("button", { name: "Delete private item" })).toHaveCount(0);
 	await expect(privateData).not.toContainText("Private item deleted and authoritative export refreshed.");
@@ -120,7 +121,7 @@ test("accepted deletion reports verification-required failure and claims success
 	await expect(privateData).not.toContainText("Private item deleted and authoritative export refreshed.");
 
 	await privateData.getByRole("button", { name: "Delete private item" }).click();
-	await privateData.getByRole("button", { name: "Confirm private item deletion" }).click();
+	await privateData.getByRole("button", { name: "Permanently delete private item" }).click();
 	await expect(privateData.getByText("Private item deleted and authoritative export refreshed.")).toBeVisible();
 	await expect(privateData.locator("[data-admin-private-data-empty]")).toBeVisible();
 	expect(deletedIds).toEqual([firstItemId, secondItemId]);
@@ -131,4 +132,42 @@ test("accepted deletion reports verification-required failure and claims success
 	releasePostSuccessFailure();
 	await expect(privateData.getByRole("alert")).toContainText("Account data could not be refreshed");
 	await expect(privateData).not.toContainText("Private item deleted and authoritative export refreshed.");
+});
+
+// Implements DESIGN-008 AccountDeleter permanent-deletion safety and saved-diet conflict recovery.
+test("requires irreversible confirmation and retains actionable saved-diet references after conflict", async ({ page }) => {
+	const dietId = "00000000-0000-4000-8000-000000000269";
+	await stubAdminShell(
+		page,
+		(route) => json(route, 200, bundle([item(firstItemId, "Referenced private item")])),
+		[],
+		(route) => json(route, 409, {
+			status: "error",
+			requestId: "task-298-conflict",
+			error: {
+				category: "conflict",
+				code: "custom_item_in_use",
+				message: "private item is still referenced",
+				retryable: false,
+				data: { affectedDiets: [{ id: dietId, name: "Weeknight private meals" }] }
+			}
+		})
+	);
+
+	const privateData = await openPrivateData(page);
+	await privateData.getByRole("button", { name: "Delete private item" }).click();
+	const dialog = privateData.getByRole("alertdialog");
+	await expect(dialog).toContainText("permanently and irreversibly");
+	await expect(dialog).toContainText("There is no Trash or Restore workflow");
+	await expect(dialog.getByRole("button", { name: "Permanently delete private item" })).toBeVisible();
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(privateData.getByText("Referenced private item")).toBeVisible();
+
+	await privateData.getByRole("button", { name: "Delete private item" }).click();
+	await privateData.getByRole("button", { name: "Permanently delete private item" }).click();
+	const alert = privateData.getByRole("alert");
+	await expect(alert).toContainText("Remove this item from the listed saved diets before permanent deletion.");
+	await expect(alert).toContainText("Open Daily Diets, remove this item from each listed diet, save the diet, then retry permanent deletion.");
+	await expect(alert.getByRole("list", { name: "Saved diets blocking permanent deletion" })).toContainText("Weeknight private meals");
+	await expect(privateData.getByText("Referenced private item")).toHaveCount(0);
 });

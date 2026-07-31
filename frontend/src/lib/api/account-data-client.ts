@@ -94,7 +94,7 @@ function assertSavedDiet(value: unknown): void {
 function assertSavedDietEntry(value: unknown): void {
 	if (!isRecord(value)) throw new AccountDataClientError();
 	assertExactKeys(value, ["id", "foodObjectId", "foodObjectType", "quantity", "unit", "position"]);
-	if (!uuid(value.id) || !uuid(value.foodObjectId) || !["food_item", "meal"].includes(String(value.foodObjectType)) || !positive(value.quantity) || !["g", "ml", "oz", "fl_oz"].includes(String(value.unit)) || !Number.isInteger(value.position) || Number(value.position) < 0 || Number(value.position) > 99) throw new AccountDataClientError();
+	if (!uuid(value.id) || !uuid(value.foodObjectId) || !["food_item", "meal", "custom_food_item"].includes(String(value.foodObjectType)) || !positive(value.quantity) || !["g", "ml", "oz", "fl_oz"].includes(String(value.unit)) || !Number.isInteger(value.position) || Number(value.position) < 0 || Number(value.position) > 99) throw new AccountDataClientError();
 }
 
 function assertSearchHistory(value: unknown): void {
