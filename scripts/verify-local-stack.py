@@ -112,15 +112,13 @@ def ensure_test_database() -> None:
 	# Implements DESIGN-005 RepositoryInterfaces fresh-stack test database bootstrap.
 	query = f"SELECT 1 FROM pg_database WHERE datname = '{TEST_DATABASE_NAME}'"
 	result = run([
-		"docker", "compose", "exec", "-T", "postgres",
-		"psql", "-U", "mealswapp", "-d", "postgres", "-tAc", query,
-	], capture=True)
+		"psql", "-h", "127.0.0.1", "-U", "mealswapp", "-d", "postgres", "-tAc", query,
+	], capture=True, env={"PGPASSWORD": "mealswapp"})
 	if result.stdout.strip() == "1":
 		return
 	run([
-		"docker", "compose", "exec", "-T", "postgres",
-		"createdb", "-U", "mealswapp", TEST_DATABASE_NAME,
-	])
+		"createdb", "-h", "127.0.0.1", "-U", "mealswapp", TEST_DATABASE_NAME,
+	], env={"PGPASSWORD": "mealswapp"})
 
 
 def ensure_local_dependencies() -> set[str]:
