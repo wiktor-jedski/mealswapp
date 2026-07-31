@@ -725,7 +725,6 @@ func TestPostgresVocabularyRepositoryValidation(t *testing.T) {
 	}
 }
 
-<<<<<<< ours
 // TestPostgresVocabularyAdministratorLifecycle proves deterministic listing, replay, guarded changes, and reactivation.
 // Implements DESIGN-005 MicronutrientVocabulary.
 func TestPostgresVocabularyAdministratorLifecycle(t *testing.T) {
