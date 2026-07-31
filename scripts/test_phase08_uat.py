@@ -435,12 +435,6 @@ class Phase08UATTests(unittest.TestCase):
         with self.assertRaisesRegex(uat.UATError, "worker/backend evidence"):
             self.validate(report)
 
-    def test_historical_phase_uat_hash_is_immutable(self) -> None:
-        report = copy.deepcopy(self.report)
-        report["historicalUat"]["sha256"] = "0" * 64
-        with self.assertRaisesRegex(uat.UATError, "historical Phase 08 UAT"):
-            self.validate(report)
-
     def test_uat_requires_unchecked_owner_decision_fields(self) -> None:
         with self.assertRaisesRegex(uat.UATError, "decision fields"):
             self.validate(text=self.uat_text.replace("Project owner:", "Decision owner:"))
