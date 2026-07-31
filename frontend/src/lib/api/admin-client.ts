@@ -68,7 +68,7 @@ export async function createAdminItem(requestBody: AdminItemRequest, idempotency
 
 /** Replaces one global item and returns only the server projection. */
 export async function replaceAdminItem(itemId: string, requestBody: AdminItemRequest, options: AdminMutationOptions = {}): Promise<AdminItem> {
-	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options, options.headers), 200);
+	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options, options.headers), 200, true);
 }
 
 /** Soft-deletes one global item only after an empty 204 response. */
@@ -256,13 +256,6 @@ async function decodeItem(responsePromise: Promise<Response> | Response, expecte
 		if (!mutationResponse || !(error instanceof AdminClientError) || error.appError.code !== "malformed_admin_response") throw error;
 		throw malformed(response.status, error.appError.requestId ?? requestIdFrom(raw), "possibly_committed");
 	}
-}
-
-function decodeItemSearchSummary(value: unknown, status: number): AdminItemSearchSummary {
-	if (!exact(value, ["itemId", "name", "physicalState", "macrosPer100", "foodCategories", "culinaryRoles"]) || !uuid(value.itemId) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !macroProfile(value.macrosPer100) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100) throw malformed(status);
-	value.foodCategories.forEach((classification) => decodeClassificationSummary(classification, "food_category", status));
-	value.culinaryRoles.forEach((classification) => decodeClassificationSummary(classification, "culinary_role", status));
-	return value as unknown as AdminItemSearchSummary;
 }
 
 function decodeItemSearchSummary(value: unknown, status: number): AdminItemSearchSummary {

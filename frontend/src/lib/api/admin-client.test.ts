@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import {
-	createAdminClassification, createAdminItem, createAdminMicronutrient, deleteAdminClassification, deleteAdminItem, getAdminItem,
+	AdminClientError, createAdminClassification, createAdminItem, createAdminMicronutrient, deleteAdminClassification, deleteAdminItem, getAdminItem,
 	listAdminClassifications, listAdminMicronutrients, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion,
 	setAdminMicronutrientActive, updateAdminMicronutrientDisplayName, updateAdminMicronutrientUnit
 	, searchAdminItems
