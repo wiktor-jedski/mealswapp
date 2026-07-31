@@ -142,6 +142,11 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 		return mapPostgresError(err, "update manual food item")
 	}
 	if result.RowsAffected() == 0 {
+		if _, lookupErr := getManualFoodByID(ctx, tx, item.ID, false); lookupErr == nil {
+			return NewError(ErrorKindConflict, "food item has changed since it was read", nil)
+		} else if !IsKind(lookupErr, ErrorKindNotFound) {
+			return lookupErr
+		}
 		return NewError(ErrorKindNotFound, "food item not found", nil)
 	}
 	if err := replaceFoodClassificationsWithExecutor(ctx, tx, item.ID, item.FoodCategories, item.CulinaryRoles); err != nil {
