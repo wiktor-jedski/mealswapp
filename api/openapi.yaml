@@ -3808,17 +3808,15 @@ components:
       required: [user, consent, savedItems, savedDiets, history, customItems]
       properties:
         user:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/ExportUser"
         consent:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/ExportConsent"
         savedItems:
           type: array
           items:
-            $ref: "#/components/schemas/SavedItem"
+            $ref: "#/components/schemas/ExportSavedItem"
         savedDiets:
           type: array
           items:
@@ -3826,11 +3824,62 @@ components:
         history:
           type: array
           items:
-            $ref: "#/components/schemas/SearchHistoryEntry"
+            $ref: "#/components/schemas/ExportSearchHistoryEntry"
         customItems:
           type: array
           items:
-            $ref: "#/components/schemas/CustomItem"
+            $ref: "#/components/schemas/ExportCustomItem"
+    # Implements DESIGN-008 DataExporter top-level account identity.
+    ExportUser:
+      type: object
+      additionalProperties: false
+      required: [userId, email, role, displayName, unitSystem, themePreference]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin]
+        displayName:
+          type: string
+        unitSystem:
+          type: string
+          enum: [metric, imperial]
+        themePreference:
+          type: string
+          enum: [system, light, dark]
+    # Implements DESIGN-008 DataExporter legal-consent projection.
+    ExportConsent:
+      type: object
+      additionalProperties: false
+      required: [privacyPolicyVersion, termsVersion]
+      properties:
+        privacyPolicyVersion:
+          type: string
+        termsVersion:
+          type: string
+    # Implements DESIGN-008 DataExporter owner-free saved-item projection.
+    ExportSavedItem:
+      type: object
+      additionalProperties: false
+      required: [id, itemId, kind, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        itemId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [favorite, saved_meal, saved_diet]
+        createdAt:
+          type: string
+          format: date-time
     ExportSavedDiet:
       type: object
       additionalProperties: false
@@ -3847,13 +3896,115 @@ components:
           type: array
           maxItems: 100
           items:
-            $ref: "#/components/schemas/DailyDietFoodObjectEntry"
+            $ref: "#/components/schemas/ExportSavedDietEntry"
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+    # Implements DESIGN-008 DataExporter owner-free saved-diet entry projection.
+    ExportSavedDietEntry:
+      type: object
+      additionalProperties: false
+      required: [id, foodObjectId, foodObjectType, quantity, unit, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        foodObjectId:
+          type: string
+          format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+          multipleOf: 0.001
+        unit:
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 99
+    # Implements DESIGN-008 DataExporter owner-free search-history projection.
+    ExportSearchHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [id, query, mode, filtersHash, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        query:
+          type: string
+        mode:
+          type: string
+        filtersHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    # Implements DESIGN-008 DataExporter owner-free private-item projection.
+    ExportCustomItem:
+      type: object
+      additionalProperties: false
+      required: [id, name, physicalState, prepTimeMinutes, macrosPer100, micros, foodCategories, culinaryRoles]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        physicalState:
+          type: string
+          enum: [solid, liquid]
+        prepTimeMinutes:
+          type: integer
+          minimum: 0
+        averageUnitWeightGrams:
+          type: number
+          exclusiveMinimum: 0
+        averageServingVolumeMilliliters:
+          type: number
+          exclusiveMinimum: 0
+        densityGramsPerMilliliter:
+          type: number
+          exclusiveMinimum: 0
+        densitySourceProvider:
+          type: string
+          maxLength: 200
+        densitySourceFoodId:
+          type: string
+          maxLength: 200
+        densitySourceKind:
+          type: string
+          enum: [imported, manual, estimated]
+        macrosPer100:
+          $ref: "#/components/schemas/MacroProfile"
+        micros:
+          type: object
+          propertyNames:
+            minLength: 1
+            maxLength: 120
+          additionalProperties:
+            type: number
+            minimum: 0
+        foodCategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        culinaryRoles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        imageUrl:
+          type: string
+          format: uri-reference
+          maxLength: 2048
     ExportFormat:
       type: string
       enum: [json, csv]

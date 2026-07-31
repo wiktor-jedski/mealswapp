@@ -1393,12 +1393,39 @@ export type SearchHistoryEnvelope = Envelope<SearchHistoryData>;
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** JSON account export bundle. */
 export interface ExportBundle {
-\tuser: Record<string, unknown>;
-\tconsent: Array<Record<string, unknown>>;
-\tsavedItems: SavedItem[];
+\tuser: ExportUser;
+\tconsent: ExportConsent[];
+\tsavedItems: ExportSavedItem[];
 \tsavedDiets: ExportSavedDiet[];
-\thistory: SearchHistoryEntry[];
-\tcustomItems: Array<Record<string, unknown>>;
+\thistory: ExportSearchHistoryEntry[];
+\tcustomItems: ExportCustomItem[];
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** Top-level authenticated account identity. */
+export interface ExportUser {
+\tuserId: string;
+\temail: string;
+\trole: "user" | "admin";
+\tdisplayName: string;
+\tunitSystem: "metric" | "imperial";
+\tthemePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One accepted legal-version pair. */
+export interface ExportConsent {
+\tprivacyPolicyVersion: string;
+\ttermsVersion: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free saved-item reference. */
+export interface ExportSavedItem {
+\tid: string;
+\titemId: string;
+\tkind: "favorite" | "saved_meal" | "saved_diet";
+\tcreatedAt: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -1406,9 +1433,50 @@ export interface ExportBundle {
 export interface ExportSavedDiet {
 \tid: string;
 \tname: string;
-\tentries: DailyDietFoodObjectEntry[];
+\tentries: ExportSavedDietEntry[];
 \tcreatedAt: string;
 \tupdatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One ordered owner-free saved-diet entry. */
+export interface ExportSavedDietEntry {
+\tid: string;
+\tfoodObjectId: string;
+\tfoodObjectType: FoodObjectType;
+\tquantity: number;
+\tunit: CanonicalQuantityUnit;
+\tposition: number;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free decrypted search-history entry. */
+export interface ExportSearchHistoryEntry {
+\tid: string;
+\tquery: string;
+\tmode: string;
+\tfiltersHash: string;
+\tcreatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free private custom-item projection. */
+export interface ExportCustomItem {
+\tid: string;
+\tname: string;
+\tphysicalState: "solid" | "liquid";
+\tprepTimeMinutes: number;
+\taverageUnitWeightGrams?: number;
+\taverageServingVolumeMilliliters?: number;
+\tdensityGramsPerMilliliter?: number;
+\tdensitySourceProvider?: string;
+\tdensitySourceFoodId?: string;
+\tdensitySourceKind?: "imported" | "manual" | "estimated";
+\tmacrosPer100: MacroProfile;
+\tmicros: Record<string, number>;
+\tfoodCategories: ClassificationSummary[];
+\tculinaryRoles: ClassificationSummary[];
+\timageUrl?: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -2169,7 +2237,7 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 
 def generated_contract(source: str) -> str:
 	"""Render shared quantity enums and administration TSDoc from OpenAPI."""
-	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 4:
+	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 5:
 		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
 	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
 	if match is None:
