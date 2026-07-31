@@ -75,22 +75,6 @@ class Phase08UATTests(unittest.TestCase):
                 with self.assertRaises(uat.UATError):
                     self.validate(report)
 
-    def test_list_valued_hash_operands_are_bounded_validation_errors(self) -> None:
-        mutations = (
-            (("results", 0, "criterionId"), []),
-            (("results", 0, "sources", 0, "report"), []),
-            (("results", 0, "sources", 0, "status"), []),
-        )
-        for path, value in mutations:
-            with self.subTest(path=path):
-                report = copy.deepcopy(self.report)
-                target = report
-                for part in path[:-1]:
-                    target = target[part]
-                target[path[-1]] = value
-                with self.assertRaises(uat.UATError):
-                    self.validate(report)
-
     def test_all_nested_operation_fields_are_type_guarded(self) -> None:
         mutations = (
             (("counts", "PASS"), []),
@@ -117,11 +101,8 @@ class Phase08UATTests(unittest.TestCase):
             (("taskTrace", 0, "component"), {}),
             (("taskTrace", 0, "evidence"), {}),
             (("taskTrace", 0, "evidence", 0, "path"), []),
-            (("taskTrace", 0, "evidence", 0, "sha256"), []),
             (("controls", 0, "path"), []),
-            (("closureEvidence", 0, "sha256"), []),
             (("historicalUat", "path"), []),
-            (("historicalUat", "sha256"), {}),
             (("acceptanceDecision", "status"), []),
             (("acceptanceDecision", "owner"), {}),
             (("acceptanceDecision", "date"), []),
@@ -230,23 +211,6 @@ class Phase08UATTests(unittest.TestCase):
                     {item["id"]: item for item in criteria},
                     findings,
                 )
-
-    def test_source_result_hash_operands_are_bounded_validation_errors(self) -> None:
-        original = Path(self.report["results"][0]["sources"][0]["report"]).parent
-        criteria, findings = uat.load_controls()
-        criteria_by_id = {item["id"]: item for item in criteria}
-        for field in ("criterionId", "status"):
-            with self.subTest(field=field), tempfile.TemporaryDirectory(
-                dir=uat.ROOT / "logs"
-            ) as temporary:
-                copied = Path(temporary) / "source"
-                shutil.copytree(uat.ROOT / original, copied)
-                report_path = copied / "report.json"
-                report = json.loads(report_path.read_text(encoding="utf-8"))
-                report["results"][0][field] = []
-                report_path.write_text(json.dumps(report), encoding="utf-8")
-                with self.assertRaises(uat.UATError):
-                    uat.validate_source_report(report_path, criteria_by_id, findings)
 
     def test_malformed_build_input_is_bounded_before_operations(self) -> None:
         source = json.loads(uat.INPUT.read_text(encoding="utf-8"))

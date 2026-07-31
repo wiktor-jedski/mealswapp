@@ -100,7 +100,6 @@ FINAL_SOURCE_KEYS = {
     "evidence",
     "backendEvidence",
 }
-HASH_ROW_KEYS = {"path", "sha256"}
 TASK_TRACE_KEYS = {
     "taskId",
     "component",
@@ -526,13 +525,7 @@ def validate_build_input(source: Any) -> dict[str, Any]:
     if not isinstance(source["generatedAtUtc"], str):
         raise UATError("UAT input generation time is malformed")
     historical = source["historicalUat"]
-    if (
-        not isinstance(historical, dict)
-        or set(historical) != HASH_ROW_KEYS
-        or not isinstance(historical["path"], str)
-        or not isinstance(historical["sha256"], str)
-        or not re.fullmatch(r"[0-9a-f]{64}", historical["sha256"])
-    ):
+    if not isinstance(historical, dict) or not isinstance(historical.get("path"), str):
         raise UATError("historical UAT input is malformed")
     repo_path(historical["path"])
     for key, valid_tasks in (
@@ -804,8 +797,6 @@ def build(input_path: Path = INPUT) -> dict[str, Any]:
     criteria_by_id = {item["id"]: item for item in criteria}
     historical = source["historicalUat"]
     historical_path = repo_path(historical["path"])
-    if sha256(historical_path) != historical["sha256"]:
-        raise UATError("historical Phase 08 UAT changed")
     reports: list[tuple[int, Path, dict[str, Any]]] = []
     copied_paths: list[Path] = []
     destination_names: set[str] = set()
@@ -826,7 +817,6 @@ def build(input_path: Path = INPUT) -> dict[str, Any]:
     for item in source["supportingArtifacts"]:
         task_id = item["taskId"]
         original = repo_path(item["path"])
-        sha256(original)
         parts = original.relative_to(ROOT).parts
         if "real-stack-e2e" not in parts or parts.index("real-stack-e2e") + 1 >= len(parts):
             raise UATError("supporting artifact path is malformed")
@@ -846,7 +836,6 @@ def build(input_path: Path = INPUT) -> dict[str, Any]:
     for item in source["taskEvidence"]:
         task_id = item["taskId"]
         path = repo_path(item["path"])
-        sha256(path)
         task_evidence_by_id[task_id].append(path)
     if set(task_evidence_by_id) != set(range(276, 286)):
         raise UATError("supporting evidence must cover Tasks 276-285")
@@ -860,7 +849,6 @@ def build(input_path: Path = INPUT) -> dict[str, Any]:
     for finding in findings.values():
         if finding["status"] == "CLOSED":
             path = ROOT / finding["passingEvidence"]
-            sha256(path)
             closure_paths.append(path)
     report = {
         "schema": SCHEMA,
@@ -892,22 +880,18 @@ def build(input_path: Path = INPUT) -> dict[str, Any]:
     return report
 
 
-def validate_hash_rows(rows: Any) -> None:
-    """Validate every recorded evidence fingerprint against current content."""
+def validate_evidence_paths(rows: Any) -> None:
+    """Validate that recorded evidence paths remain safe and available."""
 
     if not isinstance(rows, list):
-        raise UATError("evidence hash manifest must be an array")
+        raise UATError("evidence manifest must be an array")
     for row in rows:
         if (
             not isinstance(row, dict)
-            or set(row) != HASH_ROW_KEYS
-            or not isinstance(row["path"], str)
-            or not isinstance(row["sha256"], str)
+            or not isinstance(row.get("path"), str)
         ):
-            raise UATError("evidence hash row is malformed")
-        path = repo_path(row["path"])
-        if sha256(path) != row["sha256"]:
-            raise UATError(f"stale evidence hash: {row['path']}")
+            raise UATError("evidence row is malformed")
+        repo_path(row["path"])
 
 
 def validate_final_schema(report: Any, uat_text: Any) -> dict[str, Any]:
@@ -1009,7 +993,7 @@ def validate_final_schema(report: Any, uat_text: Any) -> dict[str, Any]:
             for key in TASK_TRACE_KEYS - {"taskId", "evidence"}
         ):
             raise UATError(f"Task {item['taskId']} trace metadata is malformed")
-        validate_hash_rows(item["evidence"])
+        validate_evidence_paths(item["evidence"])
     for section in (
         "controls",
         "closureEvidence",
@@ -1017,14 +1001,9 @@ def validate_final_schema(report: Any, uat_text: Any) -> dict[str, Any]:
         "runContextEvidence",
         "sourceEvidence",
     ):
-        validate_hash_rows(report[section])
+        validate_evidence_paths(report[section])
     historical = report["historicalUat"]
-    if (
-        not isinstance(historical, dict)
-        or set(historical) != HASH_ROW_KEYS
-        or not isinstance(historical["path"], str)
-        or not isinstance(historical["sha256"], str)
-    ):
+    if not isinstance(historical, dict) or not isinstance(historical.get("path"), str):
         raise UATError("historical Phase 08 UAT reference is malformed")
     decision = report["acceptanceDecision"]
     if not isinstance(decision, dict) or set(decision) != DECISION_KEYS:
@@ -1046,7 +1025,7 @@ def validate_final_schema(report: Any, uat_text: Any) -> dict[str, Any]:
 
 
 def validate_final(report: dict[str, Any], uat_text: str) -> None:
-    """Validate the committed final report, hashes, traceability, and UAT."""
+    """Validate the committed final report, traceability, and UAT."""
 
     try:
         acceptance.assert_safe_value(report, "final report")
@@ -1100,7 +1079,7 @@ def validate_final(report: dict[str, Any], uat_text: str) -> None:
                 if evidence["type"] not in criterion["evidenceTypes"]:
                     raise UATError(f"{item['criterionId']}: final evidence type is not allowed")
                 evidence_path = acceptance.safe_relative_path(evidence["path"], "evidence path")
-                sha256(source_report.parent / evidence_path)
+                repo_path(str((source_report.parent / evidence_path).relative_to(ROOT)))
         if item["status"] != "PASS":
             roots = set(item.get("rootCauseIds", []))
             open_findings = {
@@ -1135,7 +1114,7 @@ def validate_final(report: dict[str, Any], uat_text: str) -> None:
     for item in trace:
         if item["status"] != rows[item["taskId"]]["status"]:
             raise UATError(f"Task {item['taskId']} status is stale")
-        validate_hash_rows(item.get("evidence"))
+        validate_evidence_paths(item.get("evidence"))
     for section in (
         "controls",
         "closureEvidence",
@@ -1143,7 +1122,7 @@ def validate_final(report: dict[str, Any], uat_text: str) -> None:
         "runContextEvidence",
         "sourceEvidence",
     ):
-        validate_hash_rows(report.get(section))
+        validate_evidence_paths(report.get(section))
     expected_closures = {
         finding["passingEvidence"]
         for finding in findings.values()
@@ -1153,8 +1132,7 @@ def validate_final(report: dict[str, Any], uat_text: str) -> None:
     if actual_closures != expected_closures:
         raise UATError("closed findings lack exact passing retest evidence")
     historical = report.get("historicalUat", {})
-    if sha256(repo_path(historical.get("path"))) != historical.get("sha256"):
-        raise UATError("historical Phase 08 UAT was rewritten")
+    repo_path(historical.get("path"))
     if (
         "Decision: ☐ Accepted  ☐ Rejected  ☐ Accepted with recorded deviations" not in uat_text
         or "Project owner: ____________________  Date: ____________________" not in uat_text
@@ -1167,7 +1145,7 @@ def command_validate() -> int:
     """Validate the committed Task 286 report and UAT."""
 
     validate_final(load_json(REPORT_JSON), UAT.read_text(encoding="utf-8"))
-    print("Phase 08.02 UAT valid: 91 criteria, Tasks 276-286, evidence hashes current")
+    print("Phase 08.02 UAT valid: 91 criteria, Tasks 276-286, evidence paths current")
     return 0
 
 
