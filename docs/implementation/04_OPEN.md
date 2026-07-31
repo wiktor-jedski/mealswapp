@@ -676,7 +676,7 @@ retained in the mandatory append-only
     {
       "id": "P08-FIND-282-004",
       "rootCauseId": "ROOT-T282-VOCABULARY-DISABLE",
-      "status": "OPEN BLOCKER",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-090"
       ],
@@ -685,9 +685,11 @@ retained in the mandatory append-only
       ],
       "observed": "Administration exposes no production capability to disable and restore a micronutrient vocabulary entry, so the required disabled-entry import scenario cannot be driven without direct database mutation.",
       "expected": "The acceptance flow disables a vocabulary entry through an authorized production boundary, proves import rejection, restores it, and leaves no fixture state.",
-      "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json",
+      "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json; logs/phase08-acceptance/task282-e43e7193f5e3257f0cba65f9-sw-req-090/report.json",
       "owner": "backend-data-curation",
-      "retestCondition": "Provide the authorized vocabulary lifecycle capability and rerun Task 282 without database bypass."
+      "retestCondition": "Provide the authorized vocabulary lifecycle capability and rerun Task 282 without database bypass.",
+      "closedDate": "2026-07-31",
+      "passingEvidence": "Integrated Task 282 SW-REQ-090 report is all PASS, including production disable/restore and rejection evidence."
     },
     {
       "id": "P08-FIND-283-001",
@@ -730,12 +732,14 @@ retained in the mandatory append-only
       "passingEvidence": "docs/implementation/evidence/task-283-preparation.md"
     },
     {
-      "id": "P08-FIND-283-005", "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION", "status": "OPEN BLOCKER",
+      "id": "P08-FIND-283-005", "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION", "status": "CLOSED",
       "requirements": ["SW-REQ-033"], "scenarios": ["P08-SWR033-STANDARDIZED-STORAGE"],
       "observed": "The available probes do not establish ownerless global discovery, normalization/partition isolation, Catalog/Substitution visibility, or deletion search exclusion for the newly created manual records.",
       "expected": "Global and private partitions remain isolated while normalized global records are discoverable through both production search surfaces.",
-      "evidence": "docs/implementation/evidence/task-283-preparation.md", "owner": "phase08-e2e",
-      "retestCondition": "Execute partition and search/substitution scenarios with read-only owner/count evidence."
+      "evidence": "docs/implementation/evidence/task-283-preparation.md; logs/phase08-acceptance/task282-e43e7193f5e3257f0cba65f9-sw-req-033/report.json; docs/implementation/preparations/task-292.md", "owner": "phase08-e2e",
+      "retestCondition": "Execute partition and search/substitution scenarios with read-only owner/count evidence.",
+      "closedDate": "2026-07-31",
+      "passingEvidence": "Task 282 integrated SW-REQ-033 report is all PASS; Task 292 integrated real-stack proofs show ownerless global discovery, private partition exclusion, Catalog/Substitution visibility, and deleted-item exclusion."
     },
     {
       "id": "P08-FIND-283-006", "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION", "status": "OPEN BLOCKER",
@@ -839,10 +843,10 @@ retained in the mandatory append-only
 <!-- phase08-acceptance-findings:end -->
 
 - **ACCEPTED OUT OF SCOPE (project-owner decision, 2026-07-29):** no implementation task will be created for `P08-FIND-281-002`. The stale-refresh behavior is not important for the current Phase 08 scope. The finding remains in the append-only acceptance ledger because its failed test result is historical evidence; this disposition does not claim that the behavior passed a retest.
-- **PLANNED (Tasks 289-290, accepted 2026-07-29; owner: backend/frontend/data-curation/tooling maintainers):** resolve `P08-FIND-282-004` with verified-administrator micronutrient vocabulary management in both the Administration UI and an authenticated operator CLI. Canonical keys remain stable, hard deletion is not exposed, and unit changes or deactivation are blocked while the key is in use.
+- **IMPLEMENTED (Tasks 289-290, verified 2026-07-31; owner: backend/frontend/data-curation/tooling maintainers):** resolved `P08-FIND-282-004` with verified-administrator micronutrient vocabulary management in both the Administration UI and authenticated operator CLI. Canonical keys remain stable, hard deletion is not exposed, and the integrated Task 282 run proves disable/restore and rejection behavior.
 - **TRACKING (Task 302, project-owner decision, 2026-07-29):** `P08-FIND-283-001` is a broad manual-catalog acceptance tracker, not one implementation defect. Do not create a duplicate implementation task for it. Task 302 owns the final isolated real-stack retest and may close this tracker only with mapped passing evidence after the specific product tasks are complete.
 - **CLOSED (Task 291, verified 2026-07-31; owner: frontend/data-curation maintainers):** resolved `P08-FIND-283-002` by exposing classification create-with-parent, reparent, detach, and hierarchy-conflict behavior in the Administration UI. The isolated SW-REQ-057 acceptance scenario passes all criteria and steps in both real-stack browser contexts; the cross-instance stale-write regression returns HTTP 409 with no duplicate mutation or audit.
-- **PLANNED (Task 292, accepted 2026-07-29; owner: backend/frontend/data-curation maintainers):** resolve `P08-FIND-283-005` with an administrator-only, global-only paginated item search contract and accessible picker, while retaining direct UUID loading as a secondary advanced tool. The isolated retest must prove ownerlessness, private partition isolation, Catalog and Substitution visibility, and deletion exclusion.
+- **IMPLEMENTED (Task 292, verified 2026-07-31; owner: backend/frontend/data-curation maintainers):** resolved `P08-FIND-283-005` with an administrator-only, global-only paginated item search contract and accessible picker, while retaining direct UUID loading as a secondary advanced tool. Integrated Task 282 provider evidence and Task 292 real-stack proofs establish ownerlessness, private partition isolation, Catalog and Substitution visibility, and deletion exclusion.
 - **TRACKING (Task 302, project-owner decision, 2026-07-29):** `P08-FIND-283-006` is a real-stack evidence gap, not a confirmed separate product defect. Do not create a duplicate product task. Task 302 must prove valid and invalid micronutrient, allergen, and classification behavior together with exact persistence, audit, rollback, and Redis-generation counts.
 - **PLANNED (Task 293, accepted 2026-07-29; owner: backend/privacy/frontend maintainers):** resolve `P08-FIND-284-001` with export-only nested projections. Keep the account identity only in the top-level user section and remove repeated persistence ownership fields from nested JSON and CSV data, then rerun the isolated private-isolation and portability scenarios.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-001` to Phase 09 planning. It requires an approved deployed test origin, bounded GCP Cloud Logging scope, least-privilege reader, and retention evidence. No task is created now. Local console output remains invalid evidence.

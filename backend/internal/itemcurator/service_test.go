@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -38,6 +40,26 @@ func (s *memoryStore) GetByID(_ context.Context, id uuid.UUID, _ bool) (reposito
 
 func (s *memoryStore) GetByIDInMutation(ctx context.Context, _ repository.AdminMutationExecutor, id uuid.UUID, deleted bool) (repository.FoodItemEntity, error) {
 	return s.GetByID(ctx, id, deleted)
+}
+
+func (s *memoryStore) Search(_ context.Context, name string, limit int, offset int) ([]repository.FoodItemEntity, int, error) {
+	matches := []repository.FoodItemEntity{}
+	for _, item := range s.items {
+		if strings.Contains(strings.ToLower(item.Name), name) {
+			matches = append(matches, item)
+		}
+	}
+	slices.SortFunc(matches, func(left, right repository.FoodItemEntity) int {
+		if compared := strings.Compare(strings.ToLower(left.Name), strings.ToLower(right.Name)); compared != 0 {
+			return compared
+		}
+		return strings.Compare(left.ID.String(), right.ID.String())
+	})
+	total := len(matches)
+	if offset >= total {
+		return []repository.FoodItemEntity{}, total, nil
+	}
+	return matches[offset:min(offset+limit, total)], total, nil
 }
 
 func (s *memoryStore) ClaimCreate(_ context.Context, _ repository.AdminMutationExecutor, claim repository.ManualFoodItemCreateClaim, encode repository.ManualFoodItemResponseEncoder) (repository.ManualFoodItemCreateClaimResult, error) {
@@ -159,5 +181,32 @@ func TestServiceRejectsInvalidFieldsAndLiquidDensity(t *testing.T) {
 	liquid := Request{Name: "Manual milk", PhysicalState: repository.PhysicalStateLiquid, AverageServingVolumeMilliliters: 250, DensityGramsPerMilliliter: 1.03, DensitySourceKind: "manual", MacrosPer100: repository.MacroValues{Protein: 3}}
 	if result, err := service.Create(context.Background(), tx, adminID, "liquid-key-0001", liquid); err != nil || result.Item.DensityGramsPerMilliliter != 1.03 {
 		t.Fatalf("valid liquid = %+v err=%v", result, err)
+	}
+}
+
+func TestServiceSearchNormalizesBoundsAndDisambiguatesDeterministically(t *testing.T) {
+	store := newMemoryStore()
+	firstID := uuid.MustParse("00000000-0000-4000-8000-000000000002")
+	secondID := uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	categoryID := uuid.New()
+	store.items[firstID] = repository.FoodItemEntity{
+		ID: firstID, Name: "Café Tofu", PhysicalState: repository.PhysicalStateSolid,
+		MacrosPer100: repository.MacroValues{Protein: 18}, FoodCategories: []repository.ClassificationEntity{{ID: categoryID, Name: "Protein", Kind: repository.ClassificationKindFoodCategory}},
+	}
+	store.items[secondID] = repository.FoodItemEntity{ID: secondID, Name: "Café Tofu", PhysicalState: repository.PhysicalStateLiquid, MacrosPer100: repository.MacroValues{Protein: 7}}
+	service := NewService(store)
+
+	first, err := service.Search(context.Background(), SearchQuery{Name: "  CAFÉ   TOFU  ", Page: 1, PageSize: 1})
+	if err != nil || first.Total != 2 || len(first.Items) != 1 || first.Items[0].ItemID != secondID || first.Items[0].Name == "" || first.Items[0].MacrosPer100.Protein != 7 {
+		t.Fatalf("first search = %+v err=%v", first, err)
+	}
+	second, err := service.Search(context.Background(), SearchQuery{Name: "café tofu", Page: 2, PageSize: 1})
+	if err != nil || second.Total != 2 || len(second.Items) != 1 || second.Items[0].ItemID != firstID || len(second.Items[0].FoodCategories) != 1 {
+		t.Fatalf("second search = %+v err=%v", second, err)
+	}
+	for _, query := range []SearchQuery{{Name: "", Page: 1, PageSize: 10}, {Name: "tofu", Page: 0, PageSize: 10}, {Name: "tofu", Page: 1, PageSize: 51}} {
+		if _, err := service.Search(context.Background(), query); !repository.IsKind(err, repository.ErrorKindValidation) {
+			t.Fatalf("invalid search %+v error = %v", query, err)
+		}
 	}
 }

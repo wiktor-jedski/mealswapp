@@ -68,3 +68,18 @@ test("initializes, loads, edits, and submits the required allergen key contract"
 	expect(source).toContain("bind:value={form.allergenKeys}");
 	expect(source).toContain("Allergens");
 });
+
+test("makes searchable discovery primary and UUID loading an advanced fallback", () => {
+	expect(source).toContain('aria-label="Search global items"');
+	expect(source).toContain("api.searchItems");
+	expect(source).toContain("beginItemSearch");
+	expect(source).toContain("itemSearchController?.abort()");
+	expect(source).toContain('data-admin-item-search-result');
+	expect(source).toContain("IDs distinguish duplicate names");
+	expect(source).toContain("Loading matching global items");
+	expect(source).toContain("No active global items matched");
+	expect(source).toContain("Retry search");
+	expect(source).toContain("Advanced: load by item ID");
+	expect(source).toContain("loadSearchResult(item)");
+	expect(source).toContain("refreshItemSearch()");
+});

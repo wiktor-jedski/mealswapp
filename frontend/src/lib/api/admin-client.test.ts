@@ -3,6 +3,7 @@ import {
 	createAdminClassification, createAdminItem, createAdminMicronutrient, deleteAdminClassification, deleteAdminItem, getAdminItem,
 	listAdminClassifications, listAdminMicronutrients, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion,
 	setAdminMicronutrientActive, updateAdminMicronutrientDisplayName, updateAdminMicronutrientUnit
+	, searchAdminItems
 } from "./admin-client";
 import type { AdminItemRequest } from "./generated";
 
@@ -66,6 +67,36 @@ test("uses the closed micronutrient lifecycle routes and strictly decodes author
 		"/api/v1/admin/micronutrients/VitaminK/reactivate"
 	]);
 	expect(calls.slice(1).every(({ init }) => (init.headers as Record<string, string>)["X-CSRF-Token"] === "csrf")).toBe(true);
+});
+
+test("searches bounded ownerless summaries with stable duplicate-name IDs", async () => {
+	const duplicate = (id: string, physicalState: "solid" | "liquid") => ({
+		itemId: id, name: "Tofu", physicalState, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 },
+		foodCategories: [{ id: classId, name: "Protein", kind: "food_category" }], culinaryRoles: []
+	});
+	let requested = "";
+	let requestedInit: RequestInit | undefined;
+	globalThis.fetch = ((input, init) => {
+		requested = String(input);
+		requestedInit = init;
+		return Promise.resolve(response(200, envelope({ items: [duplicate(itemId, "solid"), duplicate(requestId, "liquid")], page: 1, pageSize: 10, total: 2 })));
+	}) as typeof fetch;
+
+	const result = await searchAdminItems({ name: " tofu & rice ", page: 1, pageSize: 10 });
+	expect(requested).toBe("/api/v1/admin/items?query=+tofu+%26+rice+&page=1&pageSize=10");
+	expect(requestedInit?.cache).toBe("no-store");
+	expect(result.items.map(({ itemId: id }) => id)).toEqual([itemId, requestId]);
+
+	const malformed = [
+		{ items: [{ ...duplicate(itemId, "solid"), ownerId: userId }], page: 1, pageSize: 10, total: 1 },
+		{ items: [{ ...duplicate(itemId, "solid"), name: "" }], page: 1, pageSize: 10, total: 1 },
+		{ items: [{ ...duplicate(itemId, "solid"), macrosPer100: { ...duplicate(itemId, "solid").macrosPer100, calories: 100 } }], page: 1, pageSize: 10, total: 1 },
+		{ items: [duplicate(itemId, "solid")], page: 0, pageSize: 10, total: 1 },
+		{ items: Array.from({ length: 51 }, () => duplicate(itemId, "solid")), page: 1, pageSize: 50, total: 51 }
+	];
+	const malformedCount = malformed.length;
+	globalThis.fetch = (() => Promise.resolve(response(200, envelope(malformed.shift())))) as typeof fetch;
+	for (let index = 0; index < malformedCount; index++) await expect(searchAdminItems({ name: "tofu" })).rejects.toMatchObject({ appError: { code: "malformed_admin_response" } });
 });
 
 test("rejects conflicts, audit failures, malformed privacy projections, and false-success statuses", async () => {

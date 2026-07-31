@@ -53,6 +53,7 @@ REQUIRED_MARKERS = (
 	"CuratedImportEnvelope:",
 	"AdminItemRequest:",
 	"AdminItemEnvelope:",
+	"AdminItemSearchEnvelope:",
 	"AdminClassificationRequest:",
 	"AdminClassificationEnvelope:",
 	"AdminClassificationCollectionEnvelope:",
@@ -124,6 +125,7 @@ PHASE08_OPERATION_RESPONSES = {
 	("/api/v1/search/filter-options", "get"): {"200", "400", "429", "500", "503", "504"},
 	("/api/v1/admin/external-search", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
 	("/api/v1/admin/imports", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/items", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
 	("/api/v1/admin/items", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
 	("/api/v1/admin/items/{itemId}", "get"): {"200", "400", "401", "403", "404", "429", "500", "503", "504"},
 	("/api/v1/admin/items/{itemId}", "put"): {"200", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
@@ -142,6 +144,7 @@ PHASE08_SUCCESS_ENVELOPES = (
 	"ExternalSearchEnvelope",
 	"CuratedImportEnvelope",
 	"AdminItemEnvelope",
+	"AdminItemSearchEnvelope",
 	"AdminClassificationEnvelope",
 	"AdminClassificationCollectionEnvelope",
 	"AdminUserPageEnvelope",
@@ -151,6 +154,8 @@ PHASE08_SUCCESS_ENVELOPES = (
 ADMINISTRATION_DESCRIPTION_SCHEMAS = (
 	"AdminItemRequest",
 	"AdminItem",
+	"AdminItemSearchSummary",
+	"AdminItemSearchPageData",
 	"AdminClassificationRequest",
 	"AdminClassification",
 	"AdminUser",
@@ -1951,6 +1956,26 @@ export interface AdminItem extends AdminItemRequest {
 }
 
 export type AdminItemEnvelope = OkEnvelope<AdminItem>;
+
+/** @openapi-description AdminItemSearchSummary */
+export interface AdminItemSearchSummary {
+	itemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	macrosPer100: MacroProfile;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+/** @openapi-description AdminItemSearchPageData */
+export interface AdminItemSearchPageData {
+	items: AdminItemSearchSummary[];
+	page: number;
+	pageSize: number;
+	total: number;
+}
+
+export type AdminItemSearchEnvelope = OkEnvelope<AdminItemSearchPageData>;
 
 // Implements DESIGN-009 TagManager administration hierarchy boundary.
 /** @openapi-description AdminClassificationRequest */
