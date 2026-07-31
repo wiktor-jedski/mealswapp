@@ -984,6 +984,35 @@ export interface ProfileUpdateRequest {
 \tthemePreference: "system" | "light" | "dark";
 }
 
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Credentialed profile update request with CSRF protection. */
+export interface ProfileUpdateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+\tmethod: "PUT";
+\tcredentials: "include";
+\theaders: AuthJsonMutationHeaders;
+\tbody: string;
+}
+
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Builds the authoritative profile preference update request. */
+export function buildProfileUpdateRequestInit(
+\trequest: ProfileUpdateRequest,
+\tcsrfToken: string,
+\toptions: { signal?: AbortSignal } = {}
+): ProfileUpdateRequestInit {
+\treturn {
+\t\tmethod: "PUT",
+\t\tcredentials: "include",
+\t\theaders: {
+\t\t\tAccept: "application/json",
+\t\t\t"Content-Type": "application/json",
+\t\t\t"X-CSRF-Token": csrfToken
+\t\t},
+\t\tbody: JSON.stringify(request),
+\t\tsignal: options.signal
+\t};
+}
+
 // Implements DESIGN-008 SavedDataRepository frontend saved-data contract.
 /** One saved favorite, meal, or reserved diet reference. */
 export interface SavedItem {

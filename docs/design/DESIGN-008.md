@@ -29,7 +29,7 @@
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Require authenticated user context from ARCH-006 for every profile route.
 2. Read and write preferences through ARCH-005 using `user_id` predicates on every query.
-3. When unit preference changes, persist the value and return recalculation hints for currently displayed data.
+3. The authenticated profile is authoritative for unit preference. When it changes, persist the value and return the confirmed profile plus recalculation hints; the frontend applies that confirmed value and performs display conversion exactly once. Anonymous device preference remains browser-local and is not copied into an account profile.
 4. Save favorites, meals, diets, and optional history with the authenticated user ID supplied by the server, never by the client. Daily Diet names are unique per user after trimming and case folding. A Daily Diet entry identifies exactly one Food Item or Meal, and aggregate nutrition is derived from that authoritative Food Object.
 5. Data export passes the authenticated user ID to every repository query, decrypts the owner's portable data, and copies repository results into export-only projections before they reach a serialization function. Repository entities and persistence ownership fields never form part of `ExportBundle`.
 6. JSON export writes one strict `ExportBundle`. CSV writes one three-column document (`section,field,value`): top-level account identity uses individual `user` rows, while each nested resource row carries the export projection as escaped JSON. Empty collection sections carry an explicit `count,0` row. Repository ordering and JSON map-key ordering make unchanged owner data deterministic.

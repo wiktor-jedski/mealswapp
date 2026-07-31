@@ -81,9 +81,6 @@
 	function beginItemSearch(): { generation: number; controller: AbortController } {
 		itemSearchController?.abort(); const controller = new AbortController(); itemSearchController = controller; return { generation: ++itemSearchGeneration, controller };
 	}
-	function beginItemSearch(): { generation: number; controller: AbortController } {
-		itemSearchController?.abort(); const controller = new AbortController(); itemSearchController = controller; return { generation: ++itemSearchGeneration, controller };
-	}
 	function beginUserOperation(): { generation: number; controller: AbortController } {
 		userController?.abort(); const controller = new AbortController(); userController = controller; return { generation: ++userGeneration, controller };
 	}
@@ -580,7 +577,6 @@
 			<label class="grid gap-1 text-sm">Culinary Roles<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.culinaryRoleIds}>{#each classifications.culinary_role as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm sm:col-span-2">Allergens<select multiple size="7" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.allergenKeys}>{#each allergenOptions as key}<option value={key}>{key.replaceAll("_", " ")}</option>{/each}</select></label>
 				<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
-				</fieldset>
 			</form>
 		{#if itemError}<p role="alert" tabindex="-1" bind:this={itemErrorNotice} class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
 	</section>

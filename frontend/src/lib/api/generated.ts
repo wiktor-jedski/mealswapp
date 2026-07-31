@@ -341,6 +341,35 @@ export interface ProfileUpdateRequest {
 	themePreference: "system" | "light" | "dark";
 }
 
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Credentialed profile update request with CSRF protection. */
+export interface ProfileUpdateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "PUT";
+	credentials: "include";
+	headers: AuthJsonMutationHeaders;
+	body: string;
+}
+
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Builds the authoritative profile preference update request. */
+export function buildProfileUpdateRequestInit(
+	request: ProfileUpdateRequest,
+	csrfToken: string,
+	options: { signal?: AbortSignal } = {}
+): ProfileUpdateRequestInit {
+	return {
+		method: "PUT",
+		credentials: "include",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+			"X-CSRF-Token": csrfToken
+		},
+		body: JSON.stringify(request),
+		signal: options.signal
+	};
+}
+
 // Implements DESIGN-008 SavedDataRepository frontend saved-data contract.
 /** One saved favorite, meal, or reserved diet reference. */
 export interface SavedItem {
