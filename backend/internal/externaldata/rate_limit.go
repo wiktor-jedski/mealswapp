@@ -27,6 +27,8 @@ const (
 	WarningTimeout = "timeout"
 	// WarningRetryExhausted identifies a provider call that used its retry budget.
 	WarningRetryExhausted = "retry_exhausted"
+	// WarningPartialNormalization identifies a candidate whose unusable optional evidence was ignored.
+	WarningPartialNormalization = "partial_normalization"
 )
 
 // ProviderRateLimit is the bounded state maintained independently per provider.
@@ -339,14 +341,14 @@ func searchExternalRecords(ctx context.Context, query ExternalSearchQuery, provi
 			warnings = append(warnings, ExternalDataWarning{item.name, code, code})
 			continue
 		}
-		if result.RejectedCandidates > 0 {
-			warnings = append(warnings, ExternalDataWarning{item.name, string(ProviderErrorInvalidPayload), string(ProviderErrorInvalidPayload)})
-		}
 		records := result.Records
 		if len(records) > query.PageSize {
 			records = records[:query.PageSize]
 		}
 		all = append(all, records...)
+		if result.RejectedCandidates {
+			warnings = append(warnings, ExternalDataWarning{item.name, string(ProviderErrorInvalidPayload), string(ProviderErrorInvalidPayload)})
+		}
 	}
 	return all, warnings, nil
 }
