@@ -58,18 +58,23 @@ func (i ClassificationInvalidator) Invalidate() {
 	if i.redis == nil {
 		return
 	}
-	var cursor uint64
-	for page := 0; page < 1000; page++ {
-		keys, next, err := i.redis.Scan(ctx, cursor, string(RedisNamespaceSearch)+":"+SearchSchemaVersion+"*:*", 100).Result()
-		if err != nil {
-			return
-		}
-		if len(keys) > 0 && i.redis.Del(ctx, keys...).Err() != nil {
-			return
-		}
-		cursor = next
-		if cursor == 0 {
-			return
+	for _, pattern := range []string{
+		string(RedisNamespaceSearch) + ":" + SearchSchemaVersion + "*:*",
+		string(RedisNamespaceAutocomplete) + ":" + AutocompleteSchemaVersion + "*:*",
+	} {
+		var cursor uint64
+		for page := 0; page < 1000; page++ {
+			keys, next, err := i.redis.Scan(ctx, cursor, pattern, 100).Result()
+			if err != nil {
+				return
+			}
+			if len(keys) > 0 && i.redis.Del(ctx, keys...).Err() != nil {
+				return
+			}
+			cursor = next
+			if cursor == 0 {
+				break
+			}
 		}
 	}
 }
