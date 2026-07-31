@@ -868,7 +868,21 @@ def run_static_lane() -> tuple[int, int]:
 		CheckStep("task list", lambda: run(["python3", "scripts/validate-task-list.py"])),
 		CheckStep("Go Doc", lambda: run(["python3", "scripts/validate-phase07-go-doc.py"])),
 		CheckStep("TSDoc", lambda: run(["python3", "scripts/validate-phase08-tsdoc.py"])),
-		CheckStep("OpenAPI", lambda: run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])),
+		CheckStep(
+			"OpenAPI",
+			lambda: run(
+				[
+					"npm",
+					"exec",
+					"--yes",
+					"--package=@redocly/cli@2.31.5",
+					"--",
+					"redocly",
+					"lint",
+					"api/openapi.yaml",
+				]
+			),
+		),
 		CheckStep("optimization capacity tests", validate_phase07_capacity_tests),
 		CheckStep("coverage contract tests", validate_coverage_contract_tests),
 		CheckStep("development process tests", validate_start_dev_process_tests),
