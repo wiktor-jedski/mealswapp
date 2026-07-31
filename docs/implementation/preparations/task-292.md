@@ -42,21 +42,24 @@ Earlier committed Task 292 implementation and repair commits remain preserved:
 | `cd frontend && ... bun run typecheck` | PASS |
 | `python3 -m unittest scripts/test_run_task283_acceptance.py` | PASS; 28 tests |
 | `python3 -m py_compile scripts/run-task283-acceptance.py` | PASS |
-| `npx --no-install redocly lint api/openapi.yaml` | PASS exit status; the local resolver still emits `This is not the package you're looking for` before completing, so the output is environment-noisy |
+| `npm exec --yes --package=@redocly/cli@2.31.5 -- redocly lint api/openapi.yaml` | PASS; one pre-existing ignored OAuth callback 302 warning |
 | `cd backend && ... go test ./internal/repository ./internal/httpapi ./internal/itemcurator` | PASS |
+| `cd backend && ... go test -race ./internal/repository` with isolated `mealswapp_test` | PASS; repository DB/race lane completed in 43.4s |
+| `cd backend && ... go test -race ./...` with isolated `mealswapp_test` | PASS; all backend packages completed |
 | `cd backend && ... go vet ./...` | PASS |
+| `cd backend && ... go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...` | PASS for called code; scanner reports dependency vulnerabilities outside called code |
 | `python3 scripts/check.py --quick` | FAIL, unrelated phase-wide acceptance/UAT fixtures: stale `docs/implementation/02_TASK_LIST.md` hash and unsynchronized `P08-SWR054-ACCEPT-01`; the Task 292 validators and changed-area checks pass |
 
 The retained managed Task 283 evidence (`logs/phase08-acceptance/task283-38b14c5e78cc60d1a3b46df3-sw-req-056/` and the paired `sw-req-033` report) produced real-stack evidence without the admin private-item POST 403. Its non-pass criteria remain linked to `P08-FIND-283-001` (global/private-owner acceptance) and `P08-FIND-283-005` (standardized-storage/discovery acceptance). Neither finding is closed by this preparation; Task 292's picker implementation is the planned remediation surface for `P08-FIND-283-005`, while Task 302 owns the final isolated retest and closure decision.
 
 ## Criterion results
 
-- Global ownerless item search and bounded pagination: PASS by implementation and repository/API/frontend regression coverage.
+- Global ownerless item search and bounded pagination: PASS by implementation and repository/API/frontend regression coverage; managed Task 283 acceptance remains non-pass where its separate owner/private-partition criteria apply.
 - Canonical name persistence and search, including repeated internal whitespace in legacy rows: PASS by PostgreSQL regression.
 - Blank-query stale response cancellation and later-page deletion recovery: PASS by focused frontend regression coverage from the implementation repair cycle.
 - Macro projection contract: PASS; picker uses the canonical `MacroProfile` contract.
-- Private-item exclusion and administrator authorization: PASS by backend/API and managed browser evidence; the Task 283 harness now seeds a private fixture read-only boundary instead of attempting an unauthorized admin private-item mutation.
-- OpenAPI lint: command exits 0, but its resolver output is noisy as noted above; generated API drift check passes.
+- Private-item exclusion and administrator authorization: implementation/API boundary PASS; managed Task 283 acceptance still records `P08-FIND-283-001` for the unresolved owner/private-partition criterion. The harness seeds a private fixture read-only boundary instead of attempting an unauthorized admin private-item mutation.
+- OpenAPI lint: PASS with the documented pre-existing ignored OAuth callback 302 warning; generated API drift check passes.
 
 ## Risks and blockers
 
