@@ -14,28 +14,22 @@
 ### 1. Data Structures & Types
 - `interface UserProfile { userId: UUID; displayName?: string; unitSystem: "metric" | "imperial"; themePreference: "system" | "light" | "dark"; createdAt: time.Time; updatedAt: time.Time }`
 - `interface SavedItem { id: UUID; userId: UUID; itemId: UUID; kind: "favorite" | "saved_meal" | "saved_diet"; createdAt: time.Time }`
-- `type FoodObjectType = "food_item" | "meal"`
+- `type FoodObjectType = "food_item" | "meal" | "custom_food_item"`
 - `interface DailyDietEntry { id: UUID; foodObjectId: UUID; foodObjectType: FoodObjectType; quantity: number; unit: CanonicalQuantityUnit; position: number }`
 - `interface DailyDiet { id: UUID; userId: UUID; name: string; entries: DailyDietEntry[]; createdAt: time.Time; updatedAt: time.Time }`
 - `interface SearchHistoryEntry { id: UUID; userId: UUID; query: string; mode: string; filtersHash: string; createdAt: time.Time }`
-- `interface ExportUser { userId: UUID; email: string; role: "user" | "admin"; displayName: string; unitSystem: "metric" | "imperial"; themePreference: "system" | "light" | "dark" }`
-- `interface ExportSavedItem { id: UUID; itemId: UUID; kind: "favorite" | "saved_meal" | "saved_diet"; createdAt: time.Time }`
-- `interface ExportSavedDiet { id: UUID; name: string; entries: ExportSavedDietEntry[]; createdAt: time.Time; updatedAt: time.Time }`
-- `interface ExportSearchHistoryEntry { id: UUID; query: string; mode: string; filtersHash: string; createdAt: time.Time }`
-- `interface ExportCustomItem { id: UUID; name: string; physicalState: "solid" | "liquid"; prepTimeMinutes: number; metric serving and density fields; macrosPer100: ExportMacros; micros: map<string, number>; foodCategories: ExportClassificationSummary[]; culinaryRoles: ExportClassificationSummary[]; imageUrl?: string }`
-- `interface ExportBundle { user: ExportUser; consent: ExportConsent[]; savedItems: ExportSavedItem[]; savedDiets: ExportSavedDiet[]; history: ExportSearchHistoryEntry[]; customItems: ExportCustomItem[] }`
+- `interface ExportBundle { user: UserProfile; savedItems: SavedItem[]; history: SearchHistoryEntry[]; customItems: FoodItemEntity[]; format: "json" | "csv" }`
 - `interface DeletionPlan { userId: UUID; piiTables: string[]; cascadeTables: string[]; cachePrefixes: string[]; requestedAt: time.Time }`
 
 ### 2. Logic & Algorithms (Step-by-Step)
 1. Require authenticated user context from ARCH-006 for every profile route.
 2. Read and write preferences through ARCH-005 using `user_id` predicates on every query.
-3. The authenticated profile is authoritative for unit preference. When it changes, persist the value and return the confirmed profile plus recalculation hints; the frontend applies that confirmed value and performs display conversion exactly once. Anonymous device preference remains browser-local and is not copied into an account profile.
-4. Save favorites, meals, diets, and optional history with the authenticated user ID supplied by the server, never by the client. Daily Diet names are unique per user after trimming and case folding. A Daily Diet entry identifies exactly one Food Item or Meal, and aggregate nutrition is derived from that authoritative Food Object.
-5. Data export passes the authenticated user ID to every repository query, decrypts the owner's portable data, and copies repository results into export-only projections before they reach a serialization function. Repository entities and persistence ownership fields never form part of `ExportBundle`.
-6. JSON export writes one strict `ExportBundle`. CSV writes one three-column document (`section,field,value`): top-level account identity uses individual `user` rows, while each nested resource row carries the export projection as escaped JSON. Empty collection sections carry an explicit `count,0` row. Repository ordering and JSON map-key ordering make unchanged owner data deterministic.
-7. The authenticated account identity appears exactly once in the top-level `user` object or CSV `user` section. Nested projections recursively exclude `userId`, `UserID`, `ownerId`, `owner_id`, and equivalent persistence-only ownership spellings while retaining IDs, content, classifications, nutrition, and timestamps.
-8. Account deletion builds a deletion plan, deletes production records in a transaction, and calls ARCH-011 to purge user cache keys.
-9. Return deletion confirmation only after database deletion and cache purge are complete or explicitly queued for retry.
+3. When unit preference changes, persist the value and return recalculation hints for currently displayed data.
+4. Save favorites, meals, diets, and optional history with the authenticated user ID supplied by the server, never by the client. Daily Diet names are unique per user after trimming and case folding. A Daily Diet entry identifies exactly one global Food Item, Meal, or active private Custom Food Item owned by the Daily Diet owner. Validate the mutually exclusive reference, ownership, active state, and quantity basis in the persistence transaction; derive aggregate nutrition from the matching authoritative repository.
+5. Data export loads profile, PII, saved data, custom items, diets, and history into an `ExportBundle`.
+6. JSON export writes a structured object; CSV export writes separate sections/files for tabular data.
+7. Account deletion builds a deletion plan, deletes production records in a transaction, and calls ARCH-011 to purge user cache keys.
+8. Return deletion confirmation only after database deletion and cache purge are complete or explicitly queued for retry.
 
 ### 3. State Management & Error Handling
 - `profile_missing`: create default profile after first authentication.

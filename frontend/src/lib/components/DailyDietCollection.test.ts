@@ -95,5 +95,28 @@ test("identity changes and teardown cancel outstanding editor hydration", () => 
 	expect(source).toContain("cancelHydration()");
 	expect(source).toContain("controller.abort()");
 	expect(source).toContain("generation !== hydrationGeneration");
-	expect(source).toContain("onDestroy(cancelHydration)");
+	expect(source).toContain("onDestroy(() =>");
+});
+
+// Implements DESIGN-008 SavedDataRepository owner-scoped custom Food Object selection verification.
+test("the editor lists, disambiguates, reloads, and hydrates private custom foods", () => {
+	expect(source).toContain("listCustomFoodObjects(controller.signal)");
+	expect(source).toContain('id="daily-diet-custom-food"');
+	expect(source).toContain("item.name} · {item.physicalState} · {item.id.slice(-8)");
+	expect(source).toContain("Your custom foods could not be loaded.");
+	expect(source).toContain("loadCustomFoods()");
+	expect(source).toContain("customFoodController?.abort()");
+	expect(source).toContain('entry.foodObjectType === "custom_food_item"');
+	expect(source).toContain("fetchCustomFoodObject(entry.foodObjectId, controller.signal)");
+});
+
+// Implements DESIGN-008 SavedDataRepository custom Food Object empty and retry state verification.
+test("custom-food loading, empty, error, and retry states are explicit", () => {
+	expect(source).toContain('customFoodStatus = "loading"');
+	expect(source).toContain('customFoodStatus = "error"');
+	expect(source).toContain("You have no active custom foods yet.");
+	expect(source).toContain("Your custom foods could not be loaded.");
+	expect(source).toContain('onclick={() => void loadCustomFoods()}');
+	expect(source).toContain('role="status"');
+	expect(source).toContain('role="alert"');
 });

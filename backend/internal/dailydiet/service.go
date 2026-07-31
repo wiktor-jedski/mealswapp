@@ -108,9 +108,10 @@ type CreateResult struct {
 // Service coordinates saved-diet persistence, meal validation, and aggregation.
 // Implements DESIGN-008 ProfileController and SavedDataRepository.
 type Service struct {
-	diets repository.DailyDietMutationRepository
-	meals repository.MealRepository
-	foods repository.FoodItemRepository
+	diets       repository.DailyDietMutationRepository
+	meals       repository.MealRepository
+	foods       repository.FoodItemRepository
+	customFoods repository.CustomFoodItemRepository
 }
 
 // NewService creates authenticated saved-diet behavior.
@@ -121,6 +122,12 @@ func NewService(diets repository.DailyDietMutationRepository, meals repository.M
 		service.foods = foods[0]
 	}
 	return service
+}
+
+// NewServiceWithCustomFoods creates saved-diet behavior with owner-scoped private Food Objects.
+// Implements DESIGN-008 SavedDataRepository custom Food Object entries.
+func NewServiceWithCustomFoods(diets repository.DailyDietMutationRepository, meals repository.MealRepository, foods repository.FoodItemRepository, customFoods repository.CustomFoodItemRepository) *Service {
+	return &Service{diets: diets, meals: meals, foods: foods, customFoods: customFoods}
 }
 
 // Create persists a user-owned daily diet and replays exact idempotent retries.
@@ -218,7 +225,7 @@ func (s *Service) Replace(ctx context.Context, userID, dietID uuid.UUID, req Rep
 		return DailyDiet{}, err
 	}
 	entries := normalizeFoodObjectEntries(req.Entries)
-	if err := s.validateFoodObjects(ctx, entries); err != nil {
+	if err := s.validateFoodObjects(ctx, userID, entries); err != nil {
 		return DailyDiet{}, err
 	}
 	if s == nil || s.diets == nil || s.meals == nil {
@@ -270,9 +277,9 @@ func (s *Service) load(ctx context.Context, userID, dietID uuid.UUID) (DailyDiet
 
 // validateFoodObjects verifies every Meal or Food Item before any saved-diet write begins.
 // Implements DESIGN-008 SavedDataRepository.
-func (s *Service) validateFoodObjects(ctx context.Context, entries []FoodObjectQuantity) error {
+func (s *Service) validateFoodObjects(ctx context.Context, userID uuid.UUID, entries []FoodObjectQuantity) error {
 	for _, entry := range entries {
-		physicalState, _, err := s.foodObjectNutrition(ctx, entry.FoodObjectID, entry.FoodObjectType)
+		physicalState, _, err := s.foodObjectNutrition(ctx, userID, entry.FoodObjectID, entry.FoodObjectType)
 		if err != nil {
 			return err
 		}
@@ -299,7 +306,7 @@ func (s *Service) prepareCreate(ctx context.Context, userID uuid.UUID, name stri
 		objectKey := string(entry.FoodObjectType) + ":" + entry.FoodObjectID.String()
 		object, ok := objects[objectKey]
 		if !ok {
-			physicalState, macros, err := s.foodObjectNutrition(ctx, entry.FoodObjectID, entry.FoodObjectType)
+			physicalState, macros, err := s.foodObjectNutrition(ctx, userID, entry.FoodObjectID, entry.FoodObjectType)
 			if err != nil {
 				return repository.SavedDiet{}, repository.DailyDietCreateResponse{}, err
 			}
@@ -343,7 +350,7 @@ func (s *Service) project(ctx context.Context, diet repository.SavedDiet) (Daily
 	projection := MacroProjection{}
 	for _, entry := range diet.Entries {
 		objectID, objectType := repositoryEntryFoodObject(entry)
-		physicalState, objectMacros, err := s.foodObjectNutrition(ctx, objectID, objectType)
+		physicalState, objectMacros, err := s.foodObjectNutrition(ctx, diet.UserID, objectID, objectType)
 		if err != nil {
 			return DailyDiet{}, err
 		}
@@ -381,11 +388,11 @@ func normalizeRequest(name string, entries []FoodObjectQuantity) (string, error)
 		return "", validationError("daily diet name is invalid")
 	}
 	if len(entries) == 0 || len(entries) > maxEntries {
-		return "", validationError("daily diet entries must contain between 1 and 100 meals")
+		return "", validationError("daily diet entries must contain between 1 and 100 Food Objects")
 	}
 	seenPositions := make(map[int]struct{}, len(entries))
 	for _, entry := range normalizeFoodObjectEntries(entries) {
-		if entry.FoodObjectID == uuid.Nil || (entry.FoodObjectType != repository.FoodObjectTypeMeal && entry.FoodObjectType != repository.FoodObjectTypeFoodItem) {
+		if entry.FoodObjectID == uuid.Nil || (entry.FoodObjectType != repository.FoodObjectTypeMeal && entry.FoodObjectType != repository.FoodObjectTypeFoodItem && entry.FoodObjectType != repository.FoodObjectTypeCustomFoodItem) {
 			return "", validationError("saved diet Food Object identity is required")
 		}
 		if entry.Quantity <= 0 || entry.Quantity > maxQuantity || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) {
@@ -430,7 +437,7 @@ func toRepositoryEntries(entries []FoodObjectQuantity) []repository.SavedDietMea
 
 // foodObjectNutrition resolves the authoritative nutrition basis for one Daily Diet entry.
 // Implements DESIGN-005 FoodItemRepository/MealRepository and DESIGN-008 SavedDataRepository.
-func (s *Service) foodObjectNutrition(ctx context.Context, id uuid.UUID, objectType repository.FoodObjectType) (repository.PhysicalState, repository.MacroValues, error) {
+func (s *Service) foodObjectNutrition(ctx context.Context, userID, id uuid.UUID, objectType repository.FoodObjectType) (repository.PhysicalState, repository.MacroValues, error) {
 	switch objectType {
 	case repository.FoodObjectTypeMeal:
 		if s == nil || s.meals == nil {
@@ -443,6 +450,12 @@ func (s *Service) foodObjectNutrition(ctx context.Context, id uuid.UUID, objectT
 			return "", repository.MacroValues{}, repository.NewError(repository.ErrorKindConnection, "Food Item service is unavailable", nil)
 		}
 		food, err := s.foods.GetByID(ctx, id, repository.RepositoryContext{})
+		return food.PhysicalState, food.MacrosPer100, err
+	case repository.FoodObjectTypeCustomFoodItem:
+		if s == nil || s.customFoods == nil {
+			return "", repository.MacroValues{}, repository.NewError(repository.ErrorKindConnection, "custom Food Item service is unavailable", nil)
+		}
+		food, err := s.customFoods.GetByID(ctx, userID, id, repository.RepositoryContext{})
 		return food.PhysicalState, food.MacrosPer100, err
 	default:
 		return "", repository.MacroValues{}, validationError("Food Object type is invalid")

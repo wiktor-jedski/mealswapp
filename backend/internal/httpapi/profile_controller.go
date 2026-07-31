@@ -61,6 +61,7 @@ func (c *ProfileController) Routes() []RouteDefinition {
 			return validateDailyDietBody(ctx)
 		}, Handler: c.ReplaceDailyDiet},
 		{Method: fiber.MethodDelete, Path: "/daily-diets/:dietId", RequiresAuth: true, RequiresCSRF: true, Validate: ValidatePath("dietId", validateDailyDietID), Handler: c.DeleteDailyDiet},
+		{Method: fiber.MethodGet, Path: "/custom-items", RequiresAuth: true, Handler: c.ListCustomItems},
 		{Method: fiber.MethodPost, Path: "/custom-items", RequiresAuth: true, RequiresCSRF: true, Validate: validateCustomItemCreate, Handler: c.CreateCustomItem},
 		{Method: fiber.MethodGet, Path: "/custom-items/:itemId", RequiresAuth: true, Validate: ValidatePath("itemId", validateCustomItemID), Handler: c.GetCustomItem},
 		{Method: fiber.MethodPut, Path: "/custom-items/:itemId", RequiresAuth: true, RequiresCSRF: true, Validate: validateCustomItemUpdate, Handler: c.UpdateCustomItem},

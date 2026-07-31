@@ -115,7 +115,7 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 	curatedImports := dataimporter.NewService(adminAudit).WithTelemetry(adminExternalTelemetry)
 	adminUserService := useradmin.NewService(repository.NewPostgresAdminUserRepository(pg), adminAudit, encryption, digests)
 	adminUserController := httpapi.NewUserAdminController(adminUserService)
-	dailyDietService := dailydiet.NewService(savedRepo, mealRepo, foodRepo)
+	dailyDietService := dailydiet.NewServiceWithCustomFoods(savedRepo, mealRepo, foodRepo, customFoodRepo)
 	complianceRepo := repository.NewPostgresComplianceRepository(pg)
 	adminRepo := repository.NewPostgresAdminImportAuditRepository(pg)
 	providers := externaldata.ProviderSet{}

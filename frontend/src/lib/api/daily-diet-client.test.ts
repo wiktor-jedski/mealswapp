@@ -104,6 +104,14 @@ test("decodes exact empty, list, item, create, replace, and empty-delete respons
 	expect(fetchMock.calls[5]?.init.method).toBe("DELETE");
 });
 
+// Implements DESIGN-008 SavedDataRepository custom Food Object response contract.
+test("decodes a saved-diet custom Food Object entry", async () => {
+	globalThis.fetch = fetchMock.fetch;
+	const custom = diet({ entries: [{ id: entryId, foodObjectId, foodObjectType: "custom_food_item", quantity: 100, unit: "ml", position: 0 }] });
+	fetchMock.enqueue(jsonResponse(200, itemEnvelope(custom)));
+	expect((await getDailyDiet(dietId)).entries[0]?.foodObjectType).toBe("custom_food_item");
+});
+
 test("rejects every unexpected successful endpoint status", async () => {
 	globalThis.fetch = fetchMock.fetch;
 	fetchMock.enqueue(jsonResponse(201, collectionEnvelope([])));
