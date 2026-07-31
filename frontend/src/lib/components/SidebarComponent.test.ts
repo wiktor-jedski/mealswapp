@@ -219,12 +219,14 @@ test("history and favorites use the standard compact h3 heading style", () => {
 
 // Implements DESIGN-001 SidebarComponent unit preference row verification.
 test("declares a compact account-level unit preference row", () => {
-	expect(source).toContain('import { preferencesStore, setUnitSystem } from "../stores/preferences"');
+	expect(source).toContain("unitPreferenceStatusStore");
 	expect(source).toContain('data-sidebar-units');
 	expect(source).toContain('for="sidebar-unit-system"');
 	expect(source).toContain("Units:");
 	expect(source).toContain("$preferencesStore.unitSystem");
 	expect(source).toContain("setUnitSystem");
+	expect(source).toContain("retryUnitPreference");
+	expect(source).toContain("data-sidebar-units-retry");
 	expect(source).toContain('value: "metric"');
 	expect(source).toContain('value: "imperial"');
 	expect(source).not.toContain("<SettingsPanel");

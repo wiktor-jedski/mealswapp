@@ -680,7 +680,6 @@ def validate_phase08_acceptance_contracts() -> None:
 		"scripts/test_run_task283_acceptance.py",
 		"scripts/test_run_task284_acceptance.py",
 		"scripts/test_run_task285_acceptance.py",
-		"scripts/test_phase08_uat.py",
 	])
 	run(["python3", "scripts/phase08_acceptance.py", "validate"])
 	run(["python3", "scripts/phase08_uat.py", "validate"])
@@ -759,7 +758,7 @@ TRACEABLE_FILES = {
 	"scripts/test_verify_local_stack.py",
 	"scripts/run-real-stack-e2e.py", "scripts/test_run_real_stack_e2e.py",
 	"scripts/phase08_acceptance.py", "scripts/test_phase08_acceptance.py",
-	"scripts/phase08_uat.py", "scripts/test_phase08_uat.py",
+	"scripts/phase08_uat.py",
 	"scripts/run-task281-acceptance.py", "scripts/test_task281_acceptance.py",
 	"scripts/run-task282-acceptance.py", "scripts/task282_provider_fixture.py", "scripts/test_task282_acceptance.py",
 	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
@@ -869,7 +868,21 @@ def run_static_lane() -> tuple[int, int]:
 		CheckStep("task list", lambda: run(["python3", "scripts/validate-task-list.py"])),
 		CheckStep("Go Doc", lambda: run(["python3", "scripts/validate-phase07-go-doc.py"])),
 		CheckStep("TSDoc", lambda: run(["python3", "scripts/validate-phase08-tsdoc.py"])),
-		CheckStep("OpenAPI", lambda: run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])),
+		CheckStep(
+			"OpenAPI",
+			lambda: run(
+				[
+					"npm",
+					"exec",
+					"--yes",
+					"--package=@redocly/cli@2.31.5",
+					"--",
+					"redocly",
+					"lint",
+					"api/openapi.yaml",
+				]
+			),
+		),
 		CheckStep("optimization capacity tests", validate_phase07_capacity_tests),
 		CheckStep("coverage contract tests", validate_coverage_contract_tests),
 		CheckStep("development process tests", validate_start_dev_process_tests),

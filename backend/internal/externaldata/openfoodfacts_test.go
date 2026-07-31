@@ -58,7 +58,7 @@ func TestOpenFoodFactsSearchEncodesQueryIdentifiesCallerAndProjectsDeterministic
 	want := []ExternalFoodRecord{{
 		Provider: "openfoodfacts", ExternalID: "3017620422003", Name: "Apple drink", ServingSize: &serving, ServingUnit: "ml",
 		PackageSize: &packageSize, PackageUnit: "oz",
-		Nutrients: map[string]float64{"carbohydrates_100g": 5.2, "energy-kcal_100g": 46, "fat_100g": 0, "proteins_100g": 0.1},
+		Nutrients: map[string]float64{"carbohydrates_100g": 5.2, "fat_100g": 0, "proteins_100g": 0.1},
 		ImageURL:  "https://images.openfoodfacts.org/apple.jpg",
 	}}
 	if err != nil || !reflect.DeepEqual(records, want) || records[0].RawPayload != nil {
@@ -218,12 +218,28 @@ func TestOpenFoodFactsSearchBoundsBodiesAndHandlesMalformedOrPartialPayloads(t *
 		`{"code":"5","product_name":"Overflowed nutrient","nutriments":{"fat_100g":1e999}}]}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
 	defer server.Close()
-	records, err := newTestOpenFoodFactsClient(t, server.URL, logs, 0, 0).Search(context.Background(), validOpenFoodFactsQuery())
-	if err != nil || len(records) != 1 || records[0].ExternalID != "1" || records[0].RawPayload != nil {
-		t.Fatalf("partial records = %#v, %v", records, err)
+	result, err := newTestOpenFoodFactsClient(t, server.URL, logs, 0, 0).SearchResult(context.Background(), validOpenFoodFactsQuery())
+	if err != nil || len(result.Records) != 1 || result.Records[0].ExternalID != "1" || result.Records[0].RawPayload != nil || result.RejectedCandidates != 5 {
+		t.Fatalf("partial result = %#v, %v", result, err)
 	}
-	if len(logs.Logs) != 1 || logs.Logs[0].Message != "external_provider_payload_dropped" || logs.Logs[0].Fields["count"] != 5 {
+	wantFields := map[string]any{"provider": "openfoodfacts", "count": 5}
+	if len(logs.Logs) != 1 || logs.Logs[0].Message != "external_provider_payload_dropped" || !reflect.DeepEqual(logs.Logs[0].Fields, wantFields) {
 		t.Fatalf("partial diagnostics = %+v", logs.Logs)
+	}
+}
+
+func TestOpenFoodFactsSearchRejectsMalformedUTF8KeysWithoutHidingPeers(t *testing.T) {
+	malformedProduct := []byte(`{"code":"bad","product_name":"Bad","nutriments":{"proteins_100g":1,`)
+	malformedProduct = append(malformedProduct, '"', 0xff, '"')
+	malformedProduct = append(malformedProduct, []byte(`:2}}`)...)
+	body := append([]byte(`{"count":2,"page":1,"page_count":1,"page_size":20,"products":[`), malformedProduct...)
+	body = append(body, []byte(`,{"code":"good","product_name":"Good","nutriments":{"proteins_100g":3}}]}`)...)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) }))
+	defer server.Close()
+
+	result, err := newTestOpenFoodFactsClient(t, server.URL, nil, 0, 0).SearchResult(context.Background(), validOpenFoodFactsQuery())
+	if err != nil || result.RejectedCandidates != 1 || len(result.Records) != 1 || result.Records[0].ExternalID != "good" {
+		t.Fatalf("malformed UTF-8 result = %#v, err = %v", result, err)
 	}
 }
 
@@ -323,6 +339,23 @@ func TestProjectOpenFoodFactsProductRejectsMalformedNumericNutriments(t *testing
 		Nutrients: map[string]json.RawMessage{"fat_100g": nil},
 	}); ok {
 		t.Fatalf("empty nutrient token accepted: %#v", record)
+	}
+}
+
+func TestProjectOpenFoodFactsProductToleratesUnsupportedMetadata(t *testing.T) {
+	var product openFoodFactsProduct
+	payload := `{"code":"1","product_name":"Chickpeas","nutriments":{"proteins_100g":4.5,"carbohydrates_100g":11,"fat_100g":2,"sodium_100g":0.02,"energy_modifier":"~","added-sugars_modifier":"~","proteins_unit":"g","label":"fixture","future_metadata":{"source":"provider"}}}`
+	if err := json.Unmarshal([]byte(payload), &product); err != nil {
+		t.Fatal(err)
+	}
+
+	record, ok := projectOpenFoodFactsProduct(product)
+	if !ok {
+		t.Fatal("candidate with unsupported metadata was rejected")
+	}
+	want := map[string]float64{"proteins_100g": 4.5, "carbohydrates_100g": 11, "fat_100g": 2, "sodium_100g": 0.02}
+	if !reflect.DeepEqual(record.Nutrients, want) {
+		t.Fatalf("nutrients = %#v, want %#v", record.Nutrients, want)
 	}
 }
 

@@ -144,6 +144,9 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 	}
 	var result CustomFoodItemCreateClaimResult
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
 		_, claimErr := scanCustomFoodCreateClaim(db.QueryRow(ctx, customFoodCreateClaimSQL, claim.UserID, claim.Key, claim.BodyHash))
 		if claimErr == nil {
 			itemID, err := createCustomFoodItemInTransaction(ctx, db, claim.Item)
@@ -196,6 +199,9 @@ func (r *PostgresCustomFoodItemRepository) Create(ctx context.Context, item Cust
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
 		var err error
 		id, err = createCustomFoodItemInTransaction(ctx, db, item)
 		return err
@@ -284,6 +290,12 @@ func (r *PostgresCustomFoodItemRepository) Update(ctx context.Context, item Cust
 	}
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item.FoodItemEntity); err != nil {
+			return err
+		}
 		result, err := db.Exec(ctx, customFoodUpdateSQL,
 			item.OwnerID, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes,
 			nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters),
