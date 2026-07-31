@@ -164,7 +164,12 @@ test("partial failure, outage, malformed data, timeout, cancellation, quota rese
 	for (const query of ["outage", "malformed", "malformed-consumed", "timeout"]) {
 		requestIds.push((await search(page, workflow, query, "USDA + OpenFoodFacts")).requestId);
 		await expect(workflow).not.toContainText(/nutriments|api_key|provider payload|task282-controlled-key/i);
+		if (query === "outage") await expect(workflow.locator("[data-external-provider-failure]")).toBeVisible();
 	}
+	requestIds.push((await search(page, workflow, "rejected", "USDA")).requestId);
+	await expect(workflow.locator("[data-external-rejected]")).toBeVisible();
+	requestIds.push((await search(page, workflow, "zero", "USDA")).requestId);
+	await expect(workflow.locator("[data-external-empty]")).toHaveText("No external candidates matched this search.");
 	await workflow.getByLabel("External food search").fill("cancel");
 	await workflow.getByRole("button", { name: /Search/ }).click();
 	await workflow.getByLabel("External food search").fill("success");
@@ -194,8 +199,11 @@ test("legitimate OpenFoodFacts metadata remains visible [P08-SWR055-STEP-02]", a
 test("optional USDA portion metadata degrades without losing the candidate [P08-SWR033-STEP-02]", async ({ page }, testInfo) => {
 	const workflow = await openAdministration(page);
 	const result = await search(page, workflow, "optional", "USDA");
-	await recordAcceptance(testInfo, ["P08-SWR033-STEP-02"], [result.requestId], [], ["provider_state=rejected_candidate", "metric_basis=100ml"], "ROOT-T282-USDA-OPTIONAL-PORTION");
 	await expect(workflow.getByText("Fixture lentils")).toBeVisible();
+	await expect(workflow.locator("[data-provider-warnings]")).toHaveCount(0);
+	await workflow.getByText("Fixture lentils").locator("..").locator("..").getByRole("button", { name: "Curate" }).click();
+	await expect(workflow.locator("[data-candidate-warnings]")).toContainText("Some optional source measures were ignored.");
+	await recordAcceptance(testInfo, ["P08-SWR033-STEP-02"], [result.requestId], [], ["provider_state=partial_normalization", "metric_basis=100ml"]);
 });
 
 test("external import rejects aliases and unknown micronutrient keys [P08-SWR090-STEP-02] [P08-SWR090-STEP-03]", async ({ page }, testInfo) => {
@@ -233,7 +241,52 @@ test("external import rejects aliases and unknown micronutrient keys [P08-SWR090
 	);
 });
 
-test("disabled micronutrient vocabulary entries are rejected through Administration [P08-SWR090-STEP-04]", async ({}, testInfo) => {
-	await recordAcceptance(testInfo, ["P08-SWR090-STEP-04"], [], [], ["mutation_count=0"], "ROOT-T282-VOCABULARY-DISABLE");
-	test.skip(true, "No production Administration capability disables a micronutrient vocabulary entry for acceptance.");
+test("disabled micronutrient vocabulary entries are rejected through Administration [P08-SWR090-STEP-04]", async ({ page }, testInfo) => {
+	await openAdministration(page);
+	const csrf = await page.request.get("/api/v1/auth/csrf-token");
+	const csrfBody = await safeEnvelope(csrf) as { requestId?: string; data?: { csrfToken?: string } };
+	const requestIds = [csrfBody.requestId!];
+	const headers = { "X-CSRF-Token": csrfBody.data?.csrfToken ?? "" };
+	const vocabularyBefore = await page.request.get("/api/v1/admin/micronutrients");
+	const vocabularyBeforeBody = await safeEnvelope(vocabularyBefore) as { requestId?: string; data?: { micronutrients?: Array<{ key: string; active: boolean }> } };
+	requestIds.push(vocabularyBeforeBody.requestId!);
+	const candidates = vocabularyBeforeBody.data?.micronutrients?.filter((entry) => entry.active).map((entry) => entry.key) ?? [];
+	let key = "";
+	try {
+		for (const candidate of candidates) {
+			const disabled = await page.request.post(`/api/v1/admin/micronutrients/${candidate}/deactivate`, { headers });
+			const disabledBody = await safeEnvelope(disabled);
+			requestIds.push(disabledBody.requestId!);
+			if (disabled.status() === 200) { key = candidate; break; }
+		}
+		expect(key).not.toBe("");
+
+		const rejected = await page.request.post("/api/v1/admin/imports", {
+			headers: { ...headers, "Idempotency-Key": "task282-disabled-micronutrient" },
+			data: {
+				name: "Acceptance disabled micronutrient",
+				physicalState: "solid",
+				prepTimeMinutes: 0,
+				macrosPer100: { protein: 1, carbohydrates: 1, fat: 1 },
+				micros: { [key]: 1 },
+				foodCategoryIds: [],
+				culinaryRoleIds: []
+			}
+		});
+		const rejectedBody = await safeEnvelope(rejected);
+		requestIds.push(rejectedBody.requestId!);
+		expect(rejected.status()).toBe(400);
+		expect(rejectedBody.error?.code).toBe("validation_failed");
+	} finally {
+		if (!key) throw new Error("no unused active micronutrient vocabulary fixture was available");
+		const restored = await page.request.post(`/api/v1/admin/micronutrients/${key}/reactivate`, { headers });
+		const restoredBody = await safeEnvelope(restored);
+		requestIds.push(restoredBody.requestId!);
+		expect(restored.status()).toBe(200);
+		const vocabulary = await page.request.get("/api/v1/admin/micronutrients");
+		const vocabularyBody = await safeEnvelope(vocabulary) as { requestId?: string; data?: { micronutrients?: Array<{ key: string; active: boolean }> } };
+		requestIds.push(vocabularyBody.requestId!);
+		expect(vocabularyBody.data?.micronutrients?.find((entry) => entry.key === key)?.active).toBe(true);
+	}
+	await recordAcceptance(testInfo, ["P08-SWR090-STEP-04"], requestIds, [], ["mutation_count=0", "fixture_state=restored"]);
 });

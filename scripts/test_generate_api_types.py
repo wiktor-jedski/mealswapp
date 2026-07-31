@@ -34,10 +34,14 @@ class OperationResponseDriftTest(unittest.TestCase):
 		self.assertIn("\tsavedDiets: ExportSavedDiet[];", generated)
 		export_diet = generated[generated.index("export interface ExportSavedDiet"):generated.index("export type ExportFormat")]
 		self.assertNotIn("userId", export_diet)
-		self.assertIn("\tentries: DailyDietFoodObjectEntry[];", export_diet)
+		self.assertIn("\tentries: ExportSavedDietEntry[];", export_diet)
 		export_schema = GENERATOR.schema_block(source, "ExportBundle") or ""
 		self.assertIn("required: [user, consent, savedItems, savedDiets, history, customItems]", export_schema)
 		self.assertIn('$ref: "#/components/schemas/ExportSavedDiet"', export_schema)
+		for schema in ("ExportUser", "ExportConsent", "ExportSavedItem", "ExportSavedDiet", "ExportSavedDietEntry", "ExportSearchHistoryEntry"):
+			self.assertIn("additionalProperties: false", GENERATOR.schema_block(source, schema) or "")
+		for projection in ("ExportSavedItem", "ExportSavedDiet", "ExportSavedDietEntry", "ExportSearchHistoryEntry", "ExportCustomItem"):
+			self.assertNotRegex(GENERATOR.schema_block(source, projection) or "", r"(?i)\b(?:user|owner)_?id\b")
 		self.assertEqual(GENERATOR.administration_description_mismatches(source, generated), [])
 		changed_description = "One regenerated ownerless administration item."
 		mutated = source.replace(
@@ -126,6 +130,7 @@ class OperationResponseDriftTest(unittest.TestCase):
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
 		self.assertEqual(GENERATOR.custom_item_contract_mismatches(source), [])
 		generated = GENERATOR.generated_contract(source)
+		self.assertIn("metric-named values always use metric units", generated)
 		self.assertIn("export interface CustomItem extends CustomItemRequest", generated)
 		classification = generated[generated.index("export interface ClassificationSummary"):generated.index("export interface CustomItemRequest")]
 		self.assertNotIn("parentId", classification)
@@ -136,6 +141,18 @@ class OperationResponseDriftTest(unittest.TestCase):
 		self.assertIsNotNone(re.fullmatch(pattern.group(1), " Tofu "))
 		self.assertIsNone(re.fullmatch(pattern.group(1), "   "))
 		self.assertIsNone(re.fullmatch(pattern.group(1), "bad\x00name"))
+
+	def test_metric_named_and_explicit_quantity_contracts_are_documented(self) -> None:
+		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")
+		fields = GENERATOR.schema_block(source, "CustomItemFields") or ""
+		for description in ("Metric grams.", "Metric milliliters.", "Metric grams per milliliter."):
+			self.assertIn(description, fields)
+		unit = GENERATOR.schema_block(source, "CanonicalQuantityUnit") or ""
+		self.assertIn("rejects cross-basis units", unit)
+		self.assertIn("exactly once", unit)
+		generated = GENERATOR.generated_contract(source)
+		self.assertIn("normalized by the server exactly once after basis validation", generated)
+		self.assertIn("metric gram and milliliter totals after one request-unit normalization", generated)
 
 	def test_custom_item_name_or_parent_projection_drift_is_rejected(self) -> None:
 		source = (ROOT / "api" / "openapi.yaml").read_text(encoding="utf-8")

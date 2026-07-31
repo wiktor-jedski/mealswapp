@@ -187,6 +187,9 @@ func NormalizeExternalRecordWithOptions(record ExternalFoodRecord, vocabulary []
 		DensitySourceProvider: densityProvider, DensitySourceFoodID: densityFoodID,
 		DensitySourceKind: densityKind, Micros: repository.MicroValues{}, ImageURL: record.ImageURL,
 	}
+	if record.PartialNormalization {
+		candidate.Warnings = append(candidate.Warnings, WarningPartialNormalization)
+	}
 	if err := setServingMeasures(&candidate); err != nil {
 		return NormalizedFoodCandidate{}, err
 	}
@@ -415,6 +418,9 @@ func setServingMeasures(candidate *NormalizedFoodCandidate) error {
 		return nil
 	}
 	if candidate.PhysicalState == repository.PhysicalStateSolid {
+		if candidate.Provider == "usda" {
+			return nil
+		}
 		grams := candidate.ServingSize
 		if candidate.ServingUnit == "oz" {
 			grams *= gramsPerOunce

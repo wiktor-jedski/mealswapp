@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
@@ -52,17 +53,18 @@ type ExternalFoodPortion struct {
 // ExternalFoodRecord is the loss-bounded USDA projection consumed by normalization.
 // Implements DESIGN-012 ExternalFoodRecord.
 type ExternalFoodRecord struct {
-	Provider    string
-	ExternalID  string
-	Name        string
-	ServingSize *float64
-	ServingUnit string
-	PackageSize *float64
-	PackageUnit string
-	Nutrients   map[string]float64
-	Portions    []ExternalFoodPortion
-	ImageURL    string
-	RawPayload  json.RawMessage
+	Provider             string
+	ExternalID           string
+	Name                 string
+	ServingSize          *float64
+	ServingUnit          string
+	PackageSize          *float64
+	PackageUnit          string
+	Nutrients            map[string]float64
+	Portions             []ExternalFoodPortion
+	PartialNormalization bool
+	ImageURL             string
+	RawPayload           json.RawMessage
 }
 
 // ProviderErrorCode is a closed, secret-safe provider failure category.
@@ -223,11 +225,14 @@ func (c *USDAClient) SearchResult(ctx context.Context, query ExternalSearchQuery
 	if int64(len(body)) > c.maxBodyBytes {
 		return result, c.failure(ctx, ProviderErrorResponseTooLarge, resp.StatusCode, false, nil)
 	}
-	records, err := decodeUSDASearch(body)
+	records, rejectedCandidates, err := decodeUSDASearchResult(body)
 	if err != nil {
 		return result, c.failure(ctx, ProviderErrorInvalidPayload, resp.StatusCode, false, nil)
 	}
 	result.Records = records
+	if rejectedCandidates {
+		result.RejectedCandidates = 1
+	}
 	return result, nil
 }
 
@@ -264,29 +269,29 @@ type usdaSearchPayload struct {
 // usdaFood captures provider fields required for external-record projection.
 // Implements DESIGN-012 USDAClient payload parsing.
 type usdaFood struct {
-	FDCID       int            `json:"fdcId"`
-	Description string         `json:"description"`
-	ServingSize *float64       `json:"servingSize"`
-	ServingUnit string         `json:"servingSizeUnit"`
-	Nutrients   []usdaNutrient `json:"foodNutrients"`
-	Measures    []usdaMeasure  `json:"foodMeasures"`
+	FDCID       int             `json:"fdcId"`
+	Description string          `json:"description"`
+	ServingSize *float64        `json:"servingSize"`
+	ServingUnit string          `json:"servingSizeUnit"`
+	Nutrients   []usdaNutrient  `json:"foodNutrients"`
+	Measures    json.RawMessage `json:"foodMeasures"`
 }
 
 // usdaNutrient captures one named and unit-qualified USDA nutrient value.
 // Implements DESIGN-012 USDAClient payload parsing.
 type usdaNutrient struct {
-	Name  string  `json:"nutrientName"`
-	Unit  string  `json:"unitName"`
-	Value float64 `json:"value"`
+	Name  string          `json:"nutrientName"`
+	Unit  string          `json:"unitName"`
+	Value json.RawMessage `json:"value"`
 }
 
 // usdaMeasure captures portion amounts with provider-measured gram weights.
 // Implements DESIGN-012 USDAClient volume-portion parsing.
 type usdaMeasure struct {
-	DisseminationText string          `json:"disseminationText"`
-	GramWeight        float64         `json:"gramWeight"`
-	Amount            float64         `json:"amount"`
-	MeasureUnit       usdaMeasureUnit `json:"measureUnit"`
+	DisseminationText string           `json:"disseminationText"`
+	GramWeight        *float64         `json:"gramWeight"`
+	Amount            *float64         `json:"amount"`
+	MeasureUnit       *usdaMeasureUnit `json:"measureUnit"`
 }
 
 // usdaMeasureUnit captures USDA's preferred and fallback portion-unit labels.
@@ -299,57 +304,147 @@ type usdaMeasureUnit struct {
 // decodeUSDASearch rejects malformed or partial payloads and produces deterministic records.
 // Implements DESIGN-012 USDAClient payload parsing.
 func decodeUSDASearch(body []byte) ([]ExternalFoodRecord, error) {
+	records, _, err := decodeUSDASearchResult(body)
+	return records, err
+}
+
+// decodeUSDASearchResult preserves valid peers and reports candidate-level rejection.
+// Implements DESIGN-012 USDAClient partial normalization and invalid-candidate isolation.
+func decodeUSDASearchResult(body []byte) ([]ExternalFoodRecord, bool, error) {
 	var payload usdaSearchPayload
 	if err := json.Unmarshal(body, &payload); err != nil || payload.TotalHits == nil || payload.CurrentPage == nil || payload.TotalPages == nil || payload.Foods == nil || *payload.TotalHits < 0 || *payload.CurrentPage < 0 || *payload.TotalPages < 0 {
-		return nil, errors.New("incomplete USDA search payload")
+		return nil, false, errors.New("incomplete USDA search payload")
 	}
 	records := make([]ExternalFoodRecord, 0, len(payload.Foods))
+	rejectedCandidates := false
 	for _, raw := range payload.Foods {
-		var food usdaFood
-		if err := json.Unmarshal(raw, &food); err != nil {
-			return nil, errors.New("malformed USDA food")
+		record, err := decodeUSDAFood(raw)
+		if err != nil {
+			rejectedCandidates = true
+			continue
 		}
-		if food.FDCID < 1 || strings.TrimSpace(food.Description) == "" || food.Nutrients == nil || (food.ServingSize == nil) != (strings.TrimSpace(food.ServingUnit) == "") || food.ServingSize != nil && (!finitePositive(*food.ServingSize)) {
-			return nil, errors.New("incomplete USDA food")
+		records = append(records, record)
+	}
+	return records, rejectedCandidates, nil
+}
+
+// decodeUSDAFood strictly validates required identity and nutrients while degrading optional portions.
+// Implements DESIGN-012 USDAClient candidate-level payload parsing.
+func decodeUSDAFood(raw json.RawMessage) (ExternalFoodRecord, error) {
+	var food usdaFood
+	if err := json.Unmarshal(raw, &food); err != nil {
+		return ExternalFoodRecord{}, errors.New("malformed USDA food")
+	}
+	name, nameErr := security.NormalizeInput(security.InputFieldProviderText, food.Description)
+	if food.FDCID < 1 || nameErr != nil || name.Value == "" || food.Nutrients == nil || len(food.Nutrients) > maxExternalNutrientFields || (food.ServingSize == nil) != (strings.TrimSpace(food.ServingUnit) == "") || food.ServingSize != nil && !finitePositive(*food.ServingSize) {
+		return ExternalFoodRecord{}, errors.New("incomplete USDA food")
+	}
+	nutrients := make(map[string]float64, len(food.Nutrients))
+	for _, nutrient := range food.Nutrients {
+		name, unit := strings.TrimSpace(nutrient.Name), strings.TrimSpace(nutrient.Unit)
+		key := name + " (" + unit + ")"
+		if name == "" || unit == "" || utf8.RuneCountInString(key) > 128 || containsUnsafeProviderText(key) {
+			return ExternalFoodRecord{}, errors.New("invalid USDA nutrient")
 		}
-		nutrients := make(map[string]float64, len(food.Nutrients))
-		for _, nutrient := range food.Nutrients {
-			name, unit := strings.TrimSpace(nutrient.Name), strings.TrimSpace(nutrient.Unit)
-			key := name + " (" + unit + ")"
-			if name == "" || unit == "" || math.IsNaN(nutrient.Value) || math.IsInf(nutrient.Value, 0) || nutrient.Value < 0 {
-				return nil, errors.New("invalid USDA nutrient")
+		_, _, supported := classifyUSDANutrient(key)
+		var value *float64
+		if len(nutrient.Value) == 0 || json.Unmarshal(nutrient.Value, &value) != nil || value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0 {
+			if supported {
+				return ExternalFoodRecord{}, errors.New("invalid USDA nutrient")
 			}
-			if _, duplicate := nutrients[key]; duplicate {
-				return nil, errors.New("duplicate USDA nutrient")
-			}
-			nutrients[key] = nutrient.Value
+			continue
 		}
-		portions := make([]ExternalFoodPortion, 0, len(food.Measures))
-		for _, measure := range food.Measures {
-			unit := strings.TrimSpace(measure.MeasureUnit.Abbreviation)
+		if _, duplicate := nutrients[key]; duplicate {
+			return ExternalFoodRecord{}, errors.New("duplicate USDA nutrient")
+		}
+		nutrients[key] = *value
+	}
+	var measures []json.RawMessage
+	partialNormalization := false
+	if len(food.Measures) > 0 {
+		if json.Unmarshal(food.Measures, &measures) != nil || measures == nil {
+			partialNormalization = true
+		}
+	}
+	portions := make([]ExternalFoodPortion, 0, len(measures))
+	for _, rawMeasure := range measures {
+		portion, ok := decodeUSDAPortion(rawMeasure)
+		if !ok {
+			partialNormalization = true
+			continue
+		}
+		portions = append(portions, portion)
+	}
+	sort.Slice(portions, func(i, j int) bool {
+		if portions[i].Unit != portions[j].Unit {
+			return portions[i].Unit < portions[j].Unit
+		}
+		if portions[i].Amount != portions[j].Amount {
+			return portions[i].Amount < portions[j].Amount
+		}
+		return portions[i].GramWeight < portions[j].GramWeight
+	})
+	return ExternalFoodRecord{
+		Provider: "usda", ExternalID: strconv.Itoa(food.FDCID), Name: name.Value,
+		ServingSize: food.ServingSize, ServingUnit: strings.TrimSpace(food.ServingUnit),
+		Nutrients: nutrients, Portions: portions, PartialNormalization: partialNormalization,
+		RawPayload: append(json.RawMessage(nil), raw...),
+	}, nil
+}
+
+// decodeUSDAPortion accepts only measured gram weights paired with explicit volume evidence.
+// Implements DESIGN-012 USDAClient optional portion allowlist.
+func decodeUSDAPortion(raw json.RawMessage) (ExternalFoodPortion, bool) {
+	var measure usdaMeasure
+	if json.Unmarshal(raw, &measure) != nil || measure.GramWeight == nil || !finitePositive(*measure.GramWeight) {
+		return ExternalFoodPortion{}, false
+	}
+	amount, unit := 0.0, ""
+	if measure.Amount != nil && finitePositive(*measure.Amount) {
+		amount = *measure.Amount
+		if measure.MeasureUnit != nil {
+			unit = strings.TrimSpace(measure.MeasureUnit.Abbreviation)
 			if unit == "" {
 				unit = strings.TrimSpace(measure.MeasureUnit.Name)
 			}
-			if unit == "" {
-				unit = strings.TrimSpace(measure.DisseminationText)
-			}
-			if !finitePositive(measure.Amount) || !finitePositive(measure.GramWeight) || unit == "" {
-				return nil, errors.New("invalid USDA portion")
-			}
-			portions = append(portions, ExternalFoodPortion{Amount: measure.Amount, Unit: unit, GramWeight: measure.GramWeight})
 		}
-		sort.Slice(portions, func(i, j int) bool {
-			if portions[i].Unit != portions[j].Unit {
-				return portions[i].Unit < portions[j].Unit
-			}
-			if portions[i].Amount != portions[j].Amount {
-				return portions[i].Amount < portions[j].Amount
-			}
-			return portions[i].GramWeight < portions[j].GramWeight
-		})
-		records = append(records, ExternalFoodRecord{Provider: "usda", ExternalID: strconv.Itoa(food.FDCID), Name: strings.TrimSpace(food.Description), ServingSize: food.ServingSize, ServingUnit: strings.TrimSpace(food.ServingUnit), Nutrients: nutrients, Portions: portions, RawPayload: append(json.RawMessage(nil), raw...)})
+		if !allowedUSDAPortionUnit(unit) {
+			unit = strings.TrimSpace(measure.DisseminationText)
+		}
+		if !allowedUSDAPortionUnit(unit) {
+			return ExternalFoodPortion{}, false
+		}
+	} else {
+		amount, unit = parseUSDAPortionText(measure.DisseminationText)
+		if amount == 0 {
+			return ExternalFoodPortion{}, false
+		}
 	}
-	return records, nil
+	return ExternalFoodPortion{Amount: amount, Unit: unit, GramWeight: *measure.GramWeight}, true
+}
+
+// parseUSDAPortionText recognizes only an exact positive decimal plus one documented volume alias.
+// Implements DESIGN-012 USDAClient unambiguous portion-text allowlist.
+func parseUSDAPortionText(text string) (float64, string) {
+	fields := strings.Fields(strings.ToLower(strings.TrimSpace(text)))
+	if len(fields) < 2 || len(fields) > 3 {
+		return 0, ""
+	}
+	amount, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil || !finitePositive(amount) {
+		return 0, ""
+	}
+	unit := strings.Join(fields[1:], " ")
+	if !allowedUSDAPortionUnit(unit) {
+		return 0, ""
+	}
+	return amount, unit
+}
+
+// allowedUSDAPortionUnit limits text-derived evidence to DataNormalizer's volume vocabulary.
+// Implements DESIGN-012 USDAClient unambiguous portion-text allowlist.
+func allowedUSDAPortionUnit(unit string) bool {
+	return normalizeVolumeAlias(unit) != ""
 }
 
 // finitePositive validates provider quantities used as serving or portion evidence.

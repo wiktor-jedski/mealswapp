@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -15,6 +16,16 @@ import (
 )
 
 type contractFoodRepository struct{}
+
+func TestRepositoryContextCannotCarryDisplayUnitPreferences(t *testing.T) {
+	contextType := reflect.TypeOf(RepositoryContext{})
+	if _, exists := contextType.FieldByName("UnitSystem"); exists {
+		t.Fatal("RepositoryContext must not carry display unit preferences")
+	}
+	if contextType.NumField() != 2 {
+		t.Fatalf("RepositoryContext fields = %d, want user scoping and deletion visibility only", contextType.NumField())
+	}
+}
 
 func (contractFoodRepository) GetByID(context.Context, uuid.UUID, RepositoryContext) (FoodItemEntity, error) {
 	return FoodItemEntity{}, nil

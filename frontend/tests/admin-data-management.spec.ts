@@ -31,13 +31,6 @@ interface State {
 	itemSearchItems?: Array<Record<string, unknown>>;
 	failNextItemSearch?: boolean;
 	itemSearchReads: number;
-	createRequests: Array<{ body: Record<string, unknown>; key: string | null }>;
-	updateRequests: Array<Record<string, unknown>>;
-	corruptNextCreate?: boolean;
-	corruptCreateWithoutCommit?: boolean;
-	abortNextCreate?: boolean;
-	corruptNextUpdate?: boolean;
-	failNextItemRead?: boolean;
 	classificationMutationWaits?: Record<string, Promise<void>>;
 	classificationMutationCompletions?: Record<string, () => void>;
 }
@@ -51,7 +44,7 @@ async function stubApp(page: Page): Promise<State> {
 		categories: [{ id: categoryParentId, name: "Food", kind: "food_category" }, { id: categoryId, name: "Produce", kind: "food_category", parentId: categoryParentId }, { id: conflictId, name: "In use", kind: "food_category" }],
 		roles: [{ id: roleId, name: "Base", kind: "culinary_role" }],
 		user: { id: userId, email: "minimal@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", deletion: { requestId: deletionId, status: "failed", failureCategory: "unknown", retryCount: 1, requestedAt: "2026-07-20T00:00:00Z" } },
-		deletedItemIds: [], classificationReads: 0, itemSearchReads: 0, createRequests: [], updateRequests: []
+		deletedItemIds: [], classificationReads: 0, itemSearchReads: 0
 	};
 	const session = ok({ userId: "admin-256", role: "admin", hasVerifiedLoginMethod: true, accessExpiresAt: "2026-07-21T22:00:00Z", refreshExpiresAt: "2026-07-28T22:00:00Z" });
 	await page.route(/\/api\/v1\/(profile|auth\/refresh|billing\/entitlement|search-history|saved-items|search\/autocomplete|auth\/csrf-token)(\?.*)?$/, async (route) => {
@@ -85,28 +78,10 @@ async function stubApp(page: Page): Promise<State> {
 			const pageNumber = Number(url.searchParams.get("page") ?? 1); const pageSize = Number(url.searchParams.get("pageSize") ?? 10); const offset = (pageNumber - 1) * pageSize;
 			return json(route, 200, ok({ items: matching.slice(offset, offset + pageSize), page: pageNumber, pageSize, total: matching.length }));
 		}
-			if (path === "/api/v1/admin/items" && method === "POST") {
-				const body = request.postDataJSON() as Record<string, unknown>;
-				state.createRequests.push({ body, key: request.headers()["idempotency-key"] ?? null });
-				if (state.abortNextCreate) { state.abortNextCreate = false; return route.abort("connectionfailed"); }
-				if (!state.corruptCreateWithoutCommit) state.item = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] };
-				state.corruptCreateWithoutCommit = false;
-				if (state.corruptNextCreate) { state.corruptNextCreate = false; return json(route, 201, { status: "ok", requestId: "req-create-294", data: { id: "corrupted" } }); }
-				return json(route, 201, ok(state.item));
-			}
-			if (path === `/api/v1/admin/items/${itemId}` && method === "GET") {
-				const delay = state.itemReadDelays?.[itemId] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-				if (state.failNextItemRead) { state.failNextItemRead = false; return json(route, 503, failure(503, "dependency_unavailable")); }
-				return state.item ? json(route, 200, ok(state.item)) : json(route, 404, failure(404, "not_found"));
-			}
+		if (path === "/api/v1/admin/items" && method === "POST") { const body = request.postDataJSON(); state.item = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] }; return json(route, 201, ok(state.item)); }
+		if (path === `/api/v1/admin/items/${itemId}` && method === "GET") { const delay = state.itemReadDelays?.[itemId] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); return state.item ? json(route, 200, ok(state.item)) : json(route, 404, failure(404, "not_found")); }
 		if (path === `/api/v1/admin/items/${secondItemId}` && method === "GET") return json(route, 200, ok({ ...state.item, id: secondItemId, name: "Second item" }));
-			if (path === `/api/v1/admin/items/${itemId}` && method === "PUT") {
-				const body = request.postDataJSON() as Record<string, unknown>; state.lastItemPut = body; state.updateRequests.push(body);
-				if (body.name === "Audit fail") return json(route, 500, failure(500, "audit_write_failed"));
-				const mutationProjection = { ...state.item, ...body }; state.item = { ...mutationProjection, ...(state.authoritativeNameAfterPut ? { name: state.authoritativeNameAfterPut } : {}) };
-				if (state.corruptNextUpdate) { state.corruptNextUpdate = false; return json(route, 200, { status: "ok", requestId: "req-update-294", data: { id: "corrupted" } }); }
-				return json(route, 200, ok(mutationProjection));
-			}
+		if (path === `/api/v1/admin/items/${itemId}` && method === "PUT") { const body = request.postDataJSON() as Record<string, unknown>; state.lastItemPut = body; if (body.name === "Audit fail") return json(route, 500, failure(500, "audit_write_failed")); const mutationProjection = { ...state.item, ...body }; state.item = { ...mutationProjection, ...(state.authoritativeNameAfterPut ? { name: state.authoritativeNameAfterPut } : {}) }; return json(route, 200, ok(mutationProjection)); }
 		if (path.startsWith("/api/v1/admin/items/") && method === "DELETE") { const id = path.split("/").at(-1)!; state.deletedItemIds.push(id); if (id === itemId) state.item = undefined; state.itemSearchItems = state.itemSearchItems?.filter(({ itemId: candidate }) => candidate !== id); return json(route, 204); }
 		if (path === "/api/v1/admin/users" && method === "GET") { const query = url.searchParams.get("email") ?? url.searchParams.get("userId") ?? ""; const delay = state.userLookupDelays?.[query] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); return json(route, 200, ok({ users: [{ ...state.user, email: query.includes("@") ? query : state.user.email }] })); }
 		if (path === `/api/v1/admin/users/${userId}/deletion-requests/${deletionId}/retry` && method === "POST") {

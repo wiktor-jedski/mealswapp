@@ -1,6 +1,7 @@
 package httpapi
 
 // Implements DESIGN-008 ProfileController custom-item HTTP verification.
+// Implements DESIGN-005 UnitConverter metric API field verification.
 
 import (
 	"context"
@@ -364,7 +365,7 @@ func TestProfileControllerCustomItemClassificationProjectionOmitsParentID(t *tes
 	userID, itemID, classificationID := uuid.New(), uuid.New(), uuid.New()
 	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
 	service := &fakeCustomItemService{item: customitem.Item{
-		ID: itemID, Name: "Projected", PhysicalState: repository.PhysicalStateSolid,
+		ID: itemID, Name: "Projected", PhysicalState: repository.PhysicalStateSolid, AverageUnitWeightGrams: 28.3495,
 		FoodCategories: []customitem.ClassificationSummary{{ID: classificationID, Name: "Child", Kind: repository.ClassificationKindFoodCategory}},
 		CulinaryRoles:  []customitem.ClassificationSummary{},
 	}}
@@ -381,7 +382,7 @@ func TestProfileControllerCustomItemClassificationProjectionOmitsParentID(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != fiber.StatusOK || !strings.Contains(string(encoded), classificationID.String()) || strings.Contains(string(encoded), "parentId") {
+	if resp.StatusCode != fiber.StatusOK || body.Data["averageUnitWeightGrams"] != 28.3495 || !strings.Contains(string(encoded), classificationID.String()) || strings.Contains(string(encoded), "parentId") {
 		t.Fatalf("classification HTTP projection = %d %s", resp.StatusCode, encoded)
 	}
 }

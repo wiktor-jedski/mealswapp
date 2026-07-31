@@ -1,5 +1,7 @@
 package repository
 
+// Implements DESIGN-005 UnitConverter metric repository invariant verification.
+
 import (
 	"bytes"
 	"context"
@@ -169,7 +171,7 @@ func TestPostgresCustomFoodItemRepositoryOwnerScopedCRUD(t *testing.T) {
 		t.Fatal("custom item unexpectedly shares global identity")
 	}
 
-	stored, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{UnitSystem: UnitSystemMetric})
+	stored, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("GetByID() same owner error = %v", err)
 	}
@@ -179,12 +181,12 @@ func TestPostgresCustomFoodItemRepositoryOwnerScopedCRUD(t *testing.T) {
 	if len(stored.FoodCategories) != 1 || stored.FoodCategories[0].ID != categoryID || stored.FoodCategories[0].ParentID == nil || *stored.FoodCategories[0].ParentID != categoryRootID || len(stored.CulinaryRoles) != 1 || stored.CulinaryRoles[0].ID != roleID {
 		t.Fatalf("stored custom classifications = categories %#v roles %#v", stored.FoodCategories, stored.CulinaryRoles)
 	}
-	imperial, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{UnitSystem: UnitSystemImperial})
+	secondRead, err := customRepo.GetByID(ctx, ownerA, customID, RepositoryContext{})
 	if err != nil {
-		t.Fatalf("GetByID() imperial error = %v", err)
+		t.Fatalf("GetByID() second read error = %v", err)
 	}
-	if imperial.AverageUnitWeightGrams != 1 {
-		t.Fatalf("imperial unit weight = %v, want 1 oz", imperial.AverageUnitWeightGrams)
+	if secondRead.AverageUnitWeightGrams != 28.3495 {
+		t.Fatalf("metric unit weight = %v, want 28.3495 g", secondRead.AverageUnitWeightGrams)
 	}
 
 	if _, err := customRepo.GetByID(ctx, ownerB, customID, RepositoryContext{}); !IsKind(err, ErrorKindNotFound) {
@@ -210,14 +212,14 @@ func TestPostgresCustomFoodItemRepositoryOwnerScopedCRUD(t *testing.T) {
 	if otherOwnerID == customID {
 		t.Fatal("different-owner item reused custom item ID")
 	}
-	ownerAItems, err := customRepo.List(ctx, ownerA, RepositoryContext{UnitSystem: UnitSystemMetric})
+	ownerAItems, err := customRepo.List(ctx, ownerA, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("List() owner A error = %v", err)
 	}
 	if len(ownerAItems) != 1 || ownerAItems[0].ID != customID || ownerAItems[0].OwnerID != ownerA {
 		t.Fatalf("List() owner A items = %#v", ownerAItems)
 	}
-	ownerBItems, err := customRepo.List(ctx, ownerB, RepositoryContext{UnitSystem: UnitSystemMetric})
+	ownerBItems, err := customRepo.List(ctx, ownerB, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("List() owner B error = %v", err)
 	}
@@ -324,6 +326,7 @@ func TestPostgresCustomFoodItemRepositoryErrorBranches(t *testing.T) {
 	rollbackTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{
 		execErrs: []error{nil, wantErr},
 		execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")},
+		rows:     &fakeRows{},
 	}}
 	repo = NewPostgresCustomFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: rollbackTx})
 	if err := repo.Update(ctx, valid); !IsKind(err, ErrorKindConnection) {
@@ -427,12 +430,12 @@ func TestPostgresCustomFoodItemRepositoryValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() valid liquid error = %v", err)
 	}
-	liquid, err := repo.GetByID(ctx, ownerID, liquidID, RepositoryContext{UnitSystem: UnitSystemImperial})
+	liquid, err := repo.GetByID(ctx, ownerID, liquidID, RepositoryContext{})
 	if err != nil {
 		t.Fatalf("GetByID() liquid error = %v", err)
 	}
-	if liquid.AverageServingVolumeMilliliters != 8.4535 || liquid.DensityGramsPerMilliliter != 1.03 || liquid.DensitySourceKind != "manual" {
-		t.Fatalf("imperial liquid fields = %#v", liquid.FoodItemEntity)
+	if liquid.AverageServingVolumeMilliliters != 250 || liquid.DensityGramsPerMilliliter != 1.03 || liquid.DensitySourceKind != "manual" {
+		t.Fatalf("metric liquid fields = %#v", liquid.FoodItemEntity)
 	}
 
 	invalidCases := []struct {

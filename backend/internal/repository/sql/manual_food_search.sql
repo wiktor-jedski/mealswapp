@@ -5,6 +5,6 @@ SELECT id, name, physical_state, prep_time_minutes, average_unit_weight_grams, a
        deleted_at, created_at, updated_at
 FROM food_items
 WHERE deleted_at IS NULL
-  AND strpos(normalized_name, $1::text) > 0
-ORDER BY normalized_name, id
+  AND strpos(regexp_replace(normalized_name, '[[:space:]]+', ' ', 'g'), $1::text) > 0
+ORDER BY regexp_replace(normalized_name, '[[:space:]]+', ' ', 'g'), id
 LIMIT $2 OFFSET $3;

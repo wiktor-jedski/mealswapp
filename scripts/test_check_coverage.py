@@ -84,10 +84,12 @@ class Phase08BackendCoverageContractTests(unittest.TestCase):
 		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
 		contract = check.marked_contract(section, "phase08-backend-coverage-contract")
 		rows = check.parse_backend_exceptions(contract)
-		self.assertIn("Measured Phase 08 scope: `4645/4986` statements (`93.2%`).", contract)
+		self.assertIn("Measured Phase 08 scope: `4676/5016` statements (`93.2%`).", contract)
 		self.assertEqual(rows["internal/app/app.go"][0], check.GoCoverage(110, 116, "98.86-100.4,117.69-122.18,122.18-124.5,130.17-132.4,165.4-169.10"))
 		self.assertEqual(rows["internal/httpapi/manual_item_controller.go"][0].covered, 105)
 		self.assertEqual(rows["internal/itemcurator/service.go"][0].total, 97)
+		self.assertEqual(rows["internal/externaldata/openfoodfacts.go"][0], check.GoCoverage(184, 192, "206.62-208.12,228.10-230.4,248.14-250.12,252.26-254.12,260.2-260.17"))
+		self.assertEqual(rows["internal/externaldata/rate_limit.go"][0], check.GoCoverage(186, 188, "357.14-359.3,407.46-409.3"))
 		self.assertEqual(rows["internal/repository/compliance_repository.go"][0], check.GoCoverage(277, 280, "546.31-547.31,547.31-549.4,550.10-551.56"))
 		self.assertEqual(rows["internal/repository/manual_food_repository.go"][0].total, 120)
 

@@ -186,6 +186,12 @@ async function adminSearch(page: Page, name: string, baseURL = ""): Promise<{ re
 	return { response, items: body.data!.items! };
 }
 
+function generation(): string {
+	const container = fixture("MEALSWAPP_TASK283_REDIS_CONTAINER");
+	if (!/^mealswapp-e2e-[0-9a-f]{24}$/.test(container)) throw new Error("Task 283 Redis container identity is invalid");
+	return execFileSync("docker", ["exec", container, "redis-cli", "GET", "classification:cache-generation:v1"], { encoding: "utf8" }).trim();
+}
+
 function generationSnapshot(): { id: string; value: string } {
 	const id = crypto.randomUUID();
 	const directory = fixture("MEALSWAPP_TASK283_REDIS_OBSERVATION_REQUEST_DIR");
@@ -310,33 +316,24 @@ test("solid and liquid creation persists ownerless canonical state and density p
 	const secondRead = await page.request.get(`${secondAPI()}/api/v1/admin/items/${liquidCreate.value.id}`);
 	expect(secondRead.status()).toBe(200);
 	expect(await item(secondRead)).toEqual(liquidCreate.value);
-	const privateKey = crypto.randomUUID();
 	const sharedSearchQuery = "Task 283";
-	const privateResponse = await page.request.post("/api/v1/custom-items", {
-		headers: { "X-CSRF-Token": token, "Idempotency-Key": privateKey },
-		data: solid(`${sharedSearchQuery} private ${info.project.name}`)
-	});
-	expect(privateResponse.status()).toBe(201);
-	const privateBody = await privateResponse.json() as { data?: { id?: string } };
-	expect(privateBody.data?.id).toMatch(UUID);
+	const privatePartitionID = fixture("MEALSWAPP_TASK283_PRIVATE_ITEM_ID");
 	const createdPicker = await adminSearch(page, sharedSearchQuery, secondAPI());
 	expect(createdPicker.items).toContainEqual(expect.objectContaining({ itemId: solidCreate.value.id, name: solidCreate.value.name, macrosPer100: solidCreate.value.macrosPer100 }));
-	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privateBody.data!.id);
+	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privatePartitionID);
 	const createdCatalog = await search(page, { query: sharedSearchQuery, mode: "catalog", page: 1, filters: [] });
 	expect(createdCatalog.items.map(({ id }) => id)).toContain(solidCreate.value.id);
-	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privateBody.data!.id);
+	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privatePartitionID);
 	const createdSubstitution = await search(page, {
 		query: sharedSearchQuery, mode: "substitution", page: 1, filters: [],
 		substitutionInputs: [{ foodObjectId: solidCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
 	}, secondAPI());
 	expect(createdSubstitution.items.map(({ id }) => id)).toContain(liquidCreate.value.id);
-	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privateBody.data!.id);
-	const privateDelete = await page.request.delete(`/api/v1/custom-items/${privateBody.data!.id}`, { headers: { "X-CSRF-Token": token } });
-	expect(privateDelete.status()).toBe(204);
+	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privatePartitionID);
 	const criteria = ["P08-SWR056-STEP-01", "P08-SWR056-STEP-02", "P08-SWR056-ACCEPT-01", "P08-SWR033-STEP-05"];
 	await record(info, "solid-create", criteria, {
 		kind: "item", entityId: solidCreate.value.id, name: solidCreate.value.name, idempotencyKey: solidCreate.key,
-		requestIds: [await responseRequestId(solidCreate.response), await responseRequestId(privateResponse), await responseRequestId(createdPicker.response), await responseRequestId(createdCatalog.response), await responseRequestId(privateDelete)],
+		requestIds: [await responseRequestId(solidCreate.response), await responseRequestId(createdPicker.response), await responseRequestId(createdCatalog.response)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "solid", metricBasis: "100g", macros: solidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100g"]);
 	await record(info, "liquid-create", criteria, {
@@ -618,6 +615,7 @@ test("API-2 observes commits while an API-1 stale absolute write is rejected", a
 	const created = await createItem(page, primaryToken, solid(`Task 283 stale ${info.project.name}`, { protein: 4, carbohydrates: 5, fat: 6 }));
 	const staleRead = await page.request.get(`/api/v1/admin/items/${created.value.id}`);
 	expect(staleRead.status()).toBe(200);
+	const staleProjection = await staleRead.json();
 	const freshUpdate = await page.request.put(`${secondAPI()}/api/v1/admin/items/${created.value.id}`, {
 		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) },
 		data: solid(`${created.value.name} fresh`, { protein: 7, carbohydrates: 8, fat: 9 })
@@ -625,7 +623,7 @@ test("API-2 observes commits while an API-1 stale absolute write is rejected", a
 	expect(freshUpdate.status()).toBe(200);
 	const refreshedPrimaryToken = await csrf(page);
 	const staleUpdate = await page.request.put(`/api/v1/admin/items/${created.value.id}`, {
-		headers: { "X-CSRF-Token": refreshedPrimaryToken },
+		headers: { "X-CSRF-Token": refreshedPrimaryToken, "If-Match": staleProjection.data.updatedAt },
 		data: solid(`${created.value.name} stale`, created.value.macrosPer100)
 	});
 	await record(info, "cross-instance-stale-write", ["P08-SWR057-STEP-08", "P08-SWR057-ACCEPT-05"], {

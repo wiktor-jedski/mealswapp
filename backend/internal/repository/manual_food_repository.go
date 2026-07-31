@@ -129,6 +129,9 @@ func (r *PostgresManualFoodItemRepository) ClaimCreate(ctx context.Context, tx A
 	if err := validateManualFoodCreateClaim(claim, encode); err != nil {
 		return ManualFoodItemCreateClaimResult{}, err
 	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return ManualFoodItemCreateClaimResult{}, err
+	}
 	_, claimErr := scanManualFoodCreateClaim(tx.QueryRow(ctx, manualFoodCreateClaimSQL, claim.AdminUserID, claim.Key, claim.BodyHash))
 	if claimErr == nil {
 		id, err := createManualFoodItem(ctx, tx, claim.Item)
@@ -171,6 +174,9 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if item.ID == uuid.Nil {
 		return validationError("food item id is required")
 	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return err
+	}
 	item.Name = canonicalManualFoodName(item.Name)
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return err
@@ -178,11 +184,16 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if err := validateManualFoodAllergens(ctx, tx, item.AllergenKeys); err != nil {
 		return err
 	}
-	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL))
+	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL), item.ExpectedUpdatedAt)
 	if err != nil {
 		return mapPostgresError(err, "update manual food item")
 	}
 	if result.RowsAffected() == 0 {
+		if _, lookupErr := getManualFoodByID(ctx, tx, item.ID, false); lookupErr == nil {
+			return NewError(ErrorKindConflict, "food item has changed since it was read", nil)
+		} else if !IsKind(lookupErr, ErrorKindNotFound) {
+			return lookupErr
+		}
 		return NewError(ErrorKindNotFound, "food item not found", nil)
 	}
 	if err := replaceFoodClassificationsWithExecutor(ctx, tx, item.ID, item.FoodCategories, item.CulinaryRoles); err != nil {
@@ -210,6 +221,9 @@ func (r *PostgresManualFoodItemRepository) Delete(ctx context.Context, tx AdminM
 // createManualFoodItem persists one ownerless global row and its classifications.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEntity) (uuid.UUID, error) {
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return uuid.Nil, err
+	}
 	item.Name = canonicalManualFoodName(item.Name)
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return uuid.Nil, err

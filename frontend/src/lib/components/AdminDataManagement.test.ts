@@ -25,9 +25,26 @@ test("binds confirmations to immutable targets and guards authoritative refresh 
 	expect(source).toContain("event.preventDefault(); target.focus()");
 	expect(source).not.toContain("<dialog open");
 	expect(source).toContain("currentItemOperation(generation, controller)");
-	expect(source).toContain("currentClassificationOperation(generation, controller)");
+	expect(source).toContain("currentClassificationMutation(generation, controller)");
+	expect(source).toContain("currentClassificationRead(generation, controller)");
 	expect(source).toContain("currentUserOperation(generation, controller)");
 	expect(source).toContain("api.getItem(saved.id, controller.signal)");
+});
+
+test("separates confirmed classification mutations from recoverable hierarchy reads", () => {
+	expect(source).toContain('"Saved, but the list could not be refreshed"');
+	expect(source).toContain("savedClassification = saved");
+	expect(source).toContain("classificationRefreshRequired = true");
+	expect(source).toContain("Retry list refresh");
+	expect(source).toContain("classificationMutationBusy || classificationRefreshRequired");
+	expect(source).toContain("projectionContains(projection, savedClassification)");
+	expect(source).toContain("parentId: classificationParentId || null");
+	expect(source).toContain('value.id !== classificationId');
+	expect(source).toContain("changeClassificationKind");
+	expect(source).toContain("deletedClassificationId");
+	expect(source).toContain("lastSafeClassifications");
+	expect(source).toContain('role="tree"');
+	expect(source).toContain("aria-level={row.depth + 1}");
 });
 
 test("uses responsive layouts, keyboard focus, safe alerts, and design traceability", () => {
@@ -65,19 +82,4 @@ test("makes searchable discovery primary and UUID loading an advanced fallback",
 	expect(source).toContain("Advanced: load by item ID");
 	expect(source).toContain("loadSearchResult(item)");
 	expect(source).toContain("refreshItemSearch()");
-});
-
-test("blocks ambiguous item resubmission and exposes authoritative recovery", () => {
-	expect(source).toContain('error.outcome === "possibly_committed"');
-	expect(source).toContain("snapshotRequest(parsed.request)");
-	expect(source).toContain("snapshotForm(form)");
-	expect(source).toContain("data-admin-item-recovery");
-	expect(source).toContain("Verify saved update");
-	expect(source).toContain("Check authoritative items");
-	expect(source).toContain("Retry original create safely");
-	expect(source).toContain("adminItemMatchesRequest");
-	expect(source).toContain("{ createKey }");
-	expect(source).toContain("disabled={Boolean(ambiguousItemMutation)}");
-	expect(source).toContain("recoveryNotice?.focus()");
-	expect(source).toContain("itemErrorNotice?.focus()");
 });

@@ -12,6 +12,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -213,6 +214,9 @@ class Task283Harness(real_stack.Harness):
             if f"user_id={user['user_id']}" not in bootstrap.stdout or "actor=operator" not in bootstrap.stdout:
                 raise RuntimeError("administrator bootstrap returned an unexpected target")
             self.events.append("administrator_bootstrapped")
+            private_item_id = str(uuid.uuid4())
+            private_item_name = f"Task 283 private {self.run_id}"
+            real_stack.psql(self.target, "INSERT INTO custom_food_items (id,owner_id,name,physical_state,protein_per_100,carbohydrates_per_100,fat_per_100) VALUES ('%s'::uuid,'%s'::uuid,'%s','solid',1,2,3)" % (private_item_id, user["user_id"], private_item_name), database=self.database)
             real_stack.psql(self.target, "INSERT INTO entitlements (user_id,tier,status,search_limit_per_24h,allowed_modes,expires_at) VALUES ('%s'::uuid,'trial','active',100,ARRAY['catalog','substitution','daily_diet','daily_diet_alternative'],now()+interval '1 day')" % user["user_id"], database=self.database)
             capability = self.raw_dir / "task283-harness-capability.json"
             nonce = __import__("secrets").token_hex(24)
@@ -231,7 +235,7 @@ class Task283Harness(real_stack.Harness):
                 daemon=True,
             )
             observer.start()
-            playwright_env = {**env,"MEALSWAPP_TASK283_REAL_E2E":"1","MEALSWAPP_REAL_STACK_MANAGED":"1","MEALSWAPP_REAL_STACK_BASE_URL":f"http://127.0.0.1:{frontend_port}","MEALSWAPP_TASK283_CAPABILITY_FILE":str(capability),"MEALSWAPP_TASK283_CAPABILITY_NONCE":nonce,"MEALSWAPP_TASK283_SECOND_API_URL":f"http://127.0.0.1:{self.second_api_port}","MEALSWAPP_TASK283_REDIS_CONTAINER":self.container,"MEALSWAPP_TASK283_AUTH_STATE_DIR":str(self.raw_dir / "task283-auth-state"),"MEALSWAPP_E2E_EMAIL":user["email"],"MEALSWAPP_E2E_PASSWORD":user["password"],"PHASE08_ACCEPTANCE_RESULT_DIR":str(evidence),"MEALSWAPP_PHASE08_RESULT_FILE":"browser.json","MEALSWAPP_PHASE08_CRITERIA":",".join(CRITERIA),"MEALSWAPP_PHASE08_EXPECTED_PROJECTS":"real-stack-desktop-chromium,real-stack-mobile-chromium","MEALSWAPP_PHASE08_INFRASTRUCTURE_ROOT":INFRASTRUCTURE_ROOT,"MEALSWAPP_PHASE08_SYNCHRONIZED_ROOTS":",".join(SYNCHRONIZED_ROOTS),"PLAYWRIGHT_OUTPUT_DIR":str(self.raw_dir / "playwright")}
+            playwright_env = {**env,"MEALSWAPP_TASK283_REAL_E2E":"1","MEALSWAPP_REAL_STACK_MANAGED":"1","MEALSWAPP_REAL_STACK_BASE_URL":f"http://127.0.0.1:{frontend_port}","MEALSWAPP_TASK283_CAPABILITY_FILE":str(capability),"MEALSWAPP_TASK283_CAPABILITY_NONCE":nonce,"MEALSWAPP_TASK283_SECOND_API_URL":f"http://127.0.0.1:{self.second_api_port}","MEALSWAPP_TASK283_REDIS_CONTAINER":self.container,"MEALSWAPP_TASK283_AUTH_STATE_DIR":str(self.raw_dir / "task283-auth-state"),"MEALSWAPP_TASK283_PRIVATE_ITEM_ID":private_item_id,"MEALSWAPP_TASK283_PRIVATE_ITEM_NAME":private_item_name,"MEALSWAPP_E2E_EMAIL":user["email"],"MEALSWAPP_E2E_PASSWORD":user["password"],"PHASE08_ACCEPTANCE_RESULT_DIR":str(evidence),"MEALSWAPP_PHASE08_RESULT_FILE":"browser.json","MEALSWAPP_PHASE08_CRITERIA":",".join(CRITERIA),"MEALSWAPP_PHASE08_EXPECTED_PROJECTS":"real-stack-desktop-chromium,real-stack-mobile-chromium","MEALSWAPP_PHASE08_INFRASTRUCTURE_ROOT":INFRASTRUCTURE_ROOT,"MEALSWAPP_PHASE08_SYNCHRONIZED_ROOTS":",".join(SYNCHRONIZED_ROOTS),"PLAYWRIGHT_OUTPUT_DIR":str(self.raw_dir / "playwright")}
             playwright_env["MEALSWAPP_TASK283_REDIS_OBSERVATION_REQUEST_DIR"] = str(redis_requests)
             generation_before = self.redis_generation_snapshot()
             (evidence / "backend").mkdir(exist_ok=True)

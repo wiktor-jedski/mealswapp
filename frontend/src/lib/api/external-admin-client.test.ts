@@ -222,6 +222,14 @@ test("rejects malformed nested search candidates and provider warnings", async (
 		globalThis.fetch = mock(async () => response(200, { status: "ok", requestId: "search", data })) as typeof fetch;
 		await expect(searchExternalFoods("apple", "all", 1)).rejects.toMatchObject({ appError: { code: "malformed_search_response" } });
 	}
+	globalThis.fetch = mock(async () => response(200, {
+		status: "ok",
+		requestId: "search",
+		data: { candidates: [{ ...validCandidate, warnings: ["partial_normalization"] }], warnings: [], page: 1 }
+	})) as typeof fetch;
+	await expect(searchExternalFoods("apple", "usda", 1)).resolves.toMatchObject({
+		candidates: [{ warnings: ["partial_normalization"] }]
+	});
 });
 
 test("rejects malformed nested classifications and import decisions", async () => {

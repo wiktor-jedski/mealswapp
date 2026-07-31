@@ -1007,7 +1007,7 @@ export interface SavedItemsData {
 export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
-/** Canonical quantity units accepted by saved daily-diet entries. */
+/** Explicit quantity units normalized by the server exactly once after basis validation. */
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
 /** Distinguishes Food Items from Meals in Daily Diet entries. */
@@ -1393,12 +1393,39 @@ export type SearchHistoryEnvelope = Envelope<SearchHistoryData>;
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** JSON account export bundle. */
 export interface ExportBundle {
-\tuser: Record<string, unknown>;
-\tconsent: Array<Record<string, unknown>>;
-\tsavedItems: SavedItem[];
+\tuser: ExportUser;
+\tconsent: ExportConsent[];
+\tsavedItems: ExportSavedItem[];
 \tsavedDiets: ExportSavedDiet[];
-\thistory: SearchHistoryEntry[];
-\tcustomItems: Array<Record<string, unknown>>;
+\thistory: ExportSearchHistoryEntry[];
+\tcustomItems: ExportCustomItem[];
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** Top-level authenticated account identity. */
+export interface ExportUser {
+\tuserId: string;
+\temail: string;
+\trole: "user" | "admin";
+\tdisplayName: string;
+\tunitSystem: "metric" | "imperial";
+\tthemePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One accepted legal-version pair. */
+export interface ExportConsent {
+\tprivacyPolicyVersion: string;
+\ttermsVersion: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free saved-item reference. */
+export interface ExportSavedItem {
+\tid: string;
+\titemId: string;
+\tkind: "favorite" | "saved_meal" | "saved_diet";
+\tcreatedAt: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -1406,9 +1433,50 @@ export interface ExportBundle {
 export interface ExportSavedDiet {
 \tid: string;
 \tname: string;
-\tentries: DailyDietFoodObjectEntry[];
+\tentries: ExportSavedDietEntry[];
 \tcreatedAt: string;
 \tupdatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One ordered owner-free saved-diet entry. */
+export interface ExportSavedDietEntry {
+\tid: string;
+\tfoodObjectId: string;
+\tfoodObjectType: FoodObjectType;
+\tquantity: number;
+\tunit: CanonicalQuantityUnit;
+\tposition: number;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free decrypted search-history entry. */
+export interface ExportSearchHistoryEntry {
+\tid: string;
+\tquery: string;
+\tmode: string;
+\tfiltersHash: string;
+\tcreatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free private custom-item projection. */
+export interface ExportCustomItem {
+\tid: string;
+\tname: string;
+\tphysicalState: "solid" | "liquid";
+\tprepTimeMinutes: number;
+\taverageUnitWeightGrams?: number;
+\taverageServingVolumeMilliliters?: number;
+\tdensityGramsPerMilliliter?: number;
+\tdensitySourceProvider?: string;
+\tdensitySourceFoodId?: string;
+\tdensitySourceKind?: "imported" | "manual" | "estimated";
+\tmacrosPer100: MacroProfile;
+\tmicros: Record<string, number>;
+\tfoodCategories: ClassificationSummary[];
+\tculinaryRoles: ClassificationSummary[];
+\timageUrl?: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -1819,7 +1887,7 @@ export interface ClassificationSummary {
 }
 
 // Implements DESIGN-008 ProfileController frontend custom-item mutation contract.
-/** Client-editable private custom-item fields. */
+/** Client-editable private custom-item fields whose metric-named values always use metric units. */
 export interface CustomItemRequest {
 	name: string;
 	physicalState: "solid" | "liquid";
@@ -1885,7 +1953,8 @@ export type ExternalCandidateWarning =
 	| "missing_micronutrients"
 	| "missing_liquid_density"
 	| "uncertain_unit_conversion"
-	| "suspicious_liquid_macros";
+	| "suspicious_liquid_macros"
+	| "partial_normalization";
 
 export type ExternalProviderWarningCode =
 	| "provider_rate_limited"
@@ -1994,6 +2063,35 @@ export interface AdminClassification {
 export type AdminClassificationEnvelope = OkEnvelope<{ classification: AdminClassification }>;
 export type AdminClassificationCollectionEnvelope = OkEnvelope<{ classifications: AdminClassification[] }>;
 
+// Implements DESIGN-005 MicronutrientVocabulary administration boundary.
+/** @openapi-description AdminMicronutrient */
+export interface AdminMicronutrient {
+	key: string;
+	displayName: string;
+	unit: "g" | "mg" | "mcg";
+	active: boolean;
+}
+
+/** @openapi-description AdminMicronutrientCreateRequest */
+export interface AdminMicronutrientCreateRequest {
+	key: string;
+	displayName: string;
+	unit: AdminMicronutrient["unit"];
+}
+
+/** @openapi-description AdminMicronutrientDisplayNameRequest */
+export interface AdminMicronutrientDisplayNameRequest {
+	displayName: string;
+}
+
+/** @openapi-description AdminMicronutrientUnitRequest */
+export interface AdminMicronutrientUnitRequest {
+	unit: AdminMicronutrient["unit"];
+}
+
+export type AdminMicronutrientEnvelope = OkEnvelope<{ micronutrient: AdminMicronutrient }>;
+export type AdminMicronutrientCollectionEnvelope = OkEnvelope<{ micronutrients: AdminMicronutrient[] }>;
+
 // Implements DESIGN-009 UserAdminPanel privacy-minimized projection.
 export interface AdminDeletionSummary {
 	requestId: string;
@@ -2029,7 +2127,7 @@ export interface MacroProfile {
 }
 
 // Implements DESIGN-002 SearchController frontend substitution source summary contract.
-/** Macro and amount totals for the user's selected substitution input list. */
+/** Macro totals plus metric gram and milliliter totals after one request-unit normalization. */
 export interface SourceSummary {
 \tmacros: MacroProfile;
 \tcalories: number;
@@ -2139,7 +2237,7 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 
 def generated_contract(source: str) -> str:
 	"""Render shared quantity enums and administration TSDoc from OpenAPI."""
-	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 4:
+	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 5:
 		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
 	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
 	if match is None:

@@ -15,6 +15,9 @@ test("covers provider selection, pagination, and all safe external states", () =
 	for (const state of ["loading", "empty", "error"]) expect(source).toContain(`searchState === "${state}"`);
 	expect(source).toContain('"empty" : "results"');
 	expect(source).toContain("providerWarningLabels");
+	expect(source).toContain("Some provider candidates were rejected because required data was invalid.");
+	expect(source).toContain("External providers could not return results.");
+	expect(source).toContain("No external candidates matched this search.");
 	expect(source).not.toContain("warning.message");
 	expect(source).toContain("searchController?.abort()");
 	expect(source).toContain("sequence !== searchSequence");
@@ -27,6 +30,7 @@ test("provides editable drafts, normalization warnings, density, and classificat
 	expect(source).toContain("missing_liquid_density");
 	expect(source).toContain("uncertain_unit_conversion");
 	expect(source).toContain("suspicious_liquid_macros");
+	expect(source).toContain("partial_normalization");
 	expect(source).toContain("toggleClassification");
 	expect(source).toContain("foodCategoryIds");
 	expect(source).toContain("culinaryRoleIds");
@@ -34,6 +38,13 @@ test("provides editable drafts, normalization warnings, density, and classificat
 	expect(source).toContain("updateDensity");
 	expect(source).toContain("updatePhysicalState");
 	expect(source).toContain("Density provenance");
+});
+
+test("distinguishes partial normalization, rejected candidates, provider failure, and zero matches", () => {
+	expect(source).toContain("Some optional source measures were ignored.");
+	expect(source).toContain("Some provider candidates were rejected because required data was invalid.");
+	expect(source).toContain("External providers could not return results.");
+	expect(source).toContain("No external candidates matched this search.");
 });
 
 test("keeps one idempotency key through conflict and ambiguous retry paths", () => {

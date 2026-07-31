@@ -83,7 +83,6 @@ func (r *PostgresFoodItemRepository) GetByID(ctx context.Context, id uuid.UUID, 
 	if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 		return FoodItemEntity{}, err
 	}
-	convertFoodItemForUnitSystem(&item, rc.UnitSystem)
 	return item, nil
 }
 
@@ -124,7 +123,6 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 		if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 			return nil, 0, err
 		}
-		convertFoodItemForUnitSystem(&item, q.UnitSystem)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -156,6 +154,12 @@ func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEn
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
 		err := db.QueryRow(ctx, foodCreateSQL, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL)).Scan(&id)
 		if err != nil {
@@ -178,8 +182,14 @@ func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEn
 	micros := marshalMicros(item.Micros)
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
-		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL))
+		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL), nil)
 		if err != nil {
 			return mapPostgresError(err, "update food item")
 		}
@@ -409,20 +419,6 @@ func scanFoodItem(row foodRowScanner) (FoodItemEntity, error) {
 		item.Micros = MicroValues{}
 	}
 	return item, nil
-}
-
-// convertFoodItemForUnitSystem converts display values to the requested unit system.
-// Implements DESIGN-005 FoodItemEntity.
-func convertFoodItemForUnitSystem(item *FoodItemEntity, unitSystem UnitSystem) {
-	if unitSystem != UnitSystemImperial {
-		return
-	}
-	switch item.PhysicalState {
-	case PhysicalStateSolid:
-		item.AverageUnitWeightGrams, _ = ConvertUnit(item.AverageUnitWeightGrams, "g", "oz")
-	case PhysicalStateLiquid:
-		item.AverageServingVolumeMilliliters, _ = ConvertUnit(item.AverageServingVolumeMilliliters, "ml", "fl_oz")
-	}
 }
 
 // validateFoodDensity checks required liquid density metadata.

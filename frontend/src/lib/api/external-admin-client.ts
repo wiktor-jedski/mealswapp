@@ -319,7 +319,7 @@ function isNumericMap(value: unknown, maximumProperties: number): boolean {
 }
 
 function isCandidateWarning(value: unknown): boolean {
-	return typeof value === "string" && ["missing_image", "missing_macros", "missing_micronutrients", "missing_liquid_density", "uncertain_unit_conversion", "suspicious_liquid_macros"].includes(value);
+	return typeof value === "string" && ["missing_image", "missing_macros", "missing_micronutrients", "missing_liquid_density", "uncertain_unit_conversion", "suspicious_liquid_macros", "partial_normalization"].includes(value);
 }
 
 function isProviderWarningCode(value: unknown): boolean {
