@@ -18,6 +18,8 @@ Task 292 implements the administrator-only paginated global manual-item picker a
 | `backend/internal/repository/sql/manual_food_search.sql` | Legacy-compatible canonical search predicate and deterministic ordering | Repeated-whitespace legacy PostgreSQL regression |
 | `backend/internal/repository/sql/manual_food_search_count.sql` | Legacy-compatible canonical count predicate | Search/count parity inspection and repository regression |
 | `backend/internal/repository/manual_food_repository_test.go` | `TestPostgresManualFoodItemCRUD` | Direct PostgreSQL create/search/update and legacy-row discovery |
+| `backend/internal/cache/classification_invalidator.go` | Post-commit namespace invalidation | Real-stack deletion regression proves autocomplete no longer returns deleted manual items |
+| `backend/internal/cache/classification_invalidator_test.go` | `TestClassificationInvalidatorClearsFilterAndSearchNamespaces` | Search and autocomplete namespace invalidation regression |
 | `frontend/tests/task283-manual-catalog.spec.ts` | Private-partition assertions in managed acceptance flow | Task 283 isolated real-stack evidence |
 | `scripts/run-task283-acceptance.py` | Run-owned private fixture seeding and fixture environment export | Managed acceptance harness |
 
@@ -27,6 +29,7 @@ Earlier committed Task 292 implementation and repair commits remain preserved:
 - `01995b97` — repair global item picker regressions
 - `e24b285b` — align picker macros contract
 - `d0dcf521` — repair legacy picker search evidence
+- `465681bc` — invalidate autocomplete after manual item mutations
 
 ## Verification evidence
 
@@ -44,23 +47,27 @@ Earlier committed Task 292 implementation and repair commits remain preserved:
 | `python3 -m py_compile scripts/run-task283-acceptance.py` | PASS |
 | `npm exec --yes --package=@redocly/cli@2.31.5 -- redocly lint api/openapi.yaml` | PASS; one pre-existing ignored OAuth callback 302 warning |
 | `cd backend && ... go test ./internal/repository ./internal/httpapi ./internal/itemcurator` | PASS |
+| `cd backend && ... go test ./internal/cache ./internal/search ./internal/httpapi ./internal/itemcurator -count=1` | PASS |
+| `cd backend && ... go test -race ./internal/cache ./internal/search ./internal/httpapi ./internal/itemcurator -count=1` | PASS |
 | `cd backend && ... go test -race ./internal/repository` with isolated `mealswapp_test` | PASS; repository DB/race lane completed in 43.4s |
 | `cd backend && ... go test -race ./...` with isolated `mealswapp_test` | PASS; all backend packages completed |
 | `cd backend && ... go vet ./...` | PASS |
 | `cd backend && ... go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...` | PASS for called code; scanner reports dependency vulnerabilities outside called code |
+| `python3 scripts/run-task283-acceptance.py --timeout-seconds 180` | In-scope deletion regression PASS: latest proof has `autocompleteContainsDeleted=false`; run remains nonzero because separate `P08-FIND-283-001` and provider/unit `P08-FIND-283-005` criteria remain blocked |
 | `python3 scripts/check.py --quick` | FAIL, unrelated phase-wide acceptance/UAT fixtures: stale `docs/implementation/02_TASK_LIST.md` hash and unsynchronized `P08-SWR054-ACCEPT-01`; the Task 292 validators and changed-area checks pass |
 
 The retained managed Task 283 evidence (`logs/phase08-acceptance/task283-38b14c5e78cc60d1a3b46df3-sw-req-056/` and the paired `sw-req-033` report) produced real-stack evidence without the admin private-item POST 403. Its non-pass criteria remain linked to `P08-FIND-283-001` (global/private-owner acceptance) and `P08-FIND-283-005` (standardized-storage/discovery acceptance). Neither finding is closed by this preparation; Task 292's picker implementation is the planned remediation surface for `P08-FIND-283-005`, while Task 302 owns the final isolated retest and closure decision.
 
 ## Criterion results
 
-- Global ownerless item search and bounded pagination: PASS by implementation and repository/API/frontend regression coverage; managed Task 283 acceptance remains non-pass where its separate owner/private-partition criteria apply.
+- Global ownerless item search and bounded pagination: PASS by implementation and repository/API/frontend regression coverage; managed Task 283 ownerless assertions pass, while unrelated acceptance criteria remain non-pass.
 - Canonical name persistence and search, including repeated internal whitespace in legacy rows: PASS by PostgreSQL regression.
 - Blank-query stale response cancellation and later-page deletion recovery: PASS by focused frontend regression coverage from the implementation repair cycle.
 - Macro projection contract: PASS; picker uses the canonical `MacroProfile` contract.
-- Private-item exclusion and administrator authorization: implementation/API boundary PASS; managed Task 283 acceptance still records `P08-FIND-283-001` for the unresolved owner/private-partition criterion. The harness seeds a private fixture read-only boundary instead of attempting an unauthorized admin private-item mutation.
+- Private-item exclusion and administrator authorization: implementation/API boundary PASS; managed Task 283 still records the broad `P08-FIND-283-001` tracker for separate manual-catalog criteria. The harness seeds a private fixture read-only boundary instead of attempting an unauthorized admin private-item mutation.
+- Deleted-item exclusion from autocomplete: PASS after `465681bc`; both desktop and mobile real-stack proofs report `autocompleteContainsDeleted=false`.
 - OpenAPI lint: PASS with the documented pre-existing ignored OAuth callback 302 warning; generated API drift check passes.
 
 ## Risks and blockers
 
-The current acceptance ledger still records `P08-FIND-283-001` and `P08-FIND-283-005` as open/non-pass findings; this report does not hide or close them. The phase-wide quick gate also exposes an unrelated stale UAT hash and unsynchronized `P08-SWR054-ACCEPT-01`; those are not Task 292 evidence and remain outside this repair. Task 292 requires global ownerless manual items and therefore cannot resolve the private-owner tracker without contradicting its own scope. No additional Task 292 implementation blocker remains.
+The current acceptance ledger still records `P08-FIND-283-001` and `P08-FIND-283-005` as open/non-pass findings; this report does not hide or close them. The latest Task 283 run proves the Task 292 deletion/autocomplete defect is fixed, but its provider-import/unit criteria remain blocked under `P08-FIND-283-005`, and its broad manual-catalog tracker remains under `P08-FIND-283-001`. The phase-wide quick gate also exposes an unrelated stale UAT hash and unsynchronized `P08-SWR054-ACCEPT-01`; those remain outside this repair. Task 292 remains prepared but not eligible for promotion until the orchestrator accepts the complete dependency evidence.
