@@ -91,6 +91,7 @@ func TestEncodeCSVCustomItemsEmptyAndNonemptyExact(t *testing.T) {
 
 type memoryExportDiets struct {
 	diets []repository.SavedDiet
+	err   error
 }
 
 type memoryExportCustomItems struct {
@@ -111,7 +112,7 @@ func (r memoryExportDiets) Get(context.Context, uuid.UUID, uuid.UUID) (repositor
 	return repository.SavedDiet{}, nil
 }
 func (r memoryExportDiets) List(context.Context, uuid.UUID) ([]repository.SavedDiet, error) {
-	return r.diets, nil
+	return r.diets, r.err
 }
 func (r memoryExportDiets) Replace(context.Context, uuid.UUID, repository.SavedDiet) error {
 	return nil
@@ -389,5 +390,26 @@ func TestExportServicePropagatesValidationDependencyAndDecryptionErrors(t *testi
 	var bundle ExportBundle
 	if err := json.Unmarshal(payload.Body, &bundle); err != nil || bundle.User.Role != "user" {
 		t.Fatalf("default role bundle=%+v err=%v", bundle, err)
+	}
+	dietFailure := memoryExportDiets{err: errors.New("diet failed")}
+	if _, err := NewExportService(defaultRole, defaultRole, defaultRole, defaultRole, defaultRole, encryption, dietFailure).BuildExport(ctx, userID, "json"); err == nil {
+		t.Fatal("diet failure ignored")
+	}
+	customFailure := &memoryExportCustomItems{err: errors.New("custom item failed")}
+	if _, err := NewExportService(defaultRole, defaultRole, defaultRole, defaultRole, defaultRole, encryption).WithCustomItems(customFailure).BuildExport(ctx, userID, "json"); err == nil {
+		t.Fatal("custom-item failure ignored")
+	}
+	invalidItem := customitem.Item{ID: uuid.New(), Name: "invalid", MacrosPer100: repository.MacroValues{Protein: math.NaN()}}
+	invalidItems := &memoryExportCustomItems{items: []customitem.Item{invalidItem}}
+	service := NewExportService(defaultRole, defaultRole, defaultRole, defaultRole, defaultRole, encryption).WithCustomItems(invalidItems)
+	if _, err := service.BuildExport(ctx, userID, "json"); err == nil {
+		t.Fatal("JSON marshal failure ignored")
+	}
+	if _, err := service.BuildExport(ctx, userID, "csv"); err == nil {
+		t.Fatal("CSV marshal failure ignored")
+	}
+	invalidDiet := memoryExportDiets{diets: []repository.SavedDiet{{ID: uuid.New(), Name: "invalid", Entries: []repository.SavedDietMealEntry{{ID: uuid.New(), MealID: uuid.New(), Quantity: math.NaN(), Unit: "g"}}}}}
+	if _, err := NewExportService(defaultRole, defaultRole, defaultRole, defaultRole, defaultRole, encryption, invalidDiet).BuildExport(ctx, userID, "csv"); err == nil {
+		t.Fatal("saved-diet CSV marshal failure ignored")
 	}
 }

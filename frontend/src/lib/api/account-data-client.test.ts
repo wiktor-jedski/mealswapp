@@ -55,6 +55,8 @@ test("rejects ownership leakage, malformed identifiers, oversized exports, and n
 
 	globalThis.fetch = mock(async () => new Response("{}", { status: 200, headers: { "Content-Length": String(1024 * 1024 + 1) } })) as typeof fetch;
 	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
+	globalThis.fetch = mock(async () => { throw new Error("network failure"); }) as typeof fetch;
+	await expect(loadAccountExport()).rejects.toBeInstanceOf(AccountDataClientError);
 
 	let call = 0;
 	globalThis.fetch = mock(async () => ++call === 1
