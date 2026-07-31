@@ -22,7 +22,11 @@ async function stubAdmin(page: Page): Promise<void> {
 		if (url.pathname === "/api/v1/search-history") return json(route, 200, ok({ history: [] }));
 		if (url.pathname === "/api/v1/saved-items") return json(route, 200, ok({ items: [] }));
 		if (url.pathname === "/api/v1/search/autocomplete") return json(route, 200, ok({ items: [] }));
-		if (url.pathname === "/api/v1/account/export") return json(route, 200, { user: {}, consent: [], savedItems: [], savedDiets: [], history: [], customItems: [{ id: privateItemId, name: "Current private regression item" }] });
+		if (url.pathname === "/api/v1/account/export") return json(route, 200, {
+			user: { userId: privateItemId, email: "admin@example.test", role: "admin", displayName: "Regression Admin", unitSystem: "metric", themePreference: "system" },
+			consent: [], savedItems: [], savedDiets: [], history: [],
+			customItems: [{ id: privateItemId, name: "Current private regression item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 1, fat: 1 }, micros: {}, foodCategories: [], culinaryRoles: [] }]
+		});
 		if (url.pathname === "/api/v1/admin/classifications") return json(route, 200, ok({ classifications: [] }));
 		if (url.pathname === "/api/v1/admin/external-search") return json(route, 200, ok({ candidates: [], warnings: [], page: 1 }));
 		return json(route, 404, { status: "error", requestId: "task-272-unhandled", error: { category: "validation", code: "not_found", message: "Not found", retryable: false } });

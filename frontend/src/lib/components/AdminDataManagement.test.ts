@@ -25,9 +25,26 @@ test("binds confirmations to immutable targets and guards authoritative refresh 
 	expect(source).toContain("event.preventDefault(); target.focus()");
 	expect(source).not.toContain("<dialog open");
 	expect(source).toContain("currentItemOperation(generation, controller)");
-	expect(source).toContain("currentClassificationOperation(generation, controller)");
+	expect(source).toContain("currentClassificationMutation(generation, controller)");
+	expect(source).toContain("currentClassificationRead(generation, controller)");
 	expect(source).toContain("currentUserOperation(generation, controller)");
 	expect(source).toContain("api.getItem(saved.id, controller.signal)");
+});
+
+test("separates confirmed classification mutations from recoverable hierarchy reads", () => {
+	expect(source).toContain('"Saved, but the list could not be refreshed"');
+	expect(source).toContain("savedClassification = saved");
+	expect(source).toContain("classificationRefreshRequired = true");
+	expect(source).toContain("Retry list refresh");
+	expect(source).toContain("classificationMutationBusy || classificationRefreshRequired");
+	expect(source).toContain("projectionContains(projection, savedClassification)");
+	expect(source).toContain("parentId: classificationParentId || null");
+	expect(source).toContain('value.id !== classificationId');
+	expect(source).toContain("changeClassificationKind");
+	expect(source).toContain("deletedClassificationId");
+	expect(source).toContain("lastSafeClassifications");
+	expect(source).toContain('role="tree"');
+	expect(source).toContain("aria-level={row.depth + 1}");
 });
 
 test("uses responsive layouts, keyboard focus, safe alerts, and design traceability", () => {
@@ -50,4 +67,19 @@ test("initializes, loads, edits, and submits the required allergen key contract"
 	expect(source).toContain("allergenKeys: item.allergenKeys");
 	expect(source).toContain("bind:value={form.allergenKeys}");
 	expect(source).toContain("Allergens");
+});
+
+test("makes searchable discovery primary and UUID loading an advanced fallback", () => {
+	expect(source).toContain('aria-label="Search global items"');
+	expect(source).toContain("api.searchItems");
+	expect(source).toContain("beginItemSearch");
+	expect(source).toContain("itemSearchController?.abort()");
+	expect(source).toContain('data-admin-item-search-result');
+	expect(source).toContain("IDs distinguish duplicate names");
+	expect(source).toContain("Loading matching global items");
+	expect(source).toContain("No active global items matched");
+	expect(source).toContain("Retry search");
+	expect(source).toContain("Advanced: load by item ID");
+	expect(source).toContain("loadSearchResult(item)");
+	expect(source).toContain("refreshItemSearch()");
 });

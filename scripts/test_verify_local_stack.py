@@ -22,7 +22,7 @@ class LocalStackDatabaseIsolationTests(unittest.TestCase):
         self.assertIn("/mealswapp_test?", local_stack.DATABASE_URL)
         self.assertEqual(local_stack.backend_env()["MEALSWAPP_DATABASE_URL"], local_stack.DATABASE_URL)
 
-    def test_missing_test_database_is_created_through_compose_postgres(self):
+    def test_missing_test_database_is_created_through_host_postgres(self):
         calls = []
 
         def fake_run(command, cwd=local_stack.ROOT, env=None, capture=False):
@@ -33,8 +33,8 @@ class LocalStackDatabaseIsolationTests(unittest.TestCase):
             local_stack.ensure_test_database()
 
         self.assertEqual(calls, [
-            ["docker", "compose", "exec", "-T", "postgres", "psql", "-U", "mealswapp", "-d", "postgres", "-tAc", "SELECT 1 FROM pg_database WHERE datname = 'mealswapp_test'"],
-            ["docker", "compose", "exec", "-T", "postgres", "createdb", "-U", "mealswapp", "mealswapp_test"],
+			["psql", "-h", "127.0.0.1", "-U", "mealswapp", "-d", "postgres", "-tAc", "SELECT 1 FROM pg_database WHERE datname = 'mealswapp_test'"],
+			["createdb", "-h", "127.0.0.1", "-U", "mealswapp", "mealswapp_test"],
         ])
 
     def test_existing_test_database_is_not_recreated(self):

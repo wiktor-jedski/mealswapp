@@ -109,3 +109,14 @@ test("the editor lists, disambiguates, reloads, and hydrates private custom food
 	expect(source).toContain('entry.foodObjectType === "custom_food_item"');
 	expect(source).toContain("fetchCustomFoodObject(entry.foodObjectId, controller.signal)");
 });
+
+// Implements DESIGN-008 SavedDataRepository custom Food Object empty and retry state verification.
+test("custom-food loading, empty, error, and retry states are explicit", () => {
+	expect(source).toContain('customFoodStatus = "loading"');
+	expect(source).toContain('customFoodStatus = "error"');
+	expect(source).toContain("You have no active custom foods yet.");
+	expect(source).toContain("Your custom foods could not be loaded.");
+	expect(source).toContain('onclick={() => void loadCustomFoods()}');
+	expect(source).toContain('role="status"');
+	expect(source).toContain('role="alert"');
+});

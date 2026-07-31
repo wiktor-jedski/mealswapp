@@ -49,13 +49,14 @@ func (s *classificationRedisStub) Del(ctx context.Context, keys ...string) *redi
 
 func TestClassificationInvalidatorClearsFilterAndSearchNamespaces(t *testing.T) {
 	filter := &filterInvalidatorStub{}
-	redisClient := &classificationRedisStub{pages: []userPurgeScanPage{{keys: []string{"search:search-response-v3:first"}, cursor: 7}, {keys: []string{"search:search-response-v3:second"}}}}
+	redisClient := &classificationRedisStub{pages: []userPurgeScanPage{{keys: []string{"search:search-response-v3:first"}, cursor: 7}, {keys: []string{"search:search-response-v3:second"}}, {keys: []string{"autocomplete:autocomplete-response-v2:first"}, cursor: 9}, {keys: []string{"autocomplete:autocomplete-response-v2:second"}}}}
 	(ClassificationInvalidator{filter: filter, redis: redisClient}).Invalidate()
-	if filter.calls != 1 || redisClient.scanCalls != 2 || len(redisClient.deleted) != 2 {
+	if filter.calls != 1 || redisClient.scanCalls != 4 || len(redisClient.deleted) != 4 {
 		t.Fatalf("filter calls=%d scans=%d deleted=%v", filter.calls, redisClient.scanCalls, redisClient.deleted)
 	}
-	for _, match := range redisClient.matches {
-		if match != "search:"+SearchSchemaVersion+"*:*" {
+	wantMatches := []string{"search:" + SearchSchemaVersion + "*:*", "autocomplete:" + AutocompleteSchemaVersion + "*:*"}
+	for i, match := range redisClient.matches {
+		if match != wantMatches[i/2] {
 			t.Fatalf("unexpected namespace match %q", match)
 		}
 	}

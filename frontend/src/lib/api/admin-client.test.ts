@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import {
-	createAdminClassification, createAdminItem, deleteAdminClassification, deleteAdminItem, getAdminItem,
-	listAdminClassifications, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion
+	AdminClientError, createAdminClassification, createAdminItem, createAdminMicronutrient, deleteAdminClassification, deleteAdminItem, getAdminItem,
+	listAdminClassifications, listAdminMicronutrients, lookupAdminUsers, replaceAdminClassification, replaceAdminItem, retryAdminDeletion,
+	setAdminMicronutrientActive, updateAdminMicronutrientDisplayName, updateAdminMicronutrientUnit
+	, searchAdminItems
 } from "./admin-client";
 import type { AdminItemRequest } from "./generated";
 
@@ -36,6 +38,67 @@ test("uses documented generated-contract routes, methods, CSRF, and idempotency"
 	expect(calls[9]!.url).toBe(`/api/v1/admin/users/${userId}/deletion-requests/${requestId}/retry`);
 });
 
+test("uses the closed micronutrient lifecycle routes and strictly decodes authoritative entries", async () => {
+	const calls: Array<{ url: string; init: RequestInit }> = [];
+	const active = { key: "VitaminK", displayName: "Vitamin K", unit: "mcg", active: true };
+	const queued = [
+		response(200, envelope({ micronutrients: [active, { ...active, key: "Zinc", displayName: "Zinc", unit: "mg", active: false }] })),
+		response(201, envelope({ micronutrient: active })),
+		response(200, envelope({ micronutrient: { ...active, displayName: "Vitamin K1" } })),
+		response(200, envelope({ micronutrient: { ...active, unit: "mg" } })),
+		response(200, envelope({ micronutrient: { ...active, active: false } })),
+		response(200, envelope({ micronutrient: active }))
+	];
+	globalThis.fetch = ((input: string | URL | Request, init = {}) => { calls.push({ url: String(input), init }); return Promise.resolve(queued.shift()!); }) as typeof fetch;
+
+	expect(await listAdminMicronutrients()).toHaveLength(2);
+	await createAdminMicronutrient({ key: "VitaminK", displayName: "Vitamin K", unit: "mcg" }, { csrfToken: "csrf" });
+	await updateAdminMicronutrientDisplayName("VitaminK", "Vitamin K1", { csrfToken: "csrf" });
+	await updateAdminMicronutrientUnit("VitaminK", "mg", { csrfToken: "csrf" });
+	await setAdminMicronutrientActive("VitaminK", false, { csrfToken: "csrf" });
+	await setAdminMicronutrientActive("VitaminK", true, { csrfToken: "csrf" });
+
+	expect(calls.map(({ url }) => url)).toEqual([
+		"/api/v1/admin/micronutrients",
+		"/api/v1/admin/micronutrients",
+		"/api/v1/admin/micronutrients/VitaminK/display-name",
+		"/api/v1/admin/micronutrients/VitaminK/unit",
+		"/api/v1/admin/micronutrients/VitaminK/deactivate",
+		"/api/v1/admin/micronutrients/VitaminK/reactivate"
+	]);
+	expect(calls.slice(1).every(({ init }) => (init.headers as Record<string, string>)["X-CSRF-Token"] === "csrf")).toBe(true);
+});
+
+test("searches bounded ownerless summaries with stable duplicate-name IDs", async () => {
+	const duplicate = (id: string, physicalState: "solid" | "liquid") => ({
+		itemId: id, name: "Tofu", physicalState, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 },
+		foodCategories: [{ id: classId, name: "Protein", kind: "food_category" }], culinaryRoles: []
+	});
+	let requested = "";
+	let requestedInit: RequestInit | undefined;
+	globalThis.fetch = ((input, init) => {
+		requested = String(input);
+		requestedInit = init;
+		return Promise.resolve(response(200, envelope({ items: [duplicate(itemId, "solid"), duplicate(requestId, "liquid")], page: 1, pageSize: 10, total: 2 })));
+	}) as typeof fetch;
+
+	const result = await searchAdminItems({ name: " tofu & rice ", page: 1, pageSize: 10 });
+	expect(requested).toBe("/api/v1/admin/items?query=+tofu+%26+rice+&page=1&pageSize=10");
+	expect(requestedInit?.cache).toBe("no-store");
+	expect(result.items.map(({ itemId: id }) => id)).toEqual([itemId, requestId]);
+
+	const malformed = [
+		{ items: [{ ...duplicate(itemId, "solid"), ownerId: userId }], page: 1, pageSize: 10, total: 1 },
+		{ items: [{ ...duplicate(itemId, "solid"), name: "" }], page: 1, pageSize: 10, total: 1 },
+		{ items: [{ ...duplicate(itemId, "solid"), macrosPer100: { ...duplicate(itemId, "solid").macrosPer100, calories: 100 } }], page: 1, pageSize: 10, total: 1 },
+		{ items: [duplicate(itemId, "solid")], page: 0, pageSize: 10, total: 1 },
+		{ items: Array.from({ length: 51 }, () => duplicate(itemId, "solid")), page: 1, pageSize: 50, total: 51 }
+	];
+	const malformedCount = malformed.length;
+	globalThis.fetch = (() => Promise.resolve(response(200, envelope(malformed.shift())))) as typeof fetch;
+	for (let index = 0; index < malformedCount; index++) await expect(searchAdminItems({ name: "tofu" })).rejects.toMatchObject({ appError: { code: "malformed_admin_response" } });
+});
+
 test("rejects conflicts, audit failures, malformed privacy projections, and false-success statuses", async () => {
 	const queued = [
 		response(409, { status: "error", requestId: "r", error: { code: "classification_in_use" } }),
@@ -43,7 +106,7 @@ test("rejects conflicts, audit failures, malformed privacy projections, and fals
 		response(200, envelope({ users: [{ id: userId, email: "user@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", password: "secret" }] })),
 		response(200, envelope(item))
 	];
-	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as typeof fetch;
+	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as unknown as typeof fetch;
 	await expect(deleteAdminClassification(classId, { csrfToken: "csrf" })).rejects.toMatchObject({ status: 409, appError: { code: "classification_in_use" } });
 	await expect(replaceAdminItem(itemId, request, { csrfToken: "csrf" })).rejects.toMatchObject({ status: 500, appError: { code: "audit_write_failed", message: expect.not.stringContaining("snapshot") } });
 	// Unknown user fields are not part of the generated privacy-minimized contract.
@@ -184,4 +247,47 @@ test("preserves a classification parent in the generated-contract replacement re
 
 	await expect(replaceAdminClassification(classId, { name: "Leaf", parentId: parentClassId }, { csrfToken: "csrf" })).resolves.toMatchObject({ id: classId, parentId: parentClassId });
 	expect(body).toEqual({ name: "Leaf", parentId: parentClassId });
+});
+
+test("classifies malformed successful item mutations as possibly committed with only a bounded request ID", async () => {
+	const queued = [
+		response(201, { status: "ok", requestId: "req-create:294", data: { id: "corrupt" } }),
+		new Response("{", { status: 200, headers: { "Content-Type": "application/json" } }),
+		response(200, { status: "ok", requestId: "unsafe request id", data: { id: "corrupt" } }),
+		response(200, envelope({ ...item, id: "corrupt" }))
+	];
+	globalThis.fetch = (() => Promise.resolve(queued.shift()!)) as unknown as typeof fetch;
+
+	await expect(createAdminItem(request, "stable-key", { csrfToken: "csrf" })).rejects.toMatchObject({
+		status: 201,
+		outcome: "possibly_committed",
+		appError: { code: "malformed_admin_response", requestId: "req-create:294" }
+	});
+	for (let index = 0; index < 2; index++) {
+		try {
+			await replaceAdminItem(itemId, request, { csrfToken: "csrf" });
+			throw new Error("malformed mutation was accepted");
+		} catch (error) {
+			expect(error).toBeInstanceOf(AdminClientError);
+			expect((error as AdminClientError).outcome).toBe("possibly_committed");
+			expect((error as AdminClientError).appError.requestId).toBeUndefined();
+		}
+	}
+	await expect(getAdminItem(itemId)).rejects.toMatchObject({ outcome: "confirmed_response", appError: { code: "malformed_admin_response" } });
+});
+
+test("distinguishes confirmed response failures from failures before any response", async () => {
+	const queued: Array<Response | Error> = [
+		response(400, { status: "error", requestId: "req-validation-294", error: { code: "validation_failed" } }),
+		response(500, { status: "error", requestId: "req-server-294", error: { code: "internal_error" } }),
+		new TypeError("offline")
+	];
+	globalThis.fetch = (() => {
+		const next = queued.shift()!;
+		return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+	}) as unknown as typeof fetch;
+
+	await expect(createAdminItem(request, "stable-key", { csrfToken: "csrf" })).rejects.toMatchObject({ status: 400, outcome: "confirmed_response", appError: { code: "validation_failed", requestId: "req-validation-294", retryable: false } });
+	await expect(replaceAdminItem(itemId, request, { csrfToken: "csrf" })).rejects.toMatchObject({ status: 500, outcome: "confirmed_response", appError: { code: "internal_error", requestId: "req-server-294" } });
+	await expect(createAdminItem(request, "stable-key", { csrfToken: "csrf" })).rejects.toMatchObject({ status: 0, outcome: "pre_response", appError: { code: "network_error" } });
 });

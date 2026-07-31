@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { devices, expect, test, type Page, type Route } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type {
   AuthSessionEnvelope,
@@ -151,7 +151,8 @@ async function stubAuthenticatedDailyDiet(
   page: Page,
   tier: "free" | "paid" = "paid",
   listBehavior?: (route: Route) => Promise<void>,
-  visibleCustomItems: CustomItem[] = [customItem(CUSTOM_A_ID), customItem(CUSTOM_B_ID)]
+  visibleCustomItems: CustomItem[] = [customItem(CUSTOM_A_ID), customItem(CUSTOM_B_ID)],
+  customItemsBehavior?: (route: Route) => Promise<void>
 ): Promise<{
   createBodies: () => Array<Record<string, unknown>>;
   replaceBodies: () => Array<Record<string, unknown>>;
@@ -171,7 +172,7 @@ async function stubAuthenticatedDailyDiet(
   await page.route(new RegExp(`/api/v1/food-objects/${APPLE_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(APPLE_ID)));
   await page.route(new RegExp(`/api/v1/food-objects/${OATS_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(OATS_ID)));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
-  await page.route(/\/api\/v1\/custom-items$/, (route) => fulfillJson(route, 200, {
+  await page.route(/\/api\/v1\/custom-items$/, (route) => customItemsBehavior?.(route) ?? fulfillJson(route, 200, {
     status: "ok",
     requestId: "daily-diet-custom-items",
     data: { items: visibleCustomItems }
@@ -325,15 +326,33 @@ test("owner custom foods are disambiguated, saved, and rehydrated", async ({ pag
   await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
 });
 
-test("custom-food selection is isolated between authenticated owners", async ({ browser }) => {
-  const ownerAContext = await browser.newContext();
-  const ownerBContext = await browser.newContext();
+test("custom-food selection is isolated between authenticated owners", async ({ browser }, testInfo) => {
+  const device = testInfo.project.name === "mobile-chromium" ? "Pixel 5" : "Desktop Chrome";
+  const contextOptions = {
+    ...devices[device],
+    baseURL: "http://localhost:4173"
+  };
+  const ownerAContext = await browser.newContext({
+    ...contextOptions,
+    storageState: {
+      cookies: [{ name: "mealswapp_session", value: "owner-a-session", domain: "localhost", path: "/", httpOnly: true, secure: false, sameSite: "Lax" }],
+      origins: []
+    }
+  });
+  const ownerBContext = await browser.newContext({
+    ...contextOptions,
+    storageState: {
+      cookies: [{ name: "mealswapp_session", value: "owner-b-session", domain: "localhost", path: "/", httpOnly: true, secure: false, sameSite: "Lax" }],
+      origins: []
+    }
+  });
   const ownerAPage = await ownerAContext.newPage();
   const ownerBPage = await ownerBContext.newPage();
   try {
     await stubAuthenticatedDailyDiet(ownerAPage, "paid", undefined, [customItem(CUSTOM_A_ID)]);
     await stubAuthenticatedDailyDiet(ownerBPage, "paid", undefined, [customItem(CUSTOM_B_ID)]);
-    await Promise.all([ownerAPage.goto("/?mode=daily_diet"), ownerBPage.goto("/?mode=daily_diet")]);
+    await ownerAPage.goto("/?mode=daily_diet");
+    await ownerBPage.goto("/?mode=daily_diet");
     const ownerAPicker = ownerAPage.getByLabel("Add one of your custom foods");
     const ownerBPicker = ownerBPage.getByLabel("Add one of your custom foods");
     await expect(ownerAPicker.locator("option")).toHaveCount(2);
@@ -343,7 +362,8 @@ test("custom-food selection is isolated between authenticated owners", async ({ 
     await expect(ownerBPicker.locator(`option[value="${CUSTOM_B_ID}"]`)).toHaveCount(1);
     await expect(ownerBPicker.locator(`option[value="${CUSTOM_A_ID}"]`)).toHaveCount(0);
   } finally {
-    await Promise.all([ownerAContext.close(), ownerBContext.close()]);
+    await ownerAContext.close();
+    await ownerBContext.close();
   }
 });
 
@@ -441,6 +461,47 @@ test("recovers from a real collection-list error through the retry action", asyn
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.locator(`[data-saved-daily-diet="${DIET_ID}"]`)).toContainText("Saved breakfast");
   expect(listAttempts).toBe(2);
+});
+
+test("custom-food API empty response renders the owner empty state", async ({ page }) => {
+  await stubAuthenticatedDailyDiet(page, "paid", undefined, [], async (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "daily-diet-custom-items-empty",
+    data: { items: [] }
+  } satisfies CustomItemCollectionEnvelope));
+  await page.goto("/?mode=daily_diet");
+  await expect(page.getByText("You have no active custom foods yet.")).toBeVisible();
+  await expect(page.getByLabel("Add one of your custom foods")).toHaveCount(0);
+});
+
+test("custom-food API failure recovers through its retry action", async ({ page }) => {
+  let attempts = 0;
+  await stubAuthenticatedDailyDiet(page, "paid", undefined, [customItem(CUSTOM_A_ID)], async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      return fulfillJson(route, 503, {
+        status: "error",
+        requestId: "daily-diet-custom-items-failure",
+        error: {
+          category: "dependency",
+          code: "custom_items_unavailable",
+          message: "Your custom foods could not be loaded.",
+          retryable: true
+        }
+      });
+    }
+    return fulfillJson(route, 200, {
+      status: "ok",
+      requestId: "daily-diet-custom-items-recovered",
+      data: { items: [customItem(CUSTOM_A_ID)] }
+    } satisfies CustomItemCollectionEnvelope);
+  });
+  await page.goto("/?mode=daily_diet");
+  await expect(page.getByText("Your custom foods could not be loaded.")).toBeVisible();
+  await page.getByRole("alert").getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByLabel("Add one of your custom foods")).toBeVisible();
+  await expect(page.getByLabel("Add one of your custom foods").locator("option")).toHaveCount(2);
+  expect(attempts).toBe(2);
 });
 
 test("keyboard focus moves from saved-diet lookup into the collection editor", async ({ page }) => {

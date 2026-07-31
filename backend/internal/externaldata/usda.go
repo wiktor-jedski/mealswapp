@@ -230,7 +230,9 @@ func (c *USDAClient) SearchResult(ctx context.Context, query ExternalSearchQuery
 		return result, c.failure(ctx, ProviderErrorInvalidPayload, resp.StatusCode, false, nil)
 	}
 	result.Records = records
-	result.RejectedCandidates = rejectedCandidates
+	if rejectedCandidates {
+		result.RejectedCandidates = 1
+	}
 	return result, nil
 }
 
