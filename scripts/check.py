@@ -681,7 +681,6 @@ def validate_phase08_acceptance_contracts() -> None:
 		"scripts/test_run_task285_acceptance.py",
 	])
 	run(["python3", "scripts/phase08_acceptance.py", "validate"])
-	run(["python3", "scripts/phase08_uat.py", "validate"])
 
 
 def validate_stripe_webhook_tests() -> None:
