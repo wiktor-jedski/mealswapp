@@ -523,6 +523,7 @@ test("API-2 observes commits while an API-1 stale absolute write is rejected", a
 	const created = await createItem(page, primaryToken, solid(`Task 283 stale ${info.project.name}`, { protein: 4, carbohydrates: 5, fat: 6 }));
 	const staleRead = await page.request.get(`/api/v1/admin/items/${created.value.id}`);
 	expect(staleRead.status()).toBe(200);
+	const staleProjection = await staleRead.json();
 	const freshUpdate = await page.request.put(`${secondAPI()}/api/v1/admin/items/${created.value.id}`, {
 		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) },
 		data: solid(`${created.value.name} fresh`, { protein: 7, carbohydrates: 8, fat: 9 })
@@ -530,7 +531,7 @@ test("API-2 observes commits while an API-1 stale absolute write is rejected", a
 	expect(freshUpdate.status()).toBe(200);
 	const refreshedPrimaryToken = await csrf(page);
 	const staleUpdate = await page.request.put(`/api/v1/admin/items/${created.value.id}`, {
-		headers: { "X-CSRF-Token": refreshedPrimaryToken },
+		headers: { "X-CSRF-Token": refreshedPrimaryToken, "If-Match": staleProjection.data.updatedAt },
 		data: solid(`${created.value.name} stale`, created.value.macrosPer100)
 	});
 	await record(info, "cross-instance-stale-write", ["P08-SWR057-STEP-08", "P08-SWR057-ACCEPT-05"], {

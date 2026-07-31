@@ -2301,11 +2301,14 @@ components:
       allOf:
         - $ref: "#/components/schemas/CustomItemFields"
         - type: object
-          required: [id, prepTimeMinutes, micros, foodCategories, culinaryRoles, allergenKeys]
+          required: [id, updatedAt, prepTimeMinutes, micros, foodCategories, culinaryRoles, allergenKeys]
           properties:
             id:
               type: string
               format: uuid
+            updatedAt:
+              type: string
+              format: date-time
             foodCategories:
               type: array
               maxItems: 100

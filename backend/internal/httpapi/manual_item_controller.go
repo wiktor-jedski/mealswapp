@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -116,6 +117,13 @@ func (c *ManualItemController) Update(ctx *fiber.Ctx, tx repository.AdminMutatio
 	req, err := manualItemRequest(ctx)
 	if err != nil {
 		return AdminMutationResult{}, err
+	}
+	if value := strings.TrimSpace(ctx.Get("If-Match")); value != "" {
+		expected, parseErr := http.ParseTime(value)
+		if parseErr != nil {
+			return AdminMutationResult{}, AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
+		}
+		req.ExpectedUpdatedAt = &expected
 	}
 	result, err := c.service.Update(ctx.UserContext(), tx, id, req)
 	if err != nil {
@@ -267,7 +275,7 @@ func manualItemData(item itemcurator.Item) map[string]any {
 		allergenKeys = []string{}
 	}
 	data := map[string]any{
-		"id": item.ID, "name": item.Name, "physicalState": item.PhysicalState, "prepTimeMinutes": item.PrepTimeMinutes,
+		"id": item.ID, "updatedAt": item.UpdatedAt, "name": item.Name, "physicalState": item.PhysicalState, "prepTimeMinutes": item.PrepTimeMinutes,
 		"macrosPer100": item.MacrosPer100, "micros": item.Micros, "foodCategories": item.FoodCategories,
 		"culinaryRoles": item.CulinaryRoles, "allergenKeys": allergenKeys,
 	}

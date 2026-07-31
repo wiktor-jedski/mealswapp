@@ -23,6 +23,7 @@ export type ClassificationKind = AdminClassification["kind"];
 export interface AdminMutationOptions {
 	csrfToken?: string;
 	signal?: AbortSignal;
+	headers?: Record<string, string>;
 }
 
 /** Safe normalized failure returned by an administration API call. */
@@ -51,7 +52,7 @@ export async function createAdminItem(requestBody: AdminItemRequest, idempotency
 
 /** Replaces one global item and returns only the server projection. */
 export async function replaceAdminItem(itemId: string, requestBody: AdminItemRequest, options: AdminMutationOptions = {}): Promise<AdminItem> {
-	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options), 200);
+	return decodeItem(await mutation(`/api/v1/admin/items/${encodeURIComponent(itemId)}`, "PUT", requestBody, options, options.headers), 200);
 }
 
 /** Soft-deletes one global item only after an empty 204 response. */
@@ -180,7 +181,7 @@ async function mutation(url: string, method: "POST" | "PUT", body: unknown, opti
 	return request(url, {
 		method,
 		credentials: "include",
-		headers: { Accept: "application/json", "Content-Type": "application/json", "X-CSRF-Token": csrfToken, ...headers },
+		headers: { Accept: "application/json", "Content-Type": "application/json", "X-CSRF-Token": csrfToken, ...options.headers, ...headers },
 		...(payload === undefined ? {} : { body: payload }),
 		signal: options.signal
 	});
@@ -219,7 +220,7 @@ function decodeItem(responsePromise: Promise<Response> | Response, expectedStatu
 	return Promise.resolve(responsePromise).then(async (response) => {
 		const value = decodeData(await json(response, expectedStatus), response.status);
 		const optional = ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter", "densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "foodCategoryIds", "culinaryRoleIds", "imageUrl"];
-		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], optional) || !uuid(value.id) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status);
+		if (!exact(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles", "allergenKeys"], [...optional, "updatedAt"]) || !uuid(value.id) || (value.updatedAt !== undefined && !dateTime(value.updatedAt)) || !boundedString(value.name, 1, 200) || (value.physicalState !== "solid" && value.physicalState !== "liquid") || !nonnegativeInteger(value.prepTimeMinutes) || value.prepTimeMinutes > MAX_NUTRITION_VALUE || !macroProfile(value.macrosPer100) || !micronutrients(value.micros) || !Array.isArray(value.foodCategories) || value.foodCategories.length > 100 || !Array.isArray(value.culinaryRoles) || value.culinaryRoles.length > 100 || !allergenKeys(value.allergenKeys)) throw malformed(response.status);
 		if (!optionalPositive(value.averageUnitWeightGrams) || !optionalPositive(value.averageServingVolumeMilliliters) || !optionalPositive(value.densityGramsPerMilliliter) || !optionalBoundedString(value.densitySourceProvider, 200) || !optionalBoundedString(value.densitySourceFoodId, 200) || (value.densitySourceKind !== undefined && !["imported", "manual", "estimated"].includes(String(value.densitySourceKind))) || !optionalBoundedString(value.imageUrl, 2048) || (value.imageUrl !== undefined && !safeUriReference(value.imageUrl))) throw malformed(response.status);
 		if (!optionalUuidCollection(value.foodCategoryIds) || !optionalUuidCollection(value.culinaryRoleIds)) throw malformed(response.status);
 		if (value.physicalState === "solid" && (value.macrosPer100.protein as number) + (value.macrosPer100.carbohydrates as number) + (value.macrosPer100.fat as number) > 100) throw malformed(response.status);

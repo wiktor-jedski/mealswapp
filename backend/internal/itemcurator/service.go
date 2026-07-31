@@ -9,6 +9,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
@@ -26,6 +27,7 @@ var (
 // Request contains administrator-editable global food-item fields.
 // Implements DESIGN-009 ItemCurator request boundary.
 type Request struct {
+	ExpectedUpdatedAt               *time.Time               `json:"-"`
 	Name                            string                   `json:"name"`
 	PhysicalState                   repository.PhysicalState `json:"physicalState"`
 	PrepTimeMinutes                 int                      `json:"prepTimeMinutes"`
@@ -55,6 +57,7 @@ type ClassificationSummary struct {
 // Implements DESIGN-009 ItemCurator global/private separation.
 type Item struct {
 	ID                              uuid.UUID                `json:"id"`
+	UpdatedAt                       time.Time                `json:"updatedAt"`
 	Name                            string                   `json:"name"`
 	PhysicalState                   repository.PhysicalState `json:"physicalState"`
 	PrepTimeMinutes                 int                      `json:"prepTimeMinutes"`
@@ -177,6 +180,9 @@ func (s *Service) Update(ctx context.Context, tx repository.AdminMutationExecuto
 	if err != nil {
 		return MutationResult{}, err
 	}
+	if normalized.ExpectedUpdatedAt != nil && !before.UpdatedAt.Equal(*normalized.ExpectedUpdatedAt) {
+		return MutationResult{}, repository.NewError(repository.ErrorKindConflict, "food item has changed since it was read", nil)
+	}
 	if err := s.items.Update(ctx, tx, toEntity(id, normalized)); err != nil {
 		return MutationResult{}, err
 	}
@@ -246,6 +252,7 @@ func validateRequest(req Request) (Request, error) {
 		return Request{}, validationError("allergen keys are invalid")
 	}
 	return Request{
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
 		Name: normalized.Name, PhysicalState: normalized.PhysicalState, PrepTimeMinutes: normalized.PrepTimeMinutes,
 		AverageUnitWeightGrams: normalized.AverageUnitWeightGrams, AverageServingVolumeMilliliters: normalized.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: normalized.DensityGramsPerMilliliter, DensitySourceProvider: normalized.DensitySourceProvider,
@@ -266,7 +273,7 @@ func toEntity(id uuid.UUID, req Request) repository.FoodItemEntity {
 		return result
 	}
 	return repository.FoodItemEntity{
-		ID: id, Name: req.Name, PhysicalState: req.PhysicalState, PrepTimeMinutes: req.PrepTimeMinutes,
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt, ID: id, Name: req.Name, PhysicalState: req.PhysicalState, PrepTimeMinutes: req.PrepTimeMinutes,
 		AverageUnitWeightGrams: req.AverageUnitWeightGrams, AverageServingVolumeMilliliters: req.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: req.DensityGramsPerMilliliter, DensitySourceProvider: req.DensitySourceProvider,
 		DensitySourceFoodID: req.DensitySourceFoodID, DensitySourceKind: req.DensitySourceKind, MacrosPer100: req.MacrosPer100,
@@ -294,7 +301,7 @@ func fromEntity(entity repository.FoodItemEntity) Item {
 		allergenKeys = []string{}
 	}
 	return Item{
-		ID: entity.ID, Name: entity.Name, PhysicalState: entity.PhysicalState, PrepTimeMinutes: entity.PrepTimeMinutes,
+		ID: entity.ID, UpdatedAt: entity.UpdatedAt, Name: entity.Name, PhysicalState: entity.PhysicalState, PrepTimeMinutes: entity.PrepTimeMinutes,
 		AverageUnitWeightGrams: entity.AverageUnitWeightGrams, AverageServingVolumeMilliliters: entity.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: entity.DensityGramsPerMilliliter, DensitySourceProvider: entity.DensitySourceProvider,
 		DensitySourceFoodID: entity.DensitySourceFoodID, DensitySourceKind: entity.DensitySourceKind, MacrosPer100: entity.MacrosPer100,

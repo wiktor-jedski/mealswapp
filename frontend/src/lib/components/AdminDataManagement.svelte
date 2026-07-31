@@ -161,7 +161,7 @@
 		try {
 			const wasEditing = Boolean(targetId);
 			let saved: AdminItem;
-			if (targetId) saved = await api.replaceItem(targetId, parsed.request, { signal: controller.signal });
+			if (targetId) saved = await api.replaceItem(targetId, parsed.request, { signal: controller.signal, headers: currentItem?.updatedAt ? { "If-Match": currentItem.updatedAt } : undefined });
 			else {
 				const body = JSON.stringify(parsed.request);
 				if (!createKey || createBody !== body) { createKey = newAdminItemKey(); createBody = body; }

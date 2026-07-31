@@ -71,6 +71,7 @@ type ClassificationEntity struct {
 // FoodItemEntity stores normalized food item data owned by repositories.
 // Implements DESIGN-005 FoodItemEntity.
 type FoodItemEntity struct {
+	ExpectedUpdatedAt               *time.Time
 	ID                              uuid.UUID
 	Name                            string
 	PhysicalState                   PhysicalState
