@@ -1,7 +1,7 @@
 ## FILE: DESIGN-009.md
 **Traceability:** ARCH-009
 
-**Static aspects covered:** AdminController, DataImporter, ItemCurator, TagManager, UserAdminPanel, ExternalSearchProxy.
+**Static aspects covered:** AdminController, DataImporter, ItemCurator, TagManager, UserAdminPanel, ExternalSearchProxy, MicronutrientVocabularyOperator.
 
 ### 0. Static Aspect Responsibilities
 - `AdminController`: owns admin-only endpoint routing, role checks, and audit coordination.
@@ -11,6 +11,7 @@
 - `TagManager`: owns global food_category/culinary_role classification CRUD and in-use safeguards.
 - `UserAdminPanel`: owns restricted user lookup and administrative user actions.
 - `ExternalSearchProxy`: owns calls from admin UI to ARCH-012 and result shaping for curation.
+- `MicronutrientVocabularyOperator`: owns explicit-environment API-only vocabulary maintenance from an operator terminal.
 
 ### 1. Data Structures & Types
 - `interface AdminContext { userId: UUID; role: "admin"; requestId: string }`
@@ -42,6 +43,8 @@
 18. The export repository streams UUID-ordered `food_items` from one PostgreSQL repeatable-read, read-only transaction. Classification relationships are ordered by name and UUID; allergens, micronutrient keys, and curated-source identity are deterministic. The representation includes no generated timestamp, so unchanged state produces byte-identical compact JSON.
 19. Export entries derive their stable idempotency key from the item UUID. Item timestamps, deletion state, image alt text, direct source identity, classification IDs/names, and `curated_imports` identity are informational metadata. The manual-item import path validates and reports that metadata but strips it before mutation and does not recreate `curated_imports`.
 20. The export operator reuses the import operator's interactive credential and memory-only authenticated session helper. It streams the API response to a private same-directory temporary file, validates the complete JSON, optionally emits pretty JSON or deterministic inspection CSV, flushes and fsyncs, and atomically replaces the destination only after success.
+21. The micronutrient vocabulary operator requires an explicit environment and API origin, reuses the interactive credential and memory-only cookie/CSRF session, and calls only the administrator list, create, display-name update, safe unit update, deactivate, and reactivate routes. Production requires HTTPS and a separate confirmation flag.
+22. Vocabulary dry-runs authenticate and read authoritative state but send no mutation. Mutations use a fresh CSRF token; ambiguous transport and 5xx outcomes reconcile authoritative state before any bounded identical-request retry, while valid bounded `Retry-After` outcomes are honored. Output is deterministic and excludes credentials, email, cookies, CSRF, raw bodies, database URLs, and stack diagnostics.
 
 ### 3. State Management & Error Handling
 - `forbidden`: non-admin user receives 403.
@@ -55,6 +58,7 @@
 - `catalog_preflight_failed`: reject the complete run before mutation when any schema, metric, micronutrient, classification, allergen, or key rule fails.
 - `catalog_partial_failure`: continue after permanent per-item 400/409 failures, report only safe key fingerprints and bounded status metadata, and exit nonzero; 401/403 aborts immediately.
 - `catalog_export_failed`: cancel the read-only snapshot and leave any prior operator destination untouched; emit only a safe error category.
+- `vocabulary_operator_failed`: reject invalid targets, arguments, response shapes, authorization, in-use conflicts, or exhausted retries with a nonzero status and a fixed safe diagnostic.
 
 ### 4. Component Interfaces
 - `func (c *AdminController) SearchExternal(ctx *fiber.Ctx) error`

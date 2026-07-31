@@ -1,0 +1,13 @@
+{
+  "schema": "mealswapp.task290-diagnostics.v1",
+  "runId": "e565f3b003c09aa4d1c1af6a",
+  "result": "passed",
+  "events": [
+    "redis_ready",
+    "task290_api_started",
+    "task290_migrations_applied",
+    "task290_commands_passed",
+    "task290_audit_verified",
+    "task290_final_state_verified"
+  ]
+}
