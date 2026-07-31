@@ -2,6 +2,7 @@
   import type { AdminAccessState } from "../admin-access";
   import AdminDataManagement from "./AdminDataManagement.svelte";
   import AdminPrivateData from "./AdminPrivateData.svelte";
+  import AdminMicronutrientVocabulary from "./AdminMicronutrientVocabulary.svelte";
   import ExternalImportWorkflow from "./ExternalImportWorkflow.svelte";
 
   // Implements DESIGN-009 UserAdminPanel responsive, feature-local loading/error shell.
@@ -58,6 +59,8 @@
     </p>
 
     <AdminPrivateData />
+
+    <AdminMicronutrientVocabulary />
 
     <!-- Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel generated-contract administration views. -->
     <AdminDataManagement />

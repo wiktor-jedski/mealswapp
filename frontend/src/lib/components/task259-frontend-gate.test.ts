@@ -13,6 +13,7 @@ test("the administration gate composes every Phase 08 feature surface", () => {
 
 	expect(panel).toContain("<ExternalImportWorkflow");
 	expect(panel).toContain("<AdminDataManagement");
+	expect(panel).toContain("<AdminMicronutrientVocabulary");
 	expect(dataManagement).toContain("Manual global items");
 	expect(dataManagement).toContain("Food Categories and Culinary Roles");
 	expect(dataManagement).toContain("Restricted user lookup");

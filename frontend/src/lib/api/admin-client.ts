@@ -4,6 +4,10 @@ import type {
 	AdminClassificationRequest,
 	AdminItem,
 	AdminItemRequest,
+	AdminMicronutrient,
+	AdminMicronutrientCreateRequest,
+	AdminMicronutrientDisplayNameRequest,
+	AdminMicronutrientUnitRequest,
 	AdminUser,
 	AdminUserPageData,
 	AppError,
@@ -78,6 +82,37 @@ export async function deleteAdminClassification(id: string, options: AdminMutati
 	await emptyMutation(`/api/v1/admin/classifications/${encodeURIComponent(id)}`, "DELETE", options);
 }
 
+/** Lists active and inactive canonical micronutrient entries in server order. */
+export async function listAdminMicronutrients(signal?: AbortSignal): Promise<AdminMicronutrient[]> {
+	const response = await request("/api/v1/admin/micronutrients", { method: "GET", signal });
+	const data = decodeData(await json(response, 200), response.status);
+	if (!exact(data, ["micronutrients"]) || !Array.isArray(data.micronutrients) || data.micronutrients.length > 1000) throw malformed(response.status);
+	return data.micronutrients.map((value) => decodeMicronutrient(value, response.status));
+}
+
+/** Creates or exactly replays one immutable canonical micronutrient entry. */
+export async function createAdminMicronutrient(body: AdminMicronutrientCreateRequest, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	return decodeMicronutrientEnvelope(await mutation("/api/v1/admin/micronutrients", "POST", body, options), 201);
+}
+
+/** Updates only a canonical entry's display name. */
+export async function updateAdminMicronutrientDisplayName(key: string, displayName: string, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	const body: AdminMicronutrientDisplayNameRequest = { displayName };
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/display-name`, "PUT", body, options), 200);
+}
+
+/** Updates the unit of one unused canonical entry. */
+export async function updateAdminMicronutrientUnit(key: string, unit: AdminMicronutrient["unit"], options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	const body: AdminMicronutrientUnitRequest = { unit };
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/unit`, "PUT", body, options), 200);
+}
+
+/** Deactivates or reactivates one canonical entry without deleting it. */
+export async function setAdminMicronutrientActive(key: string, active: boolean, options: AdminMutationOptions = {}): Promise<AdminMicronutrient> {
+	const action = active ? "reactivate" : "deactivate";
+	return decodeMicronutrientEnvelope(await mutation(`/api/v1/admin/micronutrients/${encodeURIComponent(key)}/${action}`, "POST", undefined, options), 200);
+}
+
 /** Performs an exact or bounded privacy-minimized user lookup. */
 export async function lookupAdminUsers(query: { userId?: string; email?: string; cursor?: string; limit?: number }, signal?: AbortSignal): Promise<AdminUserPageData> {
 	const parameters = new URLSearchParams();
@@ -109,6 +144,11 @@ export interface AdminApi {
 	createClassification: typeof createAdminClassification;
 	replaceClassification: typeof replaceAdminClassification;
 	deleteClassification: typeof deleteAdminClassification;
+	listMicronutrients: typeof listAdminMicronutrients;
+	createMicronutrient: typeof createAdminMicronutrient;
+	updateMicronutrientDisplayName: typeof updateAdminMicronutrientDisplayName;
+	updateMicronutrientUnit: typeof updateAdminMicronutrientUnit;
+	setMicronutrientActive: typeof setAdminMicronutrientActive;
 	lookupUsers: typeof lookupAdminUsers;
 	retryDeletion: typeof retryAdminDeletion;
 }
@@ -123,6 +163,11 @@ export const adminApi: AdminApi = {
 	createClassification: createAdminClassification,
 	replaceClassification: replaceAdminClassification,
 	deleteClassification: deleteAdminClassification,
+	listMicronutrients: listAdminMicronutrients,
+	createMicronutrient: createAdminMicronutrient,
+	updateMicronutrientDisplayName: updateAdminMicronutrientDisplayName,
+	updateMicronutrientUnit: updateAdminMicronutrientUnit,
+	setMicronutrientActive: setAdminMicronutrientActive,
 	lookupUsers: lookupAdminUsers,
 	retryDeletion: retryAdminDeletion
 };
@@ -192,6 +237,18 @@ async function decodeClassificationEnvelope(responsePromise: Promise<Response> |
 	const data = decodeData(await json(response, expectedStatus), response.status);
 	if (!exact(data, ["classification"])) throw malformed(response.status);
 	return decodeClassification(data.classification, response.status);
+}
+
+async function decodeMicronutrientEnvelope(responsePromise: Promise<Response> | Response, expectedStatus: number): Promise<AdminMicronutrient> {
+	const response = await responsePromise;
+	const data = decodeData(await json(response, expectedStatus), response.status);
+	if (!exact(data, ["micronutrient"])) throw malformed(response.status);
+	return decodeMicronutrient(data.micronutrient, response.status);
+}
+
+function decodeMicronutrient(value: unknown, status: number): AdminMicronutrient {
+	if (!exact(value, ["key", "displayName", "unit", "active"]) || !boundedString(value.key, 3, 120) || !/^[A-Z][A-Za-z0-9]{2,119}$/.test(value.key) || !boundedString(value.displayName, 1, 120) || !["g", "mg", "mcg"].includes(String(value.unit)) || typeof value.active !== "boolean") throw malformed(status);
+	return value as unknown as AdminMicronutrient;
 }
 
 function decodeClassification(value: unknown, status: number): AdminClassification {

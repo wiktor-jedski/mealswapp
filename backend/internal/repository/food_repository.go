@@ -154,6 +154,12 @@ func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEn
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
 		err := db.QueryRow(ctx, foodCreateSQL, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL)).Scan(&id)
 		if err != nil {
@@ -176,6 +182,12 @@ func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEn
 	micros := marshalMicros(item.Micros)
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
 		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL))
 		if err != nil {

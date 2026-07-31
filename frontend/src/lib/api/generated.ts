@@ -1332,6 +1332,35 @@ export interface AdminClassification {
 export type AdminClassificationEnvelope = OkEnvelope<{ classification: AdminClassification }>;
 export type AdminClassificationCollectionEnvelope = OkEnvelope<{ classifications: AdminClassification[] }>;
 
+// Implements DESIGN-005 MicronutrientVocabulary administration boundary.
+/** @openapi-description AdminMicronutrient */
+export interface AdminMicronutrient {
+	key: string;
+	displayName: string;
+	unit: "g" | "mg" | "mcg";
+	active: boolean;
+}
+
+/** @openapi-description AdminMicronutrientCreateRequest */
+export interface AdminMicronutrientCreateRequest {
+	key: string;
+	displayName: string;
+	unit: AdminMicronutrient["unit"];
+}
+
+/** @openapi-description AdminMicronutrientDisplayNameRequest */
+export interface AdminMicronutrientDisplayNameRequest {
+	displayName: string;
+}
+
+/** @openapi-description AdminMicronutrientUnitRequest */
+export interface AdminMicronutrientUnitRequest {
+	unit: AdminMicronutrient["unit"];
+}
+
+export type AdminMicronutrientEnvelope = OkEnvelope<{ micronutrient: AdminMicronutrient }>;
+export type AdminMicronutrientCollectionEnvelope = OkEnvelope<{ micronutrients: AdminMicronutrient[] }>;
+
 // Implements DESIGN-009 UserAdminPanel privacy-minimized projection.
 export interface AdminDeletionSummary {
 	requestId: string;

@@ -38,6 +38,15 @@ var testInvalidPasswordPairCreateSQL string
 //go:embed sql/testdata/food_fixture_create.sql
 var testFoodFixtureCreateSQL string
 
+//go:embed sql/testdata/food_fixture_set_micronutrient.sql
+var testFoodFixtureSetMicronutrientSQL string
+
+//go:embed sql/testdata/food_fixture_clear_micronutrients.sql
+var testFoodFixtureClearMicronutrientsSQL string
+
+//go:embed sql/testdata/custom_food_micronutrient_fixture_create.sql
+var testCustomFoodMicronutrientFixtureCreateSQL string
+
 //go:embed sql/testdata/food_classification_fixture_create.sql
 var testFoodClassificationFixtureCreateSQL string
 
@@ -713,6 +722,118 @@ func TestPostgresVocabularyRepositoryValidation(t *testing.T) {
 	repo := NewPostgresMicronutrientVocabularyRepository(nil)
 	if err := repo.Upsert(context.Background(), MicronutrientVocabularyEntry{Key: "x"}); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("Upsert() invalid entry error = %v, want validation", err)
+	}
+}
+
+<<<<<<< ours
+// TestPostgresVocabularyAdministratorLifecycle proves deterministic listing, replay, guarded changes, and reactivation.
+// Implements DESIGN-005 MicronutrientVocabulary.
+func TestPostgresVocabularyAdministratorLifecycle(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	ctx := context.Background()
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatalf("Begin() error = %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	repo := NewPostgresMicronutrientVocabularyRepository(tx)
+	entry := MicronutrientVocabularyEntry{Key: "Adminium", DisplayName: "Adminium", Unit: "mg", Active: true}
+	created, err := repo.Create(ctx, entry)
+	if err != nil || created != entry {
+		t.Fatalf("Create() = %+v, %v", created, err)
+	}
+	replayed, err := repo.Create(ctx, entry)
+	if err != nil || replayed != entry {
+		t.Fatalf("exact replay = %+v, %v", replayed, err)
+	}
+	if _, err := repo.Create(ctx, MicronutrientVocabularyEntry{Key: "Adminium", DisplayName: "Different", Unit: "mg", Active: true}); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("changed replay error = %v", err)
+	}
+	renamed, err := repo.UpdateDisplayName(ctx, entry.Key, "Administrative mineral")
+	if err != nil || renamed.Key != entry.Key || renamed.DisplayName != "Administrative mineral" {
+		t.Fatalf("UpdateDisplayName() = %+v, %v", renamed, err)
+	}
+	updated, err := repo.UpdateUnit(ctx, entry.Key, "mcg")
+	if err != nil || updated.Unit != "mcg" {
+		t.Fatalf("UpdateUnit() = %+v, %v", updated, err)
+	}
+	inactive, err := repo.SetActive(ctx, entry.Key, false)
+	if err != nil || inactive.Active {
+		t.Fatalf("SetActive(false) = %+v, %v", inactive, err)
+	}
+	active, err := repo.SetActive(ctx, entry.Key, true)
+	if err != nil || !active.Active {
+		t.Fatalf("SetActive(true) = %+v, %v", active, err)
+	}
+	if _, err := tx.Exec(ctx, testFoodFixtureCreateSQL); err != nil {
+		t.Fatalf("create food fixture: %v", err)
+	}
+	if _, err := tx.Exec(ctx, testFoodFixtureSetMicronutrientSQL, entry.Key); err != nil {
+		t.Fatalf("attach micronutrient fixture: %v", err)
+	}
+	if _, err := repo.UpdateUnit(ctx, entry.Key, "g"); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("in-use unit error = %v", err)
+	}
+	if _, err := repo.SetActive(ctx, entry.Key, false); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("in-use deactivate error = %v", err)
+	}
+	if _, err := tx.Exec(ctx, testFoodFixtureClearMicronutrientsSQL); err != nil {
+		t.Fatalf("clear global micronutrient fixture: %v", err)
+	}
+	var ownerID uuid.UUID
+	if err := tx.QueryRow(ctx, testUserCreateSQL, "vocabulary-owner@example.test").Scan(&ownerID); err != nil {
+		t.Fatalf("create custom-item owner: %v", err)
+	}
+	if _, err := tx.Exec(ctx, testCustomFoodMicronutrientFixtureCreateSQL, ownerID, entry.Key); err != nil {
+		t.Fatalf("create private micronutrient fixture: %v", err)
+	}
+	if _, err := repo.UpdateUnit(ctx, entry.Key, "g"); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("private in-use unit error = %v", err)
+	}
+	if _, err := repo.SetActive(ctx, entry.Key, false); !IsKind(err, ErrorKindConflict) {
+		t.Fatalf("private in-use deactivate error = %v", err)
+	}
+	all, err := repo.ListAll(ctx)
+	if err != nil {
+		t.Fatalf("ListAll() error = %v", err)
+	}
+	for index := 1; index < len(all); index++ {
+		if strings.ToLower(all[index-1].Key) > strings.ToLower(all[index].Key) {
+			t.Fatalf("ListAll() is not deterministic: %+v", all)
+		}
+	}
+}
+
+// TestPostgresVocabularyConcurrentCreateConflict proves one canonical key cannot fork under concurrent administrator writes.
+// Implements DESIGN-005 MicronutrientVocabulary.
+func TestPostgresVocabularyConcurrentCreateConflict(t *testing.T) {
+	db := openRepositoryTestDB(t)
+	repo := NewPostgresMicronutrientVocabularyRepository(db)
+	ctx := context.Background()
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for _, displayName := range []string{"Concurrent mineral A", "Concurrent mineral B"} {
+		displayName := displayName
+		go func() {
+			<-start
+			_, err := repo.Create(ctx, MicronutrientVocabularyEntry{Key: "Concurrentium", DisplayName: displayName, Unit: "mg", Active: true})
+			results <- err
+		}()
+	}
+	close(start)
+	var succeeded, conflicted int
+	for range 2 {
+		err := <-results
+		if err == nil {
+			succeeded++
+		} else if IsKind(err, ErrorKindConflict) {
+			conflicted++
+		} else {
+			t.Fatalf("concurrent Create() error = %v", err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("concurrent outcomes: succeeded=%d conflicted=%d", succeeded, conflicted)
 	}
 }
 
@@ -3315,7 +3436,7 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatalf("Search() invalid micros error = %v, want validation", err)
 	}
 
-	failedCreateTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{foodID}}, execErr: execErr}}
+	failedCreateTx := &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{values: []any{foodID}}, rows: &fakeRows{}, execErr: execErr}}
 	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: failedCreateTx})
 	validWater := FoodItemEntity{Name: "Water", PhysicalState: PhysicalStateLiquid, DensityGramsPerMilliliter: 1, DensitySourceKind: "manual", MacrosPer100: MacroValues{}}
 	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
@@ -3325,18 +3446,18 @@ func TestPostgresFoodItemRepositoryErrorBranches(t *testing.T) {
 		t.Fatal("Create() replace classifications error did not roll back transaction")
 	}
 
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}}}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{row: fakeRow{err: scanErr}, rows: &fakeRows{}}}})
 	if _, err := repo.Create(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Create() insert scan error = %v, want connection", err)
 	}
 
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execErr: execErr}}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{rows: &fakeRows{}, execErr: execErr}}})
 	validWater.ID = foodID
 	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Update() exec error = %v, want connection", err)
 	}
 
-	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, execErr}}}})
+	repo = NewPostgresFoodItemRepository(&fakeSQLExecutor{rows: &fakeRows{}, tx: &fakeTx{fakeSQLExecutor: fakeSQLExecutor{rows: &fakeRows{}, execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}, execErrs: []error{nil, execErr}}}})
 	if err := repo.Update(ctx, validWater); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("Update() replace classifications error = %v, want connection", err)
 	}
