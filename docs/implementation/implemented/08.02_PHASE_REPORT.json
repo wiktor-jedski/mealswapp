@@ -21,10 +21,6 @@
     {
       "path": "docs/implementation/evidence/task-288-preparation.md",
       "sha256": "c8658b9d18a23cbb5f446469264a76797f9012772f6320b009d5a0e80a8614a2"
-    },
-    {
-      "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/SW-REQ-055.json",
-      "sha256": "e026fe7c262dacd8777846482b2d36e8d89528463406fafc3d88183446e7c2c9"
     }
   ],
   "controls": [
@@ -34,7 +30,7 @@
     },
     {
       "path": "docs/implementation/04_OPEN.md",
-      "sha256": "aa5c5731d7ad4e7d6928493a1528cffbb005e40d3b61087fee4b67b3b9b947e8"
+      "sha256": "58bfec757decb666d9980e0149310506fcd16a1325951449bc32c761f00b6f0e"
     },
     {
       "path": "docs/testing/phase08/acceptance-manifest.json",

@@ -635,7 +635,7 @@ retained in the mandatory append-only
       "owner": "backend-external-data",
       "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/SW-REQ-055.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-282-002",

@@ -818,12 +818,16 @@ def build(input_path: Path = INPUT) -> dict[str, Any]:
         task_id = item["taskId"]
         original = repo_path(item["path"])
         parts = original.relative_to(ROOT).parts
-        if "real-stack-e2e" not in parts or parts.index("real-stack-e2e") + 1 >= len(parts):
+        if "real-stack-e2e" in parts and parts.index("real-stack-e2e") + 1 < len(parts):
+            run_id = parts[parts.index("real-stack-e2e") + 1]
+        elif "run-context" in parts and parts.index("run-context") + 2 < len(parts):
+            run_id = parts[parts.index("run-context") + 2]
+        else:
             raise UATError("supporting artifact path is malformed")
-        run_id = parts[parts.index("real-stack-e2e") + 1]
         destination = EVIDENCE_ROOT / "run-context" / f"task-{task_id}" / run_id / original.name
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(original, destination)
+        if original.resolve() != destination.resolve():
+            shutil.copy2(original, destination)
         context_paths.append(destination)
     if {task_id for task_id, _, _ in reports} != set(range(281, 286)):
         raise UATError("source reports must cover Tasks 281-285")

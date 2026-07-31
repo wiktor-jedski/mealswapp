@@ -22,18 +22,18 @@
     {"taskId": 285, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task285-abcdab7626a34fa9ed348a6a/report.json"}
   ],
   "supportingArtifacts": [
-    {"taskId": 281, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/trace.ndjson"},
-    {"taskId": 281, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/diagnostics.json"},
-    {"taskId": 281, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/results.json"},
-    {"taskId": 282, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/trace.ndjson"},
-    {"taskId": 282, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/diagnostics.json"},
-    {"taskId": 282, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/results.json"},
-    {"taskId": 283, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/trace.ndjson"},
-    {"taskId": 283, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/diagnostics.json"},
-    {"taskId": 283, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/results.json"},
-    {"taskId": 284, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/trace.ndjson"},
-    {"taskId": 284, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/diagnostics.json"},
-    {"taskId": 284, "path": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/results.json"}
+    {"taskId": 281, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-281/eed925ef7313fed9671c514c/trace.ndjson"},
+    {"taskId": 281, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-281/eed925ef7313fed9671c514c/diagnostics.json"},
+    {"taskId": 281, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-281/eed925ef7313fed9671c514c/results.json"},
+    {"taskId": 282, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-282/eed925ef7313fed9671c514c/trace.ndjson"},
+    {"taskId": 282, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-282/eed925ef7313fed9671c514c/diagnostics.json"},
+    {"taskId": 282, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-282/eed925ef7313fed9671c514c/results.json"},
+    {"taskId": 283, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-283/eed925ef7313fed9671c514c/trace.ndjson"},
+    {"taskId": 283, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-283/eed925ef7313fed9671c514c/diagnostics.json"},
+    {"taskId": 283, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-283/eed925ef7313fed9671c514c/results.json"},
+    {"taskId": 284, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-284/eed925ef7313fed9671c514c/trace.ndjson"},
+    {"taskId": 284, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-284/eed925ef7313fed9671c514c/diagnostics.json"},
+    {"taskId": 284, "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-284/eed925ef7313fed9671c514c/results.json"}
   ],
   "taskEvidence": [
     {"taskId": 276, "path": "docs/implementation/evidence/task-276-preparation.md"},
