@@ -31,7 +31,7 @@ interface State {
 	classificationReadFailures?: Partial<Record<"food_category" | "culinary_role", number>>;
 	classificationReadOverrides?: Partial<Record<"food_category" | "culinary_role", unknown[]>>;
 	classificationReadDelays?: Partial<Record<"food_category" | "culinary_role", number>>;
-	classificationReadPlans?: Partial<Record<"food_category" | "culinary_role", Array<{ delay: number; values: unknown[] }>>>;
+	classificationReadPlans?: Partial<Record<"food_category" | "culinary_role", Array<{ delay?: number; values: unknown[] }>>>;
 	authoritativeNameAfterPut?: string;
 	userLookupDelays?: Record<string, number>;
 	itemReadDelays?: Record<string, number>;
@@ -396,6 +396,7 @@ test("overlapping canceled classification reads accept the newest projection and
 			{ delay: 0, values: state.roles.map((value) => ({ ...value })) }
 		]
 	};
+	state.classificationReadDelays = { food_category: 250, culinary_role: 250 };
 	await page.getByLabel("Name", { exact: true }).last().fill("Late projection");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 	await expect(page.getByText("Saved, but the list could not be refreshed")).toBeVisible();
@@ -406,11 +407,11 @@ test("overlapping canceled classification reads accept the newest projection and
 	expect(state.classificationMutations).toBe(1);
 	state.classificationReadPlans = {
 		food_category: [
-			{ delay: 250, values: state.categories.map((value) => ({ ...value })) },
+			{ values: state.categories.map((value) => ({ ...value })) },
 			{ delay: 0, values: state.categories }
 		],
 		culinary_role: [
-			{ delay: 250, values: state.roles.map((value) => ({ ...value })) },
+			{ values: state.roles.map((value) => ({ ...value })) },
 			{ delay: 0, values: state.roles }
 		]
 	};
