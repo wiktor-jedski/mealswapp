@@ -127,7 +127,7 @@ class FrontendCoverageContractTests(unittest.TestCase):
 	def test_task277_frontend_metrics_are_current(self) -> None:
 		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
 		rows = check.parse_frontend_exceptions(check.marked_contract(section, "frontend-coverage-contract"))
-		self.assertEqual(rows["src/lib/admin-workflows.ts"][1], check.FrontendCoverage("83.33", "98.55", "-"))
+		self.assertEqual(rows["src/lib/admin-workflows.ts"][1], check.FrontendCoverage("94.44", "98.94", "-"))
 		self.assertEqual(rows["src/lib/api/admin-client.ts"][1], check.FrontendCoverage("95.95", "100.00", "-"))
 
 
