@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -119,7 +120,10 @@ func (c *ManualItemController) Update(ctx *fiber.Ctx, tx repository.AdminMutatio
 		return AdminMutationResult{}, err
 	}
 	if value := strings.TrimSpace(ctx.Get("If-Match")); value != "" {
-		expected, parseErr := http.ParseTime(value)
+		expected, parseErr := time.Parse(time.RFC3339Nano, value)
+		if parseErr != nil {
+			expected, parseErr = http.ParseTime(value)
+		}
 		if parseErr != nil {
 			return AdminMutationResult{}, AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "validation_failed", Message: "request validation failed"}
 		}
