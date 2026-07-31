@@ -81,6 +81,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200, {"not": "a provider search envelope"})
             return
         if provider == "usda":
+            if query == "zero":
+                self._json(200, {"totalHits": 0, "currentPage": 1, "totalPages": 0, "foods": []})
+                return
             food = usda_food()
             if query == "rejected":
                 food["fdcId"] = 0
@@ -93,6 +96,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"totalHits": 0, "currentPage": 0, "totalPages": 0, "foods": []})
                 return
             self._json(200, {"totalHits": 1, "currentPage": 1, "totalPages": 1, "foods": [food]})
+            return
+        if query == "zero":
+            self._json(200, {"count": 0, "page": 1, "page_count": 0, "page_size": 25, "products": []})
             return
         product = off_product(metadata=query == "metadata", malformed=query == "malformed-consumed")
         self._json(200, {"count": 1, "page": 1, "page_count": 1, "page_size": 25, "products": [product]})

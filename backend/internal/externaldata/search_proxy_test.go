@@ -110,7 +110,7 @@ func TestExternalSearchProxyDistinguishesPartialAndRejectedCandidates(t *testing
 	partial.PartialNormalization = true
 	provider := &proxyProvider{result: ProviderResult{
 		Records:            []ExternalFoodRecord{partial},
-		RejectedCandidates: true,
+		RejectedCandidates: 1,
 	}}
 	proxy := NewExternalSearchProxy(ProviderSet{USDA: provider}, NewRateLimitHandler(nil, nil), NewDataNormalizer(&proxyVocabulary{}))
 	response, err := proxy.Search(context.Background(), ExternalSearchQuery{Query: "apple", Provider: "usda", Page: 1})

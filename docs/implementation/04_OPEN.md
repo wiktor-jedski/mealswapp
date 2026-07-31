@@ -473,12 +473,13 @@ condition. No unowned or disposition-less Phase 07 entry remains.
 - **SUPERSEDED (Task 271, remeasured 2026-07-24):** the Task 262 backend coverage exception was remeasured after the Phase 08.01 manual-item invalidation, strict custom-item JSON, and Go Doc remediations. Its current exact disposition follows.
 - **ACCEPTED EXCEPTION (Task 277, remeasured 2026-07-27; owner: Phase 08 backend maintainer):** `go test ./internal/... -p 1 -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out` passes and measures the Phase 08 Go runtime scope at `93.2%` (`4,638/4,979` statements) after deduplicating cross-package profile blocks by source range. The repository aggregate package profile is `87.4%`; direct package totals include `app 84.8%`, `cache 90.1%`, `curation 90.3%`, `customitem 90.9%`, `dataimporter 88.3%`, `deletionworker 100.0%`, `externaldata 99.8%`, `httpapi 87.3%`, `itemcurator 74.2%`, `observability 85.6%`, `repository 86.3%`, `search 96.5%`, `security 99.7%`, `tagmanager 100.0%`, `useradmin 93.1%`, and `userdata 97.2%`. Exact file counts and uncovered ranges are machine-checked below, including the Task 277 manual-item/allergen persistence surfaces and the newly measured compliance repository row. Remaining statements are defensive dependency/encoder/claim-corruption branches, repeated safe repository/HTTP error mappings, configuration/cache/wiring fallbacks, and instrumentation-only paths. Production tests cover authenticated admin/non-admin and owner isolation, recursive duplicate-key rejection before service dispatch, audited create/replay/rollback/update/delete, atomic allergen persistence, exact shared-generation behavior, peer Catalog/Substitution cache visibility, PostgreSQL atomicity, and safe envelopes/telemetry. No authorization, ownership, private/global isolation, CSRF, idempotency/replay, validation, parameterized persistence, transaction-plus-audit rollback, invalidation, sanitized observability, or search visibility behavior is waived.
 - **ACCEPTED EXCEPTION (Task 284 repair, remeasured 2026-07-28; owner: Phase 08 frontend maintainer):** `bun test --coverage` passes with `537` tests, `2,818` expectations, and `All files | 95.19% funcs | 96.06% lines`. Phase 08 runtime rows are `src/lib/admin-access.ts` (`100.00% funcs, 100.00% lines`), `src/lib/admin-workflows.ts` (`83.33% funcs, 98.55% lines`; Bun reports no stable uncovered-line range), `src/lib/api/account-data-client.ts` (`100.00% funcs, 98.11% lines`; Bun reports no stable uncovered-line range), `src/lib/api/admin-client.ts` (`95.95% funcs, 100.00% lines`; function instrumentation only), `src/lib/api/external-admin-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/filter-options-client.ts` (`100.00% funcs, 100.00% lines`), `src/lib/api/generated.ts` (`100.00% funcs, 99.06% lines`, generated fallback line `185`), `src/lib/shell-routing.ts` (`100.00% funcs, 100.00% lines`), `src/lib/substitution-filter-options.ts` (`100.00% funcs, 100.00% lines`), and Svelte components that do not emit Bun coverage rows. Component tests plus the full Playwright/axe desktop/mobile suite cover administration, import, conflict/retry, private export/deletion, dynamic filters, authorization, modal focus containment, responsive themes, and degraded paths. No generated-contract decoding, admin fail-closed state, authoritative refresh, destructive confirmation, accessibility, or browser workflow is waived.
+- **ACCEPTED EXCEPTION (Task 287, remeasured 2026-07-31; owner: Phase 08 backend maintainer):** the canonical `go test ./internal/... -p 1 -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out` run passes and measures the Phase 08 Go runtime scope at `93.0%` (`4,668/5,017` statements). The newly changed external-provider paths retain exact defensive exceptions: `internal/externaldata/openfoodfacts.go` is `184/192` (`95.8%`) with uncovered ranges `206.62-208.12,228.10-230.4,248.14-250.12,252.26-254.12,260.2-260.17`, and `internal/externaldata/rate_limit.go` is `186/188` (`98.9%`) with uncovered ranges `357.14-359.3,407.46-409.3`. These accepted lines are bounded malformed-payload, scanner, and telemetry/error fallback branches; adversarial provider-key tests and the focused externaldata suite cover the raw JSON boundary and safe rejection behavior. No provider normalization, rate-limit enforcement, cancellation, or privacy behavior is waived.
 
 The following machine-checked contracts are the precise current evidence behind those accepted exceptions. `scripts/check.py` derives the backend rows from the deduplicated cross-package profile, derives frontend rows from Bun's current report, rejects missing or additional exceptions, and requires every metric, uncovered location, phase owner, and justification ID to match.
 
 <!-- phase08-backend-coverage-contract:start -->
 
-Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
+Measured Phase 08 scope: `4668/5017` statements (`93.0%`).
 
 | Runtime file                                          | Covered/statements | Coverage | Exact uncovered statement blocks                                                                                                                                                                                                                                                                                                                                                                                      | Justification |
 | ----------------------------------------------------- | -----------------: | -------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -489,7 +490,8 @@ Measured Phase 08 scope: `4645/4986` statements (`93.2%`).
 | `internal/curation/validation.go`                     |            `88/93` |  `94.6%` | `145.132-147.4,150.130-152.4,155.120-157.4,171.64-174.3`                                                                                                                                                                                                                                                                                                                                                              | `B1`          |
 | `internal/customitem/service.go`                      |          `153/165` |  `92.7%` | `114.24-116.3,118.73-120.3,129.16-131.3,153.32-155.3,170.32-172.3,174.16-176.3,190.32-192.3,207.16-209.3,243.10-244.17,293.70-295.3,368.16-370.3,395.26-397.4`                                                                                                                                                                                                                                                        | `B1`          |
 | `internal/dataimporter/service.go`                    |            `68/77` |  `88.3%` | `98.68-100.3,103.16-105.3,147.22-149.4,150.20-152.4,164.62-165.29,174.43-176.3,198.23-200.3,202.107-204.4,213.16-215.3`                                                                                                                                                                                                                                                                                               | `B1`          |
-| `internal/externaldata/rate_limit.go`                 |          `184/186` |  `98.9%` | `353.14-355.3,403.46-405.3`                                                                                                                                                                                                                                                                                                                                                                                           | `B4`          |
+| `internal/externaldata/openfoodfacts.go`              |          `184/192` |  `95.8%` | `206.62-208.12,228.10-230.4,248.14-250.12,252.26-254.12,260.2-260.17`                                                                                                                                                                                                                                                                                                                                                 | `B4`          |
+| `internal/externaldata/rate_limit.go`                 |          `186/188` |  `98.9%` | `357.14-359.3,407.46-409.3`                                                                                                                                                                                                                                                                                                                                                                                           | `B4`          |
 | `internal/httpapi/auth_controller.go`                 |           `94/103` |  `91.3%` | `78.92-80.3,95.92-97.3,104.115-106.3,107.66-109.3,123.92-125.3,136.84-138.3,149.88-151.3,165.66-167.3,233.19-235.3`                                                                                                                                                                                                                                                                                                   | `B2`          |
 | `internal/httpapi/classification_admin_controller.go` |            `58/77` |  `75.3%` | `55.66-57.3,64.49-66.3,74.16-76.3,78.16-80.3,88.16-90.3,92.9-94.3,100.16-102.3,110.16-112.3,114.9-116.3,118.16-120.3,122.16-124.3,126.16-128.3,136.16-138.3,144.16-146.3,148.16-150.3,159.36-161.3,168.49-170.3,178.34-180.3,188.108-190.3`                                                                                                                                                                           | `B2`          |
 | `internal/httpapi/curation_validation.go`             |           `99/108` |  `91.7%` | `122.37-124.3,149.65-151.3,159.54-161.3,168.57-170.3,198.16-200.3,210.18-212.5,214.11-216.5,227.49-229.5,231.10-232.71`                                                                                                                                                                                                                                                                                               | `B1`          |
@@ -581,7 +583,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run Task 281 on desktop and mobile after the helper opens hidden responsive navigation controls.",
       "closedDate": "2026-07-28",
-      "passingEvidence": "logs/real-stack-e2e/9f13846d58116dcc9473618b/acceptance/prebootstrap.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-281-002",
@@ -615,12 +617,12 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run the isolated Task 281 suite and prove all lifecycle stages, exact PostgreSQL/audit assertions, Redis PONG, cleanup, and report finalization complete.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/9f13846d58116dcc9473618b/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-281-preparation.md"
     },
     {
       "id": "P08-FIND-282-001",
       "rootCauseId": "ROOT-T282-OFF-METADATA",
-      "status": "OPEN DEFECT",
+      "status": "CLOSED",
       "requirements": [
         "SW-REQ-055"
       ],
@@ -631,7 +633,9 @@ retained in the mandatory append-only
       "expected": "Unsupported provider metadata is ignored while supported numeric nutrients remain strictly validated and the candidate remains available for curation.",
       "evidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json",
       "owner": "backend-external-data",
-      "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI."
+      "retestCondition": "Run Task 282 with legitimate OpenFoodFacts metadata and observe the candidate through the production Administration UI.",
+      "closedDate": "2026-07-29",
+      "passingEvidence": "logs/real-stack-e2e/eed925ef7313fed9671c514c/acceptance/SW-REQ-055.json"
     },
     {
       "id": "P08-FIND-282-002",
@@ -667,7 +671,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Rerun Task 282 and require P08-SWR055-ACCEPT-06 PASS plus one food/import/audit and ownerless global persistence evidence.",
       "closedDate": "2026-07-28",
-      "passingEvidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-282-004",
@@ -761,7 +765,7 @@ retained in the mandatory append-only
       "owner": "phase08-e2e",
       "retestCondition": "Run Task 282 and prove the disposable stack, loopback fixtures, backend evidence, cleanup, and three Task 280 reports finalize.",
       "closedDate": "2026-07-29",
-      "passingEvidence": "logs/real-stack-e2e/d08e098642ba3e9c87de8721/acceptance/results.json"
+      "passingEvidence": "docs/implementation/evidence/task-282-preparation.md"
     },
     {
       "id": "P08-FIND-284-001",

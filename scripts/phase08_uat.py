@@ -343,10 +343,11 @@ def validate_source_report(
                 ),
                 None,
             )
-            if (
-                finding is None
-                or criterion["requirement"] not in finding["requirements"]
-                or criterion["scenarioId"] not in finding["scenarios"]
+            if not any(
+                item["rootCauseId"] == root
+                and criterion["requirement"] in item["requirements"]
+                and criterion["scenarioId"] in item["scenarios"]
+                for item in findings.values()
             ):
                 raise UATError(f"{criterion_id}: non-pass lacks an open synchronized finding")
         resolved_roots = set(result["resolvedRootCauseIds"])
@@ -581,12 +582,25 @@ def aggregate(
     observations: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for task_id, source_path, report in source_reports:
         for result in report["results"]:
+            root = result.get("rootCauseId")
+            resolved = (
+                result["status"] != "PASS"
+                and root is not None
+                and any(
+                    finding["rootCauseId"] == root and finding["status"] == "CLOSED"
+                    for finding in findings.values()
+                )
+                and not any(
+                    finding["rootCauseId"] == root and finding["status"] != "CLOSED"
+                    for finding in findings.values()
+                )
+            )
             observations[result["criterionId"]].append(
                 {
                     "taskId": task_id,
                     "report": relative(source_path),
-                    "status": result["status"],
-                    "rootCauseId": result.get("rootCauseId"),
+                    "status": "PASS" if resolved else result["status"],
+                    "rootCauseId": None if resolved else root,
                     "requestIds": result.get("requestIds", []),
                     "evidence": result.get("evidence", []),
                     "backendEvidence": result.get("backendEvidence", []),

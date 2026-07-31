@@ -15,6 +15,9 @@ test("covers provider selection, pagination, and all safe external states", () =
 	for (const state of ["loading", "empty", "error"]) expect(source).toContain(`searchState === "${state}"`);
 	expect(source).toContain('"empty" : "results"');
 	expect(source).toContain("providerWarningLabels");
+	expect(source).toContain("Provider candidates were rejected because their data could not be used.");
+	expect(source).toContain("External providers could not complete this search.");
+	expect(source).toContain("No external candidates matched this search.");
 	expect(source).not.toContain("warning.message");
 	expect(source).toContain("searchController?.abort()");
 	expect(source).toContain("sequence !== searchSequence");
