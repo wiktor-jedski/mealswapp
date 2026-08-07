@@ -17,7 +17,6 @@ const ROOTS = {
 } as const;
 const BLOCKED_CRITERIA = [
 	"P08-SWR033-STEP-01", "P08-SWR033-STEP-02", "P08-SWR033-STEP-03", "P08-SWR033-STEP-04",
-	"P08-SWR090-STEP-04"
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 test.skip(!enabled, "Run scripts/run-task283-acceptance.py for isolated real-stack evidence.");
@@ -42,6 +41,7 @@ interface AdminItem {
 	densitySourceKind?: string;
 	macrosPer100: MacroProfile;
 	micros: Record<string, number>;
+	allergenKeys: string[];
 	foodCategories: Array<{ id: string; name: string; kind: string }>;
 	culinaryRoles: Array<{ id: string; name: string; kind: string }>;
 }
@@ -132,7 +132,13 @@ async function csrf(page: Page, baseURL = ""): Promise<string> {
 }
 
 async function item(response: APIResponse): Promise<AdminItem> {
-	const body = await response.json() as { data?: AdminItem };
+	const raw = await response.text();
+	let body: { data?: AdminItem };
+	try {
+		body = JSON.parse(raw) as { data?: AdminItem };
+	} catch (error) {
+		throw new Error(`Task 283 item response is not JSON: ${raw.slice(0, 500)}`, { cause: error });
+	}
 	expect(body.data?.id).toMatch(UUID);
 	return body.data!;
 }
@@ -688,34 +694,118 @@ test("metric and imperial quantities preserve solid and liquid backend calculati
 	await expect(liquidCard.locator("[data-result-macro-basis]")).toHaveText("values per 3.4 fl oz");
 });
 
-test("canonical Sodium persists exactly while alias and unknown-key failures leave no state", async ({ page }, info) => {
+test("canonical vocabulary, allergen, and classification values persist with exact rollback evidence", async ({ page }, info) => {
 	await requireManaged();
 	await admin(page, info);
-	const token = await csrf(page);
-	const valid = await createItem(page, token, solid(`Task 283 Sodium ${info.project.name}`, undefined, { micros: { Sodium: 125.5 } }));
-	expect(valid.value.micros).toEqual({ Sodium: 125.5 });
-	await record(info, "canonical-sodium", ["P08-SWR090-STEP-01", "P08-SWR090-ACCEPT-01"], {
+	let token = await csrf(page);
+	const createClassification = async (kind: "food_category" | "culinary_role", name: string) => {
+		const before = generationSnapshot();
+		const response = await page.request.post(`/api/v1/admin/classifications/${kind}`, {
+			headers: { "X-CSRF-Token": token }, data: { name }
+		});
+		expect(response.status()).toBe(201);
+		const value = await classification(response);
+		const after = generationSnapshot();
+		expect(Number(after.value) - Number(before.value)).toBe(1);
+		return { response, value, before, after };
+	};
+	const category = await createClassification("food_category", `Task 283 Task 304 category ${info.project.name}`);
+	const role = await createClassification("culinary_role", `Task 283 Task 304 role ${info.project.name}`);
+	await record(info, "task304-category", ["P08-SWR057-STEP-01"], {
+		kind: "classification", entityId: category.value.id, name: category.value.name,
+		requestIds: [await responseRequestId(category.response)],
+		expected: { active: true, deleted: false, kind: "food_category", auditActions: { "classification.create": 1 }, generationBefore: category.before.value, generationAfter: category.after.value, generationDelta: 1 },
+		generationSnapshots: { generationBefore: category.before.id, generationAfter: category.after.id }
+	}, ["mutation_count=1", "audit_count=1", "cache_generation=incremented"]);
+	await record(info, "task304-role", ["P08-SWR057-STEP-02"], {
+		kind: "classification", entityId: role.value.id, name: role.value.name,
+		requestIds: [await responseRequestId(role.response)],
+		expected: { active: true, deleted: false, kind: "culinary_role", auditActions: { "classification.create": 1 }, generationBefore: role.before.value, generationAfter: role.after.value, generationDelta: 1 },
+		generationSnapshots: { generationBefore: role.before.id, generationAfter: role.after.id }
+	}, ["mutation_count=1", "audit_count=1", "cache_generation=incremented"]);
+
+	const vocabularyKey = `Task304Micro${info.project.name.replace(/[^A-Za-z0-9]/g, "")}`;
+	const vocabularyBefore = generationSnapshot();
+	const vocabularyCreate = await page.request.post("/api/v1/admin/micronutrients", {
+		headers: { "X-CSRF-Token": token }, data: { key: vocabularyKey, displayName: "Task 304 Micro", unit: "mg" }
+	});
+	expect(vocabularyCreate.status()).toBe(201);
+	const deactivate = await page.request.post(`${secondAPI()}/api/v1/admin/micronutrients/${vocabularyKey}/deactivate`, {
+		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) }
+	});
+	expect(deactivate.status()).toBe(200);
+	const inactive = await deactivate.json() as { data?: { micronutrient?: { active?: boolean } } };
+	expect(inactive.data?.micronutrient?.active).toBe(false);
+	const reactivate = await page.request.post(`${secondAPI()}/api/v1/admin/micronutrients/${vocabularyKey}/reactivate`, {
+		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) }
+	});
+	expect(reactivate.status()).toBe(200);
+	const active = await reactivate.json() as { data?: { micronutrient?: { active?: boolean } } };
+	expect(active.data?.micronutrient?.active).toBe(true);
+	expect(generationSnapshot().value).toBe(vocabularyBefore.value);
+	const inactiveVocabularyKey = `Task304Inactive${info.project.name.replace(/[^A-Za-z0-9]/g, "")}`;
+	token = await csrf(page);
+	const inactiveVocabularyCreate = await page.request.post("/api/v1/admin/micronutrients", {
+		headers: { "X-CSRF-Token": token }, data: { key: inactiveVocabularyKey, displayName: "Task 304 Inactive", unit: "mg" }
+	});
+	expect(inactiveVocabularyCreate.status()).toBe(201);
+	const inactiveVocabularyDeactivate = await page.request.post(`${secondAPI()}/api/v1/admin/micronutrients/${inactiveVocabularyKey}/deactivate`, {
+		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) }
+	});
+	expect(inactiveVocabularyDeactivate.status()).toBe(200);
+	const inactiveVocabulary = await inactiveVocabularyDeactivate.json() as { data?: { micronutrient?: { active?: boolean } } };
+	expect(inactiveVocabulary.data?.micronutrient?.active).toBe(false);
+	expect(generationSnapshot().value).toBe(vocabularyBefore.value);
+
+	const validBefore = generationSnapshot();
+	token = await csrf(page);
+	const valid = await createItem(page, token, solid(`Task 283 Task 304 canonical ${info.project.name}`, undefined, {
+		micros: { Sodium: 125.5, [vocabularyKey]: 7.25 },
+		foodCategoryIds: [category.value.id], culinaryRoleIds: [role.value.id], allergenKeys: ["peanut", "dairy"]
+	}));
+	const validAfter = generationSnapshot();
+	expect(Number(validAfter.value) - Number(validBefore.value)).toBe(1);
+	expect(valid.value.micros).toEqual({ Sodium: 125.5, [vocabularyKey]: 7.25 });
+	expect(valid.value.allergenKeys).toEqual(["dairy", "peanut"]);
+	expect(valid.value.foodCategories.map(({ id }) => id)).toEqual([category.value.id]);
+	expect(valid.value.culinaryRoles.map(({ id }) => id)).toEqual([role.value.id]);
+	const crossInstanceRead = await page.request.get(`${secondAPI()}/api/v1/admin/items/${valid.value.id}`);
+	expect(crossInstanceRead.status()).toBe(200);
+	expect(await item(crossInstanceRead)).toEqual(valid.value);
+	await record(info, "task304-canonical-values", ["P08-SWR090-STEP-01", "P08-SWR090-ACCEPT-01"], {
 		kind: "item", entityId: valid.value.id, name: valid.value.name, idempotencyKey: valid.key,
-		requestIds: [await responseRequestId(valid.response)],
-		expected: { active: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, micros: { Sodium: 125.5 } }
-	}, ["mutation_count=1", "audit_count=1", "row_count=1"]);
-	for (const [slug, micros, criterion] of [
+		requestIds: [await responseRequestId(category.response), await responseRequestId(role.response), await responseRequestId(vocabularyCreate), await responseRequestId(deactivate), await responseRequestId(reactivate), await responseRequestId(valid.response)],
+		expected: {
+			active: true, ownerless: true, auditActions: { manual_create: 1 },
+			requestAuditActions: { "classification.create": 2, "micronutrient.create": 1, "micronutrient.deactivate": 1, "micronutrient.reactivate": 1, manual_create: 1 },
+			idempotencyCount: 1, micros: { Sodium: 125.5, [vocabularyKey]: 7.25 },
+			foodCategoryIds: [category.value.id], culinaryRoleIds: [role.value.id], allergenKeys: ["dairy", "peanut"],
+			generationBefore: validBefore.value, generationAfter: validAfter.value, generationDelta: 1
+		},
+		generationSnapshots: { generationBefore: validBefore.id, generationAfter: validAfter.id }
+	}, ["mutation_count=1", "audit_count=1", "row_count=1", "owner_state=global", "cache_generation=incremented"]);
+
+	const invalidInputs = [
 		["alias", { Na: 1 }, "P08-SWR090-STEP-02"],
-		["unknown", { unknown_key: 1 }, "P08-SWR090-STEP-03"]
-	] as const) {
-		const name = `Task 283 micro ${slug} ${info.project.name}`;
+		["unknown", { unknown_key: 1 }, "P08-SWR090-STEP-03"],
+		["inactive", { [inactiveVocabularyKey]: 1 }, "P08-SWR090-STEP-04"],
+		["allergen", { Sodium: 1 }, "P08-SWR056-ACCEPT-03", { allergenKeys: ["not_in_vocabulary"] }],
+		["classification", { Sodium: 1 }, "P08-SWR056-ACCEPT-03", { foodCategoryIds: [role.value.id] }]
+	] as const;
+	for (const [slug, micros, criterion, extra = {}] of invalidInputs) {
+		const name = `Task 283 Task 304 invalid ${slug} ${info.project.name}`;
 		const key = crypto.randomUUID();
 		const before = generationSnapshot();
 		const response = await page.request.post(`${secondAPI()}/api/v1/admin/items`, {
 			headers: { "X-CSRF-Token": await csrf(page, secondAPI()), "Idempotency-Key": key },
-			data: solid(name, undefined, { micros })
+			data: solid(name, undefined, { micros, ...extra })
 		});
 		expect(response.status()).toBe(400);
 		const after = generationSnapshot();
 		expect(after.value).toBe(before.value);
-		await record(info, `micro-${slug}`, [criterion, "P08-SWR090-ACCEPT-01"], {
+		await record(info, `task304-invalid-${slug}`, [criterion, ...(criterion.startsWith("P08-SWR090") ? ["P08-SWR090-ACCEPT-01"] : [])], {
 			kind: "rejected_item", name, idempotencyKey: key, requestIds: [await responseRequestId(response)],
-			expected: { rowCount: 0, auditCount: 0, idempotencyCount: 0, generationBefore: before.value, generationAfter: after.value, generationDelta: 0 },
+			expected: { rowCount: 0, auditCount: 0, requestAuditActions: {}, idempotencyCount: 0, generationBefore: before.value, generationAfter: after.value, generationDelta: 0 },
 			generationSnapshots: { generationBefore: before.id, generationAfter: after.id }
 		}, ["http_status=400", "rollback_state=complete", "cache_generation=unchanged"]);
 	}
@@ -724,7 +814,7 @@ test("canonical Sodium persists exactly while alias and unknown-key failures lea
 test("admin surface remains responsive, keyboard reachable, and reportable", async ({ page }, info) => {
 	await requireManaged();
 	await admin(page, info);
-	await page.getByRole("form", { name: "Classification form" }).getByLabel("Name").focus();
+	await page.getByRole("form", { name: "Classification form" }).getByLabel("Name").first().focus();
 	expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("INPUT");
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });

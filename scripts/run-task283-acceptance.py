@@ -241,23 +241,31 @@ class Task283Harness(real_stack.Harness):
             (evidence / "backend").mkdir(exist_ok=True)
             (evidence / "backend/task283-redis-before.json").write_text(json.dumps(generation_before, sort_keys=True) + "\n")
             browser_failure = None
+            browser_errors = []
             try:
                 real_stack.run_command(
                     ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep", "Task 294 production transport corruption"],
                     cwd=ROOT / "frontend", env=playwright_env, timeout=self.timeout,
                 )
-                suite_environment = dict(playwright_env)
-                suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"
-                suite_environment["MEALSWAPP_TASK283_AUTH_STATE_DIR"] = str(self.raw_dir / "task283-auth-state-suite")
+            except BaseException as error:
+                browser_errors.append(error)
+            suite_environment = dict(playwright_env)
+            suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"
+            suite_environment["MEALSWAPP_TASK294_CORRUPT_MANUAL_ITEM_RESPONSE_ONCE"] = "0"
+            suite_environment["MEALSWAPP_TASK283_AUTH_STATE_DIR"] = str(self.raw_dir / "task283-auth-state-suite")
+            try:
                 real_stack.run_command(
                     ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep-invert", "Task 294 production transport corruption"],
                     cwd=ROOT / "frontend", env=suite_environment, timeout=self.timeout,
                 )
             except BaseException as error:
-                browser_failure = error
-                self.events.append("browser_product_nonpass" if isinstance(error, __import__("subprocess").CalledProcessError) else "browser_infrastructure_nonpass")
+                browser_errors.append(error)
+            if browser_errors:
+                browser_failure = browser_errors[0]
+                self.events.append("browser_product_nonpass" if any(isinstance(error, __import__("subprocess").CalledProcessError) for error in browser_errors) else "browser_infrastructure_nonpass")
                 diagnostic = "\n".join(
                     value.decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value)
+                    for error in browser_errors
                     for value in (getattr(error, "stdout", None), getattr(error, "stderr", None))
                     if value
                 )
@@ -265,13 +273,17 @@ class Task283Harness(real_stack.Harness):
                     diagnostic = diagnostic.replace(secret, "[redacted]")
                 safe_lines = [line[:400] for line in diagnostic.splitlines() if any(marker in line for marker in ("task283", "Error", "Expected", "Received", "Timeout"))][:100]
                 (evidence / "browser-diagnostics.txt").write_text(
-                    f"{type(error).__name__}\n" + "\n".join(safe_lines) + "\n", encoding="utf-8"
+                    "\n".join(type(error).__name__ for error in browser_errors) + "\n" + "\n".join(safe_lines) + "\n", encoding="utf-8"
                 )
-            finally:
+            try:
                 observer_stop.set()
                 observer.join(timeout=10)
                 if observer.is_alive():
                     raise RuntimeError("Redis generation observer did not stop")
+            except BaseException as error:
+                browser_errors.append(error)
+                if browser_failure is None:
+                    browser_failure = error
             generation_after = self.redis_generation_snapshot()
             (evidence / "backend/task283-redis-after.json").write_text(json.dumps(generation_after, sort_keys=True) + "\n")
             browser_result = evidence / "browser.json"
@@ -282,7 +294,8 @@ class Task283Harness(real_stack.Harness):
             if not expected_projects.issubset(set(browser_payload.get("projects", []))):
                 self.write_synthetic_browser(evidence, "BLOCKED")
             try:
-                self.write_task294_proof(evidence)
+                if (evidence / "task294-transport-proof.json").is_file():
+                    self.write_task294_proof(evidence)
                 self.write_backend_evidence(evidence)
             except Exception as error:
                 self.events.append("backend_proof_nonpass")
@@ -442,15 +455,29 @@ class Task283Harness(real_stack.Harness):
                 raise ValueError("item operation identity is invalid")
             actual.update(json.loads(read_only_psql(
                 self.target, self.database,
-                """SELECT json_build_object(
-                    'rowCount', count(*), 'active', count(*) FILTER (WHERE deleted_at IS NULL) = 1,
-                    'deleted', count(*) FILTER (WHERE deleted_at IS NOT NULL) = 1,
-                    'name', max(name), 'physicalState', max(physical_state),
-                    'metricBasis', max(CASE physical_state WHEN 'solid' THEN '100g' ELSE '100ml' END),
-                    'density', max(density_grams_per_milliliter), 'densitySourceKind', max(density_source_kind),
-                    'macros', COALESCE((json_agg(json_build_object('protein',protein_per_100,'carbohydrates',carbohydrates_per_100,'fat',fat_per_100)) FILTER (WHERE id IS NOT NULL))->0, '{}'::json),
-                    'micros', COALESCE((json_agg(micronutrients) FILTER (WHERE id IS NOT NULL))->0, '{}'::json)
-                ) FROM food_items WHERE id=%s::uuid""",
+                """WITH selected_item AS (SELECT * FROM food_items WHERE id=%s::uuid)
+                SELECT json_build_object(
+                    'rowCount', (SELECT count(*) FROM selected_item),
+                    'active', EXISTS (SELECT 1 FROM selected_item WHERE deleted_at IS NULL),
+                    'deleted', EXISTS (SELECT 1 FROM selected_item WHERE deleted_at IS NOT NULL),
+                    'name', (SELECT name FROM selected_item),
+                    'physicalState', (SELECT physical_state FROM selected_item),
+                    'metricBasis', (SELECT CASE physical_state WHEN 'solid' THEN '100g' ELSE '100ml' END FROM selected_item),
+                    'density', (SELECT density_grams_per_milliliter FROM selected_item),
+                    'densitySourceKind', (SELECT density_source_kind FROM selected_item),
+                    'macros', COALESCE((SELECT json_build_object('protein',protein_per_100,'carbohydrates',carbohydrates_per_100,'fat',fat_per_100) FROM selected_item), '{}'::json),
+                    'micros', COALESCE((SELECT micronutrients::json FROM selected_item), '{}'::json),
+                    'foodCategoryIds', COALESCE((SELECT json_agg(assignment.classification_id::text ORDER BY assignment.classification_id)
+                        FROM food_item_classifications assignment
+                        JOIN classifications classification ON classification.id = assignment.classification_id
+                        WHERE assignment.food_item_id = (SELECT id FROM selected_item) AND classification.kind = 'food_category'), '[]'::json),
+                    'culinaryRoleIds', COALESCE((SELECT json_agg(assignment.classification_id::text ORDER BY assignment.classification_id)
+                        FROM food_item_classifications assignment
+                        JOIN classifications classification ON classification.id = assignment.classification_id
+                        WHERE assignment.food_item_id = (SELECT id FROM selected_item) AND classification.kind = 'culinary_role'), '[]'::json),
+                    'allergenKeys', COALESCE((SELECT json_agg(allergen_key ORDER BY allergen_key)
+                        FROM food_item_allergens WHERE food_item_id = (SELECT id FROM selected_item)), '[]'::json)
+                )""",
                 (entity_id,),
             )))
             actual["ownerless"] = int(read_only_psql(self.target, self.database, "SELECT count(*) FROM custom_food_items WHERE name=%s", (name,))) == 0
@@ -479,6 +506,12 @@ class Task283Harness(real_stack.Harness):
                 "SELECT count(*) FROM admin_audit_entries WHERE request_id = ANY(string_to_array(%s, ','))",
                 (",".join(request_ids),),
             )) if request_ids else 0
+        if request_ids:
+            actual["requestAuditActions"] = json.loads(read_only_psql(
+                self.target, self.database,
+                "SELECT COALESCE(json_object_agg(action, amount), '{}'::json)::text FROM (SELECT action,count(*) amount FROM admin_audit_entries WHERE request_id::text = ANY(string_to_array(%s, ',')) GROUP BY action) grouped",
+                (",".join(request_ids),),
+            ))
         key = operation.get("idempotencyKey")
         if key is not None:
             if not isinstance(key, str) or not re.fullmatch(r"[0-9a-f-]{36}", key, re.I):
