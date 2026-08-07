@@ -145,7 +145,7 @@ test("requires irreversible confirmation and retains actionable saved-diet refer
 			status: "error",
 			requestId: "task-298-conflict",
 			error: {
-				category: "conflict",
+				category: "validation",
 				code: "custom_item_in_use",
 				message: "private item is still referenced",
 				retryable: false,

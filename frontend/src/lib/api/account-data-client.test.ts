@@ -70,7 +70,7 @@ test("rejects ownership leakage, malformed identifiers, oversized exports, and n
 		? new Response(JSON.stringify({ status: "ok", requestId: "csrf", data: { csrfToken: "csrf-261" } }), { status: 200 })
 		: new Response(JSON.stringify({
 			status: "error", requestId: "task-298", error: {
-				category: "conflict", code: "custom_item_in_use", message: "in use", retryable: false,
+				category: "validation", code: "custom_item_in_use", message: "in use", retryable: false,
 				data: { affectedDiets: [{ id: objectId, name: "Portable diet" }] }
 			}
 		}), { status: 409 })) as typeof fetch;
@@ -78,4 +78,55 @@ test("rejects ownership leakage, malformed identifiers, oversized exports, and n
 		message: "Remove this item from the listed saved diets before permanent deletion.",
 		affectedDiets: [{ id: objectId, name: "Portable diet" }]
 	});
+});
+
+// Implements DESIGN-008 AccountDeleter adversarial 409 conflict decoding verification.
+test("rejects malformed, oversized, and unsafe custom-item deletion conflict responses", async () => {
+	const conflict = (): Record<string, unknown> => ({
+		status: "error",
+		requestId: "task-298",
+		error: {
+			category: "validation",
+			code: "custom_item_in_use",
+			message: "in use",
+			retryable: false,
+			data: { affectedDiets: [{ id: objectId, name: "Portable diet" }] }
+		}
+	});
+	const edited = (edit: (body: Record<string, unknown>) => void): Record<string, unknown> => {
+		const body = conflict();
+		edit(body);
+		return body;
+	};
+	const cases: Array<[string, number, unknown]> = [
+		["wrong status", 404, conflict()],
+		["invalid JSON", 409, "{"],
+		["missing top-level field", 409, edited((body) => { delete body.status; })],
+		["extra top-level field", 409, edited((body) => { body.extra = true; })],
+		["missing error field", 409, edited((body) => { delete body.error; })],
+		["extra error field", 409, edited((body) => { (body.error as Record<string, unknown>).requestId = "leak"; })],
+		["wrong category", 409, edited((body) => { (body.error as Record<string, unknown>).category = "conflict"; })],
+		["wrong code", 409, edited((body) => { (body.error as Record<string, unknown>).code = "not_found"; })],
+		["retryable conflict", 409, edited((body) => { (body.error as Record<string, unknown>).retryable = true; })],
+		["missing data", 409, edited((body) => { delete (body.error as Record<string, unknown>).data; })],
+		["extra data field", 409, edited((body) => { (body.error as Record<string, unknown>).data = { affectedDiets: [{ id: objectId, name: "Portable diet" }], ownerId: itemId }; })],
+		["malformed diet id", 409, edited((body) => { ((body.error as Record<string, unknown>).data as Record<string, unknown>).affectedDiets = [{ id: "not-a-uuid", name: "Portable diet" }]; })],
+		["missing diet name", 409, edited((body) => { ((body.error as Record<string, unknown>).data as Record<string, unknown>).affectedDiets = [{ id: objectId }]; })],
+		["extra diet field", 409, edited((body) => { ((body.error as Record<string, unknown>).data as Record<string, unknown>).affectedDiets = [{ id: objectId, name: "Portable diet", ownerId: itemId }]; })],
+		["oversized diet name", 409, edited((body) => { ((body.error as Record<string, unknown>).data as Record<string, unknown>).affectedDiets = [{ id: objectId, name: "x".repeat(201) }]; })],
+		["unsafe diet name", 409, edited((body) => { ((body.error as Record<string, unknown>).data as Record<string, unknown>).affectedDiets = [{ id: objectId, name: "Portable\u0000diet" }]; })],
+		["too many diets", 409, edited((body) => { ((body.error as Record<string, unknown>).data as Record<string, unknown>).affectedDiets = Array.from({ length: 26 }, () => ({ id: objectId, name: "Portable diet" })); })],
+		["unsafe request id", 409, edited((body) => { body.requestId = "task-298\nleak"; })]
+	];
+
+	for (const [label, status, body] of cases) {
+		let call = 0;
+		globalThis.fetch = mock(async () => ++call === 1
+			? new Response(JSON.stringify({ status: "ok", requestId: "csrf", data: { csrfToken: "csrf-298" } }), { status: 200 })
+			: new Response(typeof body === "string" ? body : JSON.stringify(body), { status })) as typeof fetch;
+		const error = await deletePrivateCustomItem(itemId).catch((cause: unknown) => cause);
+		expect(error, label).toBeInstanceOf(AccountDataClientError);
+		expect(error, label).toMatchObject({ message: "The private item could not be deleted. Try again." });
+		expect((error as AccountDataClientError).affectedDiets, label).toBeUndefined();
+	}
 });
