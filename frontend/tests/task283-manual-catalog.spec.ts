@@ -324,16 +324,17 @@ test("solid and liquid creation persists ownerless canonical state and density p
 	const secondRead = await page.request.get(`${secondAPI()}/api/v1/admin/items/${liquidCreate.value.id}`);
 	expect(secondRead.status()).toBe(200);
 	expect(await item(secondRead)).toEqual(liquidCreate.value);
-	const sharedSearchQuery = "Task 283";
+	const solidSearchQuery = solidCreate.value.name;
+	const liquidSearchQuery = liquidCreate.value.name;
 	const privatePartitionID = fixture("MEALSWAPP_TASK283_PRIVATE_ITEM_ID");
-	const createdPicker = await adminSearch(page, sharedSearchQuery, secondAPI());
+	const createdPicker = await adminSearch(page, solidSearchQuery, secondAPI());
 	expect(createdPicker.items).toContainEqual(expect.objectContaining({ itemId: solidCreate.value.id, name: solidCreate.value.name, macrosPer100: solidCreate.value.macrosPer100 }));
 	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privatePartitionID);
-	const createdCatalog = await search(page, { query: sharedSearchQuery, mode: "catalog", page: 1, filters: [] });
+	const createdCatalog = await search(page, { query: solidSearchQuery, mode: "catalog", page: 1, filters: [] });
 	expect(createdCatalog.items.map(({ id }) => id)).toContain(solidCreate.value.id);
 	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privatePartitionID);
 	const createdSubstitution = await search(page, {
-		query: sharedSearchQuery, mode: "substitution", page: 1, filters: [],
+		query: liquidSearchQuery, mode: "substitution", page: 1, filters: [],
 		substitutionInputs: [{ foodObjectId: solidCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
 	}, secondAPI());
 	expect(createdSubstitution.items.map(({ id }) => id)).toContain(liquidCreate.value.id);
