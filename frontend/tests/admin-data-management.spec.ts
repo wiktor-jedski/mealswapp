@@ -36,6 +36,7 @@ interface State {
 	itemReadDelays?: Record<string, number>;
 	itemSearchDelays?: Record<string, number>;
 	itemSearchItems?: Array<Record<string, unknown>>;
+	staleNextItemSearch?: boolean;
 	failNextItemSearch?: boolean;
 	itemSearchReads: number;
 	classificationMutationWaits?: Record<string, Promise<void>>;
@@ -83,7 +84,9 @@ async function stubApp(page: Page): Promise<State> {
 			}] : []);
 			const matching = values.filter(({ name }) => String(name).toLowerCase().includes(query.trim().toLowerCase()));
 			const pageNumber = Number(url.searchParams.get("page") ?? 1); const pageSize = Number(url.searchParams.get("pageSize") ?? 10); const offset = (pageNumber - 1) * pageSize;
-			return json(route, 200, ok({ items: matching.slice(offset, offset + pageSize), page: pageNumber, pageSize, total: matching.length }));
+			const responseItems = state.staleNextItemSearch ? matching.map((value) => ({ ...value, name: "Tofu" })) : matching;
+			state.staleNextItemSearch = false;
+			return json(route, 200, ok({ items: responseItems.slice(offset, offset + pageSize), page: pageNumber, pageSize, total: matching.length }));
 		}
 		if (path === "/api/v1/admin/items" && method === "POST") {
 			const body = request.postDataJSON() as Record<string, unknown>;
@@ -448,6 +451,7 @@ test("picker refreshes after committed mutations and recovers a failed read with
 	await page.getByRole("button", { name: "Edit Tofu" }).click();
 	const readsBeforeUpdate = state.itemSearchReads;
 	await page.getByLabel("Name", { exact: true }).first().fill("Tofu refreshed");
+	state.staleNextItemSearch = true;
 	await page.getByRole("button", { name: "Save item" }).click();
 	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
 	expect(state.itemSearchReads).toBeGreaterThan(readsBeforeUpdate);
