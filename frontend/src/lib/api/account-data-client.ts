@@ -5,17 +5,22 @@ import {
 	buildCustomItemDeleteRequestInit,
 	buildCustomItemUrl
 } from "./generated";
-import type { ExportBundle, ExportCustomItem } from "./generated";
+import type { ExportBundle, ExportCustomItem, SavedDietDeletionReference } from "./generated";
 
 // Implements DESIGN-008 DataExporter and ProfileController generated-contract client.
 
 const MAX_EXPORT_BYTES = 1024 * 1024;
+const MAX_CONFLICT_DIETS = 25;
+const MAX_CONFLICT_DIET_NAME_LENGTH = 200;
+const MAX_REQUEST_ID_LENGTH = 120;
 
 /** Safe failure exposed by authenticated Account Export operations. */
 export class AccountDataClientError extends Error {
-	constructor(message = "Account data could not be refreshed. Try again.") {
+	readonly affectedDiets?: SavedDietDeletionReference[];
+	constructor(message = "Account data could not be refreshed. Try again.", affectedDiets?: SavedDietDeletionReference[]) {
 		super(message);
 		this.name = "AccountDataClientError";
+		this.affectedDiets = affectedDiets;
 	}
 }
 
@@ -43,7 +48,30 @@ export async function deletePrivateCustomItem(itemId: string, signal?: AbortSign
 	if (!uuid(itemId)) throw new AccountDataClientError("The private item identifier is invalid.");
 	const { csrfToken } = await fetchCsrfToken(signal);
 	const response = await request(buildCustomItemUrl(itemId), buildCustomItemDeleteRequestInit(csrfToken, { signal }));
-	if (response.status !== 204 || (await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
+	if (response.status !== 204) {
+		let affectedDiets: Array<{ id: string; name: string }> | undefined;
+		try {
+			const body = await readBoundedText(response, MAX_EXPORT_BYTES);
+			if (response.status === 409) affectedDiets = decodeCustomItemInUseError(JSON.parse(body) as unknown);
+		} catch { /* use the bounded generic error */ }
+		throw new AccountDataClientError(affectedDiets?.length ? "Remove this item from the listed saved diets before permanent deletion." : "The private item could not be deleted. Try again.", affectedDiets);
+	}
+	if ((await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
+}
+
+// Implements DESIGN-008 AccountDeleter strict 409 conflict response decoding.
+function decodeCustomItemInUseError(value: unknown): SavedDietDeletionReference[] | undefined {
+	if (!isRecord(value) || !hasExactKeys(value, ["status", "requestId", "error"]) || value.status !== "error" || !safeRequestId(value.requestId) || !isRecord(value.error)) return undefined;
+	const error = value.error;
+	if (!hasExactKeys(error, ["category", "code", "message", "retryable", "data"]) || error.category !== "validation" || error.code !== "custom_item_in_use" || typeof error.message !== "string" || error.retryable !== false || !isRecord(error.data)) return undefined;
+	const data = error.data;
+	if (!hasExactKeys(data, ["affectedDiets"]) || !Array.isArray(data.affectedDiets) || data.affectedDiets.length > MAX_CONFLICT_DIETS) return undefined;
+	const diets: SavedDietDeletionReference[] = [];
+	for (const diet of data.affectedDiets) {
+		if (!isRecord(diet) || !hasExactKeys(diet, ["id", "name"]) || !uuid(diet.id) || !safeDietName(diet.name)) return undefined;
+		diets.push({ id: diet.id, name: diet.name });
+	}
+	return diets;
 }
 
 /** Injectable Account Export and private-item mutation operations. */
@@ -82,7 +110,7 @@ function assertSavedDiet(value: unknown): void {
 function assertSavedDietEntry(value: unknown): void {
 	if (!isRecord(value)) throw new AccountDataClientError();
 	assertExactKeys(value, ["id", "foodObjectId", "foodObjectType", "quantity", "unit", "position"]);
-	if (!uuid(value.id) || !uuid(value.foodObjectId) || !["food_item", "meal"].includes(String(value.foodObjectType)) || !positive(value.quantity) || !["g", "ml", "oz", "fl_oz"].includes(String(value.unit)) || !Number.isInteger(value.position) || Number(value.position) < 0 || Number(value.position) > 99) throw new AccountDataClientError();
+	if (!uuid(value.id) || !uuid(value.foodObjectId) || !["food_item", "meal", "custom_food_item"].includes(String(value.foodObjectType)) || !positive(value.quantity) || !["g", "ml", "oz", "fl_oz"].includes(String(value.unit)) || !Number.isInteger(value.position) || Number(value.position) < 0 || Number(value.position) > 99) throw new AccountDataClientError();
 }
 
 function assertSearchHistory(value: unknown): void {
@@ -129,6 +157,11 @@ function assertExactKeys(value: Record<string, unknown>, required: string[], opt
 	if (required.some((key) => !(key in value)) || keys.some((key) => !required.includes(key) && !optional.includes(key))) throw new AccountDataClientError();
 }
 
+function hasExactKeys(value: Record<string, unknown>, required: string[]): boolean {
+	const keys = Object.keys(value);
+	return required.every((key) => key in value) && keys.length === required.length && keys.every((key) => required.includes(key));
+}
+
 async function request(input: string, init: RequestInit): Promise<Response> {
 	try { return await fetch(input, init); }
 	catch (error) { if (init.signal?.aborted) throw error; throw new AccountDataClientError(); }
@@ -159,6 +192,8 @@ async function readBoundedText(response: Response, maximum: number): Promise<str
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function uuid(value: unknown): value is string { return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 function nonempty(value: unknown): value is string { return typeof value === "string" && value.trim() !== ""; }
+function safeRequestId(value: unknown): value is string { return typeof value === "string" && value.length > 0 && value.length <= MAX_REQUEST_ID_LENGTH && /^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value); }
+function safeDietName(value: unknown): value is string { return typeof value === "string" && value.trim() !== "" && value.length <= MAX_CONFLICT_DIET_NAME_LENGTH && !/[\u0000-\u001f\u007f]/u.test(value); }
 function timestamp(value: unknown): value is string { return typeof value === "string" && Number.isFinite(Date.parse(value)); }
 function nonnegative(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
 function positive(value: unknown): value is number { return nonnegative(value) && value > 0; }

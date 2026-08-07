@@ -121,7 +121,7 @@ PHASE08_OPERATION_RESPONSES = {
 	("/api/v1/custom-items", "post"): {"201", "400", "401", "403", "409", "500", "503", "504"},
 	("/api/v1/custom-items/{itemId}", "get"): {"200", "400", "401", "404", "500", "503", "504"},
 	("/api/v1/custom-items/{itemId}", "put"): {"200", "400", "401", "403", "404", "409", "500", "503", "504"},
-	("/api/v1/custom-items/{itemId}", "delete"): {"204", "400", "401", "403", "404", "500", "503", "504"},
+	("/api/v1/custom-items/{itemId}", "delete"): {"204", "400", "401", "403", "404", "409", "500", "503", "504"},
 	("/api/v1/search/filter-options", "get"): {"200", "400", "429", "500", "503", "504"},
 	("/api/v1/admin/external-search", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
 	("/api/v1/admin/imports", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
@@ -511,6 +511,8 @@ def app_error_contract_mismatches(source: str) -> list[str]:
 		mismatches.append("AppError retryable must remain boolean")
 	if "        requestId:\n          type: string\n" not in block:
 		mismatches.append("AppError requestId must remain string")
+	if "        data:\n          type: object\n" not in block:
+		mismatches.append("AppError data must remain an object")
 	return mismatches
 
 
@@ -664,6 +666,21 @@ export interface AppError {
 \tmessage: string;
 \tretryable: boolean;
 \trequestId?: string;
+\tdata?: Record<string, unknown>;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Bounded owner-scoped saved-diet reference that blocks permanent deletion. */
+export interface SavedDietDeletionReference {
+\tid: string;
+\tname: string;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Structured conflict details returned when a private item is still referenced. */
+export interface CustomItemInUseError extends AppError {
+\tcode: "custom_item_in_use";
+\tdata: { affectedDiets: SavedDietDeletionReference[] };
 }
 
 // Implements DESIGN-009 AdminController audit-safe frontend error boundary.
