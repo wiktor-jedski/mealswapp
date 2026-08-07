@@ -15,8 +15,8 @@ test("uses the server registry through combined search, pagination, and all safe
 	for (const state of ["loading", "empty", "error"]) expect(source).toContain(`searchState === "${state}"`);
 	expect(source).toContain('"empty" : "results"');
 	expect(source).toContain("providerWarningLabels");
-	expect(source).toContain("Some provider candidates were rejected because required data was invalid.");
-	expect(source).toContain("External providers could not return results.");
+	expect(source).toContain("Provider candidates were rejected because their data could not be used.");
+	expect(source).toContain("External providers could not complete this search.");
 	expect(source).toContain("No external candidates matched this search.");
 	expect(source).not.toContain("warning.message");
 	expect(source).toContain("searchController?.abort()");
@@ -43,8 +43,8 @@ test("provides editable drafts, normalization warnings, density, and classificat
 
 test("distinguishes partial normalization, rejected candidates, provider failure, and zero matches", () => {
 	expect(source).toContain("Some optional source measures were ignored.");
-	expect(source).toContain("Some provider candidates were rejected because required data was invalid.");
-	expect(source).toContain("External providers could not return results.");
+	expect(source).toContain("Provider candidates were rejected because their data could not be used.");
+	expect(source).toContain("External providers could not complete this search.");
 	expect(source).toContain("No external candidates matched this search.");
 });
 

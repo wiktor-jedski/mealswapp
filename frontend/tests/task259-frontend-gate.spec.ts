@@ -49,7 +49,7 @@ test("classification administration refreshes substitution filters and remains a
 	await expect(page.locator("[data-admin-data-management]")).toBeVisible();
 	await page.getByLabel("Name", { exact: true }).last().fill("Cultured foods");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
-	await expect(page.getByRole("listitem").filter({ hasText: "Cultured foods" })).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Cultured foods" })).toBeVisible();
 
 	for (const theme of ["light", "dark"] as const) {
 		if ((await page.locator("html").getAttribute("data-theme")) !== theme) {
