@@ -450,10 +450,14 @@ test("picker refreshes after committed mutations and recovers a failed read with
 	await page.locator('form[aria-label="Search global items"]').getByRole("button", { name: "Search", exact: true }).click();
 	await page.getByRole("button", { name: "Edit Tofu" }).click();
 	const readsBeforeUpdate = state.itemSearchReads;
-	await page.getByLabel("Name", { exact: true }).first().fill("Tofu refreshed");
+	const nameInput = page.getByLabel("Name", { exact: true }).first();
+	await expect(nameInput).toHaveValue("Tofu");
+	await nameInput.fill("Tofu refreshed");
+	await expect(nameInput).toHaveValue("Tofu refreshed");
 	state.staleNextItemSearch = true;
 	await page.getByRole("button", { name: "Save item" }).click();
 	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
+	expect(state.lastItemPut?.name).toBe("Tofu refreshed");
 	expect(state.itemSearchReads).toBeGreaterThan(readsBeforeUpdate);
 	await expect(page.locator("[data-admin-item-search-results]")).toContainText("Tofu refreshed");
 
