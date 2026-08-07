@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
-import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "./admin-workflows";
+import { adminItemMatchesRequest, deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "./admin-workflows";
 
 // Implements DESIGN-009 ItemCurator and UserAdminPanel validation and legal-retry verification.
 
 const valid = (overrides: Partial<AdminItemForm> = {}): AdminItemForm => ({
-	name: "Broth", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "10", carbohydrates: "20", fat: "5", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{\"sodium\":1}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "", ...overrides
+	name: "Broth", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "10", carbohydrates: "20", fat: "5", density: "", densitySourceKind: "", micros: "{\"sodium\":1}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "", ...overrides
 });
 
 test("builds generated-contract solid and liquid item requests", () => {
@@ -12,13 +12,13 @@ test("builds generated-contract solid and liquid item requests", () => {
 	expect(parseAdminItemForm(valid({ physicalState: "liquid", density: "1.02" })).request).toMatchObject({ physicalState: "liquid", densityGramsPerMilliliter: 1.02, densitySourceKind: "manual" });
 });
 
-test("round-trips image, preparation, measures, and imported density provenance", () => {
+test("round-trips image, preparation, measures, and manual density provenance", () => {
 	expect(parseAdminItemForm(valid({
 		physicalState: "liquid", prepTimeMinutes: "12", averageUnitWeightGrams: "250", averageServingVolumeMilliliters: "240", density: "1.03",
-		densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported", imageUrl: "https://images.example.test/milk.png"
+		densitySourceKind: "estimated", imageUrl: "https://images.example.test/milk.png"
 	})).request).toMatchObject({
 		prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240, densityGramsPerMilliliter: 1.03,
-		densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported", imageUrl: "https://images.example.test/milk.png"
+		densitySourceKind: "estimated", imageUrl: "https://images.example.test/milk.png"
 	});
 });
 
@@ -47,4 +47,22 @@ test("permits only permanent, unknown, or exhausted transient failed deletion re
 
 test("creates a memory-only namespaced item idempotency key", () => {
 	expect(newAdminItemKey()).toMatch(/^admin-item-[0-9a-f-]{36}$/);
+});
+
+test("normalizes names and compares every persisted item value independent of set ordering", () => {
+	const request = parseAdminItemForm(valid({ name: "  Rice   bowl  ", foodCategoryIds: ["00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001"], allergenKeys: ["dairy", "egg"] })).request!;
+	expect(request.name).toBe("Rice bowl");
+	const item = {
+		...request,
+		id: "00000000-0000-4000-8000-000000000003",
+		prepTimeMinutes: 0,
+		foodCategoryIds: undefined,
+		foodCategories: request.foodCategoryIds!.map((id) => ({ id, name: id, kind: "food_category" as const })).reverse(),
+		culinaryRoles: [],
+		allergenKeys: [...request.allergenKeys].reverse()
+	};
+	expect(adminItemMatchesRequest(item, request)).toBeTrue();
+	expect(adminItemMatchesRequest({ ...item, densitySourceProvider: "usda", densitySourceFoodId: "171265" }, request)).toBeTrue();
+	expect(adminItemMatchesRequest({ ...item, macrosPer100: { ...item.macrosPer100, protein: 11 } }, request)).toBeFalse();
+	expect(adminItemMatchesRequest({ ...item, imageUrl: "https://example.test/different.png" }, request)).toBeFalse();
 });

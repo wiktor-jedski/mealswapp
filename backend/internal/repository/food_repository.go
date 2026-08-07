@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 )
 
 // Implements DESIGN-005 FoodItemEntity search query.
@@ -154,6 +155,12 @@ func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEn
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
 		err := db.QueryRow(ctx, foodCreateSQL, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL)).Scan(&id)
 		if err != nil {
@@ -176,8 +183,14 @@ func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEn
 	micros := marshalMicros(item.Micros)
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
-		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL))
+		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL), nil)
 		if err != nil {
 			return mapPostgresError(err, "update food item")
 		}
@@ -430,8 +443,13 @@ func validateFoodDensity(item FoodItemEntity) error {
 	if item.DensitySourceKind != "imported" && item.DensitySourceKind != "manual" && item.DensitySourceKind != "estimated" {
 		return validationError("density source kind is invalid")
 	}
-	if item.DensitySourceKind == "imported" && ((item.DensitySourceProvider != "usda" && item.DensitySourceProvider != "openfoodfacts") || item.DensitySourceFoodID == "") {
-		return validationError("imported density requires trusted provider evidence")
+	if item.DensitySourceKind == "imported" {
+		identity, err := providerregistry.Default().Normalize(item.DensitySourceProvider, item.DensitySourceFoodID)
+		if err != nil || identity.Provider != item.DensitySourceProvider || identity.ExternalID != item.DensitySourceFoodID {
+			return validationError("imported density requires canonical provider evidence")
+		}
+	} else if item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" {
+		return validationError("manual density cannot contain external provider evidence")
 	}
 	return nil
 }

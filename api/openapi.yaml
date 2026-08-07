@@ -626,6 +626,23 @@ paths:
           $ref: "#/components/responses/Error"
   # Implements DESIGN-008 ProfileController authenticated custom-item contract.
   /api/v1/custom-items:
+    get:
+      operationId: getApiV1CustomItems
+      summary: List the authenticated user's active private custom food items
+      description: Returns only active private items owned by the authenticated session identity, in deterministic name and id order.
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          $ref: "#/components/responses/CustomItemCollection"
+        "401":
+          $ref: "#/components/responses/Error"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
     post:
       operationId: postApiV1CustomItem
       summary: Create an authenticated user's private custom food item
@@ -730,6 +747,8 @@ paths:
           $ref: "#/components/responses/Error"
         "404":
           $ref: "#/components/responses/Error"
+        "409":
+          $ref: "#/components/responses/CustomItemInUse"
         "500":
           $ref: "#/components/responses/Error"
         "503":
@@ -971,7 +990,8 @@ paths:
           required: true
           schema:
             type: string
-            enum: [usda, openfoodfacts, all]
+            minLength: 1
+            maxLength: 64
         - name: page
           in: query
           required: true
@@ -1034,7 +1054,7 @@ paths:
     post:
       operationId: postApiV1AdminImport
       summary: Confirm an edited external candidate for local import
-      description: Provider identity supplies natural idempotency. Idempotency-Key is required only when sourceProvider and externalId are absent. Raw provider payloads and audit snapshots are never accepted or returned.
+      description: Server-issued external-record evidence supplies natural idempotency. Idempotency-Key is required only for manual administrator imports without external evidence. Raw provider payloads and audit snapshots are never accepted or returned.
       security:
         - cookieAuth: []
           csrfHeader: []
@@ -1071,6 +1091,54 @@ paths:
           $ref: "#/components/responses/Error"
   # Implements DESIGN-009 ItemCurator ownerless global item creation.
   /api/v1/admin/items:
+    get:
+      operationId: searchApiV1AdminItems
+      summary: Search active ownerless global food items by normalized name
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        "200":
+          description: Deterministic bounded page of active ownerless global item summaries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminItemSearchEnvelope"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Error"
+        "403":
+          $ref: "#/components/responses/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/Error"
+        "503":
+          $ref: "#/components/responses/Error"
+        "504":
+          $ref: "#/components/responses/Error"
     post:
       operationId: postApiV1AdminItem
       summary: Create an ownerless global food item
@@ -1321,6 +1389,145 @@ paths:
           $ref: "#/components/responses/Error"
         "504":
           $ref: "#/components/responses/Error"
+  # Implements DESIGN-005 MicronutrientVocabulary authoritative active/inactive management.
+  /api/v1/admin/micronutrients:
+    get:
+      operationId: getApiV1AdminMicronutrients
+      summary: List all canonical micronutrient vocabulary entries
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Deterministic active and inactive canonical vocabulary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMicronutrientCollectionEnvelope"
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: postApiV1AdminMicronutrient
+      summary: Create one immutable canonical micronutrient key
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminMicronutrientCreateRequest"
+      responses:
+        "201":
+          description: Canonical entry created or exactly replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMicronutrientEnvelope"
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+  /api/v1/admin/micronutrients/{key}/display-name:
+    put:
+      operationId: putApiV1AdminMicronutrientDisplayName
+      summary: Update only a micronutrient display name
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/MicronutrientKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminMicronutrientDisplayNameRequest"
+      responses:
+        "200": { $ref: "#/components/responses/AdminMicronutrient" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+  /api/v1/admin/micronutrients/{key}/unit:
+    put:
+      operationId: putApiV1AdminMicronutrientUnit
+      summary: Update the unit of one unused micronutrient
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/MicronutrientKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminMicronutrientUnitRequest"
+      responses:
+        "200": { $ref: "#/components/responses/AdminMicronutrient" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+  /api/v1/admin/micronutrients/{key}/deactivate:
+    post:
+      operationId: postApiV1AdminMicronutrientDeactivate
+      summary: Deactivate one unused micronutrient without deleting it
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/MicronutrientKey"
+      responses:
+        "200": { $ref: "#/components/responses/AdminMicronutrient" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+  /api/v1/admin/micronutrients/{key}/reactivate:
+    post:
+      operationId: postApiV1AdminMicronutrientReactivate
+      summary: Reactivate one canonical micronutrient
+      security:
+        - cookieAuth: []
+          csrfHeader: []
+      parameters:
+        - $ref: "#/components/parameters/MicronutrientKey"
+      responses:
+        "200": { $ref: "#/components/responses/AdminMicronutrient" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "500": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
   # Implements DESIGN-009 UserAdminPanel privacy-minimized bounded lookup.
   /api/v1/admin/users:
     get:
@@ -1435,7 +1642,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Stable administrator-generated retry key. Required for curated imports without sourceProvider and externalId; otherwise provider identity is the natural idempotency key.
+      description: Stable administrator-generated retry key. Required for manual curated imports without external evidence; otherwise the selected server record supplies the natural idempotency key.
       schema:
         type: string
         minLength: 8
@@ -1485,6 +1692,14 @@ components:
       schema:
         type: string
         format: uuid
+    MicronutrientKey:
+      name: key
+      in: path
+      required: true
+      description: Immutable canonical micronutrient key.
+      schema:
+        type: string
+        pattern: "^[A-Z][A-Za-z0-9]{2,119}$"
     AdminUserId:
       name: userId
       in: path
@@ -1555,6 +1770,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
+    CustomItemInUse:
+      description: Permanent deletion was rejected because owner-scoped saved diets still reference the private item.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CustomItemInUseErrorEnvelope"
     # Implements DESIGN-004 JobStatusTracker and DESIGN-010 RateLimiter shared admission contract.
     TooManyRequests:
       description: Retryable rate or admission rejection with a positive whole-second delay.
@@ -1599,6 +1820,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/CustomItemEnvelope"
+    CustomItemCollection:
+      description: Deterministic active custom-item list for the authenticated owner.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/CustomItemCollectionEnvelope"
     AdminItem:
       description: Ownerless global food item. Private ownership and audit state are structurally absent.
       content:
@@ -1611,6 +1838,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/AdminClassificationEnvelope"
+    AdminMicronutrient:
+      description: One canonical vocabulary entry without food-item usage details.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AdminMicronutrientEnvelope"
     OptimizationJobAcknowledgement:
       description: Asynchronous optimization accepted for processing. No result is available in the acknowledgement.
       headers:
@@ -1718,6 +1951,51 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+        data:
+          type: object
+          additionalProperties: true
+    CustomItemInUseErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, error]
+      properties:
+        status:
+          type: string
+          const: error
+        requestId:
+          type: string
+          maxLength: 120
+        error:
+          type: object
+          additionalProperties: false
+          required: [category, code, message, retryable, data]
+          properties:
+            category:
+              type: string
+              const: validation
+            code:
+              type: string
+              const: custom_item_in_use
+            message:
+              type: string
+            retryable:
+              type: boolean
+              const: false
+            data:
+              type: object
+              additionalProperties: false
+              required: [affectedDiets]
+              properties:
+                affectedDiets:
+                  type: array
+                  maxItems: 25
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [id, name]
+                    properties:
+                      id: {type: string, format: uuid}
+                      name: {type: string, minLength: 1, maxLength: 200}
     # Implements DESIGN-009 AdminController audit-safe error boundary.
     ErrorEnvelope:
       type: object
@@ -1782,15 +2060,21 @@ components:
     ExternalCandidate:
       type: object
       additionalProperties: false
-      required: [provider, externalId, name, physicalState, macrosPer100, micronutrients, warnings]
+      required: [provider, externalId, recordToken, name, physicalState, macrosPer100, micronutrients, warnings]
       properties:
         provider:
           type: string
-          enum: [usda, openfoodfacts]
+          minLength: 1
+          maxLength: 64
         externalId:
           type: string
           minLength: 1
           maxLength: 200
+        recordToken:
+          type: string
+          minLength: 32
+          maxLength: 32
+          pattern: "^[A-Za-z0-9_-]+$"
         name:
           type: string
           minLength: 1
@@ -1798,6 +2082,12 @@ components:
         physicalState:
           type: string
           enum: [solid, liquid]
+        densityGramsPerMilliliter:
+          type: number
+          exclusiveMinimum: 0
+        densitySourceKind:
+          type: string
+          const: imported
         macrosPer100:
           $ref: "#/components/schemas/MacroProfile"
         micronutrients:
@@ -1825,7 +2115,8 @@ components:
       properties:
         provider:
           type: string
-          enum: [usda, openfoodfacts, external]
+          minLength: 1
+          maxLength: 64
         code:
           type: string
           enum: [provider_rate_limited, provider_unavailable, timeout, retry_exhausted, invalid_external_payload]
@@ -1902,18 +2193,19 @@ components:
         - type: object
           required: [foodCategoryIds, culinaryRoleIds]
           properties:
-            sourceProvider:
+            externalRecordToken:
               type: string
-              enum: [usda, openfoodfacts]
-            externalId:
+              minLength: 32
+              maxLength: 32
+              pattern: "^[A-Za-z0-9_-]+$"
+            densitySourceKind:
               type: string
-              minLength: 1
-              maxLength: 200
+              enum: [imported, manual, estimated]
             confirmNameConflict:
               type: boolean
               default: false
       unevaluatedProperties: false
-      description: Editable normalized fields only. sourceProvider and externalId must be supplied together. Raw provider records and audit snapshots are unsupported.
+      description: Editable normalized fields plus an opaque server-issued external-record selection. Provider identity, raw provider records, and audit snapshots are unsupported.
     CuratedImportResult:
       type: object
       additionalProperties: false
@@ -1955,6 +2247,9 @@ components:
         - type: object
           required: [allergenKeys]
           properties:
+            densitySourceKind:
+              type: string
+              enum: [manual, estimated]
             allergenKeys:
               type: array
               maxItems: 100
@@ -2148,11 +2443,25 @@ components:
       allOf:
         - $ref: "#/components/schemas/CustomItemFields"
         - type: object
-          required: [id, prepTimeMinutes, micros, foodCategories, culinaryRoles, allergenKeys]
+          required: [id, updatedAt, prepTimeMinutes, micros, foodCategories, culinaryRoles, allergenKeys]
           properties:
+            densitySourceProvider:
+              type: string
+              minLength: 1
+              maxLength: 64
+            densitySourceFoodId:
+              type: string
+              minLength: 1
+              maxLength: 200
+            densitySourceKind:
+              type: string
+              enum: [imported, manual, estimated]
             id:
               type: string
               format: uuid
+            updatedAt:
+              type: string
+              format: date-time
             foodCategories:
               type: array
               maxItems: 100
@@ -2186,6 +2495,69 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/AdminItem"
+    # Implements DESIGN-009 ItemCurator bounded ownerless picker projection.
+    AdminItemSearchSummary:
+      description: Bounded active global-item summary without private ownership, micronutrients, images, or audit state.
+      type: object
+      additionalProperties: false
+      required: [itemId, name, physicalState, macrosPer100, foodCategories, culinaryRoles]
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        physicalState:
+          type: string
+          enum: [solid, liquid]
+        macrosPer100:
+          $ref: "#/components/schemas/MacroProfile"
+        foodCategories:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        culinaryRoles:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+    AdminItemSearchPageData:
+      description: Deterministic page metadata and bounded active global-item summaries.
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/AdminItemSearchSummary"
+        page:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 50
+        total:
+          type: integer
+          minimum: 0
+    AdminItemSearchEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          const: ok
+        requestId:
+          type: string
+        data:
+          $ref: "#/components/schemas/AdminItemSearchPageData"
     # Implements DESIGN-009 TagManager administration-only hierarchy contract.
     AdminClassificationRequest:
       description: Global classification name and optional parent used by administrator mutations.
@@ -2258,6 +2630,89 @@ components:
               maxItems: 1000
               items:
                 $ref: "#/components/schemas/AdminClassification"
+    # Implements DESIGN-005 MicronutrientVocabulary generated administration contracts.
+    AdminMicronutrient:
+      description: Canonical micronutrient vocabulary entry without private food usage details.
+      type: object
+      additionalProperties: false
+      required: [key, displayName, unit, active]
+      properties:
+        key:
+          type: string
+          pattern: "^[A-Z][A-Za-z0-9]{2,119}$"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        unit:
+          type: string
+          enum: [g, mg, mcg]
+        active:
+          type: boolean
+    AdminMicronutrientCreateRequest:
+      description: New immutable canonical key, display name, and supported mass unit.
+      type: object
+      additionalProperties: false
+      required: [key, displayName, unit]
+      properties:
+        key:
+          type: string
+          pattern: "^[A-Z][A-Za-z0-9]{2,119}$"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        unit:
+          type: string
+          enum: [g, mg, mcg]
+    AdminMicronutrientDisplayNameRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+    AdminMicronutrientUnitRequest:
+      type: object
+      additionalProperties: false
+      required: [unit]
+      properties:
+        unit:
+          type: string
+          enum: [g, mg, mcg]
+    AdminMicronutrientEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, data]
+      properties:
+        status: { type: string, const: ok }
+        requestId: { type: string }
+        data:
+          type: object
+          additionalProperties: false
+          required: [micronutrient]
+          properties:
+            micronutrient:
+              $ref: "#/components/schemas/AdminMicronutrient"
+    AdminMicronutrientCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, data]
+      properties:
+        status: { type: string, const: ok }
+        requestId: { type: string }
+        data:
+          type: object
+          additionalProperties: false
+          required: [micronutrients]
+          properties:
+            micronutrients:
+              type: array
+              maxItems: 1000
+              items:
+                $ref: "#/components/schemas/AdminMicronutrient"
     # Implements DESIGN-009 UserAdminPanel bounded privacy-minimized response.
     AdminDeletionSummary:
       type: object
@@ -2556,6 +3011,9 @@ components:
       description: Explicit mass or volume unit. The server rejects cross-basis units and normalizes supported imperial input exactly once before calculation.
     FoodObjectType:
       type: string
+      enum: [food_item, meal, custom_food_item]
+    GlobalFoodObjectType:
+      type: string
       enum: [food_item, meal]
     FoodObjectQuantity:
       type: object
@@ -2767,18 +3225,6 @@ components:
           type: number
           exclusiveMinimum: 0
           description: Metric grams per milliliter.
-        densitySourceProvider:
-          type: string
-          maxLength: 200
-          pattern: '^[^\x00]*$'
-        densitySourceFoodId:
-          type: string
-          maxLength: 200
-          pattern: '^[^\x00]*$'
-        densitySourceKind:
-          type: string
-          enum: [imported, manual, estimated]
-          pattern: '^[^\x00]*$'
         macrosPer100:
           $ref: "#/components/schemas/MacroProfile"
         micros:
@@ -2813,6 +3259,11 @@ components:
     CustomItemRequest:
       allOf:
         - $ref: "#/components/schemas/CustomItemFields"
+        - type: object
+          properties:
+            densitySourceKind:
+              type: string
+              enum: [manual, estimated]
       unevaluatedProperties: false
       description: Client-editable private item fields. userId and ownerId are intentionally unsupported.
     # Implements DESIGN-008 ProfileController and DataExporter private-item projection.
@@ -2822,6 +3273,9 @@ components:
         - type: object
           required: [id, prepTimeMinutes, micros, foodCategories, culinaryRoles]
           properties:
+            densitySourceKind:
+              type: string
+              enum: [manual, estimated]
             id:
               type: string
               format: uuid
@@ -2846,6 +3300,25 @@ components:
           type: string
         data:
           $ref: "#/components/schemas/CustomItem"
+    CustomItemCollectionEnvelope:
+      type: object
+      additionalProperties: false
+      required: [status, requestId, data]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        requestId:
+          type: string
+        data:
+          type: object
+          additionalProperties: false
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/CustomItem"
     # Implements DESIGN-004 JobStatusTracker optimization contract.
     OptimizationStatus:
       type: string
@@ -3169,7 +3642,7 @@ components:
           type: string
           format: uuid
         foodObjectType:
-          $ref: "#/components/schemas/FoodObjectType"
+          $ref: "#/components/schemas/GlobalFoodObjectType"
         quantity:
           type: number
           exclusiveMinimum: 0
@@ -3263,7 +3736,7 @@ components:
           type: string
           format: uuid
         objectType:
-          $ref: "#/components/schemas/FoodObjectType"
+          $ref: "#/components/schemas/GlobalFoodObjectType"
         name:
           type: string
         physicalState:
@@ -3417,7 +3890,7 @@ components:
           type: string
           format: uuid
         objectType:
-          $ref: "#/components/schemas/FoodObjectType"
+          $ref: "#/components/schemas/GlobalFoodObjectType"
         label:
           type: string
         exactMatch:
@@ -3458,17 +3931,15 @@ components:
       required: [user, consent, savedItems, savedDiets, history, customItems]
       properties:
         user:
-          type: object
-          additionalProperties: true
+          $ref: "#/components/schemas/ExportUser"
         consent:
           type: array
           items:
-            type: object
-            additionalProperties: true
+            $ref: "#/components/schemas/ExportConsent"
         savedItems:
           type: array
           items:
-            $ref: "#/components/schemas/SavedItem"
+            $ref: "#/components/schemas/ExportSavedItem"
         savedDiets:
           type: array
           items:
@@ -3476,11 +3947,62 @@ components:
         history:
           type: array
           items:
-            $ref: "#/components/schemas/SearchHistoryEntry"
+            $ref: "#/components/schemas/ExportSearchHistoryEntry"
         customItems:
           type: array
           items:
-            $ref: "#/components/schemas/CustomItem"
+            $ref: "#/components/schemas/ExportCustomItem"
+    # Implements DESIGN-008 DataExporter top-level account identity.
+    ExportUser:
+      type: object
+      additionalProperties: false
+      required: [userId, email, role, displayName, unitSystem, themePreference]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [user, admin]
+        displayName:
+          type: string
+        unitSystem:
+          type: string
+          enum: [metric, imperial]
+        themePreference:
+          type: string
+          enum: [system, light, dark]
+    # Implements DESIGN-008 DataExporter legal-consent projection.
+    ExportConsent:
+      type: object
+      additionalProperties: false
+      required: [privacyPolicyVersion, termsVersion]
+      properties:
+        privacyPolicyVersion:
+          type: string
+        termsVersion:
+          type: string
+    # Implements DESIGN-008 DataExporter owner-free saved-item projection.
+    ExportSavedItem:
+      type: object
+      additionalProperties: false
+      required: [id, itemId, kind, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        itemId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [favorite, saved_meal, saved_diet]
+        createdAt:
+          type: string
+          format: date-time
     ExportSavedDiet:
       type: object
       additionalProperties: false
@@ -3497,13 +4019,115 @@ components:
           type: array
           maxItems: 100
           items:
-            $ref: "#/components/schemas/DailyDietFoodObjectEntry"
+            $ref: "#/components/schemas/ExportSavedDietEntry"
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+    # Implements DESIGN-008 DataExporter owner-free saved-diet entry projection.
+    ExportSavedDietEntry:
+      type: object
+      additionalProperties: false
+      required: [id, foodObjectId, foodObjectType, quantity, unit, position]
+      properties:
+        id:
+          type: string
+          format: uuid
+        foodObjectId:
+          type: string
+          format: uuid
+        foodObjectType:
+          $ref: "#/components/schemas/FoodObjectType"
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 1000000
+          multipleOf: 0.001
+        unit:
+          $ref: "#/components/schemas/CanonicalQuantityUnit"
+        position:
+          type: integer
+          minimum: 0
+          maximum: 99
+    # Implements DESIGN-008 DataExporter owner-free search-history projection.
+    ExportSearchHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [id, query, mode, filtersHash, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        query:
+          type: string
+        mode:
+          type: string
+        filtersHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    # Implements DESIGN-008 DataExporter owner-free private-item projection.
+    ExportCustomItem:
+      type: object
+      additionalProperties: false
+      required: [id, name, physicalState, prepTimeMinutes, macrosPer100, micros, foodCategories, culinaryRoles]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        physicalState:
+          type: string
+          enum: [solid, liquid]
+        prepTimeMinutes:
+          type: integer
+          minimum: 0
+        averageUnitWeightGrams:
+          type: number
+          exclusiveMinimum: 0
+        averageServingVolumeMilliliters:
+          type: number
+          exclusiveMinimum: 0
+        densityGramsPerMilliliter:
+          type: number
+          exclusiveMinimum: 0
+        densitySourceProvider:
+          type: string
+          maxLength: 200
+        densitySourceFoodId:
+          type: string
+          maxLength: 200
+        densitySourceKind:
+          type: string
+          enum: [imported, manual, estimated]
+        macrosPer100:
+          $ref: "#/components/schemas/MacroProfile"
+        micros:
+          type: object
+          propertyNames:
+            minLength: 1
+            maxLength: 120
+          additionalProperties:
+            type: number
+            minimum: 0
+        foodCategories:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        culinaryRoles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassificationSummary"
+        imageUrl:
+          type: string
+          format: uri-reference
+          maxLength: 2048
     ExportFormat:
       type: string
       enum: [json, csv]

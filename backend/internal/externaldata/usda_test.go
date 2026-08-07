@@ -271,7 +271,7 @@ func TestUSDASearchRejectsMalformedCandidatesWithoutFailingTheProvider(t *testin
 			}))
 			defer server.Close()
 			result, err := newTestUSDAClient(t, server.URL, nil, 0, 0).SearchResult(context.Background(), validUSDAQuery())
-			if err != nil || len(result.Records) != 0 || !result.RejectedCandidates {
+			if err != nil || len(result.Records) != 0 || result.RejectedCandidates == 0 {
 				t.Fatalf("result=%#v err=%v", result, err)
 			}
 		})
@@ -375,7 +375,7 @@ func TestUSDASearchResultReportsRejectedCandidatesWithoutProviderFailure(t *test
 	defer server.Close()
 
 	result, err := newTestUSDAClient(t, server.URL, nil, 0, 0).SearchResult(context.Background(), validUSDAQuery())
-	if err != nil || len(result.Records) != 1 || !result.RejectedCandidates {
+	if err != nil || len(result.Records) != 1 || result.RejectedCandidates == 0 {
 		t.Fatalf("result=%#v err=%v", result, err)
 	}
 }

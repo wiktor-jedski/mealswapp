@@ -1,9 +1,11 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { devices, expect, test, type Page, type Route } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type {
   AuthSessionEnvelope,
   AutocompleteEnvelope,
   CSRFTokenEnvelope,
+  CustomItem,
+  CustomItemCollectionEnvelope,
   DailyDiet,
   DailyDietCollectionEnvelope,
   DailyDietEnvelope,
@@ -19,6 +21,8 @@ import type {
 const DIET_ID = "00000000-0000-0000-0000-000000000031";
 const APPLE_ID = "00000000-0000-0000-0000-000000000032";
 const OATS_ID = "00000000-0000-0000-0000-000000000033";
+const CUSTOM_A_ID = "00000000-0000-4000-8000-000000000041";
+const CUSTOM_B_ID = "00000000-0000-4000-8000-000000000042";
 const ENTRY_IDS = ["00000000-0000-0000-0000-000000000034", "00000000-0000-0000-0000-000000000035"] as const;
 
 function fulfillJson(route: Route, status: number, body: unknown): Promise<void> {
@@ -128,10 +132,27 @@ function searchEnvelope(): SearchResponseEnvelope {
   };
 }
 
+function customItem(id: typeof CUSTOM_A_ID | typeof CUSTOM_B_ID): CustomItem {
+  return {
+    id,
+    name: "Family shake",
+    physicalState: "liquid",
+    prepTimeMinutes: 0,
+    densityGramsPerMilliliter: 1,
+    densitySourceKind: "manual",
+    macrosPer100: { protein: 2, carbohydrates: 3, fat: 4 },
+    micros: {},
+    foodCategories: [],
+    culinaryRoles: []
+  };
+}
+
 async function stubAuthenticatedDailyDiet(
   page: Page,
   tier: "free" | "paid" = "paid",
-  listBehavior?: (route: Route) => Promise<void>
+  listBehavior?: (route: Route) => Promise<void>,
+  visibleCustomItems: CustomItem[] = [customItem(CUSTOM_A_ID), customItem(CUSTOM_B_ID)],
+  customItemsBehavior?: (route: Route) => Promise<void>
 ): Promise<{
   createBodies: () => Array<Record<string, unknown>>;
   replaceBodies: () => Array<Record<string, unknown>>;
@@ -151,6 +172,15 @@ async function stubAuthenticatedDailyDiet(
   await page.route(new RegExp(`/api/v1/food-objects/${APPLE_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(APPLE_ID)));
   await page.route(new RegExp(`/api/v1/food-objects/${OATS_ID}(?:\\?.*)?$`), (route) => fulfillJson(route, 200, meal(OATS_ID)));
   await page.route(/\/api\/v1\/search$/, (route) => fulfillJson(route, 200, searchEnvelope()));
+  await page.route(/\/api\/v1\/custom-items$/, (route) => customItemsBehavior?.(route) ?? fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "daily-diet-custom-items",
+    data: { items: visibleCustomItems }
+  } satisfies CustomItemCollectionEnvelope));
+  await page.route(new RegExp(`/api/v1/custom-items/(${CUSTOM_A_ID}|${CUSTOM_B_ID})$`), (route) => {
+    const id = route.request().url().endsWith(CUSTOM_A_ID) ? CUSTOM_A_ID : CUSTOM_B_ID;
+    return fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-custom-item", data: customItem(id) });
+  });
   await page.route(/\/api\/v1\/daily-diets$/, async (route) => {
     if (route.request().method() === "POST") {
       const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -270,6 +300,73 @@ test("authenticated user builds, edits, saves, and selects a two-meal Daily Diet
   expect(axe.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical")).toEqual([]);
 });
 
+test("owner custom foods are disambiguated, saved, and rehydrated", async ({ page }) => {
+  const api = await stubAuthenticatedDailyDiet(page);
+  await page.goto("/?mode=daily_diet");
+  const picker = page.getByLabel("Add one of your custom foods");
+  await expect(picker.locator("option")).toHaveCount(3);
+  await expect(picker.locator("option").filter({ hasText: "Family shake · liquid · 00000041" })).toHaveCount(1);
+  await expect(picker.locator("option").filter({ hasText: "Family shake · liquid · 00000042" })).toHaveCount(1);
+  await picker.selectOption(CUSTOM_B_ID);
+  await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
+  await selectMeal(page, "apple", "Apple");
+  await page.getByLabel("Collection name").fill("Private breakfast");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator("[data-daily-diet-server-total]")).toBeVisible();
+  expect(api.createBodies()[0]).toMatchObject({
+    entries: [
+      { foodObjectId: CUSTOM_B_ID, foodObjectType: "custom_food_item", unit: "ml", position: 0 },
+      { foodObjectId: APPLE_ID, foodObjectType: "food_item", unit: "g", position: 1 }
+    ]
+  });
+
+  await page.reload();
+  await page.getByLabel("Search saved Daily Diets").fill("private");
+  await page.getByLabel("Search saved Daily Diets").press("Enter");
+  await expect(page.locator(`[data-daily-diet-meal="${CUSTOM_B_ID}"]`)).toContainText("Family shake");
+});
+
+test("custom-food selection is isolated between authenticated owners", async ({ browser }, testInfo) => {
+  const device = testInfo.project.name === "mobile-chromium" ? "Pixel 5" : "Desktop Chrome";
+  const contextOptions = {
+    ...devices[device],
+    baseURL: "http://localhost:4173"
+  };
+  const ownerAContext = await browser.newContext({
+    ...contextOptions,
+    storageState: {
+      cookies: [{ name: "mealswapp_session", value: "owner-a-session", domain: "localhost", path: "/", httpOnly: true, secure: false, sameSite: "Lax" }],
+      origins: []
+    }
+  });
+  const ownerBContext = await browser.newContext({
+    ...contextOptions,
+    storageState: {
+      cookies: [{ name: "mealswapp_session", value: "owner-b-session", domain: "localhost", path: "/", httpOnly: true, secure: false, sameSite: "Lax" }],
+      origins: []
+    }
+  });
+  const ownerAPage = await ownerAContext.newPage();
+  const ownerBPage = await ownerBContext.newPage();
+  try {
+    await stubAuthenticatedDailyDiet(ownerAPage, "paid", undefined, [customItem(CUSTOM_A_ID)]);
+    await stubAuthenticatedDailyDiet(ownerBPage, "paid", undefined, [customItem(CUSTOM_B_ID)]);
+    await ownerAPage.goto("/?mode=daily_diet");
+    await ownerBPage.goto("/?mode=daily_diet");
+    const ownerAPicker = ownerAPage.getByLabel("Add one of your custom foods");
+    const ownerBPicker = ownerBPage.getByLabel("Add one of your custom foods");
+    await expect(ownerAPicker.locator("option")).toHaveCount(2);
+    await expect(ownerBPicker.locator("option")).toHaveCount(2);
+    await expect(ownerAPicker.locator(`option[value="${CUSTOM_A_ID}"]`)).toHaveCount(1);
+    await expect(ownerAPicker.locator(`option[value="${CUSTOM_B_ID}"]`)).toHaveCount(0);
+    await expect(ownerBPicker.locator(`option[value="${CUSTOM_B_ID}"]`)).toHaveCount(1);
+    await expect(ownerBPicker.locator(`option[value="${CUSTOM_A_ID}"]`)).toHaveCount(0);
+  } finally {
+    await ownerAContext.close();
+    await ownerBContext.close();
+  }
+});
+
 test("logout clears the authenticated user's unsaved Daily Diet draft", async ({ page }) => {
   await stubAuthenticatedDailyDiet(page);
   await page.route(/\/api\/v1\/auth\/logout$/, (route) => fulfillJson(route, 200, { status: "ok", requestId: "daily-diet-logout" }));
@@ -364,6 +461,47 @@ test("recovers from a real collection-list error through the retry action", asyn
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.locator(`[data-saved-daily-diet="${DIET_ID}"]`)).toContainText("Saved breakfast");
   expect(listAttempts).toBe(2);
+});
+
+test("custom-food API empty response renders the owner empty state", async ({ page }) => {
+  await stubAuthenticatedDailyDiet(page, "paid", undefined, [], async (route) => fulfillJson(route, 200, {
+    status: "ok",
+    requestId: "daily-diet-custom-items-empty",
+    data: { items: [] }
+  } satisfies CustomItemCollectionEnvelope));
+  await page.goto("/?mode=daily_diet");
+  await expect(page.getByText("You have no active custom foods yet.")).toBeVisible();
+  await expect(page.getByLabel("Add one of your custom foods")).toHaveCount(0);
+});
+
+test("custom-food API failure recovers through its retry action", async ({ page }) => {
+  let attempts = 0;
+  await stubAuthenticatedDailyDiet(page, "paid", undefined, [customItem(CUSTOM_A_ID)], async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      return fulfillJson(route, 503, {
+        status: "error",
+        requestId: "daily-diet-custom-items-failure",
+        error: {
+          category: "dependency",
+          code: "custom_items_unavailable",
+          message: "Your custom foods could not be loaded.",
+          retryable: true
+        }
+      });
+    }
+    return fulfillJson(route, 200, {
+      status: "ok",
+      requestId: "daily-diet-custom-items-recovered",
+      data: { items: [customItem(CUSTOM_A_ID)] }
+    } satisfies CustomItemCollectionEnvelope);
+  });
+  await page.goto("/?mode=daily_diet");
+  await expect(page.getByText("Your custom foods could not be loaded.")).toBeVisible();
+  await page.getByRole("alert").getByRole("button", { name: "Try again" }).click();
+  await expect(page.getByLabel("Add one of your custom foods")).toBeVisible();
+  await expect(page.getByLabel("Add one of your custom foods").locator("option")).toHaveCount(2);
+  expect(attempts).toBe(2);
 });
 
 test("keyboard focus moves from saved-diet lookup into the collection editor", async ({ page }) => {

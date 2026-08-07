@@ -30,7 +30,7 @@ type ExternalAdminOperation = keyof typeof SUCCESS_STATUS;
 type StrictCsrfTokenEnvelope = CSRFTokenEnvelope & { status: "ok"; data: CSRFTokenData };
 
 /** External provider selector accepted by the generated administration contract. */
-export type ExternalProvider = "usda" | "openfoodfacts" | "all";
+export type ExternalProvider = string;
 
 /** Safe failure exposed by external administration calls without provider or server diagnostics. */
 export class ExternalAdminClientError extends Error {
@@ -293,9 +293,11 @@ function isClassificationData(value: unknown): value is { classifications: Admin
 }
 
 function isExternalCandidate(value: unknown): boolean {
-	if (!exact(value, ["provider", "externalId", "name", "physicalState", "macrosPer100", "micronutrients", "warnings"], ["imageUrl"])) return false;
-	if ((value.provider !== "usda" && value.provider !== "openfoodfacts") || !boundedString(value.externalId, 1, 200) || !boundedString(value.name, 1, 1000)) return false;
+	if (!exact(value, ["provider", "externalId", "recordToken", "name", "physicalState", "macrosPer100", "micronutrients", "warnings"], ["imageUrl", "densityGramsPerMilliliter", "densitySourceKind"])) return false;
+	if (!boundedString(value.provider, 1, 64) || !boundedString(value.externalId, 1, 200) || !recordToken(value.recordToken) || !boundedString(value.name, 1, 1000)) return false;
 	if (value.physicalState !== "solid" && value.physicalState !== "liquid") return false;
+	if (value.densityGramsPerMilliliter !== undefined && (!positiveFiniteNumber(value.densityGramsPerMilliliter) || value.densitySourceKind !== "imported")) return false;
+	if (value.densitySourceKind !== undefined && (value.densitySourceKind !== "imported" || value.densityGramsPerMilliliter === undefined)) return false;
 	if (!isMacroProfile(value.macrosPer100) || !isNumericMap(value.micronutrients, 512)) return false;
 	if (!Array.isArray(value.warnings) || value.warnings.length > 8 || new Set(value.warnings).size !== value.warnings.length || !value.warnings.every(isCandidateWarning)) return false;
 	return value.imageUrl === undefined || boundedString(value.imageUrl, 1, 2048) && isUri(value.imageUrl);
@@ -303,7 +305,7 @@ function isExternalCandidate(value: unknown): boolean {
 
 function isExternalDataWarning(value: unknown): boolean {
 	if (!exact(value, ["provider", "code", "message"])) return false;
-	return ["usda", "openfoodfacts", "external"].includes(String(value.provider))
+	return boundedString(value.provider, 1, 64)
 		&& isProviderWarningCode(value.code) && value.message === value.code;
 }
 
@@ -338,6 +340,14 @@ function boundedString(value: unknown, minimum: number, maximum: number): value 
 
 function nonnegativeFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function positiveFiniteNumber(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function recordToken(value: unknown): value is string {
+	return typeof value === "string" && /^[A-Za-z0-9_-]{32}$/.test(value);
 }
 
 function positiveInteger(value: unknown): value is number {

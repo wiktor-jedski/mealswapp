@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { accountDataApi, type AccountDataApi } from "../api/account-data-client";
+	import { AccountDataClientError, accountDataApi, type AccountDataApi } from "../api/account-data-client";
 	import type { CustomItem } from "../api/generated";
 
 	// Implements DESIGN-008 DataExporter/ProfileController private-data controls in DESIGN-009 UserAdminPanel.
@@ -11,6 +11,7 @@
 	let loading = $state(true);
 	let error = $state("");
 	let message = $state("");
+	let affectedDiets = $state<Array<{ id: string; name: string }>>([]);
 	let pendingDelete = $state<CustomItem | undefined>();
 	let controller: AbortController | undefined;
 	let operation = 0;
@@ -47,6 +48,7 @@
 			error = deletionAccepted
 				? "The private item was deleted, but current account data could not be verified. Refresh the export before continuing."
 				: cause instanceof Error ? cause.message : "The private item could not be deleted. Try again.";
+			if (!deletionAccepted && cause instanceof AccountDataClientError && cause.affectedDiets?.length) affectedDiets = cause.affectedDiets.slice(0, 25);
 		} finally { if (isCurrent(current)) loading = false; }
 	}
 
@@ -58,6 +60,7 @@
 		loading = true;
 		error = "";
 		message = "";
+		affectedDiets = [];
 		pendingDelete = undefined;
 		items = [];
 		return { controller, operation };
@@ -75,7 +78,17 @@
 		<button type="button" class="rounded border border-[var(--color-border)] px-3 py-2 text-sm transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void refresh()} disabled={loading}>Refresh export</button>
 	</div>
 	{#if loading}<p role="status">Loading authoritative account export…</p>{/if}
-	{#if error}<p role="alert" class="text-[var(--color-error)]">{error}</p>{/if}
+	{#if error}
+		<div role="alert" class="grid gap-2 text-[var(--color-error)]">
+			<p>{error}</p>
+			{#if affectedDiets.length > 0}
+				<p class="text-[var(--color-text)]">Open Daily Diets, remove this item from each listed diet, save the diet, then retry permanent deletion.</p>
+				<ul class="grid gap-1 text-[var(--color-text)]" aria-label="Saved diets blocking permanent deletion">
+					{#each affectedDiets as diet (diet.id)}<li>{diet.name}</li>{/each}
+				</ul>
+			{/if}
+		</div>
+	{/if}
 	{#if message}<p role="status">{message}</p>{/if}
 	{#if !loading && !error && items.length === 0}<p data-admin-private-data-empty>No private custom items are present in the account export.</p>{/if}
 	{#if items.length > 0}
@@ -87,8 +100,8 @@
 	{/if}
 	{#if pendingDelete}
 		<div class="flex flex-wrap items-center gap-2 rounded border border-[var(--color-error)] p-3" role="alertdialog" aria-label={`Confirm deletion of ${pendingDelete.name}`}>
-			<p>Delete {pendingDelete.name}? This refreshes the authoritative export after the server confirms deletion.</p>
-			<button type="button" class="rounded bg-[var(--color-error)] px-3 py-2 text-[var(--color-on-error)] transition-all duration-200 motion-reduce:transition-none" onclick={() => void confirmDelete()}>Confirm private item deletion</button>
+			<p>Delete {pendingDelete.name}? This permanently and irreversibly removes the private item and its classifications. There is no Trash or Restore workflow.</p>
+			<button type="button" class="rounded bg-[var(--color-error)] px-3 py-2 text-[var(--color-on-error)] transition-all duration-200 motion-reduce:transition-none" onclick={() => void confirmDelete()}>Permanently delete private item</button>
 			<button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none" onclick={() => pendingDelete = undefined}>Cancel</button>
 		</div>
 	{/if}

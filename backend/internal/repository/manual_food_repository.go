@@ -47,6 +47,16 @@ var foodAllergensReplaceSQL string
 //go:embed sql/food_allergens_list.sql
 var foodAllergensListSQL string
 
+// Implements DESIGN-009 ItemCurator active ownerless global-item discovery.
+//
+//go:embed sql/manual_food_search.sql
+var manualFoodSearchSQL string
+
+// Implements DESIGN-009 ItemCurator active ownerless global-item discovery count.
+//
+//go:embed sql/manual_food_search_count.sql
+var manualFoodSearchCountSQL string
+
 // PostgresManualFoodItemRepository persists administrator-authored global food items.
 // Implements DESIGN-009 ItemCurator global/private separation.
 type PostgresManualFoodItemRepository struct {
@@ -77,10 +87,49 @@ func (r *PostgresManualFoodItemRepository) GetByIDInMutation(ctx context.Context
 	return getManualFoodByID(ctx, tx, id, includeDeleted)
 }
 
+// Search returns one bounded deterministic page from active global food_items only.
+// Implements DESIGN-009 ItemCurator global/private separation.
+func (r *PostgresManualFoodItemRepository) Search(ctx context.Context, normalizedName string, limit int, offset int) ([]FoodItemEntity, int, error) {
+	normalizedName = strings.ToLower(canonicalManualFoodName(normalizedName))
+	if normalizedName == "" || strings.ContainsRune(normalizedName, '\x00') {
+		return nil, 0, validationError("normalized food item search name is required")
+	}
+	if limit < 1 || limit > 50 || offset < 0 {
+		return nil, 0, validationError("manual food item pagination is invalid")
+	}
+	var total int
+	if err := r.db.QueryRow(ctx, manualFoodSearchCountSQL, normalizedName).Scan(&total); err != nil {
+		return nil, 0, mapPostgresError(err, "count manual food items")
+	}
+	rows, err := r.db.Query(ctx, manualFoodSearchSQL, normalizedName, limit, offset)
+	if err != nil {
+		return nil, 0, mapPostgresError(err, "search manual food items")
+	}
+	defer rows.Close()
+	items := make([]FoodItemEntity, 0, limit)
+	for rows.Next() {
+		item, scanErr := scanFoodItem(rows)
+		if scanErr != nil {
+			return nil, 0, scanErr
+		}
+		if err := hydrateFoodClassificationsWithExecutor(ctx, r.db, &item); err != nil {
+			return nil, 0, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapPostgresError(err, "iterate manual food items")
+	}
+	return items, total, nil
+}
+
 // ClaimCreate creates one global item or replays its transactionally stored response.
 // Implements DESIGN-009 ItemCurator idempotent global-item create.
 func (r *PostgresManualFoodItemRepository) ClaimCreate(ctx context.Context, tx AdminMutationExecutor, claim ManualFoodItemCreateClaim, encode ManualFoodItemResponseEncoder) (ManualFoodItemCreateClaimResult, error) {
 	if err := validateManualFoodCreateClaim(claim, encode); err != nil {
+		return ManualFoodItemCreateClaimResult{}, err
+	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
 		return ManualFoodItemCreateClaimResult{}, err
 	}
 	_, claimErr := scanManualFoodCreateClaim(tx.QueryRow(ctx, manualFoodCreateClaimSQL, claim.AdminUserID, claim.Key, claim.BodyHash))
@@ -125,17 +174,29 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if item.ID == uuid.Nil {
 		return validationError("food item id is required")
 	}
+	if err := validateManualDensityAuthority(item); err != nil {
+		return err
+	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return err
+	}
+	item.Name = canonicalManualFoodName(item.Name)
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return err
 	}
 	if err := validateManualFoodAllergens(ctx, tx, item.AllergenKeys); err != nil {
 		return err
 	}
-	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL))
+	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL), item.ExpectedUpdatedAt)
 	if err != nil {
 		return mapPostgresError(err, "update manual food item")
 	}
 	if result.RowsAffected() == 0 {
+		if _, lookupErr := getManualFoodByID(ctx, tx, item.ID, false); lookupErr == nil {
+			return NewError(ErrorKindConflict, "food item has changed since it was read", nil)
+		} else if !IsKind(lookupErr, ErrorKindNotFound) {
+			return lookupErr
+		}
 		return NewError(ErrorKindNotFound, "food item not found", nil)
 	}
 	if err := replaceFoodClassificationsWithExecutor(ctx, tx, item.ID, item.FoodCategories, item.CulinaryRoles); err != nil {
@@ -163,6 +224,13 @@ func (r *PostgresManualFoodItemRepository) Delete(ctx context.Context, tx AdminM
 // createManualFoodItem persists one ownerless global row and its classifications.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEntity) (uuid.UUID, error) {
+	if err := validateManualDensityAuthority(item); err != nil {
+		return uuid.Nil, err
+	}
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return uuid.Nil, err
+	}
+	item.Name = canonicalManualFoodName(item.Name)
 	if err := validateFoodItemWithExecutor(ctx, tx, item); err != nil {
 		return uuid.Nil, err
 	}
@@ -180,6 +248,21 @@ func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEnti
 		return uuid.Nil, err
 	}
 	return id, nil
+}
+
+// validateManualDensityAuthority prevents administrator-authored items from claiming provider provenance.
+// Implements DESIGN-012 DataNormalizer manual-administrator trust boundary.
+func validateManualDensityAuthority(item FoodItemEntity) error {
+	if item.DensitySourceKind == "imported" || item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" {
+		return validationError("manual food density cannot contain imported provenance")
+	}
+	return nil
+}
+
+// canonicalManualFoodName collapses internal whitespace at the global-item persistence boundary.
+// Implements DESIGN-009 ItemCurator canonical name persistence.
+func canonicalManualFoodName(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
 }
 
 // getManualFoodByID hydrates one global row using the supplied executor.

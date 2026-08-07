@@ -70,7 +70,7 @@ func (c *CuratedImportController) Confirm(ctx *fiber.Ctx, tx repository.AdminMut
 	id := result.FoodItemID
 	afterCommit := func() {
 		if recorder, ok := c.service.(curatedImportOutcomeRecorder); ok {
-			recorder.RecordCommittedOutcome(ctx.UserContext(), req.SourceProvider, result)
+			recorder.RecordCommittedOutcome(ctx.UserContext(), result.SourceProvider, result)
 		}
 		if !result.Replayed && c.invalidator != nil {
 			c.invalidator.Invalidate()
@@ -139,6 +139,10 @@ func curatedImportError(err error) error {
 		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "provider_identity_conflict", Message: "provider item was already imported with different curated data"}
 	case errors.Is(err, dataimporter.ErrNameConfirmation):
 		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "name_conflict_confirmation_required", Message: "an existing item with this name requires explicit confirmation"}
+	case errors.Is(err, dataimporter.ErrExternalRecordEvidence):
+		return AppError{HTTPStatus: fiber.StatusUnprocessableEntity, Category: "validation", Code: "external_record_evidence_invalid", Message: "select a current external search result and retry"}
+	case errors.Is(err, dataimporter.ErrExternalRecordEvidenceUnavailable):
+		return AppError{HTTPStatus: fiber.StatusServiceUnavailable, Category: "dependency", Code: "external_record_evidence_unavailable", Message: "external search evidence is temporarily unavailable; retry", Retryable: true}
 	case repository.IsKind(err, repository.ErrorKindValidation), repository.IsKind(err, repository.ErrorKindInvalidMicronutrientKey):
 		return curationValidationError()
 	default:

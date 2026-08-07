@@ -19,8 +19,30 @@ import (
 type CustomItemService interface {
 	Create(context.Context, uuid.UUID, customitem.CreateRequest) (customitem.CreateResult, error)
 	Get(context.Context, uuid.UUID, uuid.UUID) (customitem.Item, error)
+	List(context.Context, uuid.UUID) ([]customitem.Item, error)
 	Update(context.Context, uuid.UUID, uuid.UUID, customitem.Request) (customitem.Item, error)
 	Delete(context.Context, uuid.UUID, uuid.UUID) error
+}
+
+// ListCustomItems returns deterministic active private items only for the authenticated owner.
+// Implements DESIGN-008 ProfileController custom-item selection.
+func (c *ProfileController) ListCustomItems(ctx *fiber.Ctx) error {
+	user, ok := authenticatedUser(ctx)
+	if !ok {
+		return unauthorizedError()
+	}
+	if c.customItems == nil {
+		return customItemDependencyError()
+	}
+	items, err := c.customItems.List(ctx.UserContext(), user.UserID)
+	if err != nil {
+		return customItemError(err)
+	}
+	data := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		data = append(data, customItemData(item))
+	}
+	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: map[string]any{"items": data}})
 }
 
 // CreateCustomItem creates or replays an authenticated user's private item.
@@ -92,8 +114,8 @@ func (c *ProfileController) UpdateCustomItem(ctx *fiber.Ctx) error {
 	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: customItemData(item)})
 }
 
-// DeleteCustomItem soft-deletes one private item only for its authenticated owner.
-// Implements DESIGN-008 ProfileController custom-item delete.
+// DeleteCustomItem permanently removes one private item for its authenticated owner.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
 func (c *ProfileController) DeleteCustomItem(ctx *fiber.Ctx) error {
 	user, ok := authenticatedUser(ctx)
 	if !ok {
@@ -158,8 +180,8 @@ func decodeCustomItemRequest(body []byte) (customitem.Request, error) {
 	}
 	allowed := map[string]struct{}{
 		"name": {}, "physicalState": {}, "prepTimeMinutes": {}, "averageUnitWeightGrams": {},
-		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {}, "densitySourceProvider": {},
-		"densitySourceFoodId": {}, "densitySourceKind": {}, "macrosPer100": {}, "micros": {},
+		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {},
+		"densitySourceKind": {}, "macrosPer100": {}, "micros": {},
 		"foodCategoryIds": {}, "culinaryRoleIds": {}, "imageUrl": {},
 	}
 	for field, value := range raw {
@@ -254,8 +276,7 @@ func customItemData(item customitem.Item) map[string]any {
 	return map[string]any{
 		"id": item.ID, "name": item.Name, "physicalState": item.PhysicalState, "prepTimeMinutes": item.PrepTimeMinutes,
 		"averageUnitWeightGrams": item.AverageUnitWeightGrams, "averageServingVolumeMilliliters": item.AverageServingVolumeMilliliters,
-		"densityGramsPerMilliliter": item.DensityGramsPerMilliliter, "densitySourceProvider": item.DensitySourceProvider,
-		"densitySourceFoodId": item.DensitySourceFoodID, "densitySourceKind": item.DensitySourceKind, "macrosPer100": item.MacrosPer100,
+		"densityGramsPerMilliliter": item.DensityGramsPerMilliliter, "densitySourceKind": item.DensitySourceKind, "macrosPer100": item.MacrosPer100,
 		"micros": item.Micros, "foodCategories": item.FoodCategories, "culinaryRoles": item.CulinaryRoles, "imageUrl": item.ImageURL,
 	}
 }
@@ -275,6 +296,14 @@ func customItemDependencyError() AppError {
 // customItemError maps service/repository failures to user-safe API errors.
 // Implements DESIGN-008 ProfileController and DESIGN-017 GlobalExceptionHandler.
 func customItemError(err error) error {
+	var deletionConflict *repository.CustomFoodDeletionConflict
+	if errors.As(err, &deletionConflict) {
+		diets := make([]map[string]any, 0, len(deletionConflict.Diets))
+		for _, diet := range deletionConflict.Diets {
+			diets = append(diets, map[string]any{"id": diet.ID, "name": diet.Name})
+		}
+		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "custom_item_in_use", Message: "custom item is used by saved diets", Data: map[string]any{"affectedDiets": diets}}
+	}
 	switch {
 	case errors.Is(err, customitem.ErrMissingIdempotencyKey):
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "idempotency_key_required", Message: "Idempotency-Key header is required"}

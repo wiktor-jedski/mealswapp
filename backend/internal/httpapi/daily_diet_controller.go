@@ -183,7 +183,7 @@ func validateDailyDietBodyMap(body map[string]any) error {
 			return errors.New("Food Object id is invalid")
 		}
 		foodObjectType, ok := entry["foodObjectType"].(string)
-		if !ok || (foodObjectType != string(repository.FoodObjectTypeMeal) && foodObjectType != string(repository.FoodObjectTypeFoodItem)) {
+		if !ok || (foodObjectType != string(repository.FoodObjectTypeMeal) && foodObjectType != string(repository.FoodObjectTypeFoodItem) && foodObjectType != string(repository.FoodObjectTypeCustomFoodItem)) {
 			return errors.New("Food Object type is invalid")
 		}
 		quantity, ok := entry["quantity"].(float64)

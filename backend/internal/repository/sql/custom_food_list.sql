@@ -5,5 +5,5 @@ SELECT id, name, physical_state, prep_time_minutes, average_unit_weight_grams,
        protein_per_100, carbohydrates_per_100, fat_per_100, micronutrients, image_url,
        deleted_at, created_at, updated_at
 FROM custom_food_items
-WHERE owner_id = $1 AND ($2::boolean OR deleted_at IS NULL)
-ORDER BY created_at, id;
+WHERE owner_id = $1 AND deleted_at IS NULL
+ORDER BY normalized_name, id;

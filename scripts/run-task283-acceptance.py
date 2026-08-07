@@ -12,6 +12,7 @@ import re
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -173,7 +174,12 @@ class Task283Harness(real_stack.Harness):
 
     def application_environment(self, database_url: str, redis_url: str, api_port: int, frontend_port: int) -> dict[str, str]:
         environment = super().application_environment(database_url, redis_url, api_port, frontend_port)
-        environment.update({"MEALSWAPP_TASK283_REAL_E2E": "1", "MEALSWAPP_REAL_STACK_MANAGED": "1"})
+        environment.update({
+            "MEALSWAPP_TASK283_REAL_E2E": "1",
+            "MEALSWAPP_REAL_STACK_MANAGED": "1",
+            "MEALSWAPP_TASK294_CORRUPT_MANUAL_ITEM_RESPONSE_ONCE": "1",
+            "MEALSWAPP_TASK294_REAL_E2E": "1",
+        })
         return environment
 
     def start_application_stack(self, api_binary, database_url, redis_url, reservations):
@@ -208,6 +214,9 @@ class Task283Harness(real_stack.Harness):
             if f"user_id={user['user_id']}" not in bootstrap.stdout or "actor=operator" not in bootstrap.stdout:
                 raise RuntimeError("administrator bootstrap returned an unexpected target")
             self.events.append("administrator_bootstrapped")
+            private_item_id = str(uuid.uuid4())
+            private_item_name = f"Task 283 private {self.run_id}"
+            real_stack.psql(self.target, "INSERT INTO custom_food_items (id,owner_id,name,physical_state,protein_per_100,carbohydrates_per_100,fat_per_100) VALUES ('%s'::uuid,'%s'::uuid,'%s','solid',1,2,3)" % (private_item_id, user["user_id"], private_item_name), database=self.database)
             real_stack.psql(self.target, "INSERT INTO entitlements (user_id,tier,status,search_limit_per_24h,allowed_modes,expires_at) VALUES ('%s'::uuid,'trial','active',100,ARRAY['catalog','substitution','daily_diet','daily_diet_alternative'],now()+interval '1 day')" % user["user_id"], database=self.database)
             capability = self.raw_dir / "task283-harness-capability.json"
             nonce = __import__("secrets").token_hex(24)
@@ -226,14 +235,24 @@ class Task283Harness(real_stack.Harness):
                 daemon=True,
             )
             observer.start()
-            playwright_env = {**env,"MEALSWAPP_TASK283_REAL_E2E":"1","MEALSWAPP_REAL_STACK_MANAGED":"1","MEALSWAPP_REAL_STACK_BASE_URL":f"http://127.0.0.1:{frontend_port}","MEALSWAPP_TASK283_CAPABILITY_FILE":str(capability),"MEALSWAPP_TASK283_CAPABILITY_NONCE":nonce,"MEALSWAPP_TASK283_SECOND_API_URL":f"http://127.0.0.1:{self.second_api_port}","MEALSWAPP_TASK283_REDIS_CONTAINER":self.container,"MEALSWAPP_TASK283_AUTH_STATE_DIR":str(self.raw_dir / "task283-auth-state"),"MEALSWAPP_E2E_EMAIL":user["email"],"MEALSWAPP_E2E_PASSWORD":user["password"],"PHASE08_ACCEPTANCE_RESULT_DIR":str(evidence),"MEALSWAPP_PHASE08_RESULT_FILE":"browser.json","MEALSWAPP_PHASE08_CRITERIA":",".join(CRITERIA),"MEALSWAPP_PHASE08_EXPECTED_PROJECTS":"real-stack-desktop-chromium,real-stack-mobile-chromium","MEALSWAPP_PHASE08_INFRASTRUCTURE_ROOT":INFRASTRUCTURE_ROOT,"MEALSWAPP_PHASE08_SYNCHRONIZED_ROOTS":",".join(SYNCHRONIZED_ROOTS),"PLAYWRIGHT_OUTPUT_DIR":str(self.raw_dir / "playwright")}
+            playwright_env = {**env,"MEALSWAPP_TASK283_REAL_E2E":"1","MEALSWAPP_REAL_STACK_MANAGED":"1","MEALSWAPP_REAL_STACK_BASE_URL":f"http://127.0.0.1:{frontend_port}","MEALSWAPP_TASK283_CAPABILITY_FILE":str(capability),"MEALSWAPP_TASK283_CAPABILITY_NONCE":nonce,"MEALSWAPP_TASK283_SECOND_API_URL":f"http://127.0.0.1:{self.second_api_port}","MEALSWAPP_TASK283_REDIS_CONTAINER":self.container,"MEALSWAPP_TASK283_AUTH_STATE_DIR":str(self.raw_dir / "task283-auth-state"),"MEALSWAPP_TASK283_PRIVATE_ITEM_ID":private_item_id,"MEALSWAPP_TASK283_PRIVATE_ITEM_NAME":private_item_name,"MEALSWAPP_E2E_EMAIL":user["email"],"MEALSWAPP_E2E_PASSWORD":user["password"],"PHASE08_ACCEPTANCE_RESULT_DIR":str(evidence),"MEALSWAPP_PHASE08_RESULT_FILE":"browser.json","MEALSWAPP_PHASE08_CRITERIA":",".join(CRITERIA),"MEALSWAPP_PHASE08_EXPECTED_PROJECTS":"real-stack-desktop-chromium,real-stack-mobile-chromium","MEALSWAPP_PHASE08_INFRASTRUCTURE_ROOT":INFRASTRUCTURE_ROOT,"MEALSWAPP_PHASE08_SYNCHRONIZED_ROOTS":",".join(SYNCHRONIZED_ROOTS),"PLAYWRIGHT_OUTPUT_DIR":str(self.raw_dir / "playwright")}
             playwright_env["MEALSWAPP_TASK283_REDIS_OBSERVATION_REQUEST_DIR"] = str(redis_requests)
             generation_before = self.redis_generation_snapshot()
             (evidence / "backend").mkdir(exist_ok=True)
             (evidence / "backend/task283-redis-before.json").write_text(json.dumps(generation_before, sort_keys=True) + "\n")
             browser_failure = None
             try:
-                real_stack.run_command(["bunx","playwright","test","-c","playwright.real-stack.config.ts","tests/task283-manual-catalog.spec.ts"], cwd=ROOT / "frontend", env=playwright_env, timeout=self.timeout)
+                real_stack.run_command(
+                    ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep", "Task 294 production transport corruption"],
+                    cwd=ROOT / "frontend", env=playwright_env, timeout=self.timeout,
+                )
+                suite_environment = dict(playwright_env)
+                suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"
+                suite_environment["MEALSWAPP_TASK283_AUTH_STATE_DIR"] = str(self.raw_dir / "task283-auth-state-suite")
+                real_stack.run_command(
+                    ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep-invert", "Task 294 production transport corruption"],
+                    cwd=ROOT / "frontend", env=suite_environment, timeout=self.timeout,
+                )
             except BaseException as error:
                 browser_failure = error
                 self.events.append("browser_product_nonpass" if isinstance(error, __import__("subprocess").CalledProcessError) else "browser_infrastructure_nonpass")
@@ -263,6 +282,7 @@ class Task283Harness(real_stack.Harness):
             if not expected_projects.issubset(set(browser_payload.get("projects", []))):
                 self.write_synthetic_browser(evidence, "BLOCKED")
             try:
+                self.write_task294_proof(evidence)
                 self.write_backend_evidence(evidence)
             except Exception as error:
                 self.events.append("backend_proof_nonpass")
@@ -274,6 +294,33 @@ class Task283Harness(real_stack.Harness):
             self.events.append("task283_results_finalized")
         finally:
             for reservation in reservations: reservation.release()
+
+    def write_task294_proof(self, evidence: Path) -> None:
+        """Prove the browser-recovered Task 294 mutation has exactly-once effects."""
+        source = evidence / "task294-transport-proof.json"
+        if not source.is_file():
+            raise ValueError("Task 294 browser proof is missing")
+        operation = json.loads(source.read_text(encoding="utf-8"))
+        if operation.get("schema") != "mealswapp.task294-transport-proof.v1":
+            raise ValueError("Task 294 browser proof schema is invalid")
+        name, entity_id, key = operation.get("name"), operation.get("entityId"), operation.get("idempotencyKey")
+        if not isinstance(name, str) or not name.startswith("Task 294 transport ") or not isinstance(entity_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", entity_id, re.I) or not isinstance(key, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}", key):
+            raise ValueError("Task 294 browser proof identity is invalid")
+        actual = {
+            "foodCount": int(read_only_psql(self.target, self.database, "SELECT count(*) FROM food_items WHERE id=%s::uuid AND name=%s", (entity_id, name))),
+            "auditCount": int(read_only_psql(self.target, self.database, "SELECT count(*) FROM admin_audit_entries WHERE entity_type='food_item' AND entity_id=%s::uuid AND action='manual_create'", (entity_id,))),
+            "idempotencyCount": int(read_only_psql(self.target, self.database, "SELECT count(*) FROM mutation_idempotency_keys WHERE method='POST' AND route='/admin/items' AND key=%s", (key,))),
+        }
+        expected = operation.get("expected")
+        snapshots = operation.get("generationSnapshots")
+        if not isinstance(expected, dict) or not isinstance(snapshots, dict):
+            raise ValueError("Task 294 browser proof expectations are invalid")
+        actual.update(redis_generation_actual(expected, snapshots, self.redis_observation_directory))
+        failures = compare_expected(expected, actual)
+        proof = {"schema": "mealswapp.task294-transport-proof.v1", "operation": operation, "actual": actual, "assertionFailures": failures, "transactionReadOnly": True}
+        (evidence / "backend/task294-transport-proof.json").write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if failures:
+            raise ValueError("Task 294 exact-effect proof failed: " + ", ".join(failures))
 
     def redis_generation_snapshot(self) -> dict[str, object]:
         """Read the application generation key from the owned Redis container."""
@@ -303,8 +350,11 @@ class Task283Harness(real_stack.Harness):
                     ):
                         raise ValueError("Redis generation observation request is invalid")
                     snapshot = self.redis_generation_snapshot()
+                    # A fresh isolated database has no cache-generation key until
+                    # the first committed classification mutation; treat that
+                    # absent baseline as generation zero for operation deltas.
                     if snapshot["value"] is None:
-                        raise RuntimeError("Redis generation key has no numeric value")
+                        snapshot["value"] = "0"
                     observation = {
                         "schema": "mealswapp.task283-redis-observation.v1",
                         "id": snapshot_id,

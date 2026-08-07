@@ -25,7 +25,13 @@ type fakeCustomItemService struct {
 	updateCalls int
 	updateUser  uuid.UUID
 	deleteUser  uuid.UUID
+	items       []customitem.Item
 	err         error
+}
+
+func (s *fakeCustomItemService) List(_ context.Context, userID uuid.UUID) ([]customitem.Item, error) {
+	s.getUser = userID
+	return s.items, s.err
 }
 
 func (s *fakeCustomItemService) Create(_ context.Context, userID uuid.UUID, req customitem.CreateRequest) (customitem.CreateResult, error) {
@@ -49,6 +55,35 @@ func (s *fakeCustomItemService) Delete(_ context.Context, userID, _ uuid.UUID) e
 
 func customItemBody(name string) string {
 	return `{"name":"` + name + `","physicalState":"solid","prepTimeMinutes":0,"macrosPer100":{"protein":10,"carbohydrates":5,"fat":2},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+}
+
+// TestProfileControllerListsOnlyServiceOwnerProjection verifies the authenticated custom-food picker boundary.
+// Implements DESIGN-008 ProfileController custom-item selection.
+func TestProfileControllerListsOnlyServiceOwnerProjection(t *testing.T) {
+	cfg := testConfig()
+	userID := uuid.New()
+	authenticator, cookies := testJWTAuth(t, cfg, userID, nil)
+	service := &fakeCustomItemService{items: []customitem.Item{{ID: uuid.New(), Name: "Same name"}, {ID: uuid.New(), Name: "Same name"}}}
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, Routes: NewProfileController(&fakeProfileService{}).WithCustomItems(service).Routes()})
+	request := httptest.NewRequest(fiber.MethodGet, "/api/v1/custom-items", nil)
+	addCookies(request, cookies)
+
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeEnvelope(t, response.Body)
+	response.Body.Close()
+	items := envelope.Data["items"].([]any)
+	if response.StatusCode != fiber.StatusOK || service.getUser != userID || len(items) != 2 {
+		t.Fatalf("list status=%d user=%s items=%+v", response.StatusCode, service.getUser, items)
+	}
+	for _, item := range items {
+		projected := item.(map[string]any)
+		if _, exposed := projected["ownerId"]; exposed {
+			t.Fatalf("owner leaked in custom-item projection: %+v", projected)
+		}
+	}
 }
 
 // TestProfileControllerCustomItemRejectsDuplicateJSONKeysBeforeService verifies
@@ -279,6 +314,35 @@ func TestProfileControllerCustomItemRejectsClientOwnershipAndMapsSafeErrors(t *t
 	}
 }
 
+// TestProfileControllerCustomItemDeletionConflictReturnsBoundedDietSummaries verifies
+// DESIGN-008 AccountDeleter's owner-safe 409 response boundary.
+func TestProfileControllerCustomItemDeletionConflictReturnsBoundedDietSummaries(t *testing.T) {
+	cfg := testConfig()
+	userID, itemID := uuid.New(), uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	dietID := uuid.New()
+	service := &fakeCustomItemService{err: &repository.CustomFoodDeletionConflict{Diets: []repository.SavedDietDeletionReference{{ID: dietID, Name: "Owner diet"}}}}
+	controller := NewProfileController(&fakeProfileService{}).WithCustomItems(service)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: controller.Routes()})
+	token, csrfCookies := fetchCSRFToken(t, app)
+	request := httptest.NewRequest(fiber.MethodDelete, "/api/v1/custom-items/"+itemID.String(), nil)
+	request.Header.Set("X-CSRF-Token", token)
+	addCookies(request, authCookies)
+	addCookies(request, csrfCookies)
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeEnvelope(t, response.Body)
+	response.Body.Close()
+	if response.StatusCode != fiber.StatusConflict || envelope.Error == nil || envelope.Error.Code != "custom_item_in_use" {
+		t.Fatalf("deletion conflict = %d %+v", response.StatusCode, envelope)
+	}
+	if got := envelope.Error.Data["affectedDiets"].([]any); len(got) != 1 || got[0].(map[string]any)["id"] != dietID.String() {
+		t.Fatalf("affected diets = %#v", envelope.Error.Data)
+	}
+}
+
 func TestProfileControllerCustomItemRejectsEscapedNULProvenanceBeforeService(t *testing.T) {
 	cfg := testConfig()
 	userID := uuid.New()
@@ -307,7 +371,11 @@ func TestProfileControllerCustomItemRejectsEscapedNULProvenanceBeforeService(t *
 		}
 		envelope := decodeEnvelope(t, resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != "validation_failed" || service.createUser != uuid.Nil {
+		wantCode := "invalid_json"
+		if field == "densitySourceKind" {
+			wantCode = "validation_failed"
+		}
+		if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != wantCode || service.createUser != uuid.Nil {
 			t.Fatalf("escaped NUL %s = %d %+v serviceUser=%s", field, resp.StatusCode, envelope, service.createUser)
 		}
 	}
@@ -384,6 +452,29 @@ func TestProfileControllerCustomItemClassificationProjectionOmitsParentID(t *tes
 	}
 	if resp.StatusCode != fiber.StatusOK || body.Data["averageUnitWeightGrams"] != 28.3495 || !strings.Contains(string(encoded), classificationID.String()) || strings.Contains(string(encoded), "parentId") {
 		t.Fatalf("classification HTTP projection = %d %s", resp.StatusCode, encoded)
+	}
+}
+
+// Implements DESIGN-008 ProfileController closed private custom-item response contract.
+func TestCustomItemDataOmitsDensityProviderIdentityFields(t *testing.T) {
+	data := customItemData(customitem.Item{
+		ID: uuid.New(), Name: "Private item", PhysicalState: repository.PhysicalStateLiquid,
+		DensityGramsPerMilliliter: 1.02, DensitySourceProvider: "usda", DensitySourceFoodID: "171265", DensitySourceKind: "manual",
+		MacrosPer100: repository.MacroValues{}, Micros: repository.MicroValues{},
+		FoodCategories: []customitem.ClassificationSummary{}, CulinaryRoles: []customitem.ClassificationSummary{},
+	})
+	expected := map[string]struct{}{
+		"id": {}, "name": {}, "physicalState": {}, "prepTimeMinutes": {}, "averageUnitWeightGrams": {},
+		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {}, "densitySourceKind": {},
+		"macrosPer100": {}, "micros": {}, "foodCategories": {}, "culinaryRoles": {}, "imageUrl": {},
+	}
+	if len(data) != len(expected) {
+		t.Fatalf("private response keys=%v, want exactly %v", data, expected)
+	}
+	for key := range data {
+		if _, ok := expected[key]; !ok {
+			t.Fatalf("private response emitted contract-excluded field %q", key)
+		}
 	}
 }
 

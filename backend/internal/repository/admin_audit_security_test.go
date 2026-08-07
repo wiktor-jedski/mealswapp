@@ -96,6 +96,19 @@ func TestAdminAuditSnapshotsRejectUnsafeOrUnboundedData(t *testing.T) {
 	}
 }
 
+func TestMicronutrientAuditSnapshotsUseSharedSchema(t *testing.T) {
+	for _, action := range []string{"micronutrient.create", "micronutrient.display_name.update", "micronutrient.unit.update", "micronutrient.deactivate", "micronutrient.reactivate"} {
+		entry := AdminAuditEntry{ActorKind: AdminAuditActorOperator, Action: action, EntityType: "micronutrient_vocabulary", RequestID: uuid.NewString(), After: []byte(`{"active":true,"keyDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","unit":"mg"}`)}
+		if err := validateAdminAuditEntry(entry); err != nil {
+			t.Fatalf("%s audit schema rejected valid snapshot: %v", action, err)
+		}
+		canonical, err := sanitizeAdminAuditSnapshot(entry.EntityType, entry.Action, entry.After)
+		if err != nil || string(canonical) != `{"active":true,"keyDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","unit":"mg"}` {
+			t.Fatalf("%s canonical snapshot = %s, err=%v", action, canonical, err)
+		}
+	}
+}
+
 func TestAdminAuditSnapshotValidationRollsBackTransaction(t *testing.T) {
 	tx := &fakeTx{}
 	repo := NewPostgresAdminImportAuditRepository(&fakeSQLExecutor{tx: tx})

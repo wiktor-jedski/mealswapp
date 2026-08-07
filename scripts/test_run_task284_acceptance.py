@@ -1,9 +1,12 @@
 import importlib.util
+import io
 import json
 import re
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location("task284", Path(__file__).with_name("run-task284-acceptance.py"))
 assert SPEC and SPEC.loader
@@ -12,6 +15,19 @@ SPEC.loader.exec_module(module)
 
 
 class Task284AcceptanceTests(unittest.TestCase):
+    def write_results(self, evidence, statuses=None):
+        statuses = statuses or {}
+        (evidence / "results.json").write_text(json.dumps({
+            "results": [
+                {
+                    "criterionId": criterion,
+                    "status": statuses[criterion][0] if isinstance(statuses.get(criterion), tuple) else statuses.get(criterion, "PASS"),
+                    **({"rootCauseId": statuses[criterion][1]} if isinstance(statuses.get(criterion), tuple) else {}),
+                }
+                for criterion in module.CRITERIA
+            ]
+        }))
+
     def test_manifest_and_spec_cover_exact_task_criteria(self):
         source = (Path(__file__).parents[1] / "frontend/tests/task284-private-erasure.spec.ts").read_text()
         identifiers = set(re.findall(r"P08-SWR\d{3}-(?:STEP|ACCEPT)-\d{2}", source))
@@ -113,10 +129,56 @@ class Task284AcceptanceTests(unittest.TestCase):
             harness = object.__new__(module.Task284Harness)
             harness.artifacts = Path(directory)
             harness.run_id = "a" * 24
-            self.assertEqual(module.finalize_failure_reports(harness, True), 2)
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(module.finalize_failure_reports(harness, False), 2)
             results = json.loads((Path(directory) / "acceptance/results.json").read_text())["results"]
             self.assertEqual({item["criterionId"] for item in results}, set(module.CRITERIA))
             self.assertTrue(all(item["status"] == "BLOCKED" for item in results))
+
+    def test_default_finalization_prints_each_requirement_and_skips_report_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = Path(directory)
+            statuses = {module.REQUIREMENT_CRITERIA["SW-REQ-043"][0]: ("FAIL", module.ROOTS["SW-REQ-043"])}
+            self.write_results(evidence, statuses)
+            output = io.StringIO()
+            with redirect_stdout(output), mock.patch.object(module.subprocess, "run") as run:
+                code = module.finalize_reports("a" * 24, evidence, False)
+        self.assertEqual(code, 1)
+        self.assertEqual(output.getvalue().splitlines(), [
+            "SW-REQ-043 fail FAIL ROOT-T284-PRIVATE-ISOLATION",
+            "SW-REQ-072 ok",
+            "SW-REQ-073 ok",
+        ])
+        run.assert_not_called()
+
+    def test_report_flag_runs_all_report_validations_without_masking_requirement_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = Path(directory)
+            statuses = {module.REQUIREMENT_CRITERIA["SW-REQ-043"][0]: ("FAIL", module.ROOTS["SW-REQ-043"])}
+            self.write_results(evidence, statuses)
+            with mock.patch.object(module.subprocess, "run", side_effect=[
+                mock.Mock(returncode=0), mock.Mock(returncode=0), mock.Mock(returncode=0),
+            ]) as run, redirect_stdout(io.StringIO()):
+                code = module.finalize_reports("a" * 24, evidence, True)
+        self.assertEqual(code, 1)
+        self.assertEqual(run.call_count, len(module.REQUIREMENT_CRITERIA))
+
+    def test_main_maps_default_and_report_cli_flags(self):
+        for arguments, report in (([], False), (["--report"], True)):
+            with self.subTest(arguments=arguments):
+                harness = mock.Mock(run_id="a" * 24, artifacts=Path("/tmp/task284-cli-test"))
+                with (
+                    mock.patch.object(module.real_stack, "install_signal_handlers", return_value={}),
+                    mock.patch.object(module.real_stack, "restore_signal_handlers"),
+                    mock.patch.object(module.real_stack, "validate_environment"),
+                    mock.patch.object(module.real_stack.PostgresTarget, "parse", return_value=object()),
+                    mock.patch.object(module, "Task284Harness", return_value=harness),
+                    mock.patch.object(module, "finalize_reports", return_value=0) as finalize,
+                ):
+                    self.assertEqual(module.main(arguments), 0)
+                finalize.assert_called_once_with(
+                    harness.run_id, harness.artifacts / "acceptance", report
+                )
 
     def test_runner_uses_production_worker_and_parameterized_read_only_proof(self):
         source = Path(module.__file__).read_text()

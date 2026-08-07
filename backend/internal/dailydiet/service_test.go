@@ -214,6 +214,31 @@ func (r *memoryFoodRepository) Create(context.Context, repository.FoodItemEntity
 func (r *memoryFoodRepository) Update(context.Context, repository.FoodItemEntity) error { return nil }
 func (r *memoryFoodRepository) Delete(context.Context, uuid.UUID) error                 { return nil }
 
+type memoryCustomFoodRepository struct {
+	items map[uuid.UUID]repository.CustomFoodItemEntity
+}
+
+func (r *memoryCustomFoodRepository) GetByID(_ context.Context, ownerID, id uuid.UUID, _ repository.RepositoryContext) (repository.CustomFoodItemEntity, error) {
+	item, ok := r.items[id]
+	if !ok || item.OwnerID != ownerID || item.DeletedAt != nil {
+		return repository.CustomFoodItemEntity{}, repository.NewError(repository.ErrorKindNotFound, "custom Food Item not found", nil)
+	}
+	return item, nil
+}
+func (r *memoryCustomFoodRepository) List(context.Context, uuid.UUID, repository.RepositoryContext) ([]repository.CustomFoodItemEntity, error) {
+	return nil, nil
+}
+func (r *memoryCustomFoodRepository) ClaimCreate(context.Context, repository.CustomFoodItemCreateClaim, repository.CustomFoodItemResponseEncoder) (repository.CustomFoodItemCreateClaimResult, error) {
+	return repository.CustomFoodItemCreateClaimResult{}, nil
+}
+func (r *memoryCustomFoodRepository) Create(context.Context, repository.CustomFoodItemEntity) (uuid.UUID, error) {
+	return uuid.Nil, nil
+}
+func (r *memoryCustomFoodRepository) Update(context.Context, repository.CustomFoodItemEntity) error {
+	return nil
+}
+func (r *memoryCustomFoodRepository) Delete(context.Context, uuid.UUID, uuid.UUID) error { return nil }
+
 func TestServiceCreateAggregatesFoodItemsAndMeals(t *testing.T) {
 	userID, foodID, mealID := uuid.New(), uuid.New(), uuid.New()
 	foods := &memoryFoodRepository{foods: map[uuid.UUID]repository.FoodItemEntity{
@@ -234,6 +259,47 @@ func TestServiceCreateAggregatesFoodItemsAndMeals(t *testing.T) {
 	want := MacroProjection{Protein: 13.4, Carbohydrates: 25, Fat: 6, Calories: 207.6}
 	if created.Diet.AggregateMacros != want || !reflect.DeepEqual(created.Diet.Entries[0].FoodObjectType, repository.FoodObjectTypeFoodItem) {
 		t.Fatalf("created = %+v, want aggregate %+v with Food Item entry", created.Diet, want)
+	}
+}
+
+// TestServiceCustomFoodEntriesAreOwnerScopedAndAggregated verifies Task 297 private Food Object boundaries.
+// Implements DESIGN-008 SavedDataRepository custom Food Object entries.
+func TestServiceCustomFoodEntriesAreOwnerScopedAndAggregated(t *testing.T) {
+	ownerID, otherID, customID := uuid.New(), uuid.New(), uuid.New()
+	customFoods := &memoryCustomFoodRepository{items: map[uuid.UUID]repository.CustomFoodItemEntity{
+		customID: {
+			OwnerID: ownerID,
+			FoodItemEntity: repository.FoodItemEntity{
+				ID: customID, PhysicalState: repository.PhysicalStateLiquid,
+				MacrosPer100: repository.MacroValues{Protein: 2, Carbohydrates: 3, Fat: 4},
+			},
+		},
+	}}
+	service := NewServiceWithCustomFoods(&memoryDietRepository{}, &memoryMealRepository{}, &memoryFoodRepository{}, customFoods)
+	request := CreateRequest{Name: "Private day", IdempotencyKey: "private-food-entry", Entries: []FoodObjectQuantity{{
+		FoodObjectID: customID, FoodObjectType: repository.FoodObjectTypeCustomFoodItem, Quantity: 250, Unit: "ml", Position: 0,
+	}}}
+
+	created, err := service.Create(context.Background(), ownerID, request)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	want := MacroProjection{Protein: 5, Carbohydrates: 7.5, Fat: 10, Calories: 140}
+	if created.Diet.AggregateMacros != want || created.Diet.Entries[0].FoodObjectType != repository.FoodObjectTypeCustomFoodItem {
+		t.Fatalf("created = %+v, want aggregate %+v and custom type", created.Diet, want)
+	}
+
+	request.IdempotencyKey = "cross-owner-entry"
+	if _, err := service.Create(context.Background(), otherID, request); !repository.IsKind(err, repository.ErrorKindNotFound) {
+		t.Fatalf("cross-owner Create() error = %v, want ownership-safe not found", err)
+	}
+	deleted := time.Now()
+	item := customFoods.items[customID]
+	item.DeletedAt = &deleted
+	customFoods.items[customID] = item
+	request.IdempotencyKey = "deleted-private-entry"
+	if _, err := service.Create(context.Background(), ownerID, request); !repository.IsKind(err, repository.ErrorKindNotFound) {
+		t.Fatalf("deleted Create() error = %v, want not found", err)
 	}
 }
 
@@ -519,3 +585,4 @@ func copyEntries(entries []repository.SavedDietMealEntry, dietID uuid.UUID) []re
 var _ repository.DailyDietMutationRepository = (*memoryDietRepository)(nil)
 var _ repository.MealRepository = (*memoryMealRepository)(nil)
 var _ repository.FoodItemRepository = (*memoryFoodRepository)(nil)
+var _ repository.CustomFoodItemRepository = (*memoryCustomFoodRepository)(nil)

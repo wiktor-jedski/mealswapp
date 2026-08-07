@@ -7,10 +7,12 @@ import { join } from "node:path";
 const source = readFileSync(join(import.meta.dir, "AdminPrivateData.svelte"), "utf8");
 
 test("uses the generated account-data client for explicit export-backed deletion", () => {
-	expect(source).toContain('import { accountDataApi, type AccountDataApi } from "../api/account-data-client"');
+	expect(source).toContain('accountDataApi, type AccountDataApi } from "../api/account-data-client"');
 	expect(source).toContain("await api.loadExport");
 	expect(source).toContain("await api.deleteCustomItem");
-	expect(source).toContain("Confirm private item deletion");
+	expect(source).toContain("Permanently delete private item");
+	expect(source).toContain("permanently and irreversibly removes");
+	expect(source).toContain("There is no Trash or Restore workflow");
 	expect(source).toContain("authoritative export refreshed");
 	expect(source).not.toContain("fetch(");
 });
@@ -23,4 +25,7 @@ test("fails closed before every authoritative refresh and distinguishes deletion
 	expect(source).toContain("if (!isCurrent(current)) return");
 	expect(source).toContain("The private item was deleted, but current account data could not be verified.");
 	expect(source.indexOf("const current = beginOperation()")).toBeLessThan(source.indexOf("await api.loadExport(current.controller.signal)"));
+	expect(source).toContain("affectedDiets");
+	expect(source).toContain("Open Daily Diets, remove this item from each listed diet, save the diet, then retry permanent deletion.");
+	expect(source).toContain('aria-label="Saved diets blocking permanent deletion"');
 });

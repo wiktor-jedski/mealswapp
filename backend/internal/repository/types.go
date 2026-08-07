@@ -43,10 +43,10 @@ type MicroValues map[string]float64
 // MicronutrientVocabularyEntry stores one canonical micronutrient definition.
 // Implements DESIGN-005 MicronutrientVocabulary.
 type MicronutrientVocabularyEntry struct {
-	Key         string
-	DisplayName string
-	Unit        string
-	Active      bool
+	Key         string `json:"key"`
+	DisplayName string `json:"displayName"`
+	Unit        string `json:"unit"`
+	Active      bool   `json:"active"`
 }
 
 // ClassificationKind identifies Food Category and Culinary Role classification groups.
@@ -71,6 +71,7 @@ type ClassificationEntity struct {
 // FoodItemEntity stores normalized food item data owned by repositories.
 // Implements DESIGN-005 FoodItemEntity.
 type FoodItemEntity struct {
+	ExpectedUpdatedAt               *time.Time
 	ID                              uuid.UUID
 	Name                            string
 	PhysicalState                   PhysicalState
@@ -120,14 +121,22 @@ type CustomFoodItemCreateClaimResult struct {
 // Implements DESIGN-008 ProfileController durable custom-item creation.
 type CustomFoodItemResponseEncoder func(CustomFoodItemEntity) ([]byte, error)
 
-// FoodObjectType distinguishes the two object kinds accepted by Daily Diet entries.
+// RecordEvidenceRepository persists short-lived server-selected external records.
+// Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
+type RecordEvidenceRepository interface {
+	StoreRecordEvidence(context.Context, string, string, string, time.Time) error
+	ResolveRecordEvidence(context.Context, string, time.Time) (string, string, error)
+}
+
+// FoodObjectType distinguishes the object kinds accepted by Daily Diet entries.
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 type FoodObjectType string
 
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 const (
-	FoodObjectTypeFoodItem FoodObjectType = "food_item"
-	FoodObjectTypeMeal     FoodObjectType = "meal"
+	FoodObjectTypeFoodItem       FoodObjectType = "food_item"
+	FoodObjectTypeMeal           FoodObjectType = "meal"
+	FoodObjectTypeCustomFoodItem FoodObjectType = "custom_food_item"
 )
 
 // MealType identifies opaque single and composite meals.
@@ -734,6 +743,38 @@ type CustomFoodItemRepository interface {
 	Delete(ctx context.Context, ownerID uuid.UUID, id uuid.UUID) error
 }
 
+// CustomFoodItemMaintenanceRepository defines scheduled private-item marker maintenance.
+// Implements DESIGN-008 AccountDeleter marker retention.
+type CustomFoodItemMaintenanceRepository interface {
+	PurgeExpiredDeletedCustomFoodCreateKeys(context.Context) error
+}
+
+// CustomFoodDeletionConflict reports saved diets that prevent permanent deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+type CustomFoodDeletionConflict struct {
+	Diets []SavedDietDeletionReference
+}
+
+// Error returns a bounded, non-sensitive conflict message.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+func (e *CustomFoodDeletionConflict) Error() string {
+	return "custom food item is referenced by saved diets"
+}
+
+// Unwrap preserves the standard conflict classification for HTTP mapping.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+func (e *CustomFoodDeletionConflict) Unwrap() error {
+	return NewError(ErrorKindConflict, e.Error(), nil)
+}
+
+// SavedDietDeletionReference identifies one owner-scoped saved diet blocking deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+type SavedDietDeletionReference struct {
+	ID   uuid.UUID
+	Name string
+}
+
 // MealRepository defines meal and recipe persistence behavior.
 // Implements DESIGN-005 RepositoryInterfaces.
 type MealRepository interface {
@@ -770,6 +811,17 @@ type MicronutrientVocabularyRepository interface {
 	ListActive(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
 	IsAllowed(ctx context.Context, key string) (bool, error)
 	Upsert(ctx context.Context, entry MicronutrientVocabularyEntry) error
+}
+
+// MicronutrientVocabularyAdminRepository defines transaction-scoped canonical vocabulary management.
+// Implements DESIGN-005 MicronutrientVocabulary administrator management.
+type MicronutrientVocabularyAdminRepository interface {
+	ListAll(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
+	Get(ctx context.Context, key string) (MicronutrientVocabularyEntry, error)
+	Create(ctx context.Context, entry MicronutrientVocabularyEntry) (MicronutrientVocabularyEntry, error)
+	UpdateDisplayName(ctx context.Context, key, displayName string) (MicronutrientVocabularyEntry, error)
+	UpdateUnit(ctx context.Context, key, unit string) (MicronutrientVocabularyEntry, error)
+	SetActive(ctx context.Context, key string, active bool) (MicronutrientVocabularyEntry, error)
 }
 
 // UserProfileRepository defines user profile and preference persistence behavior.

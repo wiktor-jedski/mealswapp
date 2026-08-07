@@ -9,6 +9,7 @@ import importlib.util
 import json
 import re
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -586,15 +587,51 @@ class Task284Harness(real_stack.Harness):
             }, indent=2, sort_keys=True) + "\n")
 
 
-def finalize_reports(run_id: str, evidence: Path, defer_report: bool) -> int:
-    """Finalize Task 280 shards with FAIL taking precedence over BLOCKED."""
-    statuses = {item["status"] for item in json.loads((evidence / "results.json").read_text())["results"]}
-    expected = 1 if "FAIL" in statuses else 2 if "BLOCKED" in statuses else 0
-    if defer_report:
+def summarize_results(evidence: Path) -> int:
+    """Print one truthful requirement result and return its aggregate exit code."""
+    results = json.loads((evidence / "results.json").read_text()).get("results", [])
+    exit_code = 0
+    for requirement in sorted(REQUIREMENT_CRITERIA):
+        criteria = set(REQUIREMENT_CRITERIA[requirement])
+        selected = [item for item in results if item.get("criterionId") in criteria]
+        present = {item.get("criterionId") for item in selected}
+        missing = sorted(criteria - present)
+        non_pass = [item for item in selected if item.get("status") != "PASS"]
+        if not missing and not non_pass:
+            print(f"{requirement} ok")
+            continue
+
+        reasons = [f"missing criteria {', '.join(missing)}"] if missing else []
+        for item in non_pass:
+            status = item.get("status")
+            root = item.get("rootCauseId")
+            if status in {"FAIL", "BLOCKED"}:
+                reasons.append(f"{status} {root or 'unknown root cause'}")
+                exit_code = 1 if status == "FAIL" else max(exit_code, 2)
+            else:
+                reasons.append(f"invalid status {status!r}")
+                exit_code = 1
+        if missing:
+            exit_code = max(exit_code, 2)
+        print(f"{requirement} fail {'; '.join(dict.fromkeys(reasons))}")
+    return exit_code
+
+
+def summarize_unavailable_requirements(reason: str, exit_code: int = 2) -> int:
+    """Print a blocked result for every requirement when no result matrix exists."""
+    for requirement in sorted(REQUIREMENT_CRITERIA):
+        print(f"{requirement} fail {reason}")
+    return exit_code
+
+
+def finalize_reports(run_id: str, evidence: Path, report: bool) -> int:
+    """Summarize Task 284 and optionally finalize report shards."""
+    expected = summarize_results(evidence)
+    if not report:
         return expected
     codes = []
     for requirement in sorted(REQUIREMENT_CRITERIA):
-        codes.append(__import__("subprocess").run([
+        codes.append(subprocess.run([
             sys.executable,
             str(ROOT / "scripts/phase08_acceptance.py"),
             "report",
@@ -603,24 +640,26 @@ def finalize_reports(run_id: str, evidence: Path, defer_report: bool) -> int:
             "--evidence-root", str(evidence),
             "--requirement", requirement,
         ], cwd=ROOT, check=False).returncode)
-    return 1 if 1 in codes else 2 if 2 in codes else 0
+    if expected == 1 or any(code not in {0, 2} for code in codes):
+        return 1
+    return 2 if expected == 2 or 2 in codes else 0
 
 
-def finalize_failure_reports(harness: Task284Harness, defer_report: bool) -> int:
+def finalize_failure_reports(harness: Task284Harness, report: bool) -> int:
     """Materialize all Task 284 rows after setup, timeout, or signal failure."""
     evidence = harness.artifacts / "acceptance"
     evidence.mkdir(parents=True, exist_ok=True)
     if not (evidence / "browser.json").is_file():
         harness.write_synthetic_browser(evidence, "BLOCKED")
     harness.combine_results(evidence, "BLOCKED")
-    return finalize_reports(harness.run_id, evidence, defer_report)
+    return finalize_reports(harness.run_id, evidence, report)
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Allocate the owned stack, run acceptance, report, and tear down."""
+    """Allocate the owned stack, run acceptance, optionally report, and tear down."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--timeout-seconds", type=float, default=180)
-    parser.add_argument("--defer-report", action="store_true")
+    parser.add_argument("--report", action="store_true", help="validate and publish Phase 08 reports")
     args = parser.parse_args(argv)
     harness: Task284Harness | None = None
     controller = real_stack.SignalController()
@@ -635,17 +674,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         harness = Task284Harness(target, timeout=args.timeout_seconds, signal_controller=controller)
         harness.run()
-        return finalize_reports(harness.run_id, harness.artifacts / "acceptance", args.defer_report)
+        return finalize_reports(harness.run_id, harness.artifacts / "acceptance", args.report)
     except BaseException as error:
         if harness is None:
-            print(f"Task 284 infrastructure blocked before ownership: {type(error).__name__}", file=sys.stderr)
-            return 2
+            reason = f"infrastructure blocked before ownership: {type(error).__name__}"
+            print(f"Task 284 {reason}", file=sys.stderr)
+            return summarize_unavailable_requirements(reason)
         print(f"Task 284 real-stack run failed safely: {type(error).__name__}", file=sys.stderr)
         try:
-            return finalize_failure_reports(harness, args.defer_report)
+            return finalize_failure_reports(harness, args.report)
         except BaseException as finalizer_error:
             print(f"Task 284 report finalization failed: {type(finalizer_error).__name__}", file=sys.stderr)
-            return 1
+            return summarize_unavailable_requirements(
+                f"report finalization failed: {type(finalizer_error).__name__}", 1
+            )
     finally:
         real_stack.restore_signal_handlers(previous)
 

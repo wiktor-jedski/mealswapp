@@ -1,0 +1,1 @@
+-- Implements DESIGN-008 AccountDeleter permanent custom-item deletion compatibility asset.

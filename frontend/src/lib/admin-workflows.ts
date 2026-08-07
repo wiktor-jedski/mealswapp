@@ -1,4 +1,4 @@
-import type { AdminDeletionSummary, AdminItemRequest } from "./api/generated";
+import type { AdminDeletionSummary, AdminItem, AdminItemRequest } from "./api/generated";
 
 // Implements DESIGN-009 ItemCurator and UserAdminPanel client validation without replacing server authority.
 
@@ -13,9 +13,7 @@ export interface AdminItemForm {
 	carbohydrates: string;
 	fat: string;
 	density: string;
-	densitySourceProvider: string;
-	densitySourceFoodId: string;
-	densitySourceKind: "" | "imported" | "manual" | "estimated";
+	densitySourceKind: "" | "manual" | "estimated";
 	micros: string;
 	foodCategoryIds: string[];
 	culinaryRoleIds: string[];
@@ -25,7 +23,7 @@ export interface AdminItemForm {
 
 /** Converts form text to the generated item request or one actionable validation error. */
 export function parseAdminItemForm(form: AdminItemForm): { request?: AdminItemRequest; error?: string } {
-	const name = form.name.trim();
+	const name = form.name.trim().replace(/\s+/gu, " ");
 	if (!name || name.length > 200) return { error: "Enter an item name of at most 200 characters." };
 	const protein = number(form.protein);
 	const carbohydrates = number(form.carbohydrates);
@@ -61,18 +59,33 @@ export function parseAdminItemForm(form: AdminItemForm): { request?: AdminItemRe
 	if (form.physicalState === "liquid") {
 		const density = number(form.density);
 		if (density === undefined || density <= 0 || density > 99_999_999.9999) return { error: "Liquid items require a positive density." };
-		const densitySourceProvider = form.densitySourceProvider.trim();
-		const densitySourceFoodId = form.densitySourceFoodId.trim();
 		const densitySourceKind = form.densitySourceKind || "manual";
-		if (densitySourceProvider.length > 200 || densitySourceFoodId.length > 200 || densitySourceProvider.includes("\0") || densitySourceFoodId.includes("\0")) return { error: "Density provenance fields must be at most 200 characters." };
-		if (densitySourceKind === "imported" && (!densitySourceFoodId || !["usda", "openfoodfacts"].includes(densitySourceProvider))) return { error: "Imported density requires a trusted provider and source food ID." };
 		request.densityGramsPerMilliliter = density;
 		request.densitySourceKind = densitySourceKind;
-		if (densitySourceProvider) request.densitySourceProvider = densitySourceProvider;
-		if (densitySourceFoodId) request.densitySourceFoodId = densitySourceFoodId;
 		if (averageServingVolumeMilliliters !== undefined) request.averageServingVolumeMilliliters = averageServingVolumeMilliliters;
 	}
 	return { request };
+}
+
+/** Compares an authoritative global item with one normalized mutation snapshot. */
+export function adminItemMatchesRequest(item: AdminItem, request: AdminItemRequest): boolean {
+	const itemCategoryIds = item.foodCategoryIds ?? item.foodCategories.map(({ id }) => id);
+	const itemRoleIds = item.culinaryRoleIds ?? item.culinaryRoles.map(({ id }) => id);
+	return item.name === request.name
+		&& item.physicalState === request.physicalState
+		&& item.prepTimeMinutes === (request.prepTimeMinutes ?? 0)
+		&& item.averageUnitWeightGrams === request.averageUnitWeightGrams
+		&& item.averageServingVolumeMilliliters === request.averageServingVolumeMilliliters
+		&& item.densityGramsPerMilliliter === request.densityGramsPerMilliliter
+		&& item.densitySourceKind === request.densitySourceKind
+		&& item.imageUrl === request.imageUrl
+		&& item.macrosPer100.protein === request.macrosPer100.protein
+		&& item.macrosPer100.carbohydrates === request.macrosPer100.carbohydrates
+		&& item.macrosPer100.fat === request.macrosPer100.fat
+		&& equalRecord(item.micros, request.micros)
+		&& equalSet(itemCategoryIds, request.foodCategoryIds ?? [])
+		&& equalSet(itemRoleIds, request.culinaryRoleIds ?? [])
+		&& equalSet(item.allergenKeys, request.allergenKeys);
 }
 
 /** Mirrors the documented deletion retry eligibility rule for control visibility. */
@@ -106,6 +119,15 @@ function safeUriReference(value: string): boolean {
 		const parsed = new URL(value, "https://mealswapp.invalid");
 		return !parsed.protocol || parsed.protocol === "http:" || parsed.protocol === "https:";
 	} catch { return false; }
+}
+
+function equalRecord(left: Record<string, number>, right: Record<string, number>): boolean {
+	const keys = Object.keys(left);
+	return keys.length === Object.keys(right).length && keys.every((key) => left[key] === right[key]);
+}
+
+function equalSet(left: string[], right: string[]): boolean {
+	return JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
 
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

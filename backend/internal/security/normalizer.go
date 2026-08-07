@@ -11,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -482,18 +483,16 @@ func normalizeVisibleText(value string, maxRunes int, label string, required boo
 // Implements DESIGN-012 USDAClient and OpenFoodFactsClient and DESIGN-013 InputNormalizer.
 func normalizeCurationProvider(value string, allowAll bool) (NormalizationResult, error) {
 	normalized := strings.ToLower(strings.TrimSpace(value))
-	switch strings.NewReplacer("-", "_", " ", "_").Replace(normalized) {
-	case "usda":
-		normalized = "usda"
-	case "openfoodfacts", "open_food_facts":
-		normalized = "openfoodfacts"
-	case "all":
+	if normalized == "all" {
 		if !allowAll {
 			return NormalizationResult{}, errors.New("curation provider is unsupported")
 		}
-		normalized = "all"
-	default:
-		return NormalizationResult{}, errors.New("curation provider is unsupported")
+	} else {
+		var err error
+		normalized, err = providerregistry.Default().NormalizeProvider(value)
+		if err != nil {
+			return NormalizationResult{}, errors.New("curation provider is unsupported")
+		}
 	}
 	result := NormalizationResult{Value: normalized, Changed: normalized != value}
 	if result.Changed {

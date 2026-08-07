@@ -1,0 +1,7 @@
+{
+  "schema": "mealswapp.task296.real-stack-result.v1",
+  "apiHealth": "passed",
+  "apiPort": 18080,
+  "playwright": "passed",
+  "tests": 1
+}

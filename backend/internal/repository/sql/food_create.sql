@@ -4,5 +4,5 @@ INSERT INTO food_items (
     density_grams_per_milliliter, density_source_provider, density_source_food_id, density_source_kind,
     protein_per_100, carbohydrates_per_100, fat_per_100, micronutrients, image_url
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+VALUES (regexp_replace(btrim($1), '[[:space:]]+', ' ', 'g'), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 RETURNING id;

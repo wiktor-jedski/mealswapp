@@ -14,10 +14,15 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/dataimporter"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/search"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/testdatabase"
 )
+
+func record(provider, externalID string) providerregistry.Identity {
+	return providerregistry.Identity{Provider: provider, ExternalID: externalID}
+}
 
 // TestCuratedImportTransactionalWorkflow verifies IT-ARCH-009-002 and
 // IT-ARCH-009-003, ARCH-009, DESIGN-009 DataImporter, and
@@ -51,7 +56,7 @@ func TestCuratedImportTransactionalWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	base := dataimporter.Request{SourceProvider: "usda", ExternalID: "task-249-natural", Request: customitem.Request{
+	base := dataimporter.Request{SelectedRecord: record("usda", "task-249-natural"), Request: customitem.Request{
 		Name: "Task 249 imported tofu", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 18, Carbohydrates: 4, Fat: 8},
 		Micros: repository.MicroValues{"Sodium": 4}, FoodCategoryIDs: []uuid.UUID{categoryID}, CulinaryRoleIDs: []uuid.UUID{roleID},
 	}}
@@ -72,7 +77,7 @@ func TestCuratedImportTransactionalWorkflow(t *testing.T) {
 	}
 
 	withoutIdentity := base
-	withoutIdentity.SourceProvider, withoutIdentity.ExternalID, withoutIdentity.Name = "", "", "Task 249 key import"
+	withoutIdentity.SelectedRecord, withoutIdentity.Name = providerregistry.Identity{}, "Task 249 key import"
 	keyCreated, err := confirm(t, ctx, audit, service, adminID, "task-249-key-0001", withoutIdentity, false)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +94,7 @@ func TestCuratedImportTransactionalWorkflow(t *testing.T) {
 	}
 
 	nameConflict := base
-	nameConflict.ExternalID = "task-249-name-conflict"
+	nameConflict.SelectedRecord = record("usda", "task-249-name-conflict")
 	nameConflict.Name = base.Name
 	nameConflict.MacrosPer100.Protein = 21
 	if _, err := confirm(t, ctx, audit, service, adminID, "", nameConflict, false); !errors.Is(err, dataimporter.ErrNameConfirmation) {
@@ -102,23 +107,25 @@ func TestCuratedImportTransactionalWorkflow(t *testing.T) {
 	}
 
 	invalidClassification := base
-	invalidClassification.ExternalID, invalidClassification.Name = "task-249-bad-class", "Task 249 bad class"
+	invalidClassification.SelectedRecord, invalidClassification.Name = record("usda", "task-249-bad-class"), "Task 249 bad class"
 	invalidClassification.FoodCategoryIDs = []uuid.UUID{uuid.New()}
 	if _, err := confirm(t, ctx, audit, service, adminID, "", invalidClassification, false); !repository.IsKind(err, repository.ErrorKindValidation) {
 		t.Fatalf("classification error=%v", err)
 	}
 	invalidMicro := base
-	invalidMicro.ExternalID, invalidMicro.Name, invalidMicro.Micros = "task-249-bad-micro", "Task 249 bad micro", repository.MicroValues{"Unknown": 1}
+	invalidMicro.SelectedRecord, invalidMicro.Name, invalidMicro.Micros = record("usda", "task-249-bad-micro"), "Task 249 bad micro", repository.MicroValues{"Unknown": 1}
 	if _, err := confirm(t, ctx, audit, service, adminID, "", invalidMicro, false); !repository.IsKind(err, repository.ErrorKindInvalidMicronutrientKey) {
 		t.Fatalf("micronutrient error=%v", err)
 	}
 	liquid := base
-	liquid.ExternalID, liquid.Name, liquid.PhysicalState = "task-249-liquid", "Task 249 liquid", repository.PhysicalStateLiquid
+	liquid.SelectedRecord, liquid.Name, liquid.PhysicalState = record("usda", "task-249-liquid"), "Task 249 liquid", repository.PhysicalStateLiquid
 	if _, err := confirm(t, ctx, audit, service, adminID, "", liquid, false); err == nil {
 		t.Fatal("liquid without corrected density accepted")
 	}
 	liquid.DensityGramsPerMilliliter, liquid.DensitySourceKind = 1.03, "imported"
-	if _, err := confirm(t, ctx, audit, service, adminID, "", liquid, false); err == nil {
+	withoutEvidence := liquid
+	withoutEvidence.SelectedRecord = providerregistry.Identity{}
+	if _, err := confirm(t, ctx, audit, service, adminID, "task-249-no-density-evidence", withoutEvidence, false); err == nil {
 		t.Fatal("imported liquid density without provider evidence accepted")
 	}
 	assertNameAbsent(t, ctx, db, liquid.Name)
@@ -128,19 +135,18 @@ func TestCuratedImportTransactionalWorkflow(t *testing.T) {
 		t.Fatalf("corrected liquid=%+v err=%v", liquidResult, err)
 	}
 	estimated := liquid
-	estimated.ExternalID, estimated.Name, estimated.DensitySourceKind = "task-249-liquid-estimated", "Task 249 liquid estimated", "estimated"
+	estimated.SelectedRecord, estimated.Name, estimated.DensitySourceKind = record("usda", "task-249-liquid-estimated"), "Task 249 liquid estimated", "estimated"
 	if result, err := confirm(t, ctx, audit, service, adminID, "", estimated, false); err != nil || result.FoodItemID == uuid.Nil {
 		t.Fatalf("estimated liquid=%+v err=%v", result, err)
 	}
 	providerDensity := liquid
-	providerDensity.ExternalID, providerDensity.Name, providerDensity.DensitySourceKind = "task-249-liquid-provider", "Task 249 liquid provider", "imported"
-	providerDensity.DensitySourceProvider, providerDensity.DensitySourceFoodID = " USDA ", " density-record-1 "
+	providerDensity.SelectedRecord, providerDensity.Name, providerDensity.DensitySourceKind = record("usda", "task-249-liquid-provider"), "Task 249 liquid provider", "imported"
 	if result, err := confirm(t, ctx, audit, service, adminID, "", providerDensity, false); err != nil || result.FoodItemID == uuid.Nil {
 		t.Fatalf("provider-evidenced liquid=%+v err=%v", result, err)
 	}
 
 	rollback := base
-	rollback.ExternalID, rollback.Name = "task-249-rollback", "Task 249 rollback"
+	rollback.SelectedRecord, rollback.Name = record("usda", "task-249-rollback"), "Task 249 rollback"
 	if _, err := confirm(t, ctx, audit, service, adminID, "", rollback, true); !errors.Is(err, repository.ErrAdminAuditPersistence) {
 		t.Fatalf("audit rollback error=%v", err)
 	}
@@ -170,7 +176,7 @@ func TestCuratedImportTransactionalWorkflow(t *testing.T) {
 
 	for _, status := range []string{"draft", "conflict", "rejected"} {
 		statusRequest := base
-		statusRequest.ExternalID, statusRequest.Name = "task-249-status-"+status, "Task 249 status "+status
+		statusRequest.SelectedRecord, statusRequest.Name = record("usda", "task-249-status-"+status), "Task 249 status "+status
 		statusCreated, err := confirm(t, ctx, audit, service, adminID, "", statusRequest, false)
 		if err != nil {
 			t.Fatalf("create %s status fixture: %v", status, err)
@@ -221,7 +227,7 @@ func TestCuratedImportConfirmedMergeInvalidatesRedisSimilarity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft := dataimporter.Request{SourceProvider: "usda", ExternalID: "task-249-cache-first", Request: customitem.Request{
+	draft := dataimporter.Request{SelectedRecord: record("usda", "task-249-cache-first"), Request: customitem.Request{
 		Name: "Task 249 cache candidate", PhysicalState: repository.PhysicalStateSolid,
 		MacrosPer100: repository.MacroValues{Protein: 10}, Micros: repository.MicroValues{}, FoodCategoryIDs: []uuid.UUID{}, CulinaryRoleIDs: []uuid.UUID{},
 	}}
@@ -244,7 +250,7 @@ func TestCuratedImportConfirmedMergeInvalidatesRedisSimilarity(t *testing.T) {
 	}
 
 	merge := draft
-	merge.ExternalID = "task-249-cache-merge"
+	merge.SelectedRecord = record("usda", "task-249-cache-merge")
 	merge.ConfirmNameConflict = true
 	merge.MacrosPer100 = repository.MacroValues{Protein: 9, Carbohydrates: 1}
 	merged, err := confirm(t, ctx, audit, imports, adminID, "", merge, false)
@@ -309,8 +315,8 @@ func assertConcurrentNameConfirmation(t *testing.T, ctx context.Context, db *pgx
 		suffix = "confirmed"
 	}
 	requests := []dataimporter.Request{
-		{SourceProvider: "usda", ExternalID: "task-249-concurrent-" + suffix + "-a", ConfirmNameConflict: confirmed, Request: customitem.Request{Name: "Task 249 concurrent " + suffix, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}, Micros: repository.MicroValues{}}},
-		{SourceProvider: "openfoodfacts", ExternalID: "task-249-concurrent-" + suffix + "-b", ConfirmNameConflict: confirmed, Request: customitem.Request{Name: "  TASK 249 CONCURRENT " + suffix + "  ", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 11}, Micros: repository.MicroValues{}}},
+		{SelectedRecord: record("usda", "task-249-concurrent-"+suffix+"-a"), ConfirmNameConflict: confirmed, Request: customitem.Request{Name: "Task 249 concurrent " + suffix, PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 10}, Micros: repository.MicroValues{}}},
+		{SelectedRecord: record("openfoodfacts", "task-249-concurrent-"+suffix+"-b"), ConfirmNameConflict: confirmed, Request: customitem.Request{Name: "  TASK 249 CONCURRENT " + suffix + "  ", PhysicalState: repository.PhysicalStateSolid, MacrosPer100: repository.MacroValues{Protein: 11}, Micros: repository.MicroValues{}}},
 	}
 	type outcome struct {
 		result dataimporter.Result

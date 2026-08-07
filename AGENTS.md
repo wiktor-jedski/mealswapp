@@ -31,7 +31,7 @@ Planned app commands should use `docs/design/01_TECH_STACK.md`: Bun for Svelte f
 Installed development tooling:
 
 - `golang-security` agent skill: use for backend security-sensitive work, especially authentication, authorization, OAuth, cookies, PII handling, and dependency review.
-- Redocly CLI: lint the OpenAPI source of truth with `npx --no-install redocly lint api/openapi.yaml`.
+- Redocly CLI: lint the OpenAPI source of truth with `npm exec --yes --package=@redocly/cli@2.31.5 -- redocly lint api/openapi.yaml`.
 
 ## Coding Style & Naming Conventions
 
@@ -67,7 +67,7 @@ Testing commands for the current package layout:
 - Backend static analysis: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go vet ./...`
 - Backend vulnerability scan: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...`
 - Backend race detection: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test -race ./...`
-- OpenAPI lint: `npx --no-install redocly lint api/openapi.yaml`
+- OpenAPI lint: `npm exec --yes --package=@redocly/cli@2.31.5 -- redocly lint api/openapi.yaml`
 - Frontend install: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun install`
 - Frontend build: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run build`
 - Frontend unit tests: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun test`

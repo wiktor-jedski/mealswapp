@@ -53,6 +53,7 @@ REQUIRED_MARKERS = (
 	"CuratedImportEnvelope:",
 	"AdminItemRequest:",
 	"AdminItemEnvelope:",
+	"AdminItemSearchEnvelope:",
 	"AdminClassificationRequest:",
 	"AdminClassificationEnvelope:",
 	"AdminClassificationCollectionEnvelope:",
@@ -120,10 +121,11 @@ PHASE08_OPERATION_RESPONSES = {
 	("/api/v1/custom-items", "post"): {"201", "400", "401", "403", "409", "500", "503", "504"},
 	("/api/v1/custom-items/{itemId}", "get"): {"200", "400", "401", "404", "500", "503", "504"},
 	("/api/v1/custom-items/{itemId}", "put"): {"200", "400", "401", "403", "404", "409", "500", "503", "504"},
-	("/api/v1/custom-items/{itemId}", "delete"): {"204", "400", "401", "403", "404", "500", "503", "504"},
+	("/api/v1/custom-items/{itemId}", "delete"): {"204", "400", "401", "403", "404", "409", "500", "503", "504"},
 	("/api/v1/search/filter-options", "get"): {"200", "400", "429", "500", "503", "504"},
 	("/api/v1/admin/external-search", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
 	("/api/v1/admin/imports", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/items", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
 	("/api/v1/admin/items", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
 	("/api/v1/admin/items/{itemId}", "get"): {"200", "400", "401", "403", "404", "429", "500", "503", "504"},
 	("/api/v1/admin/items/{itemId}", "put"): {"200", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
@@ -142,6 +144,7 @@ PHASE08_SUCCESS_ENVELOPES = (
 	"ExternalSearchEnvelope",
 	"CuratedImportEnvelope",
 	"AdminItemEnvelope",
+	"AdminItemSearchEnvelope",
 	"AdminClassificationEnvelope",
 	"AdminClassificationCollectionEnvelope",
 	"AdminUserPageEnvelope",
@@ -151,6 +154,8 @@ PHASE08_SUCCESS_ENVELOPES = (
 ADMINISTRATION_DESCRIPTION_SCHEMAS = (
 	"AdminItemRequest",
 	"AdminItem",
+	"AdminItemSearchSummary",
+	"AdminItemSearchPageData",
 	"AdminClassificationRequest",
 	"AdminClassification",
 	"AdminUser",
@@ -179,7 +184,7 @@ DAILY_DIET_SCHEMA_RULES = {
 		"      schema:\n        type: string\n        minLength: 8\n        maxLength: 255\n",
 	),
 	"CanonicalQuantityUnit": ("      type: string\n      enum: [g, ml, oz, fl_oz]\n",),
-	"FoodObjectType": ("      type: string\n      enum: [food_item, meal]\n",),
+	"FoodObjectType": ("      type: string\n      enum: [food_item, meal, custom_food_item]\n",),
 	"FoodObjectQuantity": (
 		"      type: object\n",
 		"      additionalProperties: false\n",
@@ -506,6 +511,8 @@ def app_error_contract_mismatches(source: str) -> list[str]:
 		mismatches.append("AppError retryable must remain boolean")
 	if "        requestId:\n          type: string\n" not in block:
 		mismatches.append("AppError requestId must remain string")
+	if "        data:\n          type: object\n" not in block:
+		mismatches.append("AppError data must remain an object")
 	return mismatches
 
 
@@ -659,6 +666,21 @@ export interface AppError {
 \tmessage: string;
 \tretryable: boolean;
 \trequestId?: string;
+\tdata?: Record<string, unknown>;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Bounded owner-scoped saved-diet reference that blocks permanent deletion. */
+export interface SavedDietDeletionReference {
+\tid: string;
+\tname: string;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Structured conflict details returned when a private item is still referenced. */
+export interface CustomItemInUseError extends AppError {
+\tcode: "custom_item_in_use";
+\tdata: { affectedDiets: SavedDietDeletionReference[] };
 }
 
 // Implements DESIGN-009 AdminController audit-safe frontend error boundary.
@@ -979,6 +1001,35 @@ export interface ProfileUpdateRequest {
 \tthemePreference: "system" | "light" | "dark";
 }
 
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Credentialed profile update request with CSRF protection. */
+export interface ProfileUpdateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+\tmethod: "PUT";
+\tcredentials: "include";
+\theaders: AuthJsonMutationHeaders;
+\tbody: string;
+}
+
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Builds the authoritative profile preference update request. */
+export function buildProfileUpdateRequestInit(
+\trequest: ProfileUpdateRequest,
+\tcsrfToken: string,
+\toptions: { signal?: AbortSignal } = {}
+): ProfileUpdateRequestInit {
+\treturn {
+\t\tmethod: "PUT",
+\t\tcredentials: "include",
+\t\theaders: {
+\t\t\tAccept: "application/json",
+\t\t\t"Content-Type": "application/json",
+\t\t\t"X-CSRF-Token": csrfToken
+\t\t},
+\t\tbody: JSON.stringify(request),
+\t\tsignal: options.signal
+\t};
+}
+
 // Implements DESIGN-008 SavedDataRepository frontend saved-data contract.
 /** One saved favorite, meal, or reserved diet reference. */
 export interface SavedItem {
@@ -1006,7 +1057,10 @@ export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
 /** Distinguishes Food Items from Meals in Daily Diet entries. */
-export type FoodObjectType = "food_item" | "meal";
+export type FoodObjectType = "food_item" | "meal" | "custom_food_item";
+
+/** Distinguishes global Food Items from Meals at public search boundaries. */
+export type GlobalFoodObjectType = Exclude<FoodObjectType, "custom_food_item">;
 
 /** One ordered Food Object quantity supplied to a saved Daily Diet. */
 export interface FoodObjectQuantity {
@@ -1388,12 +1442,39 @@ export type SearchHistoryEnvelope = Envelope<SearchHistoryData>;
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** JSON account export bundle. */
 export interface ExportBundle {
-\tuser: Record<string, unknown>;
-\tconsent: Array<Record<string, unknown>>;
-\tsavedItems: SavedItem[];
+\tuser: ExportUser;
+\tconsent: ExportConsent[];
+\tsavedItems: ExportSavedItem[];
 \tsavedDiets: ExportSavedDiet[];
-\thistory: SearchHistoryEntry[];
-\tcustomItems: Array<Record<string, unknown>>;
+\thistory: ExportSearchHistoryEntry[];
+\tcustomItems: ExportCustomItem[];
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** Top-level authenticated account identity. */
+export interface ExportUser {
+\tuserId: string;
+\temail: string;
+\trole: "user" | "admin";
+\tdisplayName: string;
+\tunitSystem: "metric" | "imperial";
+\tthemePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One accepted legal-version pair. */
+export interface ExportConsent {
+\tprivacyPolicyVersion: string;
+\ttermsVersion: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free saved-item reference. */
+export interface ExportSavedItem {
+\tid: string;
+\titemId: string;
+\tkind: "favorite" | "saved_meal" | "saved_diet";
+\tcreatedAt: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -1401,9 +1482,50 @@ export interface ExportBundle {
 export interface ExportSavedDiet {
 \tid: string;
 \tname: string;
-\tentries: DailyDietFoodObjectEntry[];
+\tentries: ExportSavedDietEntry[];
 \tcreatedAt: string;
 \tupdatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One ordered owner-free saved-diet entry. */
+export interface ExportSavedDietEntry {
+\tid: string;
+\tfoodObjectId: string;
+\tfoodObjectType: FoodObjectType;
+\tquantity: number;
+\tunit: CanonicalQuantityUnit;
+\tposition: number;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free decrypted search-history entry. */
+export interface ExportSearchHistoryEntry {
+\tid: string;
+\tquery: string;
+\tmode: string;
+\tfiltersHash: string;
+\tcreatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free private custom-item projection. */
+export interface ExportCustomItem {
+\tid: string;
+\tname: string;
+\tphysicalState: "solid" | "liquid";
+\tprepTimeMinutes: number;
+\taverageUnitWeightGrams?: number;
+\taverageServingVolumeMilliliters?: number;
+\tdensityGramsPerMilliliter?: number;
+\tdensitySourceProvider?: string;
+\tdensitySourceFoodId?: string;
+\tdensitySourceKind?: "imported" | "manual" | "estimated";
+\tmacrosPer100: MacroProfile;
+\tmicros: Record<string, number>;
+\tfoodCategories: ClassificationSummary[];
+\tculinaryRoles: ClassificationSummary[];
+\timageUrl?: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -1434,6 +1556,17 @@ export const CUSTOM_ITEMS_ENDPOINT = "/api/v1/custom-items" as const;
 
 export function buildCustomItemUrl(itemId: string): string {
 	return `${CUSTOM_ITEMS_ENDPOINT}/${encodeURIComponent(itemId)}`;
+}
+
+export interface CustomItemListRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" };
+}
+
+/** Builds an owner-scoped active private-item list request. */
+export function buildCustomItemListRequestInit(options: { signal?: AbortSignal } = {}): CustomItemListRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: "application/json" }, signal: options.signal };
 }
 
 export interface CustomItemMutationRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
@@ -1789,7 +1922,7 @@ export type SubstitutionUnit = CanonicalQuantityUnit;
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 \tfoodObjectId: string;
-\tfoodObjectType?: FoodObjectType;
+\tfoodObjectType?: GlobalFoodObjectType;
 \tquantity: number;
 \tunit: SubstitutionUnit;
 }
@@ -1822,9 +1955,7 @@ export interface CustomItemRequest {
 	averageUnitWeightGrams?: number;
 	averageServingVolumeMilliliters?: number;
 	densityGramsPerMilliliter?: number;
-	densitySourceProvider?: string;
-	densitySourceFoodId?: string;
-	densitySourceKind?: "imported" | "manual" | "estimated";
+	densitySourceKind?: "manual" | "estimated";
 	macrosPer100: MacroProfile;
 	micros: Record<string, number>;
 	foodCategoryIds?: string[];
@@ -1843,6 +1974,9 @@ export interface CustomItem extends CustomItemRequest {
 
 /** Successful custom-item response envelope. */
 export type CustomItemEnvelope = OkEnvelope<CustomItem>;
+
+/** Successful active owner-scoped custom-item collection response. */
+export type CustomItemCollectionEnvelope = OkEnvelope<{ items: CustomItem[] }>;
 
 // Implements DESIGN-009 AdminController retry metadata contract.
 /** Positive whole seconds from a Retry-After response header. */
@@ -1892,10 +2026,13 @@ export type ExternalProviderWarningCode =
 
 // Implements DESIGN-009 ExternalSearchProxy safe normalized candidate projection.
 export interface ExternalCandidate {
-	provider: "usda" | "openfoodfacts";
+	provider: string;
 	externalId: string;
+	recordToken: string;
 	name: string;
 	physicalState: "solid" | "liquid";
+	densityGramsPerMilliliter?: number;
+	densitySourceKind?: "imported";
 	macrosPer100: MacroProfile;
 	micronutrients: Record<string, number>;
 	imageUrl?: string;
@@ -1903,7 +2040,7 @@ export interface ExternalCandidate {
 }
 
 export interface ExternalDataWarning {
-	provider: "usda" | "openfoodfacts" | "external";
+	provider: string;
 	code: ExternalProviderWarningCode;
 	message: ExternalProviderWarningCode;
 }
@@ -1917,9 +2054,9 @@ export interface ExternalSearchData {
 export type ExternalSearchEnvelope = OkEnvelope<ExternalSearchData>;
 
 // Implements DESIGN-009 DataImporter editable normalized request boundary.
-export interface CuratedImportRequest extends CustomItemRequest {
-	sourceProvider?: "usda" | "openfoodfacts";
-	externalId?: string;
+export interface CuratedImportRequest extends Omit<CustomItemRequest, "densitySourceKind"> {
+	externalRecordToken?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
 	confirmNameConflict?: boolean;
 	foodCategoryIds: string[];
 	culinaryRoleIds: string[];
@@ -1943,14 +2080,37 @@ export interface AdminItemRequest extends CustomItemRequest {
 }
 
 /** @openapi-description AdminItem */
-export interface AdminItem extends AdminItemRequest {
+export interface AdminItem extends Omit<AdminItemRequest, "densitySourceKind"> {
 	id: string;
 	prepTimeMinutes: number;
+	densitySourceProvider?: string;
+	densitySourceFoodId?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
 	foodCategories: ClassificationSummary[];
 	culinaryRoles: ClassificationSummary[];
 }
 
 export type AdminItemEnvelope = OkEnvelope<AdminItem>;
+
+/** @openapi-description AdminItemSearchSummary */
+export interface AdminItemSearchSummary {
+	itemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	macrosPer100: MacroProfile;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+/** @openapi-description AdminItemSearchPageData */
+export interface AdminItemSearchPageData {
+	items: AdminItemSearchSummary[];
+	page: number;
+	pageSize: number;
+	total: number;
+}
+
+export type AdminItemSearchEnvelope = OkEnvelope<AdminItemSearchPageData>;
 
 // Implements DESIGN-009 TagManager administration hierarchy boundary.
 /** @openapi-description AdminClassificationRequest */
@@ -1969,6 +2129,35 @@ export interface AdminClassification {
 
 export type AdminClassificationEnvelope = OkEnvelope<{ classification: AdminClassification }>;
 export type AdminClassificationCollectionEnvelope = OkEnvelope<{ classifications: AdminClassification[] }>;
+
+// Implements DESIGN-005 MicronutrientVocabulary administration boundary.
+/** @openapi-description AdminMicronutrient */
+export interface AdminMicronutrient {
+	key: string;
+	displayName: string;
+	unit: "g" | "mg" | "mcg";
+	active: boolean;
+}
+
+/** @openapi-description AdminMicronutrientCreateRequest */
+export interface AdminMicronutrientCreateRequest {
+	key: string;
+	displayName: string;
+	unit: AdminMicronutrient["unit"];
+}
+
+/** @openapi-description AdminMicronutrientDisplayNameRequest */
+export interface AdminMicronutrientDisplayNameRequest {
+	displayName: string;
+}
+
+/** @openapi-description AdminMicronutrientUnitRequest */
+export interface AdminMicronutrientUnitRequest {
+	unit: AdminMicronutrient["unit"];
+}
+
+export type AdminMicronutrientEnvelope = OkEnvelope<{ micronutrient: AdminMicronutrient }>;
+export type AdminMicronutrientCollectionEnvelope = OkEnvelope<{ micronutrients: AdminMicronutrient[] }>;
 
 // Implements DESIGN-009 UserAdminPanel privacy-minimized projection.
 export interface AdminDeletionSummary {
@@ -2017,7 +2206,7 @@ export interface SourceSummary {
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
 	id: string;
-	objectType: FoodObjectType;
+	objectType: GlobalFoodObjectType;
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
@@ -2092,7 +2281,7 @@ export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRej
 /** Ranked autocomplete suggestion. */
 export interface RankedAutocomplete {
 \titemId: string;
-\tobjectType: FoodObjectType;
+\tobjectType: GlobalFoodObjectType;
 \tlabel: string;
 \texactMatch: boolean;
 \tlevenshteinDistance: number;
@@ -2115,7 +2304,7 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 
 def generated_contract(source: str) -> str:
 	"""Render shared quantity enums and administration TSDoc from OpenAPI."""
-	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 4:
+	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 5:
 		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
 	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
 	if match is None:

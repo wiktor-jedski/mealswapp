@@ -249,7 +249,7 @@ func validateDailyDietCreateResponse(response DailyDietCreateResponse) error {
 	positions := make(map[int]struct{}, len(response.Entries))
 	for _, entry := range response.Entries {
 		objectID, objectType := responseEntryFoodObject(entry)
-		if entry.ID == uuid.Nil || objectID == uuid.Nil || (objectType != FoodObjectTypeMeal && objectType != FoodObjectTypeFoodItem) || entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) || ValidateQuantityUnit(entry.Unit) != nil || entry.Position < 0 || entry.Position >= 100 {
+		if entry.ID == uuid.Nil || objectID == uuid.Nil || (objectType != FoodObjectTypeMeal && objectType != FoodObjectTypeFoodItem && objectType != FoodObjectTypeCustomFoodItem) || entry.Quantity <= 0 || math.IsNaN(entry.Quantity) || math.IsInf(entry.Quantity, 0) || ValidateQuantityUnit(entry.Unit) != nil || entry.Position < 0 || entry.Position >= 100 {
 			return validationError("daily diet create response entry is invalid")
 		}
 		if _, exists := positions[entry.Position]; exists {
