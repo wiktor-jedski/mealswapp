@@ -6,11 +6,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/cache"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/database"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/deletionworker"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/maintenance"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/optimization"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
@@ -72,6 +74,9 @@ func main() {
 	})
 	group.Go(func() error {
 		return deletionworker.RunAccountDeletionProcessor(workerCtx, deletionService, 0, 0, telemetrySink)
+	})
+	group.Go(func() error {
+		return maintenance.RunDeletedCustomFoodCreateKeyPurger(workerCtx, repository.NewPostgresCustomFoodItemRepository(pg), 15*time.Minute)
 	})
 	if err := group.Wait(); err != nil {
 		log.Fatalf("worker stopped: %v", err)
