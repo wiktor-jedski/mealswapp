@@ -693,31 +693,33 @@ retained in the mandatory append-only
     {
       "id": "P08-FIND-283-001",
       "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
-      "status": "OPEN BLOCKER",
+      "status": "CLOSED",
       "requirements": ["SW-REQ-056"],
       "scenarios": ["P08-SWR056-MANUAL-GLOBAL-ITEMS"],
-      "observed": "The final Task 302 Task 283 run passes the manual solid/liquid creation, canonical persistence, update, audit rollback, deletion, and density-provenance checks, but its mobile discovery probe still cannot observe the newly created global item; the remaining SW-REQ-056 criteria therefore remain blocked.",
+      "observed": "Resolved by the latest Task 302 Task 283 isolated real-stack run: all SW-REQ-056 manual solid/liquid creation, canonical persistence, update, audit rollback, deletion, density-provenance, and desktop/mobile discovery criteria pass with request, database, Redis, and screenshot evidence.",
       "expected": "Every SW-REQ-056 criterion executes against production UI/API and read-only persistence evidence, with exact counts and truthful status.",
-      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
+      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-056/report.json",
       "owner": "phase08-e2e",
-      "retestCondition": "Run the complete Task 283 isolated producer and close only when every SW-REQ-056 criterion passes."
+      "retestCondition": "Run the complete Task 283 isolated producer and close only when every SW-REQ-056 criterion passes.",
+      "closedDate": "2026-08-07",
+      "passingEvidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-056/report.json"
     },
     {
       "id": "P08-FIND-283-002", "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE", "status": "CLOSED",
       "requirements": ["SW-REQ-057"], "scenarios": ["P08-SWR057-CLASSIFICATIONS"],
       "observed": "Resolved by the Task 302 managed desktop/mobile run: the Administration UI exposes the complete classification lifecycle and the browser/API evidence proves hierarchy, cycle, detach, conflict, deletion, and refresh behavior.",
       "expected": "Food Category and Culinary Role lifecycle and stable-ID filter propagation pass in two application instances.",
-      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json", "owner": "phase08-e2e",
+      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-057/report.json", "owner": "phase08-e2e",
       "retestCondition": "Add the authorized hierarchy lifecycle and rerun both browser contexts with database/cache evidence.",
       "closedDate": "2026-08-07",
-      "passingEvidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json"
+      "passingEvidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-057/report.json"
     },
     {
       "id": "P08-FIND-283-003", "rootCauseId": "ROOT-T283-FILTER-CROSS-INSTANCE", "status": "CLOSED",
       "requirements": ["SW-REQ-019"], "scenarios": ["P08-SWR019-CLASSIFICATION-FILTERING"],
       "observed": "Resolved by the Task 283 managed desktop/mobile run: stable classification UUIDs drive include/exclude requests, API-2 commits a rename, API-1 observes the renamed projection, and operation-scoped Redis observations prove committed invalidation and failed-mutation non-invalidation.",
       "expected": "Stable IDs drive requests and committed changes propagate without stale or failed-mutation invalidation.",
-      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.json", "owner": "phase08-e2e",
+      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-019/report.json", "owner": "phase08-e2e",
       "retestCondition": "Rerun Task 283 and require all SW-REQ-019 criteria PASS with operation-scoped SQL, request, and Redis evidence.",
       "closedDate": "2026-07-28",
       "passingEvidence": "docs/implementation/evidence/task-283-preparation.md"
@@ -727,7 +729,7 @@ retained in the mandatory append-only
       "requirements": ["SW-REQ-032"], "scenarios": ["P08-SWR032-IMPERIAL-CONVERSION"],
       "observed": "Resolved by the Task 283 managed desktop/mobile run: imperial mass and volume inputs are converted exactly once, displayed in both unit systems, and matched to canonical metric persistence through request and read-only database evidence.",
       "expected": "Metric database values equal the converted imperial quantities exactly once across create, update, display, and request boundaries.",
-      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-032/report.json", "owner": "phase08-e2e",
+      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-032/report.json", "owner": "phase08-e2e",
       "retestCondition": "Rerun Task 283 and require all SW-REQ-032 criteria PASS with desktop/mobile conversion and canonical persistence evidence.",
       "closedDate": "2026-07-28",
       "passingEvidence": "docs/implementation/evidence/task-283-preparation.md"
@@ -735,18 +737,20 @@ retained in the mandatory append-only
     {
       "id": "P08-FIND-283-005", "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION", "status": "OPEN BLOCKER",
       "requirements": ["SW-REQ-033"], "scenarios": ["P08-SWR033-STANDARDIZED-STORAGE"],
-      "observed": "The final Task 302 Task 283 run still does not establish ownerless global discovery for the newly created mobile manual record; desktop discovery passes, but the mobile picker does not contain the just-created global item, so normalization/partition isolation, Catalog/Substitution visibility, and deletion search exclusion remain blocked for that path.",
+      "observed": "The latest Task 302 Task 283 run passes ownerless global discovery, private-partition exclusion, Catalog/Substitution visibility, and deletion exclusion on mobile and desktop; the four provider-import and canonical unit-storage criteria remain explicitly blocked because this producer lacks that provider capability.",
       "expected": "Global and private partitions remain isolated while normalized global records are discoverable through both production search surfaces.",
-      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json", "owner": "phase08-e2e",
+      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-033/report.json", "owner": "phase08-e2e",
       "retestCondition": "Execute partition and search/substitution scenarios with read-only owner/count evidence."
     },
     {
-      "id": "P08-FIND-283-006", "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION", "status": "OPEN BLOCKER",
+      "id": "P08-FIND-283-006", "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION", "status": "CLOSED",
       "requirements": ["SW-REQ-090"], "scenarios": ["P08-SWR090-MICRONUTRIENT-VOCABULARY"],
-      "observed": "The final Task 302 Task 283 run proves the invalid-input rejection and no-mutation behavior, but does not yet prove the full canonical active micronutrient/allergen/classification validation and rollback/generation invariants required by SW-REQ-090.",
+      "observed": "Resolved by the latest Task 302 Task 283 isolated real-stack run: valid and invalid micronutrient, allergen, and classification vocabulary behavior passes with canonical persistence, exact rollback, audit, and Redis-generation evidence on desktop and mobile.",
       "expected": "Active vocabulary validation is authoritative, malformed values fail without mutation or generation invalidation, and accepted values persist canonically.",
-      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json", "owner": "phase08-e2e",
-      "retestCondition": "Execute valid/invalid vocabulary and rollback scenarios with audit and generation counts."
+      "evidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-090/report.json", "owner": "phase08-e2e",
+      "retestCondition": "Execute valid/invalid vocabulary and rollback scenarios with audit and generation counts.",
+      "closedDate": "2026-08-07",
+      "passingEvidence": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-d6953d11779c18e38ba0c44c-sw-req-090/report.json"
     },
     {
       "id": "P08-FIND-282-005",
@@ -850,7 +854,7 @@ retained in the mandatory append-only
 - **PLANNED (Task 292, accepted 2026-07-29; owner: backend/frontend/data-curation maintainers):** resolve `P08-FIND-283-005` with an administrator-only, global-only paginated item search contract and accessible picker, while retaining direct UUID loading as a secondary advanced tool. The isolated retest must prove ownerlessness, private partition isolation, Catalog and Substitution visibility, and deletion exclusion.
 - **TRACKING (Task 302, project-owner decision, 2026-07-29):** `P08-FIND-283-006` is a real-stack evidence gap, not a confirmed separate product defect. Do not create a duplicate product task. Task 302 must prove valid and invalid micronutrient, allergen, and classification behavior together with exact persistence, audit, rollback, and Redis-generation counts.
 - **PLANNED (Task 293, accepted 2026-07-29; owner: backend/privacy/frontend maintainers):** resolve `P08-FIND-284-001` with export-only nested projections. Keep the account identity only in the top-level user section and remove repeated persistence ownership fields from nested JSON and CSV data, then rerun the isolated private-isolation and portability scenarios.
-- **SYNCHRONIZED (Task 302, 2026-08-07):** the final remediation runs close `P08-FIND-282-001`, `P08-FIND-282-004`, `P08-FIND-283-002`, and `P08-FIND-284-001` with committed per-requirement reports. `P08-FIND-283-001`, `P08-FIND-283-005`, and `P08-FIND-283-006` remain open because the Task 283 mobile discovery and full validation evidence are still blocked; `P08-FIND-281-002` and the Task 285 deployed-environment findings remain unchanged.
+- **SYNCHRONIZED (Task 302, 2026-08-07):** the latest remediation run `d6953d11779c18e38ba0c44c` records 40 PASS and 4 BLOCKED for Task 283. It closes `P08-FIND-282-001`, `P08-FIND-282-004`, `P08-FIND-283-001`, `P08-FIND-283-002`, `P08-FIND-283-006`, and `P08-FIND-284-001` with committed per-requirement reports. `P08-FIND-283-005` remains open for the four blocked SW-REQ-033 provider-storage criteria; `P08-FIND-281-002` and the Task 285 deployed-environment findings remain unchanged.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-001` to Phase 09 planning. It requires an approved deployed test origin, bounded GCP Cloud Logging scope, least-privilege reader, and retention evidence. No task is created now. Local console output remains invalid evidence.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/E2E/observability maintainers):** move `P08-FIND-285-002` to Phase 09 planning. It requires safe deployed fixtures for authentication, provider, administration, validation, dependency, and audit-failure actions. No task is created now, and no public fault-injection API is approved.
 - **DEFERRED TO PHASE 09 (project-owner decision, 2026-07-29; owner: platform/observability maintainers):** move `P08-FIND-285-003` to Phase 09 planning. Its missing, duplicate, malformed, inconsistent, or privacy-unsafe centralized-log behavior can be evaluated only after the deployed environment exists. No task is created now.

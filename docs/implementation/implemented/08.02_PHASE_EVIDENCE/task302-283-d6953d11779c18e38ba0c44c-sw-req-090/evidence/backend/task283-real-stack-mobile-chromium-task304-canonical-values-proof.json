@@ -1,0 +1,104 @@
+{
+  "actual": {
+    "active": true,
+    "allergenKeys": [
+      "dairy",
+      "peanut"
+    ],
+    "auditActions": {
+      "manual_create": 1
+    },
+    "culinaryRoleIds": [
+      "31431631-8460-4035-9d97-8bee05e6fd89"
+    ],
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [
+      "607da3b4-fb7a-4394-a01c-ceffe7629006"
+    ],
+    "generationAfter": "62",
+    "generationBefore": "61",
+    "generationDelta": 1,
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {
+      "Sodium": 125.5,
+      "Task304Microrealstackmobilechromium": 7.25
+    },
+    "name": "Task 283 Task 304 canonical real-stack-mobile-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "requestAuditActions": {
+      "classification.create": 2,
+      "manual_create": 1,
+      "micronutrient.create": 1,
+      "micronutrient.deactivate": 1,
+      "micronutrient.reactivate": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR090-STEP-01",
+      "P08-SWR090-ACCEPT-01"
+    ],
+    "entityId": "165c87e7-1754-4e58-99bf-8992dd044be5",
+    "expected": {
+      "active": true,
+      "allergenKeys": [
+        "dairy",
+        "peanut"
+      ],
+      "auditActions": {
+        "manual_create": 1
+      },
+      "culinaryRoleIds": [
+        "31431631-8460-4035-9d97-8bee05e6fd89"
+      ],
+      "foodCategoryIds": [
+        "607da3b4-fb7a-4394-a01c-ceffe7629006"
+      ],
+      "generationAfter": "62",
+      "generationBefore": "61",
+      "generationDelta": 1,
+      "idempotencyCount": 1,
+      "micros": {
+        "Sodium": 125.5,
+        "Task304Microrealstackmobilechromium": 7.25
+      },
+      "ownerless": true,
+      "requestAuditActions": {
+        "classification.create": 2,
+        "manual_create": 1,
+        "micronutrient.create": 1,
+        "micronutrient.deactivate": 1,
+        "micronutrient.reactivate": 1
+      }
+    },
+    "generationSnapshots": {
+      "generationAfter": "f28fc562-26ba-480c-ae77-5cd21d549952",
+      "generationBefore": "55781406-7258-4ea7-a78c-d80fac9f72da"
+    },
+    "idempotencyKey": "d7dda5e1-15ca-4102-b3a4-1ac9de7a9fbd",
+    "kind": "item",
+    "name": "Task 283 Task 304 canonical real-stack-mobile-chromium",
+    "requestIds": [
+      "1c700343-ee25-4045-a4a2-6604b90ec3d7",
+      "cfa7444e-fa47-4193-be72-a00efb5bed28",
+      "64ecb5dd-85dc-4e2d-b62e-6cab18daf90f",
+      "9dac8b52-7b50-497f-ad43-474f24dc8b54",
+      "fcc8f92a-c428-42ca-88f6-28f6a3719ad9",
+      "24580c13-4564-46a6-8d2f-2bfc58fc1d9b"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

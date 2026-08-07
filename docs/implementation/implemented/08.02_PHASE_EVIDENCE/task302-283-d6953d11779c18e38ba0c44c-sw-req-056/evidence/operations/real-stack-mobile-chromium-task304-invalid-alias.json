@@ -1,0 +1,26 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR090-STEP-02",
+    "P08-SWR090-ACCEPT-01"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 Task 304 invalid alias real-stack-mobile-chromium",
+  "idempotencyKey": "6087d35e-646f-4d82-8162-bd63039c5139",
+  "requestIds": [
+    "3c73a101-3cfd-41ad-b3bf-66d519ec1125"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "requestAuditActions": {},
+    "idempotencyCount": 0,
+    "generationBefore": "62",
+    "generationAfter": "62",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "ebac139c-4983-4459-8388-c1966491ac56",
+    "generationAfter": "023c94dd-ede6-47bd-9297-5a090cbc21fb"
+  }
+}

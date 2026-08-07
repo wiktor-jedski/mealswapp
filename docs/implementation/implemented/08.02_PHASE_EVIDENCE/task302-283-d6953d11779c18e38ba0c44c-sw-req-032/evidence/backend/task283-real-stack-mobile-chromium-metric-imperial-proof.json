@@ -1,0 +1,55 @@
+{
+  "actual": {
+    "active": true,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1
+    },
+    "culinaryRoleIds": [],
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 4.0,
+      "fat": 2.0,
+      "protein": 9.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 units source real-stack-mobile-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "requestAuditActions": {},
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR032-STEP-01",
+      "P08-SWR032-STEP-02",
+      "P08-SWR032-STEP-03"
+    ],
+    "entityId": "718aade9-fe0e-4d7f-979d-ff17e14141a2",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "idempotencyCount": 1
+    },
+    "idempotencyKey": "fba15818-4e8c-4ef3-bcd2-f38c9d20750f",
+    "kind": "item",
+    "name": "Task 283 units source real-stack-mobile-chromium",
+    "requestIds": [
+      "5b067333-88dd-4dcb-95c9-88f6349746bd",
+      "9e716c2a-7488-4a69-b2c1-a924974b1b1c",
+      "758e3352-7238-427d-8158-6bbdb8424ca7",
+      "5dbed71b-f654-4205-84a3-e5e5c464f766"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

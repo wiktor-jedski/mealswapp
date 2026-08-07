@@ -1,0 +1,689 @@
+{
+  "exitCode": 0,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c700343-ee25-4045-a4a2-6604b90ec3d7",
+        "1f7f1e1d-d467-4787-b1e5-0d0e6a3a43ea",
+        "24580c13-4564-46a6-8d2f-2bfc58fc1d9b",
+        "3c73a101-3cfd-41ad-b3bf-66d519ec1125",
+        "527dc4a5-5705-43f9-afec-58b014748dc0",
+        "64ecb5dd-85dc-4e2d-b62e-6cab18daf90f",
+        "70aaa400-7e30-4723-94d4-24bcbce0ae60",
+        "783c522a-92f1-4946-b5c3-65b0facd7e72",
+        "7f52184b-f46e-4950-a4d7-1a3cd62498a9",
+        "83b55ffd-e845-4ffb-ab6b-13533c1100f9",
+        "9dac8b52-7b50-497f-ad43-474f24dc8b54",
+        "a8c0336c-6cb8-4837-af7c-131dbc31611c",
+        "b299e8fd-52a8-4b7f-9c86-6ffdfde94988",
+        "bf24ad1f-3edd-4ad5-9388-eedf9154214a",
+        "ce6b189e-949b-43c3-a054-01d34453603b",
+        "cfa7444e-fa47-4193-be72-a00efb5bed28",
+        "e63becf0-b891-4929-82c1-60f386eed522",
+        "e91a427f-5bc4-4831-8f58-0cbe502e9b79",
+        "eba88dc0-31e5-41e2-99df-43696347e624",
+        "ef4a2fda-be3b-496f-9ceb-ed09a2468eee",
+        "f4054933-120d-4bb7-8563-09f10c8bb64b",
+        "fcc8f92a-c428-42ca-88f6-28f6a3719ad9"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 192
+      },
+      "status": "PASS",
+      "text": "Accept when only active canonical keys are persisted."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-01",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c700343-ee25-4045-a4a2-6604b90ec3d7",
+        "1f7f1e1d-d467-4787-b1e5-0d0e6a3a43ea",
+        "24580c13-4564-46a6-8d2f-2bfc58fc1d9b",
+        "3c73a101-3cfd-41ad-b3bf-66d519ec1125",
+        "527dc4a5-5705-43f9-afec-58b014748dc0",
+        "64ecb5dd-85dc-4e2d-b62e-6cab18daf90f",
+        "70aaa400-7e30-4723-94d4-24bcbce0ae60",
+        "783c522a-92f1-4946-b5c3-65b0facd7e72",
+        "7f52184b-f46e-4950-a4d7-1a3cd62498a9",
+        "83b55ffd-e845-4ffb-ab6b-13533c1100f9",
+        "9dac8b52-7b50-497f-ad43-474f24dc8b54",
+        "a8c0336c-6cb8-4837-af7c-131dbc31611c",
+        "b299e8fd-52a8-4b7f-9c86-6ffdfde94988",
+        "bf24ad1f-3edd-4ad5-9388-eedf9154214a",
+        "ce6b189e-949b-43c3-a054-01d34453603b",
+        "cfa7444e-fa47-4193-be72-a00efb5bed28",
+        "e63becf0-b891-4929-82c1-60f386eed522",
+        "e91a427f-5bc4-4831-8f58-0cbe502e9b79",
+        "eba88dc0-31e5-41e2-99df-43696347e624",
+        "ef4a2fda-be3b-496f-9ceb-ed09a2468eee",
+        "f4054933-120d-4bb7-8563-09f10c8bb64b",
+        "fcc8f92a-c428-42ca-88f6-28f6a3719ad9"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 187
+      },
+      "status": "PASS",
+      "text": "Create/import an item using Sodium."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-02",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c700343-ee25-4045-a4a2-6604b90ec3d7",
+        "1f7f1e1d-d467-4787-b1e5-0d0e6a3a43ea",
+        "24580c13-4564-46a6-8d2f-2bfc58fc1d9b",
+        "3c73a101-3cfd-41ad-b3bf-66d519ec1125",
+        "527dc4a5-5705-43f9-afec-58b014748dc0",
+        "64ecb5dd-85dc-4e2d-b62e-6cab18daf90f",
+        "70aaa400-7e30-4723-94d4-24bcbce0ae60",
+        "783c522a-92f1-4946-b5c3-65b0facd7e72",
+        "7f52184b-f46e-4950-a4d7-1a3cd62498a9",
+        "83b55ffd-e845-4ffb-ab6b-13533c1100f9",
+        "9dac8b52-7b50-497f-ad43-474f24dc8b54",
+        "a8c0336c-6cb8-4837-af7c-131dbc31611c",
+        "b299e8fd-52a8-4b7f-9c86-6ffdfde94988",
+        "bf24ad1f-3edd-4ad5-9388-eedf9154214a",
+        "ce6b189e-949b-43c3-a054-01d34453603b",
+        "cfa7444e-fa47-4193-be72-a00efb5bed28",
+        "e63becf0-b891-4929-82c1-60f386eed522",
+        "e91a427f-5bc4-4831-8f58-0cbe502e9b79",
+        "eba88dc0-31e5-41e2-99df-43696347e624",
+        "ef4a2fda-be3b-496f-9ceb-ed09a2468eee",
+        "f4054933-120d-4bb7-8563-09f10c8bb64b",
+        "fcc8f92a-c428-42ca-88f6-28f6a3719ad9"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 188
+      },
+      "status": "PASS",
+      "text": "Try the same using Na."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-03",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c700343-ee25-4045-a4a2-6604b90ec3d7",
+        "1f7f1e1d-d467-4787-b1e5-0d0e6a3a43ea",
+        "24580c13-4564-46a6-8d2f-2bfc58fc1d9b",
+        "3c73a101-3cfd-41ad-b3bf-66d519ec1125",
+        "527dc4a5-5705-43f9-afec-58b014748dc0",
+        "64ecb5dd-85dc-4e2d-b62e-6cab18daf90f",
+        "70aaa400-7e30-4723-94d4-24bcbce0ae60",
+        "783c522a-92f1-4946-b5c3-65b0facd7e72",
+        "7f52184b-f46e-4950-a4d7-1a3cd62498a9",
+        "83b55ffd-e845-4ffb-ab6b-13533c1100f9",
+        "9dac8b52-7b50-497f-ad43-474f24dc8b54",
+        "a8c0336c-6cb8-4837-af7c-131dbc31611c",
+        "b299e8fd-52a8-4b7f-9c86-6ffdfde94988",
+        "bf24ad1f-3edd-4ad5-9388-eedf9154214a",
+        "ce6b189e-949b-43c3-a054-01d34453603b",
+        "cfa7444e-fa47-4193-be72-a00efb5bed28",
+        "e63becf0-b891-4929-82c1-60f386eed522",
+        "e91a427f-5bc4-4831-8f58-0cbe502e9b79",
+        "eba88dc0-31e5-41e2-99df-43696347e624",
+        "ef4a2fda-be3b-496f-9ceb-ed09a2468eee",
+        "f4054933-120d-4bb7-8563-09f10c8bb64b",
+        "fcc8f92a-c428-42ca-88f6-28f6a3719ad9"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 189
+      },
+      "status": "PASS",
+      "text": "Try an unknown micronutrient."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-04",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c700343-ee25-4045-a4a2-6604b90ec3d7",
+        "1f7f1e1d-d467-4787-b1e5-0d0e6a3a43ea",
+        "24580c13-4564-46a6-8d2f-2bfc58fc1d9b",
+        "3c73a101-3cfd-41ad-b3bf-66d519ec1125",
+        "527dc4a5-5705-43f9-afec-58b014748dc0",
+        "64ecb5dd-85dc-4e2d-b62e-6cab18daf90f",
+        "70aaa400-7e30-4723-94d4-24bcbce0ae60",
+        "783c522a-92f1-4946-b5c3-65b0facd7e72",
+        "7f52184b-f46e-4950-a4d7-1a3cd62498a9",
+        "83b55ffd-e845-4ffb-ab6b-13533c1100f9",
+        "9dac8b52-7b50-497f-ad43-474f24dc8b54",
+        "a8c0336c-6cb8-4837-af7c-131dbc31611c",
+        "b299e8fd-52a8-4b7f-9c86-6ffdfde94988",
+        "bf24ad1f-3edd-4ad5-9388-eedf9154214a",
+        "ce6b189e-949b-43c3-a054-01d34453603b",
+        "cfa7444e-fa47-4193-be72-a00efb5bed28",
+        "e63becf0-b891-4929-82c1-60f386eed522",
+        "e91a427f-5bc4-4831-8f58-0cbe502e9b79",
+        "eba88dc0-31e5-41e2-99df-43696347e624",
+        "ef4a2fda-be3b-496f-9ceb-ed09a2468eee",
+        "f4054933-120d-4bb7-8563-09f10c8bb64b",
+        "fcc8f92a-c428-42ca-88f6-28f6a3719ad9"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 190
+      },
+      "status": "PASS",
+      "text": "Disable a vocabulary entry and retry."
+    }
+  ],
+  "rootCauses": [],
+  "runId": "task302-283-d6953d11779c18e38ba0c44c-sw-req-090",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "PASS"
+}

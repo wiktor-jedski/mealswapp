@@ -1,0 +1,49 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "classification.create": 1
+    },
+    "deleted": false,
+    "generationAfter": "60",
+    "generationBefore": "59",
+    "generationDelta": 1,
+    "kind": "food_category",
+    "name": "Task 283 Task 304 category real-stack-mobile-chromium",
+    "parentId": null,
+    "requestAuditActions": {
+      "classification.create": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR057-STEP-01"
+    ],
+    "entityId": "607da3b4-fb7a-4394-a01c-ceffe7629006",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "classification.create": 1
+      },
+      "deleted": false,
+      "generationAfter": "60",
+      "generationBefore": "59",
+      "generationDelta": 1,
+      "kind": "food_category"
+    },
+    "generationSnapshots": {
+      "generationAfter": "e6999a91-02bd-41d2-9b06-339e806d9d4a",
+      "generationBefore": "1c43906a-22c5-4a6a-b4b2-e99090c739a4"
+    },
+    "kind": "classification",
+    "name": "Task 283 Task 304 category real-stack-mobile-chromium",
+    "requestIds": [
+      "1c700343-ee25-4045-a4a2-6604b90ec3d7"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}
