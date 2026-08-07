@@ -151,6 +151,9 @@ func confirmIdempotentCuratedImport(ctx context.Context, tx AdminMutationExecuto
 // persistCuratedImport validates once, resolves name conflicts, and links immutable import metadata.
 // Implements DESIGN-009 DataImporter optimized validation and confirmation.
 func persistCuratedImport(ctx context.Context, tx AdminMutationExecutor, claim CuratedImportConfirmation, provider, externalID string) (CuratedImportConfirmationResult, error) {
+	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
+		return CuratedImportConfirmationResult{}, err
+	}
 	if err := validateFoodItemWithExecutor(ctx, tx, claim.Item); err != nil {
 		return CuratedImportConfirmationResult{}, err
 	}

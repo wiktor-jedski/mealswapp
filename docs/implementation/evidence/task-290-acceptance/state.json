@@ -1,0 +1,8 @@
+{
+  "schema": "mealswapp.task290-state.v1",
+  "runId": "e565f3b003c09aa4d1c1af6a",
+  "status": "cleaned",
+  "processCount": 1,
+  "databaseCleanup": true,
+  "redisCleanup": true
+}

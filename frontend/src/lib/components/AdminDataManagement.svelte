@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from "svelte";
 	import { adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
-	import type { AdminClassification, AdminItem, AdminUser } from "../api/generated";
+	import type { AdminClassification, AdminItem, AdminItemSearchSummary, AdminUser } from "../api/generated";
 	import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
+	import { classificationHierarchy } from "../classification-hierarchy";
 
 	// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel authoritative administration workflows.
 
@@ -10,6 +11,7 @@
 	let { api = adminApi }: Props = $props();
 
 	const allergenOptions = ["animal_product", "dairy", "egg", "gluten", "meat", "peanut", "tree_nut"];
+	const classificationKinds: ClassificationKind[] = ["food_category", "culinary_role"];
 	const emptyForm = (): AdminItemForm => ({ name: "", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "", carbohydrates: "", fat: "", density: "", densitySourceKind: "", micros: "{}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "" });
 	let form = $state<AdminItemForm>(emptyForm());
 	let itemId = $state("");
@@ -19,12 +21,26 @@
 	let itemError = $state("");
 	let createKey = $state("");
 	let createBody = $state("");
+	let itemSearchQuery = $state("");
+	let itemSearchItems = $state<AdminItemSearchSummary[]>([]);
+	let itemSearchPage = $state(1);
+	let itemSearchPageSize = $state(10);
+	let itemSearchTotal = $state(0);
+	let itemSearchStatus = $state<"idle" | "loading" | "success" | "empty" | "error">("idle");
+	let itemSearchError = $state("");
+	let itemSearchPages = $derived(Math.max(1, Math.ceil(itemSearchTotal / itemSearchPageSize)));
 	let classifications = $state<Record<ClassificationKind, AdminClassification[]>>({ food_category: [], culinary_role: [] });
+	let lastSafeClassifications = $state<Record<ClassificationKind, AdminClassification[]>>({ food_category: [], culinary_role: [] });
 	let classificationKind = $state<ClassificationKind>("food_category");
 	let classificationName = $state("");
 	let classificationId = $state("");
-	let classificationParentId = $state<string | undefined>();
-	let classificationBusy = $state(false);
+	let classificationParentId = $state("");
+	let classificationMutationBusy = $state(false);
+	let classificationReadBusy = $state(false);
+	let classificationRefreshRequired = $state(false);
+	let savedClassification = $state<AdminClassification | undefined>();
+	let deletedClassificationId = $state("");
+	let classificationBusy = $derived(classificationMutationBusy || classificationReadBusy);
 	let classificationMessage = $state("");
 	let classificationError = $state("");
 	let userQuery = $state("");
@@ -39,25 +55,39 @@
 	let confirmationOpener: HTMLElement | undefined;
 	let confirmationContext: HTMLElement | undefined;
 	let itemGeneration = 0;
-	let classificationGeneration = 0;
+	let classificationMutationGeneration = 0;
+	let classificationReadGeneration = 0;
 	let userGeneration = 0;
 	let itemController: AbortController | undefined;
+	let classificationMutationController: AbortController | undefined;
+	let classificationReadController: AbortController | undefined;
 	let classificationController: AbortController | undefined;
+	let itemSearchController: AbortController | undefined;
+	let itemSearchGeneration = 0;
 	let userController: AbortController | undefined;
 
 	onMount(() => { void refreshClassifications(); });
-	onDestroy(() => { itemController?.abort(); classificationController?.abort(); userController?.abort(); });
+	onDestroy(() => { itemController?.abort(); classificationMutationController?.abort(); classificationReadController?.abort(); itemSearchController?.abort(); classificationController?.abort(); userController?.abort(); });
 
 	function beginItemOperation(): { generation: number; controller: AbortController } {
 		itemController?.abort(); const controller = new AbortController(); itemController = controller; return { generation: ++itemGeneration, controller };
 	}
-	function beginClassificationOperation(): { generation: number; controller: AbortController } {
-		classificationController?.abort(); const controller = new AbortController(); classificationController = controller; return { generation: ++classificationGeneration, controller };
+	function beginClassificationMutation(): { generation: number; controller: AbortController } {
+		const controller = new AbortController(); classificationMutationController = controller; return { generation: ++classificationMutationGeneration, controller };
+	}
+	function beginClassificationRead(): { generation: number; controller: AbortController } {
+		classificationReadController?.abort(); const controller = new AbortController(); classificationReadController = controller; return { generation: ++classificationReadGeneration, controller };
+	}
+	function beginItemSearch(): { generation: number; controller: AbortController } {
+		itemSearchController?.abort(); const controller = new AbortController(); itemSearchController = controller; return { generation: ++itemSearchGeneration, controller };
 	}
 	function beginUserOperation(): { generation: number; controller: AbortController } {
 		userController?.abort(); const controller = new AbortController(); userController = controller; return { generation: ++userGeneration, controller };
 	}
 	function currentItemOperation(generation: number, controller: AbortController): boolean { return generation === itemGeneration && !controller.signal.aborted; }
+	function currentClassificationMutation(generation: number, controller: AbortController): boolean { return generation === classificationMutationGeneration && !controller.signal.aborted; }
+	function currentClassificationRead(generation: number, controller: AbortController): boolean { return generation === classificationReadGeneration && !controller.signal.aborted; }
+	function currentItemSearch(generation: number, controller: AbortController): boolean { return generation === itemSearchGeneration && !controller.signal.aborted; }
 	function currentClassificationOperation(generation: number, controller: AbortController): boolean { return generation === classificationGeneration && !controller.signal.aborted; }
 	function currentUserOperation(generation: number, controller: AbortController): boolean { return generation === userGeneration && !controller.signal.aborted; }
 	function aborted(error: unknown): boolean { return error instanceof Error && error.name === "AbortError"; }
@@ -66,13 +96,53 @@
 		return { food_category: foodCategories, culinary_role: culinaryRoles };
 	}
 
-	async function refreshClassifications(): Promise<void> {
-		const { generation, controller } = beginClassificationOperation(); classificationBusy = true;
+	async function refreshClassifications(preserveError = false): Promise<void> {
+		const { generation, controller } = beginClassificationRead(); classificationReadBusy = true;
 		try {
 			const projection = await classificationProjection(controller.signal);
-			if (currentClassificationOperation(generation, controller)) classifications = projection;
-		} catch (error) { if (currentClassificationOperation(generation, controller) && !aborted(error)) classificationError = message(error); }
-		finally { if (generation === classificationGeneration) classificationBusy = false; }
+			if (currentClassificationRead(generation, controller)) {
+				if (savedClassification && !projectionContains(projection, savedClassification)) {
+					classifications = lastSafeClassifications;
+					classificationMessage = "Saved, but the list could not be refreshed";
+					return;
+				}
+				if (deletedClassificationId && projectionContainsId(projection, deletedClassificationId)) {
+					classifications = lastSafeClassifications;
+					classificationMessage = "Deleted, but the list could not be refreshed";
+					return;
+				}
+				lastSafeClassifications = projection;
+				classifications = projection;
+				const completedSave = classificationRefreshRequired && savedClassification !== undefined;
+				const completedDeleteId = classificationRefreshRequired ? deletedClassificationId : "";
+				const completedDelete = completedDeleteId !== "";
+				classificationRefreshRequired = false;
+				savedClassification = undefined;
+				deletedClassificationId = "";
+				if (!preserveError) classificationError = "";
+				if (completedSave) {
+					resetClassificationEditor();
+					classificationMessage = "Classification saved and refreshed.";
+				} else if (completedDelete) {
+					if (classificationId === completedDeleteId) resetClassificationEditor();
+					classificationMessage = "Classification deleted and refreshed.";
+				}
+			}
+		} catch (error) {
+			if (currentClassificationRead(generation, controller) && !aborted(error)) {
+				classifications = lastSafeClassifications;
+				if (classificationRefreshRequired) classificationMessage = savedClassification ? "Saved, but the list could not be refreshed" : "Deleted, but the list could not be refreshed";
+				else classificationError = message(error);
+			}
+		} finally { if (generation === classificationReadGeneration) classificationReadBusy = false; }
+	}
+
+	function projectionContains(projection: Record<ClassificationKind, AdminClassification[]>, saved: AdminClassification): boolean {
+		return projection[saved.kind].some((value) => value.id === saved.id && value.name === saved.name && (value.parentId ?? "") === (saved.parentId ?? ""));
+	}
+
+	function projectionContainsId(projection: Record<ClassificationKind, AdminClassification[]>, id: string): boolean {
+		return Object.values(projection).some((values) => values.some((value) => value.id === id));
 	}
 
 	async function loadItem(): Promise<void> {
@@ -82,6 +152,37 @@
 		try { const item = await api.getItem(id, controller.signal); if (currentItemOperation(generation, controller)) { applyItem(item); itemMessage = "Authoritative item loaded."; } }
 		catch (error) { if (currentItemOperation(generation, controller) && !aborted(error)) { currentItem = undefined; itemError = message(error); } }
 		finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function searchItems(page = 1): Promise<boolean> {
+		const { generation, controller } = beginItemSearch();
+		const name = itemSearchQuery.trim();
+		if (!name) {
+			itemSearchItems = []; itemSearchPage = 1; itemSearchTotal = 0;
+			itemSearchError = "Enter an item name."; itemSearchStatus = "error"; return false;
+		}
+		itemSearchStatus = "loading"; itemSearchError = "";
+		try {
+			const result = await api.searchItems({ name, page, pageSize: itemSearchPageSize }, controller.signal);
+			if (!currentItemSearch(generation, controller)) return false;
+			const resultPages = Math.max(1, Math.ceil(result.total / result.pageSize));
+			if (page > resultPages) return searchItems(resultPages);
+			itemSearchItems = result.items; itemSearchPage = result.page; itemSearchPageSize = result.pageSize; itemSearchTotal = result.total;
+			itemSearchStatus = result.items.length ? "success" : "empty";
+			return true;
+		} catch (error) {
+			if (currentItemSearch(generation, controller) && !aborted(error)) { itemSearchError = message(error); itemSearchStatus = "error"; }
+			return false;
+		}
+	}
+
+	async function loadSearchResult(item: AdminItemSearchSummary): Promise<void> {
+		itemId = item.itemId;
+		await loadItem();
+	}
+
+	async function refreshItemSearch(): Promise<boolean> {
+		return !itemSearchQuery.trim() || searchItems(Math.min(itemSearchPage, itemSearchPages));
 	}
 
 	function applyItem(item: AdminItem): void {
@@ -101,23 +202,148 @@
 
 	async function saveItem(event: SubmitEvent): Promise<void> {
 		event.preventDefault(); itemError = ""; itemMessage = "";
+		if (ambiguousItemMutation) { itemError = "Verify the previous item request before submitting another mutation."; await focusRecovery(); return; }
 		const parsed = parseAdminItemForm(form);
-		if (!parsed.request) { itemError = parsed.error ?? "Check the item fields."; return; }
+		if (!parsed.request) { itemError = parsed.error ?? "Check the item fields."; await focusItemError(); return; }
+		const request = snapshotRequest(parsed.request);
+		const formSnapshot = snapshotForm(form);
+		const body = JSON.stringify(request);
 		const targetId = currentItem?.id; const { generation, controller } = beginItemOperation(); itemBusy = true;
 		try {
 			const wasEditing = Boolean(targetId);
 			let saved: AdminItem;
-			if (targetId) saved = await api.replaceItem(targetId, parsed.request, { signal: controller.signal });
+			if (targetId) saved = await api.replaceItem(targetId, parsed.request, { signal: controller.signal, headers: currentItem?.updatedAt ? { "If-Match": currentItem.updatedAt } : undefined });
 			else {
-				const body = JSON.stringify(parsed.request);
 				if (!createKey || createBody !== body) { createKey = newAdminItemKey(); createBody = body; }
-				saved = await api.createItem(parsed.request, createKey, { signal: controller.signal });
+				saved = await api.createItem(request, createKey, { signal: controller.signal });
 			}
 			const projection = await api.getItem(saved.id, controller.signal);
-			if (currentItemOperation(generation, controller)) { applyItem(projection); createKey = ""; createBody = ""; itemMessage = wasEditing ? "Item saved and refreshed." : "Item created and refreshed."; }
+			if (currentItemOperation(generation, controller)) {
+				applyItem(projection); createKey = ""; createBody = "";
+				const refreshed = await refreshItemSearch();
+				if (currentItemOperation(generation, controller)) itemMessage = refreshed ? (wasEditing ? "Item saved and refreshed." : "Item created and refreshed.") : (wasEditing ? "Item saved, but search results could not be refreshed." : "Item created, but search results could not be refreshed.");
+			}
 		} catch (error) {
-			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = message(error); if (targetId) await refreshCurrentItem(targetId, generation, controller); }
+			if (currentItemOperation(generation, controller) && !aborted(error)) {
+				if (possiblyCommitted(error)) {
+					ambiguousItemMutation = {
+						kind: targetId ? "update" : "create",
+						request,
+						form: formSnapshot,
+						body,
+						...(targetId ? { itemId: targetId } : { createKey }),
+						...(error.appError.requestId ? { requestId: error.appError.requestId } : {}),
+						retryAllowed: false
+					};
+					conflictingItem = undefined;
+					form = snapshotForm(formSnapshot);
+					itemError = "";
+					itemMessage = "Verification required: the server may have saved this item. Ordinary submission is blocked.";
+					await focusRecovery();
+				} else {
+					itemError = message(error);
+					if (targetId) await refreshCurrentItem(targetId, generation, controller);
+					await focusItemError();
+				}
+			}
 		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function verifyAmbiguousItem(): Promise<void> {
+		const recovery = ambiguousItemMutation;
+		if (!recovery) return;
+		if (recovery.kind === "update") {
+			await verifyUpdate(recovery);
+			return;
+		}
+		await verifyCreate(recovery);
+	}
+
+	async function verifyUpdate(recovery: AmbiguousItemMutation): Promise<void> {
+		if (!recovery.itemId) return;
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		try {
+			const item = await api.getItem(recovery.itemId, controller.signal);
+			if (!currentItemOperation(generation, controller)) return;
+			if (!adminItemMatchesRequest(item, recovery.request)) { conflictingItem = item; itemError = "Verification found authoritative values that differ from the submitted update. The update will not be resubmitted."; await focusRecovery(); return; }
+			await finishRecovery(item, generation, controller, "Update recovered from authoritative state.");
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = verificationReadMessage(error); await focusRecovery(); }
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function verifyCreate(recovery: AmbiguousItemMutation): Promise<void> {
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		itemSearchController?.abort(); itemSearchQuery = recovery.request.name; itemSearchStatus = "loading"; itemSearchError = "";
+		try {
+			let page = 1;
+			let firstPage: Awaited<ReturnType<AdminApi["searchItems"]>> | undefined;
+			let exactCandidateFound = false;
+			do {
+				const result = await api.searchItems({ name: recovery.request.name, page, pageSize: 50 }, controller.signal);
+				if (!firstPage) firstPage = result;
+				for (const summary of result.items.filter(({ name }) => name === recovery.request.name)) {
+					exactCandidateFound = true;
+					const item = await api.getItem(summary.itemId, controller.signal);
+					if (adminItemMatchesRequest(item, recovery.request)) { await finishRecovery(item, generation, controller, "Create recovered from authoritative state."); return; }
+					conflictingItem ??= item;
+				}
+				if (page * result.pageSize >= result.total) break;
+				page += 1;
+			} while (page <= 10_000);
+			if (!currentItemOperation(generation, controller) || !firstPage) return;
+			itemSearchItems = firstPage.items; itemSearchPage = firstPage.page; itemSearchPageSize = firstPage.pageSize; itemSearchTotal = firstPage.total;
+			itemSearchStatus = firstPage.items.length ? "success" : "empty";
+			if (exactCandidateFound) {
+				itemError = "Verification found an item with this name but conflicting authoritative values. Retry remains blocked.";
+			} else {
+				ambiguousItemMutation = { ...recovery, retryAllowed: true };
+				itemMessage = "No matching authoritative item was found. A retry is now safe only with the original request and idempotency key.";
+			}
+			await focusRecovery();
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) { itemSearchStatus = "error"; itemSearchError = verificationReadMessage(error); itemError = "Verification could not complete. Retry remains blocked."; await focusRecovery(); }
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function verifyCreateCandidate(id: string): Promise<void> {
+		const recovery = ambiguousItemMutation;
+		if (recovery?.kind !== "create") return;
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		try {
+			const item = await api.getItem(id, controller.signal);
+			if (!currentItemOperation(generation, controller)) return;
+			if (!adminItemMatchesRequest(item, recovery.request)) { conflictingItem = item; ambiguousItemMutation = { ...recovery, retryAllowed: false }; itemError = "This authoritative item differs from the submitted create request. Retry remains blocked."; await focusRecovery(); return; }
+			await finishRecovery(item, generation, controller, "Create recovered from authoritative state.");
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = verificationReadMessage(error); await focusRecovery(); }
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function retryAmbiguousCreate(): Promise<void> {
+		const recovery = ambiguousItemMutation;
+		if (recovery?.kind !== "create" || !recovery.retryAllowed || !recovery.createKey) return;
+		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = ""; itemMessage = "";
+		try {
+			const saved = await api.createItem(recovery.request, recovery.createKey, { signal: controller.signal });
+			const item = await api.getItem(saved.id, controller.signal);
+			if (!currentItemOperation(generation, controller)) return;
+			if (!adminItemMatchesRequest(item, recovery.request)) { conflictingItem = item; ambiguousItemMutation = { ...recovery, retryAllowed: false }; itemError = "The retry returned conflicting authoritative values. No further retry is allowed."; await focusRecovery(); return; }
+			await finishRecovery(item, generation, controller, "Create safely recovered with the original idempotency key.");
+		} catch (error) {
+			if (currentItemOperation(generation, controller) && !aborted(error)) {
+				ambiguousItemMutation = { ...recovery, ...(error instanceof AdminClientError && error.appError.requestId ? { requestId: error.appError.requestId } : {}), retryAllowed: false };
+				itemError = possiblyCommitted(error) ? "The retry also returned an invalid confirmation. Verify authoritative state again." : message(error);
+				await focusRecovery();
+			}
+		} finally { if (generation === itemGeneration) itemBusy = false; }
+	}
+
+	async function finishRecovery(item: AdminItem, generation: number, controller: AbortController, success: string): Promise<void> {
+		if (!currentItemOperation(generation, controller)) return;
+		applyItem(item); ambiguousItemMutation = undefined; conflictingItem = undefined; createKey = ""; createBody = "";
+		const refreshed = await refreshItemSearch();
+		if (currentItemOperation(generation, controller)) itemMessage = refreshed ? success : `${success} Search results could not be refreshed.`;
 	}
 
 	async function refreshCurrentItem(id: string, generation: number, controller: AbortController): Promise<void> {
@@ -125,13 +351,21 @@
 		catch (error) { if (currentItemOperation(generation, controller) && !aborted(error)) currentItem = undefined; }
 	}
 
-	function resetItemState(): void { currentItem = undefined; itemId = ""; form = emptyForm(); itemError = ""; createKey = ""; createBody = ""; }
-	function newItem(): void { itemController?.abort(); ++itemGeneration; itemBusy = false; resetItemState(); itemMessage = ""; }
+	function resetItemState(): void { currentItem = undefined; itemId = ""; form = emptyForm(); itemError = ""; createKey = ""; createBody = ""; ambiguousItemMutation = undefined; conflictingItem = undefined; }
+	function newItem(): void { if (ambiguousItemMutation) { itemError = "Verify the previous item request before starting another item."; void focusRecovery(); return; } itemController?.abort(); ++itemGeneration; itemBusy = false; resetItemState(); itemMessage = ""; }
 
 	async function deleteItem(target: Confirmation): Promise<void> {
 		if (target.action !== "item" || currentItem?.id !== target.id) { itemError = "The confirmed item is no longer current. Reload it before deleting."; return; }
 		const { generation, controller } = beginItemOperation(); itemBusy = true; itemError = "";
-		try { await api.deleteItem(target.id, { signal: controller.signal }); if (currentItemOperation(generation, controller)) { resetItemState(); itemMessage = "Item deleted after server confirmation."; } }
+		try {
+			await api.deleteItem(target.id, { signal: controller.signal });
+			if (currentItemOperation(generation, controller)) {
+				resetItemState();
+				const hadSearch = Boolean(itemSearchQuery.trim());
+				const refreshed = await refreshItemSearch();
+				if (currentItemOperation(generation, controller)) itemMessage = !hadSearch ? "Item deleted after server confirmation." : refreshed ? "Item deleted and search results refreshed." : "Item deleted, but search results could not be refreshed.";
+			}
+		}
 		catch (error) { if (currentItemOperation(generation, controller) && !aborted(error)) { itemError = message(error); await refreshCurrentItem(target.id, generation, controller); } }
 		finally { if (generation === itemGeneration) itemBusy = false; }
 	}
@@ -139,35 +373,62 @@
 	async function saveClassification(event: SubmitEvent): Promise<void> {
 		event.preventDefault(); const name = classificationName.trim();
 		if (!name || name.length > 120) { classificationError = "Enter a classification name of at most 120 characters."; return; }
-		const id = classificationId; const kind = classificationKind; const { generation, controller } = beginClassificationOperation(); classificationBusy = true; classificationError = ""; classificationMessage = "";
+		if (classificationMutationBusy || classificationRefreshRequired) return;
+		const id = classificationId; const kind = classificationKind; const { generation, controller } = beginClassificationMutation(); classificationMutationBusy = true; classificationError = ""; classificationMessage = "";
 		try {
-			if (id) await api.replaceClassification(id, { name, parentId: classificationParentId ?? null }, { signal: controller.signal });
-			else await api.createClassification(kind, { name }, { signal: controller.signal });
-			const projection = await classificationProjection(controller.signal);
-			if (currentClassificationOperation(generation, controller)) { classifications = projection; classificationName = ""; classificationId = ""; classificationParentId = undefined; classificationMessage = "Classification saved and refreshed."; }
+			const saved = id
+				? await api.replaceClassification(id, { name, parentId: classificationParentId || null }, { signal: controller.signal })
+				: await api.createClassification(kind, { name, parentId: classificationParentId || null }, { signal: controller.signal });
+			if (!currentClassificationMutation(generation, controller)) return;
+			savedClassification = saved;
+			classificationKind = saved.kind;
+			classificationId = saved.id;
+			classificationName = saved.name;
+			classificationParentId = saved.parentId ?? "";
+			classificationRefreshRequired = true;
+			deletedClassificationId = "";
+			classificationMessage = "Classification saved. Refreshing list…";
+			await refreshClassifications();
 		} catch (error) {
-			if (currentClassificationOperation(generation, controller) && !aborted(error)) {
+			if (currentClassificationMutation(generation, controller) && !aborted(error)) {
 				classificationError = message(error);
-				try { const projection = await classificationProjection(controller.signal); if (currentClassificationOperation(generation, controller)) classifications = projection; } catch { /* Preserve the mutation error and latest known state. */ }
+				void refreshClassifications(true);
 			}
-		} finally { if (generation === classificationGeneration) classificationBusy = false; }
+		} finally { if (generation === classificationMutationGeneration) classificationMutationBusy = false; }
 	}
 
-	function editClassification(value: AdminClassification): void { classificationKind = value.kind; classificationId = value.id; classificationName = value.name; classificationParentId = value.parentId; classificationError = ""; }
+	function editClassification(value: AdminClassification): void {
+		if (classificationRefreshRequired) return;
+		classificationKind = value.kind; classificationId = value.id; classificationName = value.name; classificationParentId = value.parentId ?? ""; classificationError = ""; classificationMessage = "";
+	}
+
+	function changeClassificationKind(value: ClassificationKind): void {
+		classificationKind = value;
+		if (!classificationId || !classifications[value].some((candidate) => candidate.id === classificationParentId)) classificationParentId = "";
+	}
+
+	function resetClassificationEditor(): void {
+		classificationName = ""; classificationId = ""; classificationParentId = "";
+	}
 
 	async function deleteClassification(target: Confirmation): Promise<void> {
 		if (target.action !== "classification" || !Object.values(classifications).flat().some(({ id }) => id === target.id)) { classificationError = "The confirmed classification is no longer current. Reload before deleting."; return; }
-		const { generation, controller } = beginClassificationOperation(); classificationBusy = true; classificationError = ""; classificationMessage = "";
+		if (classificationMutationBusy || classificationRefreshRequired) return;
+		const { generation, controller } = beginClassificationMutation(); classificationMutationBusy = true; classificationError = ""; classificationMessage = "";
 		try {
 			await api.deleteClassification(target.id, { signal: controller.signal });
-			const projection = await classificationProjection(controller.signal);
-			if (currentClassificationOperation(generation, controller)) { classifications = projection; classificationMessage = "Classification deleted and refreshed."; }
+			if (!currentClassificationMutation(generation, controller)) return;
+			deletedClassificationId = target.id;
+			classificationRefreshRequired = true;
+			classificationMessage = "Deleted, but the list could not be refreshed";
+			await refreshClassifications();
+			if (!classificationRefreshRequired) classificationMessage = "Classification deleted and refreshed.";
 		} catch (error) {
-			if (currentClassificationOperation(generation, controller) && !aborted(error)) {
+			if (currentClassificationMutation(generation, controller) && !aborted(error)) {
 				classificationError = message(error);
-				try { const projection = await classificationProjection(controller.signal); if (currentClassificationOperation(generation, controller)) classifications = projection; } catch { /* Preserve the mutation error and latest known state. */ }
+				void refreshClassifications(true);
 			}
-		} finally { if (generation === classificationGeneration) classificationBusy = false; }
+		} finally { if (generation === classificationMutationGeneration) classificationMutationBusy = false; }
 	}
 
 	async function lookupUsers(): Promise<void> {
@@ -211,7 +472,11 @@
 
 	function confirm(target: Confirmation, opener: HTMLElement): void {
 		if (target.action === "item") { itemController?.abort(); ++itemGeneration; itemBusy = false; }
-		else if (target.action === "classification") { classificationController?.abort(); ++classificationGeneration; classificationBusy = false; }
+		else if (target.action === "classification") {
+			classificationMutationController?.abort(); classificationReadController?.abort();
+			++classificationMutationGeneration; ++classificationReadGeneration;
+			classificationMutationBusy = false; classificationReadBusy = false;
+		}
 		else { userController?.abort(); ++userGeneration; userBusy = false; }
 		confirmationOpener = opener;
 		confirmationContext = opener.closest("section") ?? undefined;
@@ -239,6 +504,12 @@
 	}
 
 	function message(error: unknown): string { return error instanceof Error ? error.message : "The administration action did not complete."; }
+	function possiblyCommitted(error: unknown): error is AdminClientError { return error instanceof AdminClientError && error.outcome === "possibly_committed"; }
+	function verificationReadMessage(error: unknown): string { return error instanceof AdminClientError && error.status === 404 ? "The authoritative item could not be found. Verification is still required." : `Authoritative verification failed. ${message(error)}`; }
+	function snapshotRequest(request: AdminItemRequest): AdminItemRequest { return JSON.parse(JSON.stringify(request)) as AdminItemRequest; }
+	function snapshotForm(value: AdminItemForm): AdminItemForm { return JSON.parse(JSON.stringify(value)) as AdminItemForm; }
+	async function focusRecovery(): Promise<void> { await tick(); recoveryNotice?.focus(); }
+	async function focusItemError(): Promise<void> { await tick(); itemErrorNotice?.focus(); }
 	/** Uses the native DESIGN-009 modal lifecycle so the complete page background remains keyboard-inert. */
 	function openModal(node: HTMLDialogElement): { destroy: () => void } {
 		const controls = (): HTMLElement[] => [...node.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
@@ -265,8 +536,26 @@
 <div class="grid gap-6" data-admin-data-management bind:this={adminRoot} tabindex="-1">
 	<div class="contents" data-admin-background inert={confirmation ? true : undefined}>
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="manual-items-title">
-		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Create an ownerless item or load one by ID to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy}>New item</button></div>
-		<form class="flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void loadItem(); }} aria-label="Load global item"><label class="grid flex-1 gap-1 text-sm">Item ID<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemId} /></label><button type="submit" class="self-end rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>Load</button></form>
+		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Search active ownerless items by name, then load the authoritative item to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy}>New item</button></div>
+		<form class="flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void searchItems(1); }} aria-label="Search global items"><label class="grid flex-1 gap-1 text-sm">Item name<input maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemSearchQuery} /></label><button type="submit" class="self-end rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchStatus === "loading"}>Search</button></form>
+		<div class="grid gap-2" aria-live="polite" aria-busy={itemSearchStatus === "loading"} data-admin-item-search-results>
+			{#if itemSearchStatus === "loading"}<p role="status" class="text-sm text-[var(--color-muted)]">Loading matching global items…</p>
+			{:else if itemSearchStatus === "error"}<div class="flex flex-wrap items-center gap-2"><p role="alert" class="text-sm text-[var(--color-error)]">{itemSearchError}</p>{#if itemSearchQuery.trim()}<button type="button" class="rounded border px-3 py-1 text-sm transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void searchItems(itemSearchPage)}>Retry search</button>{/if}</div>
+			{:else if itemSearchStatus === "empty"}<p role="status" class="text-sm text-[var(--color-muted)]">No active global items matched this name.</p>
+			{:else if itemSearchStatus === "success"}
+				<p class="text-sm text-[var(--color-muted)]">Showing {itemSearchItems.length} of {itemSearchTotal} matching items. IDs distinguish duplicate names.</p>
+				<ul class="grid gap-2">
+					{#each itemSearchItems as item (item.itemId)}
+						<li class="grid gap-2 rounded border border-[var(--color-border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]" data-admin-item-search-result>
+							<div class="grid min-w-0 gap-1"><h3 class="font-bold">{item.name}</h3><p class="break-all font-data text-xs text-[var(--color-muted)]">ID {item.itemId}</p><p class="text-sm">{item.physicalState === "solid" ? "Solid" : "Liquid"} · P {item.macrosPer100.protein} · C {item.macrosPer100.carbohydrates} · F {item.macrosPer100.fat}</p><p class="text-sm">Food Categories: {item.foodCategories.length ? item.foodCategories.map(({ name }) => name).join(", ") : "None"} · Culinary Roles: {item.culinaryRoles.length ? item.culinaryRoles.map(({ name }) => name).join(", ") : "None"}</p></div>
+							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>Edit {item.name}</button>
+						</li>
+					{/each}
+				</ul>
+				<nav class="flex items-center justify-between gap-3" aria-label="Global item search pages"><button type="button" class="rounded border px-3 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchPage <= 1} onclick={() => void searchItems(itemSearchPage - 1)}>Previous</button><span class="font-data text-sm">Page {itemSearchPage} of {itemSearchPages}</span><button type="button" class="rounded border px-3 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchPage >= itemSearchPages} onclick={() => void searchItems(itemSearchPage + 1)}>Next</button></nav>
+			{:else}<p class="text-sm text-[var(--color-muted)]">Enter a human-readable item name to begin.</p>{/if}
+		</div>
+		<details class="rounded border border-[var(--color-border)] p-3"><summary class="cursor-pointer font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]">Advanced: load by item ID</summary><form class="mt-3 flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void loadItem(); }} aria-label="Load global item"><label class="grid flex-1 gap-1 text-sm">Item ID<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-data focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemId} /></label><button type="submit" class="self-end rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>Load by ID</button></form></details>
 		<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveItem} aria-label="Manual global item form">
 			<label class="grid gap-1 text-sm sm:col-span-2">Name<input required maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.name} /></label>
 			<label class="grid gap-1 text-sm">Physical state<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.physicalState}><option value="solid">Solid</option><option value="liquid">Liquid</option></select></label>
@@ -285,18 +574,43 @@
 			<label class="grid gap-1 text-sm">Food Categories<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.foodCategoryIds}>{#each classifications.food_category as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm">Culinary Roles<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.culinaryRoleIds}>{#each classifications.culinary_role as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm sm:col-span-2">Allergens<select multiple size="7" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.allergenKeys}>{#each allergenOptions as key}<option value={key}>{key.replaceAll("_", " ")}</option>{/each}</select></label>
-			<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
-		</form>
-		{#if itemError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
+				<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
+			</form>
+		{#if itemError}<p role="alert" tabindex="-1" bind:this={itemErrorNotice} class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
 	</section>
 
-	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="classifications-title">
-		<h2 id="classifications-title" class="text-lg font-bold">Food Categories and Culinary Roles</h2>
-		<form class="grid gap-3 sm:grid-cols-[12rem_1fr_auto]" onsubmit={saveClassification} aria-label="Classification form"><label class="grid gap-1 text-sm">Kind<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationKind} disabled={Boolean(classificationId)}><option value="food_category">Food Category</option><option value="culinary_role">Culinary Role</option></select></label><label class="grid gap-1 text-sm">Name<input maxlength="120" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationName} /></label><button type="submit" class="self-end rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy}>{classificationId ? "Save rename" : "Create"}</button></form>
-		{#if classificationId}<button type="button" class="w-fit text-sm underline transition-all duration-200 motion-reduce:transition-none" onclick={() => { classificationId = ""; classificationName = ""; classificationParentId = undefined; }}>Cancel rename</button>{/if}
-		<div class="grid gap-4 md:grid-cols-2" data-admin-classification-grid>{#each ["food_category", "culinary_role"] as kind}<div class="grid content-start gap-2"><h3 class="font-bold">{kind === "food_category" ? "Food Categories" : "Culinary Roles"}</h3><ul class="grid gap-2">{#each classifications[kind as ClassificationKind] as value (value.id)}<li class="flex items-center justify-between gap-2 rounded border border-[var(--color-border)] p-2"><span>{value.name}</span><span class="flex gap-2"><button type="button" class="rounded border px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy} onclick={() => editClassification(value)}>Rename</button><button type="button" class="rounded border border-[var(--color-error)] px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy} onclick={(event) => confirm({ action: "classification", id: value.id, label: value.name }, event.currentTarget)}>Delete</button></span></li>{/each}</ul></div>{/each}</div>
-		{#if classificationError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-classification-error>{classificationError}</p>{:else if classificationMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{classificationMessage}</p>{/if}
-	</section>
+		<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="classifications-title">
+			<div><h2 id="classifications-title" class="text-lg font-bold">Food Categories and Culinary Roles</h2><p class="text-sm text-[var(--color-muted)]">Create, rename, reparent, or detach classifications. The server validates the complete hierarchy.</p></div>
+			<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveClassification} aria-label="Classification form">
+				<label class="grid gap-1 text-sm">Kind<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value={classificationKind} onchange={(event) => changeClassificationKind((event.currentTarget as HTMLSelectElement).value as ClassificationKind)} disabled={Boolean(classificationId) || classificationBusy || classificationRefreshRequired}><option value="food_category">Food Category</option><option value="culinary_role">Culinary Role</option></select></label>
+				<label class="grid gap-1 text-sm">Name<input maxlength="120" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationName} disabled={classificationBusy || classificationRefreshRequired} /></label>
+				<label class="grid gap-1 text-sm">Parent<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={classificationParentId} disabled={classificationBusy || classificationRefreshRequired}><option value="">No parent</option>{#each classificationHierarchy(classifications[classificationKind]).filter(({ value }) => value.id !== classificationId) as { value, parentName }}<option value={value.id}>{value.name}{parentName ? ` — child of ${parentName}` : ""}</option>{/each}</select></label>
+				<button type="submit" class="self-end rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired}>{classificationId ? "Save classification" : "Create"}</button>
+			</form>
+			{#if classificationId && !classificationRefreshRequired}<button type="button" class="w-fit text-sm underline transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={resetClassificationEditor}>Cancel edit</button>{/if}
+			{#if classificationRefreshRequired}
+				<div class="grid gap-2 rounded border border-[var(--color-border)] p-3" data-admin-classification-recovery>
+					{#if savedClassification}<p class="text-sm">Confirmed classification: <strong>{savedClassification.name}</strong> <span class="break-all font-data">({savedClassification.id})</span></p>{/if}
+					<button type="button" class="w-fit rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void refreshClassifications()}>Retry list refresh</button>
+				</div>
+			{/if}
+			<div class="grid gap-4 md:grid-cols-2" data-admin-classification-grid>
+				{#each classificationKinds as kind}
+					<div class="grid content-start gap-2">
+						<h3 class="font-bold">{kind === "food_category" ? "Food Categories" : "Culinary Roles"}</h3>
+						<ul class="grid gap-2" role="tree" aria-label={kind === "food_category" ? "Food Category hierarchy" : "Culinary Role hierarchy"}>
+							{#each classificationHierarchy(classifications[kind]) as row (row.value.id)}
+								<li class="grid gap-2 rounded border border-[var(--color-border)] p-2 sm:grid-cols-[1fr_auto]" role="treeitem" aria-level={row.depth + 1} aria-selected={classificationId === row.value.id} data-classification-id={row.value.id}>
+									<span class="min-w-0"><span aria-hidden="true">{"— ".repeat(row.depth)}</span><strong>{row.value.name}</strong>{#if row.parentName}<span class="block text-xs text-[var(--color-muted)]">Child of {row.parentName}</span>{/if}<span class="block break-all font-data text-xs text-[var(--color-muted)]">{row.value.id}</span></span>
+									<span class="flex items-start gap-2"><button type="button" class="rounded border px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired} onclick={() => editClassification(row.value)}>Edit</button><button type="button" class="rounded border border-[var(--color-error)] px-2 py-1 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={classificationBusy || classificationRefreshRequired} onclick={(event) => confirm({ action: "classification", id: row.value.id, label: row.value.name }, event.currentTarget)}>Delete</button></span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				{/each}
+			</div>
+			{#if classificationError}<p role="alert" class="text-sm text-[var(--color-error)]" data-admin-classification-error>{classificationError}</p>{:else if classificationMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{classificationMessage}</p>{/if}
+		</section>
 
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="user-admin-title">
 		<div><h2 id="user-admin-title" class="text-lg font-bold">Restricted user lookup</h2><p class="text-sm text-[var(--color-muted)]">Exact lookup returns only the approved account and deletion summary.</p></div>

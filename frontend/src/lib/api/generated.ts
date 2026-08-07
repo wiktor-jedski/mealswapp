@@ -21,6 +21,21 @@ export interface AppError {
 	message: string;
 	retryable: boolean;
 	requestId?: string;
+	data?: Record<string, unknown>;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Bounded owner-scoped saved-diet reference that blocks permanent deletion. */
+export interface SavedDietDeletionReference {
+	id: string;
+	name: string;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Structured conflict details returned when a private item is still referenced. */
+export interface CustomItemInUseError extends AppError {
+	code: "custom_item_in_use";
+	data: { affectedDiets: SavedDietDeletionReference[] };
 }
 
 // Implements DESIGN-009 AdminController audit-safe frontend error boundary.
@@ -339,6 +354,35 @@ export interface ProfileUpdateRequest {
 	displayName?: string;
 	unitSystem: "metric" | "imperial";
 	themePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Credentialed profile update request with CSRF protection. */
+export interface ProfileUpdateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "PUT";
+	credentials: "include";
+	headers: AuthJsonMutationHeaders;
+	body: string;
+}
+
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Builds the authoritative profile preference update request. */
+export function buildProfileUpdateRequestInit(
+	request: ProfileUpdateRequest,
+	csrfToken: string,
+	options: { signal?: AbortSignal } = {}
+): ProfileUpdateRequestInit {
+	return {
+		method: "PUT",
+		credentials: "include",
+		headers: {
+			Accept: "application/json",
+			"Content-Type": "application/json",
+			"X-CSRF-Token": csrfToken
+		},
+		body: JSON.stringify(request),
+		signal: options.signal
+	};
 }
 
 // Implements DESIGN-008 SavedDataRepository frontend saved-data contract.
@@ -753,12 +797,39 @@ export type SearchHistoryEnvelope = Envelope<SearchHistoryData>;
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** JSON account export bundle. */
 export interface ExportBundle {
-	user: Record<string, unknown>;
-	consent: Array<Record<string, unknown>>;
-	savedItems: SavedItem[];
+	user: ExportUser;
+	consent: ExportConsent[];
+	savedItems: ExportSavedItem[];
 	savedDiets: ExportSavedDiet[];
-	history: SearchHistoryEntry[];
-	customItems: Array<Record<string, unknown>>;
+	history: ExportSearchHistoryEntry[];
+	customItems: ExportCustomItem[];
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** Top-level authenticated account identity. */
+export interface ExportUser {
+	userId: string;
+	email: string;
+	role: "user" | "admin";
+	displayName: string;
+	unitSystem: "metric" | "imperial";
+	themePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One accepted legal-version pair. */
+export interface ExportConsent {
+	privacyPolicyVersion: string;
+	termsVersion: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free saved-item reference. */
+export interface ExportSavedItem {
+	id: string;
+	itemId: string;
+	kind: "favorite" | "saved_meal" | "saved_diet";
+	createdAt: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -766,9 +837,50 @@ export interface ExportBundle {
 export interface ExportSavedDiet {
 	id: string;
 	name: string;
-	entries: DailyDietFoodObjectEntry[];
+	entries: ExportSavedDietEntry[];
 	createdAt: string;
 	updatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One ordered owner-free saved-diet entry. */
+export interface ExportSavedDietEntry {
+	id: string;
+	foodObjectId: string;
+	foodObjectType: FoodObjectType;
+	quantity: number;
+	unit: CanonicalQuantityUnit;
+	position: number;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free decrypted search-history entry. */
+export interface ExportSearchHistoryEntry {
+	id: string;
+	query: string;
+	mode: string;
+	filtersHash: string;
+	createdAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free private custom-item projection. */
+export interface ExportCustomItem {
+	id: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	prepTimeMinutes: number;
+	averageUnitWeightGrams?: number;
+	averageServingVolumeMilliliters?: number;
+	densityGramsPerMilliliter?: number;
+	densitySourceProvider?: string;
+	densitySourceFoodId?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
+	macrosPer100: MacroProfile;
+	micros: Record<string, number>;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+	imageUrl?: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
@@ -1335,6 +1447,26 @@ export interface AdminItem extends Omit<AdminItemRequest, "densitySourceKind"> {
 
 export type AdminItemEnvelope = OkEnvelope<AdminItem>;
 
+/** Bounded active global-item summary without private ownership, micronutrients, images, or audit state. */
+export interface AdminItemSearchSummary {
+	itemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	macrosPer100: MacroProfile;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+/** Deterministic page metadata and bounded active global-item summaries. */
+export interface AdminItemSearchPageData {
+	items: AdminItemSearchSummary[];
+	page: number;
+	pageSize: number;
+	total: number;
+}
+
+export type AdminItemSearchEnvelope = OkEnvelope<AdminItemSearchPageData>;
+
 // Implements DESIGN-009 TagManager administration hierarchy boundary.
 /** Global classification name and optional parent used by administrator mutations. */
 export interface AdminClassificationRequest {
@@ -1352,6 +1484,35 @@ export interface AdminClassification {
 
 export type AdminClassificationEnvelope = OkEnvelope<{ classification: AdminClassification }>;
 export type AdminClassificationCollectionEnvelope = OkEnvelope<{ classifications: AdminClassification[] }>;
+
+// Implements DESIGN-005 MicronutrientVocabulary administration boundary.
+/** @openapi-description AdminMicronutrient */
+export interface AdminMicronutrient {
+	key: string;
+	displayName: string;
+	unit: "g" | "mg" | "mcg";
+	active: boolean;
+}
+
+/** @openapi-description AdminMicronutrientCreateRequest */
+export interface AdminMicronutrientCreateRequest {
+	key: string;
+	displayName: string;
+	unit: AdminMicronutrient["unit"];
+}
+
+/** @openapi-description AdminMicronutrientDisplayNameRequest */
+export interface AdminMicronutrientDisplayNameRequest {
+	displayName: string;
+}
+
+/** @openapi-description AdminMicronutrientUnitRequest */
+export interface AdminMicronutrientUnitRequest {
+	unit: AdminMicronutrient["unit"];
+}
+
+export type AdminMicronutrientEnvelope = OkEnvelope<{ micronutrient: AdminMicronutrient }>;
+export type AdminMicronutrientCollectionEnvelope = OkEnvelope<{ micronutrients: AdminMicronutrient[] }>;
 
 // Implements DESIGN-009 UserAdminPanel privacy-minimized projection.
 export interface AdminDeletionSummary {

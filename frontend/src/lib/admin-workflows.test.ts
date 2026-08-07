@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "./admin-workflows";
+import { adminItemMatchesRequest, deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "./admin-workflows";
 
 // Implements DESIGN-009 ItemCurator and UserAdminPanel validation and legal-retry verification.
 
@@ -47,4 +47,21 @@ test("permits only permanent, unknown, or exhausted transient failed deletion re
 
 test("creates a memory-only namespaced item idempotency key", () => {
 	expect(newAdminItemKey()).toMatch(/^admin-item-[0-9a-f-]{36}$/);
+});
+
+test("normalizes names and compares every persisted item value independent of set ordering", () => {
+	const request = parseAdminItemForm(valid({ name: "  Rice   bowl  ", foodCategoryIds: ["00000000-0000-4000-8000-000000000002", "00000000-0000-4000-8000-000000000001"], allergenKeys: ["dairy", "egg"] })).request!;
+	expect(request.name).toBe("Rice bowl");
+	const item = {
+		...request,
+		id: "00000000-0000-4000-8000-000000000003",
+		prepTimeMinutes: 0,
+		foodCategoryIds: undefined,
+		foodCategories: request.foodCategoryIds!.map((id) => ({ id, name: id, kind: "food_category" as const })).reverse(),
+		culinaryRoles: [],
+		allergenKeys: [...request.allergenKeys].reverse()
+	};
+	expect(adminItemMatchesRequest(item, request)).toBeTrue();
+	expect(adminItemMatchesRequest({ ...item, macrosPer100: { ...item.macrosPer100, protein: 11 } }, request)).toBeFalse();
+	expect(adminItemMatchesRequest({ ...item, imageUrl: "https://example.test/different.png" }, request)).toBeFalse();
 });

@@ -9,10 +9,12 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/customitem"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
 
 // Implements DESIGN-009 ItemCurator idempotency errors.
@@ -26,6 +28,7 @@ var (
 // Request contains administrator-editable global food-item fields.
 // Implements DESIGN-009 ItemCurator request boundary.
 type Request struct {
+	ExpectedUpdatedAt               *time.Time               `json:"-"`
 	Name                            string                   `json:"name"`
 	PhysicalState                   repository.PhysicalState `json:"physicalState"`
 	PrepTimeMinutes                 int                      `json:"prepTimeMinutes"`
@@ -55,6 +58,7 @@ type ClassificationSummary struct {
 // Implements DESIGN-009 ItemCurator global/private separation.
 type Item struct {
 	ID                              uuid.UUID                `json:"id"`
+	UpdatedAt                       time.Time                `json:"updatedAt"`
 	Name                            string                   `json:"name"`
 	PhysicalState                   repository.PhysicalState `json:"physicalState"`
 	PrepTimeMinutes                 int                      `json:"prepTimeMinutes"`
@@ -87,11 +91,40 @@ type MutationResult struct {
 	After  Item
 }
 
+// SearchQuery is the bounded administrator global-item discovery request.
+// Implements DESIGN-009 ItemCurator search boundary.
+type SearchQuery struct {
+	Name     string
+	Page     int
+	PageSize int
+}
+
+// SearchSummary is the bounded owner-free picker projection.
+// Implements DESIGN-009 ItemCurator global/private separation.
+type SearchSummary struct {
+	ItemID         uuid.UUID                `json:"itemId"`
+	Name           string                   `json:"name"`
+	PhysicalState  repository.PhysicalState `json:"physicalState"`
+	MacrosPer100   repository.MacroValues   `json:"macrosPer100"`
+	FoodCategories []ClassificationSummary  `json:"foodCategories"`
+	CulinaryRoles  []ClassificationSummary  `json:"culinaryRoles"`
+}
+
+// SearchPage is one deterministic page of global-item picker summaries.
+// Implements DESIGN-009 ItemCurator pagination.
+type SearchPage struct {
+	Items    []SearchSummary `json:"items"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"pageSize"`
+	Total    int             `json:"total"`
+}
+
 // Store is the global-only persistence boundary used by ItemCurator.
 // Implements DESIGN-009 ItemCurator global/private separation.
 type Store interface {
 	GetByID(context.Context, uuid.UUID, bool) (repository.FoodItemEntity, error)
 	GetByIDInMutation(context.Context, repository.AdminMutationExecutor, uuid.UUID, bool) (repository.FoodItemEntity, error)
+	Search(context.Context, string, int, int) ([]repository.FoodItemEntity, int, error)
 	ClaimCreate(context.Context, repository.AdminMutationExecutor, repository.ManualFoodItemCreateClaim, repository.ManualFoodItemResponseEncoder) (repository.ManualFoodItemCreateClaimResult, error)
 	Update(context.Context, repository.AdminMutationExecutor, repository.FoodItemEntity) error
 	Delete(context.Context, repository.AdminMutationExecutor, uuid.UUID) error
@@ -160,6 +193,35 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Item, error) {
 	return fromEntity(item), nil
 }
 
+// Search returns active ownerless global summaries without mutation or audit effects.
+// Implements DESIGN-009 ItemCurator searchable picker.
+func (s *Service) Search(ctx context.Context, query SearchQuery) (SearchPage, error) {
+	normalized, err := security.NormalizeInput(security.InputFieldSearchQuery, query.Name)
+	if err != nil {
+		return SearchPage{}, validationError("food item search name is invalid")
+	}
+	if query.Page < 1 || query.Page > security.MaxSearchPage || query.PageSize < 1 || query.PageSize > 50 {
+		return SearchPage{}, validationError("food item pagination is invalid")
+	}
+	if s == nil || s.items == nil {
+		return SearchPage{}, repository.NewError(repository.ErrorKindConnection, "manual item service is unavailable", nil)
+	}
+	offset := (query.Page - 1) * query.PageSize
+	items, total, err := s.items.Search(ctx, normalized.Value, query.PageSize, offset)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	summaries := make([]SearchSummary, 0, len(items))
+	for _, item := range items {
+		projection := fromEntity(item)
+		summaries = append(summaries, SearchSummary{
+			ItemID: item.ID, Name: item.Name, PhysicalState: item.PhysicalState, MacrosPer100: item.MacrosPer100,
+			FoodCategories: projection.FoodCategories, CulinaryRoles: projection.CulinaryRoles,
+		})
+	}
+	return SearchPage{Items: summaries, Page: query.Page, PageSize: query.PageSize, Total: total}, nil
+}
+
 // Update replaces one active global item and returns authoritative audit state.
 // Implements DESIGN-009 ItemCurator update behavior.
 func (s *Service) Update(ctx context.Context, tx repository.AdminMutationExecutor, id uuid.UUID, req Request) (MutationResult, error) {
@@ -176,6 +238,9 @@ func (s *Service) Update(ctx context.Context, tx repository.AdminMutationExecuto
 	before, err := s.items.GetByIDInMutation(ctx, tx, id, false)
 	if err != nil {
 		return MutationResult{}, err
+	}
+	if normalized.ExpectedUpdatedAt != nil && !before.UpdatedAt.Equal(*normalized.ExpectedUpdatedAt) {
+		return MutationResult{}, repository.NewError(repository.ErrorKindConflict, "food item has changed since it was read", nil)
 	}
 	if err := s.items.Update(ctx, tx, toEntity(id, normalized)); err != nil {
 		return MutationResult{}, err
@@ -246,7 +311,8 @@ func validateRequest(req Request) (Request, error) {
 		return Request{}, validationError("allergen keys are invalid")
 	}
 	return Request{
-		Name: normalized.Name, PhysicalState: normalized.PhysicalState, PrepTimeMinutes: normalized.PrepTimeMinutes,
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt,
+		Name:              normalized.Name, PhysicalState: normalized.PhysicalState, PrepTimeMinutes: normalized.PrepTimeMinutes,
 		AverageUnitWeightGrams: normalized.AverageUnitWeightGrams, AverageServingVolumeMilliliters: normalized.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: normalized.DensityGramsPerMilliliter, DensitySourceProvider: normalized.DensitySourceProvider,
 		DensitySourceFoodID: normalized.DensitySourceFoodID, DensitySourceKind: normalized.DensitySourceKind, MacrosPer100: normalized.MacrosPer100,
@@ -266,7 +332,7 @@ func toEntity(id uuid.UUID, req Request) repository.FoodItemEntity {
 		return result
 	}
 	return repository.FoodItemEntity{
-		ID: id, Name: req.Name, PhysicalState: req.PhysicalState, PrepTimeMinutes: req.PrepTimeMinutes,
+		ExpectedUpdatedAt: req.ExpectedUpdatedAt, ID: id, Name: req.Name, PhysicalState: req.PhysicalState, PrepTimeMinutes: req.PrepTimeMinutes,
 		AverageUnitWeightGrams: req.AverageUnitWeightGrams, AverageServingVolumeMilliliters: req.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: req.DensityGramsPerMilliliter, DensitySourceProvider: req.DensitySourceProvider,
 		DensitySourceFoodID: req.DensitySourceFoodID, DensitySourceKind: req.DensitySourceKind, MacrosPer100: req.MacrosPer100,
@@ -294,7 +360,7 @@ func fromEntity(entity repository.FoodItemEntity) Item {
 		allergenKeys = []string{}
 	}
 	return Item{
-		ID: entity.ID, Name: entity.Name, PhysicalState: entity.PhysicalState, PrepTimeMinutes: entity.PrepTimeMinutes,
+		ID: entity.ID, UpdatedAt: entity.UpdatedAt, Name: entity.Name, PhysicalState: entity.PhysicalState, PrepTimeMinutes: entity.PrepTimeMinutes,
 		AverageUnitWeightGrams: entity.AverageUnitWeightGrams, AverageServingVolumeMilliliters: entity.AverageServingVolumeMilliliters,
 		DensityGramsPerMilliliter: entity.DensityGramsPerMilliliter, DensitySourceProvider: entity.DensitySourceProvider,
 		DensitySourceFoodID: entity.DensitySourceFoodID, DensitySourceKind: entity.DensitySourceKind, MacrosPer100: entity.MacrosPer100,

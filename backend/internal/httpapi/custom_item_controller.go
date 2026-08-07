@@ -114,8 +114,8 @@ func (c *ProfileController) UpdateCustomItem(ctx *fiber.Ctx) error {
 	return ctx.JSON(Envelope{Status: "ok", RequestID: requestID(ctx), Data: customItemData(item)})
 }
 
-// DeleteCustomItem soft-deletes one private item only for its authenticated owner.
-// Implements DESIGN-008 ProfileController custom-item delete.
+// DeleteCustomItem permanently removes one private item for its authenticated owner.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
 func (c *ProfileController) DeleteCustomItem(ctx *fiber.Ctx) error {
 	user, ok := authenticatedUser(ctx)
 	if !ok {
@@ -297,6 +297,14 @@ func customItemDependencyError() AppError {
 // customItemError maps service/repository failures to user-safe API errors.
 // Implements DESIGN-008 ProfileController and DESIGN-017 GlobalExceptionHandler.
 func customItemError(err error) error {
+	var deletionConflict *repository.CustomFoodDeletionConflict
+	if errors.As(err, &deletionConflict) {
+		diets := make([]map[string]any, 0, len(deletionConflict.Diets))
+		for _, diet := range deletionConflict.Diets {
+			diets = append(diets, map[string]any{"id": diet.ID, "name": diet.Name})
+		}
+		return AppError{HTTPStatus: fiber.StatusConflict, Category: "validation", Code: "custom_item_in_use", Message: "custom item is used by saved diets", Data: map[string]any{"affectedDiets": diets}}
+	}
 	switch {
 	case errors.Is(err, customitem.ErrMissingIdempotencyKey):
 		return AppError{HTTPStatus: fiber.StatusBadRequest, Category: "validation", Code: "idempotency_key_required", Message: "Idempotency-Key header is required"}

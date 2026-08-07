@@ -23,6 +23,7 @@ import (
 	"github.com/wiktor-jedski/mealswapp/backend/internal/externaldata"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/httpapi"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/itemcurator"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/micronutrient"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/profile"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
@@ -101,6 +102,13 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 		},
 		httpapi.NewCurationRequestValidator(adminExternalTelemetry),
 		cache.NewClassificationInvalidator(filterOptions, redisClient),
+	)
+	micronutrientService := micronutrient.NewService(repository.NewPostgresMicronutrientVocabularyRepository(pg))
+	micronutrientController := httpapi.NewMicronutrientAdminController(
+		micronutrientService,
+		func(tx repository.AdminMutationExecutor) repository.MicronutrientVocabularyAdminRepository {
+			return repository.NewPostgresMicronutrientVocabularyRepository(tx)
+		},
 	)
 	adminAudit := repository.NewPostgresAdminImportAuditRepository(pg)
 	manualItems := itemcurator.NewService(repository.NewPostgresManualFoodItemRepository(pg))
@@ -198,7 +206,7 @@ func newProduction(cfg config.Config, pg postgresStore, redisClient *redis.Clien
 			entitlement.NewStatusService(entitlements, entitlements),
 		).WithBillingRedirectOrigin(cfg.FrontendOrigin).WithBillingPortal(subscription.NewPortalService(entitlements, subscription.NewStripeCheckoutGateway(cfg.Billing.StripeSecretKey, nil))),
 		httpapi.NewStripeWebhookHandler(subscription.NewStripeWebhookService(cfg.Billing.StripeWebhookSecret, entitlements).WithLogSink(telemetry), repository.NewPostgresSecurityAuditRepository(pg)),
-		httpapi.NewAdminController(adminAudit, append(classificationController.AdminRoutes(), adminUserController.AdminRoutes()...)...).WithTelemetry(adminExternalTelemetry),
+		httpapi.NewAdminController(adminAudit, append(append(classificationController.AdminRoutes(), micronutrientController.AdminRoutes()...), adminUserController.AdminRoutes()...)...).WithTelemetry(adminExternalTelemetry),
 		httpapi.NewGlobalCatalogExportAdminController(globalCatalogExport),
 		httpapi.NewManualItemAdminController(adminAudit, manualItems, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),
 		httpapi.NewCuratedImportAdminController(adminAudit, curatedImports, cache.NewClassificationInvalidator(nil, redisClient)).WithTelemetry(adminExternalTelemetry),

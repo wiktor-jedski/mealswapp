@@ -5,4 +5,4 @@ SELECT id, name, physical_state, prep_time_minutes, average_unit_weight_grams,
        protein_per_100, carbohydrates_per_100, fat_per_100, micronutrients, image_url,
        deleted_at, created_at, updated_at
 FROM custom_food_items
-WHERE owner_id = $1 AND id = $2 AND ($3::boolean OR deleted_at IS NULL);
+WHERE owner_id = $1 AND id = $2 AND deleted_at IS NULL;

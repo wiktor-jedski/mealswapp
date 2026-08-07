@@ -5,17 +5,22 @@ import {
 	buildCustomItemDeleteRequestInit,
 	buildCustomItemUrl
 } from "./generated";
-import type { CustomItem, ExportBundle } from "./generated";
+import type { ExportBundle, ExportCustomItem, SavedDietDeletionReference } from "./generated";
 
 // Implements DESIGN-008 DataExporter and ProfileController generated-contract client.
 
 const MAX_EXPORT_BYTES = 1024 * 1024;
+const MAX_CONFLICT_DIETS = 25;
+const MAX_CONFLICT_DIET_NAME_LENGTH = 200;
+const MAX_REQUEST_ID_LENGTH = 120;
 
 /** Safe failure exposed by authenticated Account Export operations. */
 export class AccountDataClientError extends Error {
-	constructor(message = "Account data could not be refreshed. Try again.") {
+	readonly affectedDiets?: SavedDietDeletionReference[];
+	constructor(message = "Account data could not be refreshed. Try again.", affectedDiets?: SavedDietDeletionReference[]) {
 		super(message);
 		this.name = "AccountDataClientError";
+		this.affectedDiets = affectedDiets;
 	}
 }
 
@@ -27,8 +32,14 @@ export async function loadAccountExport(signal?: AbortSignal): Promise<ExportBun
 	let value: unknown;
 	try { value = JSON.parse(body) as unknown; } catch { throw new AccountDataClientError(); }
 	if (!isRecord(value) || !isRecord(value.user) || !Array.isArray(value.consent) || !Array.isArray(value.savedItems) || !Array.isArray(value.savedDiets) || !Array.isArray(value.history) || !Array.isArray(value.customItems)) throw new AccountDataClientError();
+	assertNoNestedOwnership(value);
+	assertExactKeys(value, ["user", "consent", "savedItems", "savedDiets", "history", "customItems"]);
+	assertUser(value.user);
+	value.consent.forEach(assertConsent);
+	value.savedItems.forEach(assertSavedItem);
 	value.savedDiets.forEach(assertSavedDiet);
-	value.customItems.forEach(assertCustomItemSummary);
+	value.history.forEach(assertSearchHistory);
+	value.customItems.forEach(assertCustomItem);
 	return value as unknown as ExportBundle;
 }
 
@@ -37,7 +48,30 @@ export async function deletePrivateCustomItem(itemId: string, signal?: AbortSign
 	if (!uuid(itemId)) throw new AccountDataClientError("The private item identifier is invalid.");
 	const { csrfToken } = await fetchCsrfToken(signal);
 	const response = await request(buildCustomItemUrl(itemId), buildCustomItemDeleteRequestInit(csrfToken, { signal }));
-	if (response.status !== 204 || (await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
+	if (response.status !== 204) {
+		let affectedDiets: Array<{ id: string; name: string }> | undefined;
+		try {
+			const body = await readBoundedText(response, MAX_EXPORT_BYTES);
+			if (response.status === 409) affectedDiets = decodeCustomItemInUseError(JSON.parse(body) as unknown);
+		} catch { /* use the bounded generic error */ }
+		throw new AccountDataClientError(affectedDiets?.length ? "Remove this item from the listed saved diets before permanent deletion." : "The private item could not be deleted. Try again.", affectedDiets);
+	}
+	if ((await readBoundedText(response, 0)) !== "") throw new AccountDataClientError("The private item could not be deleted. Try again.");
+}
+
+// Implements DESIGN-008 AccountDeleter strict 409 conflict response decoding.
+function decodeCustomItemInUseError(value: unknown): SavedDietDeletionReference[] | undefined {
+	if (!isRecord(value) || !hasExactKeys(value, ["status", "requestId", "error"]) || value.status !== "error" || !safeRequestId(value.requestId) || !isRecord(value.error)) return undefined;
+	const error = value.error;
+	if (!hasExactKeys(error, ["category", "code", "message", "retryable", "data"]) || error.category !== "validation" || error.code !== "custom_item_in_use" || typeof error.message !== "string" || error.retryable !== false || !isRecord(error.data)) return undefined;
+	const data = error.data;
+	if (!hasExactKeys(data, ["affectedDiets"]) || !Array.isArray(data.affectedDiets) || data.affectedDiets.length > MAX_CONFLICT_DIETS) return undefined;
+	const diets: SavedDietDeletionReference[] = [];
+	for (const diet of data.affectedDiets) {
+		if (!isRecord(diet) || !hasExactKeys(diet, ["id", "name"]) || !uuid(diet.id) || !safeDietName(diet.name)) return undefined;
+		diets.push({ id: diet.id, name: diet.name });
+	}
+	return diets;
 }
 
 /** Injectable Account Export and private-item mutation operations. */
@@ -49,12 +83,83 @@ export interface AccountDataApi {
 /** Account Export operations exposed to the Administration Panel. */
 export const accountDataApi: AccountDataApi = { loadExport: loadAccountExport, deleteCustomItem: deletePrivateCustomItem };
 
-function assertCustomItemSummary(value: unknown): asserts value is CustomItem {
-	if (!isRecord(value) || !uuid(value.id) || typeof value.name !== "string" || value.name.trim() === "" || value.name.length > 200 || "ownerId" in value) throw new AccountDataClientError();
+function assertUser(value: Record<string, unknown>): void {
+	assertExactKeys(value, ["userId", "email", "role", "displayName", "unitSystem", "themePreference"]);
+	if (!uuid(value.userId) || !nonempty(value.email) || (value.role !== "user" && value.role !== "admin") || typeof value.displayName !== "string" || (value.unitSystem !== "metric" && value.unitSystem !== "imperial") || !["system", "light", "dark"].includes(String(value.themePreference))) throw new AccountDataClientError();
+}
+
+function assertConsent(value: unknown): void {
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["privacyPolicyVersion", "termsVersion"]);
+	if (!nonempty(value.privacyPolicyVersion) || !nonempty(value.termsVersion)) throw new AccountDataClientError();
+}
+
+function assertSavedItem(value: unknown): void {
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["id", "itemId", "kind", "createdAt"]);
+	if (!uuid(value.id) || !uuid(value.itemId) || !["favorite", "saved_meal", "saved_diet"].includes(String(value.kind)) || !timestamp(value.createdAt)) throw new AccountDataClientError();
 }
 
 function assertSavedDiet(value: unknown): void {
-	if (!isRecord(value) || !uuid(value.id) || typeof value.name !== "string" || value.name.trim() === "" || !Array.isArray(value.entries) || "userId" in value || "UserID" in value) throw new AccountDataClientError();
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["id", "name", "entries", "createdAt", "updatedAt"]);
+	if (!uuid(value.id) || !nonempty(value.name) || value.name.length > 120 || !Array.isArray(value.entries) || !timestamp(value.createdAt) || !timestamp(value.updatedAt)) throw new AccountDataClientError();
+	value.entries.forEach(assertSavedDietEntry);
+}
+
+function assertSavedDietEntry(value: unknown): void {
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["id", "foodObjectId", "foodObjectType", "quantity", "unit", "position"]);
+	if (!uuid(value.id) || !uuid(value.foodObjectId) || !["food_item", "meal", "custom_food_item"].includes(String(value.foodObjectType)) || !positive(value.quantity) || !["g", "ml", "oz", "fl_oz"].includes(String(value.unit)) || !Number.isInteger(value.position) || Number(value.position) < 0 || Number(value.position) > 99) throw new AccountDataClientError();
+}
+
+function assertSearchHistory(value: unknown): void {
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["id", "query", "mode", "filtersHash", "createdAt"]);
+	if (!uuid(value.id) || typeof value.query !== "string" || !nonempty(value.mode) || typeof value.filtersHash !== "string" || !timestamp(value.createdAt)) throw new AccountDataClientError();
+}
+
+function assertCustomItem(value: unknown): asserts value is ExportCustomItem {
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["id", "name", "physicalState", "prepTimeMinutes", "macrosPer100", "micros", "foodCategories", "culinaryRoles"], ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter", "densitySourceProvider", "densitySourceFoodId", "densitySourceKind", "imageUrl"]);
+	if (!uuid(value.id) || !nonempty(value.name) || value.name.length > 200 || !["solid", "liquid"].includes(String(value.physicalState)) || !Number.isInteger(value.prepTimeMinutes) || Number(value.prepTimeMinutes) < 0 || !isRecord(value.macrosPer100) || !isRecord(value.micros) || !Array.isArray(value.foodCategories) || !Array.isArray(value.culinaryRoles)) throw new AccountDataClientError();
+	assertExactKeys(value.macrosPer100, ["protein", "carbohydrates", "fat"]);
+	if (!nonnegative(value.macrosPer100.protein) || !nonnegative(value.macrosPer100.carbohydrates) || !nonnegative(value.macrosPer100.fat) || Object.entries(value.micros).some(([key, item]) => Array.from(key).length < 1 || Array.from(key).length > 120 || !nonnegative(item))) throw new AccountDataClientError();
+	value.foodCategories.forEach(assertClassification);
+	value.culinaryRoles.forEach(assertClassification);
+	for (const field of ["averageUnitWeightGrams", "averageServingVolumeMilliliters", "densityGramsPerMilliliter"]) if (field in value && !positive(value[field])) throw new AccountDataClientError();
+	for (const field of ["densitySourceProvider", "densitySourceFoodId", "imageUrl"]) if (field in value && typeof value[field] !== "string") throw new AccountDataClientError();
+	if ("densitySourceKind" in value && !["imported", "manual", "estimated"].includes(String(value.densitySourceKind))) throw new AccountDataClientError();
+}
+
+function assertClassification(value: unknown): void {
+	if (!isRecord(value)) throw new AccountDataClientError();
+	assertExactKeys(value, ["id", "name", "kind"]);
+	if (!uuid(value.id) || !nonempty(value.name) || !["food_category", "culinary_role"].includes(String(value.kind))) throw new AccountDataClientError();
+}
+
+function assertNoNestedOwnership(value: unknown, path: string[] = []): void {
+	if (Array.isArray(value)) {
+		value.forEach((item, index) => assertNoNestedOwnership(item, [...path, String(index)]));
+		return;
+	}
+	if (!isRecord(value)) return;
+	for (const [key, child] of Object.entries(value)) {
+		const normalized = key.replace(/[_-]/g, "").toLowerCase();
+		const topLevelIdentity = path.length === 1 && path[0] === "user" && key === "userId";
+		if (!topLevelIdentity && (normalized === "userid" || normalized === "ownerid" || normalized === "owner")) throw new AccountDataClientError();
+		assertNoNestedOwnership(child, [...path, key]);
+	}
+}
+
+function assertExactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): void {
+	const keys = Object.keys(value);
+	if (required.some((key) => !(key in value)) || keys.some((key) => !required.includes(key) && !optional.includes(key))) throw new AccountDataClientError();
+}
+
+function hasExactKeys(value: Record<string, unknown>, required: string[]): boolean {
+	const keys = Object.keys(value);
+	return required.every((key) => key in value) && keys.length === required.length && keys.every((key) => required.includes(key));
 }
 
 async function request(input: string, init: RequestInit): Promise<Response> {
@@ -86,3 +191,9 @@ async function readBoundedText(response: Response, maximum: number): Promise<str
 
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function uuid(value: unknown): value is string { return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
+function nonempty(value: unknown): value is string { return typeof value === "string" && value.trim() !== ""; }
+function safeRequestId(value: unknown): value is string { return typeof value === "string" && value.length > 0 && value.length <= MAX_REQUEST_ID_LENGTH && /^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value); }
+function safeDietName(value: unknown): value is string { return typeof value === "string" && value.trim() !== "" && value.length <= MAX_CONFLICT_DIET_NAME_LENGTH && !/[\u0000-\u001f\u007f]/u.test(value); }
+function timestamp(value: unknown): value is string { return typeof value === "string" && Number.isFinite(Date.parse(value)); }
+function nonnegative(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0; }
+function positive(value: unknown): value is number { return nonnegative(value) && value > 0; }

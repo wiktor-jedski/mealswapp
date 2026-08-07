@@ -32,7 +32,7 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 	item := FoodItemEntity{
-		Name: "Manual global tofu", PhysicalState: PhysicalStateSolid, PrepTimeMinutes: 5, AverageUnitWeightGrams: 100,
+		Name: "Manual   global tofu", PhysicalState: PhysicalStateSolid, PrepTimeMinutes: 5, AverageUnitWeightGrams: 100,
 		MacrosPer100: MacroValues{Protein: 18, Carbohydrates: 3, Fat: 9}, Micros: MicroValues{}, ImageURL: "https://images.example.test/tofu.png",
 		FoodCategories: []ClassificationEntity{{ID: categoryID, Kind: ClassificationKindFoodCategory}},
 		CulinaryRoles:  []ClassificationEntity{{ID: roleID, Kind: ClassificationKindCulinaryRole}},
@@ -63,10 +63,10 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 		t.Fatalf("create result=%+v id=%s err=%v", created, itemID, err)
 	}
 	stored, err := manualRepo.GetByID(ctx, itemID, false)
-	if err != nil || stored.Name != item.Name || stored.ImageURL != item.ImageURL || len(stored.FoodCategories) != 1 || len(stored.CulinaryRoles) != 1 || len(stored.AllergenKeys) != 1 || stored.AllergenKeys[0] != "peanut" {
+	if err != nil || stored.Name != "Manual global tofu" || stored.ImageURL != item.ImageURL || len(stored.FoodCategories) != 1 || len(stored.CulinaryRoles) != 1 || len(stored.AllergenKeys) != 1 || stored.AllergenKeys[0] != "peanut" {
 		t.Fatalf("stored=%+v err=%v", stored, err)
 	}
-	assertManualFoodSearch(t, ctx, foodRepo, item.Name, itemID, true)
+	assertManualFoodSearch(t, ctx, foodRepo, "Manual global tofu", itemID, true)
 
 	var replay ManualFoodItemCreateClaimResult
 	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_create", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
@@ -150,13 +150,32 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	if _, err := manualRepo.GetByID(ctx, privateID, false); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("global repository exposed private item: %v", err)
 	}
+	discovered, total, err := manualRepo.Search(ctx, "manual   global tofu", 20, 0)
+	if err != nil || total != 1 || len(discovered) != 1 || discovered[0].ID != itemID || discovered[0].Name != "Manual global tofu" || len(discovered[0].FoodCategories) != 1 || len(discovered[0].CulinaryRoles) != 1 {
+		t.Fatalf("global discovery items=%+v total=%d err=%v", discovered, total, err)
+	}
+	var legacyID uuid.UUID
+	if err := db.QueryRow(ctx, `INSERT INTO food_items (name, physical_state, protein_per_100, carbohydrates_per_100, fat_per_100) VALUES ('Legacy   whitespace tofu', 'solid', 1, 2, 3) RETURNING id`).Scan(&legacyID); err != nil {
+		t.Fatal(err)
+	}
+	legacy, legacyTotal, err := manualRepo.Search(ctx, "legacy whitespace tofu", 20, 0)
+	if err != nil || legacyTotal != 1 || len(legacy) != 1 || legacy[0].ID != legacyID {
+		t.Fatalf("legacy whitespace discovery items=%+v total=%d err=%v", legacy, legacyTotal, err)
+	}
+	if _, err := db.Exec(ctx, `DELETE FROM food_items WHERE id = $1`, legacyID); err != nil {
+		t.Fatal(err)
+	}
+	auditsAfterSearch, err := auditRepo.ListAuditForEntity(ctx, "food_item", itemID)
+	if err != nil || len(auditsAfterSearch) != len(audits) {
+		t.Fatalf("read-only discovery changed audit state: before=%d after=%d err=%v", len(audits), len(auditsAfterSearch), err)
+	}
 	var globalHasOwner bool
 	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'food_items' AND column_name = 'owner_id')`).Scan(&globalHasOwner); err != nil || globalHasOwner {
 		t.Fatalf("global owner column exists=%t err=%v", globalHasOwner, err)
 	}
 
 	updated := stored
-	updated.Name = "Manual global tempeh"
+	updated.Name = "Manual   global tempeh"
 	err = auditRepo.WithMutationAudit(ctx, AdminAuditEntry{ActorKind: AdminAuditActorAdministrator, AdminUserID: &adminID, Action: "manual_update", EntityType: "food_item", RequestID: uuid.NewString()}, func(tx AdminMutationExecutor) (AdminAuditChanges, error) {
 		before, mutationErr := manualRepo.GetByIDInMutation(ctx, tx, itemID, false)
 		if mutationErr != nil {
@@ -174,8 +193,15 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	assertManualFoodSearch(t, ctx, foodRepo, item.Name, itemID, false)
-	assertManualFoodSearch(t, ctx, foodRepo, updated.Name, itemID, true)
+	assertManualFoodSearch(t, ctx, foodRepo, "Manual global tofu", itemID, false)
+	assertManualFoodSearch(t, ctx, foodRepo, "Manual global tempeh", itemID, true)
+	canonicalUpdated, err := manualRepo.GetByID(ctx, itemID, false)
+	if err != nil || canonicalUpdated.Name != "Manual global tempeh" {
+		t.Fatalf("updated item was not canonically persisted: %+v err=%v", canonicalUpdated, err)
+	}
+	if items, total, err := manualRepo.Search(ctx, "manual global", 1, 0); err != nil || total < 2 || len(items) != 1 {
+		t.Fatalf("bounded deterministic discovery items=%+v total=%d err=%v", items, total, err)
+	}
 
 	rollbackItem := item
 	rollbackItem.Name = "Manual audit rollback"
@@ -205,7 +231,10 @@ func TestPostgresManualFoodItemCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	assertManualFoodSearch(t, ctx, foodRepo, updated.Name, itemID, false)
+	assertManualFoodSearch(t, ctx, foodRepo, "Manual global tempeh", itemID, false)
+	if items, total, err := manualRepo.Search(ctx, "manual global tempeh", 20, 0); err != nil || total != 0 || len(items) != 0 {
+		t.Fatalf("deleted item discovery items=%+v total=%d err=%v", items, total, err)
+	}
 	if _, err := manualRepo.GetByID(ctx, itemID, false); !IsKind(err, ErrorKindNotFound) {
 		t.Fatalf("deleted read error=%v", err)
 	}

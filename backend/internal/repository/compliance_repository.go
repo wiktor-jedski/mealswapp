@@ -604,9 +604,24 @@ var adminAuditSnapshotSchemas = map[string]map[string]adminAuditSnapshotRule{
 		"failureCategory": {values: map[string]struct{}{"permanent": {}, "transient": {}, "unknown": {}}},
 		"status":          {values: map[string]struct{}{"failed": {}, "pending": {}}},
 	},
-	"classification\x00classification.create": classificationAuditSnapshotSchema(),
-	"classification\x00classification.update": classificationAuditSnapshotSchema(),
-	"classification\x00classification.delete": classificationAuditSnapshotSchema(),
+	"classification\x00classification.create":                       classificationAuditSnapshotSchema(),
+	"classification\x00classification.update":                       classificationAuditSnapshotSchema(),
+	"classification\x00classification.delete":                       classificationAuditSnapshotSchema(),
+	"micronutrient_vocabulary\x00micronutrient.create":              micronutrientVocabularyAuditSnapshotSchema(),
+	"micronutrient_vocabulary\x00micronutrient.display_name.update": micronutrientVocabularyAuditSnapshotSchema(),
+	"micronutrient_vocabulary\x00micronutrient.unit.update":         micronutrientVocabularyAuditSnapshotSchema(),
+	"micronutrient_vocabulary\x00micronutrient.deactivate":          micronutrientVocabularyAuditSnapshotSchema(),
+	"micronutrient_vocabulary\x00micronutrient.reactivate":          micronutrientVocabularyAuditSnapshotSchema(),
+}
+
+// micronutrientVocabularyAuditSnapshotSchema permits identity-safe vocabulary state.
+// Implements DESIGN-009 AdminController and DESIGN-005 MicronutrientVocabulary.
+func micronutrientVocabularyAuditSnapshotSchema() map[string]adminAuditSnapshotRule {
+	return map[string]adminAuditSnapshotRule{
+		"active":    {boolean: true},
+		"keyDigest": {format: "sha256"},
+		"unit":      {values: map[string]struct{}{"g": {}, "mg": {}, "mcg": {}}},
+	}
 }
 
 // classificationAuditSnapshotSchema permits identity-safe classification change metadata.
@@ -673,7 +688,7 @@ func sanitizeAdminAuditSnapshot(entityType string, action string, snapshot []byt
 	canonical.Grow(len(snapshot))
 	canonical.WriteByte('{')
 	first := true
-	for _, key := range []string{"active", "deleted", "failureCategory", "kind", "nameDigest", "parentId", "physicalState", "status"} {
+	for _, key := range []string{"active", "deleted", "failureCategory", "keyDigest", "kind", "nameDigest", "parentId", "physicalState", "status", "unit"} {
 		value, present := fields[key]
 		if !present {
 			continue

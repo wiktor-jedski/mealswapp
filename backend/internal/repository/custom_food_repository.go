@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -47,10 +48,45 @@ var customFoodCreateClaimCompleteSQL string
 //go:embed sql/custom_food_update.sql
 var customFoodUpdateSQL string
 
-// Implements DESIGN-005 FoodItemEntity owner-scoped custom-item soft-delete query.
+// Implements DESIGN-008 AccountDeleter owner-scoped permanent custom-item delete query.
 //
-//go:embed sql/custom_food_soft_delete.sql
-var customFoodSoftDeleteSQL string
+//go:embed sql/custom_food_delete_permanent.sql
+var customFoodPermanentDeleteSQL string
+
+// Implements DESIGN-008 AccountDeleter serialized deletion lock query.
+//
+//go:embed sql/custom_food_delete_lock.sql
+var customFoodDeleteLockSQL string
+
+// Implements DESIGN-008 AccountDeleter saved-diet conflict query.
+//
+//go:embed sql/custom_food_delete_references.sql
+var customFoodDeleteReferencesSQL string
+
+// Implements DESIGN-008 AccountDeleter hard-delete query.
+//
+//go:embed sql/custom_food_delete_hard.sql
+var customFoodDeleteHardSQL string
+
+// Implements DESIGN-008 AccountDeleter payload-free create retry tombstone query.
+//
+//go:embed sql/custom_food_delete_retry_markers.sql
+var customFoodDeleteRetryMarkersSQL string
+
+// Implements DESIGN-008 AccountDeleter delayed-create replay prevention query.
+//
+//go:embed sql/custom_food_create_marker_check.sql
+var customFoodCreateMarkerCheckSQL string
+
+// Implements DESIGN-008 AccountDeleter create/delete owner lock query.
+//
+//go:embed sql/custom_food_create_owner_lock.sql
+var customFoodCreateOwnerLockSQL string
+
+// Implements DESIGN-008 AccountDeleter expired retry-marker purge query.
+//
+//go:embed sql/custom_food_purge_markers.sql
+var customFoodPurgeMarkersSQL string
 
 // Implements DESIGN-005 FoodItemEntity custom-item classification replacement query.
 //
@@ -76,6 +112,9 @@ type PostgresCustomFoodItemRepository struct {
 // Implements DESIGN-005 FoodItemEntity compile-time custom repository contract.
 var _ CustomFoodItemRepository = (*PostgresCustomFoodItemRepository)(nil)
 
+// Implements DESIGN-008 AccountDeleter maintenance repository contract.
+var _ CustomFoodItemMaintenanceRepository = (*PostgresCustomFoodItemRepository)(nil)
+
 // NewPostgresCustomFoodItemRepository creates a PostgreSQL-backed private food-item repository.
 // Implements DESIGN-005 FoodItemEntity owner-scoped custom-item persistence.
 func NewPostgresCustomFoodItemRepository(db transactionalExecutor) *PostgresCustomFoodItemRepository {
@@ -84,11 +123,11 @@ func NewPostgresCustomFoodItemRepository(db transactionalExecutor) *PostgresCust
 
 // GetByID loads a private item only when it belongs to ownerID.
 // Implements DESIGN-005 FoodItemEntity owner-scoped custom-item read.
-func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID uuid.UUID, id uuid.UUID, rc RepositoryContext) (CustomFoodItemEntity, error) {
+func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID uuid.UUID, id uuid.UUID, _ RepositoryContext) (CustomFoodItemEntity, error) {
 	if err := validateCustomFoodIdentity(ownerID, id); err != nil {
 		return CustomFoodItemEntity{}, err
 	}
-	item, err := scanFoodItem(r.db.QueryRow(ctx, customFoodGetByIDSQL, ownerID, id, rc.IncludeDeleted))
+	item, err := scanFoodItem(r.db.QueryRow(ctx, customFoodGetByIDSQL, ownerID, id))
 	if err != nil {
 		if IsKind(err, ErrorKindValidation) {
 			return CustomFoodItemEntity{}, err
@@ -103,11 +142,11 @@ func (r *PostgresCustomFoodItemRepository) GetByID(ctx context.Context, ownerID 
 
 // List loads private items belonging only to ownerID in deterministic order.
 // Implements DESIGN-008 DataExporter owner-scoped custom-item export.
-func (r *PostgresCustomFoodItemRepository) List(ctx context.Context, ownerID uuid.UUID, rc RepositoryContext) ([]CustomFoodItemEntity, error) {
+func (r *PostgresCustomFoodItemRepository) List(ctx context.Context, ownerID uuid.UUID, _ RepositoryContext) ([]CustomFoodItemEntity, error) {
 	if ownerID == uuid.Nil {
 		return nil, validationError("custom food item owner id is required")
 	}
-	rows, err := r.db.Query(ctx, customFoodListSQL, ownerID, rc.IncludeDeleted)
+	rows, err := r.db.Query(ctx, customFoodListSQL, ownerID)
 	if err != nil {
 		return nil, mapPostgresError(err, "list custom food items")
 	}
@@ -144,6 +183,22 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 	}
 	var result CustomFoodItemCreateClaimResult
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := rejectDeletedCustomFoodCreateRetry(ctx, db, claim.UserID, claim.Key); err != nil {
+			return err
+		}
+		var ownerID uuid.UUID
+		if err := db.QueryRow(ctx, customFoodCreateOwnerLockSQL, claim.UserID).Scan(&ownerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return NewError(ErrorKindNotFound, "account is unavailable", nil)
+			}
+			return mapPostgresError(err, "lock custom food create owner")
+		}
+		if err := rejectDeletedCustomFoodCreateRetry(ctx, db, claim.UserID, claim.Key); err != nil {
+			return err
+		}
 		_, claimErr := scanCustomFoodCreateClaim(db.QueryRow(ctx, customFoodCreateClaimSQL, claim.UserID, claim.Key, claim.BodyHash))
 		if claimErr == nil {
 			itemID, err := createCustomFoodItemInTransaction(ctx, db, claim.Item)
@@ -184,6 +239,18 @@ func (r *PostgresCustomFoodItemRepository) ClaimCreate(ctx context.Context, clai
 	return result, err
 }
 
+// rejectDeletedCustomFoodCreateRetry checks the payload-free tombstone before and after owner locking.
+// Implements DESIGN-008 AccountDeleter create/delete serialization.
+func rejectDeletedCustomFoodCreateRetry(ctx context.Context, db transactionalExecutor, userID uuid.UUID, key string) error {
+	var marker int
+	if err := db.QueryRow(ctx, customFoodCreateMarkerCheckSQL, userID, key).Scan(&marker); err == nil {
+		return NewError(ErrorKindConflict, "custom food create retry is no longer valid", nil)
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return mapPostgresError(err, "check custom food create retry marker")
+	}
+	return nil
+}
+
 // Create validates and persists a private food item for its mandatory owner.
 // Implements DESIGN-005 FoodItemEntity owner-scoped custom-item create.
 func (r *PostgresCustomFoodItemRepository) Create(ctx context.Context, item CustomFoodItemEntity) (uuid.UUID, error) {
@@ -196,6 +263,9 @@ func (r *PostgresCustomFoodItemRepository) Create(ctx context.Context, item Cust
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
 		var err error
 		id, err = createCustomFoodItemInTransaction(ctx, db, item)
 		return err
@@ -290,6 +360,12 @@ func (r *PostgresCustomFoodItemRepository) Update(ctx context.Context, item Cust
 	}
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item.FoodItemEntity); err != nil {
+			return err
+		}
 		result, err := db.Exec(ctx, customFoodUpdateSQL,
 			item.OwnerID, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes,
 			nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters),
@@ -317,18 +393,69 @@ func validatePrivateDensityAuthority(item FoodItemEntity) error {
 	return nil
 }
 
-// Delete soft-deletes a private food item only when it belongs to ownerID.
-// Implements DESIGN-005 FoodItemEntity owner-scoped custom-item delete.
+// Delete permanently removes a private food item only when it belongs to ownerID.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
 func (r *PostgresCustomFoodItemRepository) Delete(ctx context.Context, ownerID uuid.UUID, id uuid.UUID) error {
 	if err := validateCustomFoodIdentity(ownerID, id); err != nil {
 		return err
 	}
-	result, err := r.db.Exec(ctx, customFoodSoftDeleteSQL, ownerID, id)
-	if err != nil {
-		return mapPostgresError(err, "delete custom food item")
+	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		var lockedID uuid.UUID
+		if err := db.QueryRow(ctx, customFoodDeleteLockSQL, ownerID, id).Scan(&lockedID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return NewError(ErrorKindNotFound, "custom food item not found", nil)
+			}
+			return mapPostgresError(err, "lock custom food item for deletion")
+		}
+		rows, err := db.Query(ctx, customFoodDeleteReferencesSQL, id, ownerID)
+		if err != nil {
+			return mapPostgresError(err, "delete custom food item")
+		}
+		if rows == nil {
+			return NewError(ErrorKindConnection, "delete custom food item returned no rows", nil)
+		}
+		conflict := &CustomFoodDeletionConflict{}
+		for rows.Next() {
+			var dietID *uuid.UUID
+			var dietName *string
+			if err := rows.Scan(&dietID, &dietName); err != nil {
+				rows.Close()
+				return mapPostgresError(err, "scan custom food deletion")
+			}
+			if dietID != nil {
+				conflict.Diets = append(conflict.Diets, SavedDietDeletionReference{ID: *dietID, Name: *dietName})
+			}
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return mapPostgresError(err, "iterate custom food deletion")
+		}
+		rows.Close()
+		if len(conflict.Diets) > 0 {
+			return conflict
+		}
+		result, err := db.Exec(ctx, customFoodDeleteHardSQL, ownerID, id)
+		if err != nil {
+			return mapPostgresError(err, "delete custom food item")
+		}
+		if result.RowsAffected() != 1 {
+			return NewError(ErrorKindNotFound, "custom food item not found", nil)
+		}
+		if _, err := db.Exec(ctx, customFoodDeleteRetryMarkersSQL, ownerID, id); err != nil {
+			return mapPostgresError(err, "mark custom food create retries")
+		}
+		return nil
+	})
+}
+
+// PurgeExpiredDeletedCustomFoodCreateKeys removes expired payload-free retry markers.
+// Implements DESIGN-008 AccountDeleter marker retention.
+func (r *PostgresCustomFoodItemRepository) PurgeExpiredDeletedCustomFoodCreateKeys(ctx context.Context) error {
+	if r == nil || r.db == nil {
+		return NewError(ErrorKindConnection, "custom food item service is unavailable", nil)
 	}
-	if result.RowsAffected() == 0 {
-		return NewError(ErrorKindNotFound, "custom food item not found", nil)
+	if _, err := r.db.Exec(ctx, customFoodPurgeMarkersSQL); err != nil {
+		return mapPostgresError(err, "purge custom food create retry markers")
 	}
 	return nil
 }

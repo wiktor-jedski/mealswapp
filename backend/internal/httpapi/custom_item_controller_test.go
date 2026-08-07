@@ -314,6 +314,35 @@ func TestProfileControllerCustomItemRejectsClientOwnershipAndMapsSafeErrors(t *t
 	}
 }
 
+// TestProfileControllerCustomItemDeletionConflictReturnsBoundedDietSummaries verifies
+// DESIGN-008 AccountDeleter's owner-safe 409 response boundary.
+func TestProfileControllerCustomItemDeletionConflictReturnsBoundedDietSummaries(t *testing.T) {
+	cfg := testConfig()
+	userID, itemID := uuid.New(), uuid.New()
+	authenticator, authCookies := testJWTAuth(t, cfg, userID, nil)
+	dietID := uuid.New()
+	service := &fakeCustomItemService{err: &repository.CustomFoodDeletionConflict{Diets: []repository.SavedDietDeletionReference{{ID: dietID, Name: "Owner diet"}}}}
+	controller := NewProfileController(&fakeProfileService{}).WithCustomItems(service)
+	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: authenticator, CSRF: NewCSRFManager(cfg, nil), Routes: controller.Routes()})
+	token, csrfCookies := fetchCSRFToken(t, app)
+	request := httptest.NewRequest(fiber.MethodDelete, "/api/v1/custom-items/"+itemID.String(), nil)
+	request.Header.Set("X-CSRF-Token", token)
+	addCookies(request, authCookies)
+	addCookies(request, csrfCookies)
+	response, err := app.Test(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := decodeEnvelope(t, response.Body)
+	response.Body.Close()
+	if response.StatusCode != fiber.StatusConflict || envelope.Error == nil || envelope.Error.Code != "custom_item_in_use" {
+		t.Fatalf("deletion conflict = %d %+v", response.StatusCode, envelope)
+	}
+	if got := envelope.Error.Data["affectedDiets"].([]any); len(got) != 1 || got[0].(map[string]any)["id"] != dietID.String() {
+		t.Fatalf("affected diets = %#v", envelope.Error.Data)
+	}
+}
+
 func TestProfileControllerCustomItemRejectsEscapedNULProvenanceBeforeService(t *testing.T) {
 	cfg := testConfig()
 	userID := uuid.New()

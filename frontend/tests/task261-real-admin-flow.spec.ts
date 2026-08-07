@@ -33,7 +33,7 @@ test("Admin Panel generated client deletes exported private data and publishes a
 	await expect(privateData.getByText(privateItem)).toBeVisible();
 	await privateData.getByRole("button", { name: "Delete private item" }).click();
 	const deletionResponse = page.waitForResponse((response) => response.url().endsWith(`/api/v1/custom-items/${itemId}`) && response.request().method() === "DELETE");
-	await privateData.getByRole("button", { name: "Confirm private item deletion" }).click();
+	await privateData.getByRole("button", { name: "Permanently delete private item" }).click();
 	expect((await deletionResponse).status()).toBe(204);
 	await expect(privateData.getByText("Private item deleted and authoritative export refreshed.")).toBeVisible();
 	await expect(privateData.locator("[data-admin-private-data-empty]")).toBeVisible();
