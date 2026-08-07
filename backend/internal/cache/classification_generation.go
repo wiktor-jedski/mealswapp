@@ -13,17 +13,6 @@ import (
 // Implements DESIGN-011 CacheInvalidator shared invalidation.
 const classificationGenerationKey = "classification:cache-generation:v1"
 
-// setIfClassificationGenerationScript atomically guards stale cache-miss writes.
-// Implements DESIGN-011 RedisCache guarded cache-miss persistence.
-const setIfClassificationGenerationScript = `
-local current = redis.call("GET", KEYS[1])
-if (not current and ARGV[1] == "0") or current == ARGV[1] then
-  redis.call("SET", KEYS[2], ARGV[2], "PX", ARGV[3])
-  return 1
-end
-return 0
-`
-
 // ClassificationGeneration coordinates classification-derived caches across API instances.
 // Implements DESIGN-009 TagManager and DESIGN-011 CacheInvalidator shared invalidation.
 type ClassificationGeneration struct {
@@ -33,9 +22,9 @@ type ClassificationGeneration struct {
 // classificationGenerationClient is the Redis command subset used for generation coordination.
 // Implements DESIGN-011 RedisCache shared generation versioning.
 type classificationGenerationClient interface {
+	redis.Scripter
 	Get(context.Context, string) *redis.StringCmd
 	Incr(context.Context, string) *redis.IntCmd
-	Eval(context.Context, string, []string, ...any) *redis.Cmd
 }
 
 // NewClassificationGeneration creates a Redis-backed shared cache generation.
@@ -78,6 +67,6 @@ func (g ClassificationGeneration) SetIfCurrent(ctx context.Context, generation u
 	if g.client == nil || ttl <= 0 {
 		return false, nil
 	}
-	result, err := g.client.Eval(ctx, setIfClassificationGenerationScript, []string{classificationGenerationKey, key}, strconv.FormatUint(generation, 10), value, strconv.FormatInt(ttl.Milliseconds(), 10)).Int64()
+	result, err := setIfClassificationGenerationScript.Run(ctx, g.client, []string{classificationGenerationKey, key}, strconv.FormatUint(generation, 10), value, strconv.FormatInt(ttl.Milliseconds(), 10)).Int64()
 	return result == 1, err
 }
