@@ -51,14 +51,14 @@ The operation evidence includes a read-only PostgreSQL partition proof. It asser
 | `cd backend && ... go test -race ./internal/cache -count=1` | PASS |
 | `cd backend && ... go vet ./...` | PASS |
 | `cd frontend && ... bun run typecheck` | PASS |
-| `cd frontend && ... bun test` | PASS, 571 tests / 3,047 expectations |
+| `cd frontend && ... bun test` | PASS, 571 tests / 3,053 expectations |
 | `cd frontend && ... bun test src/lib/phase08-acceptance-reporter.test.ts` | PASS, 2 tests / 2 expectations |
 | `cd frontend && ... bun run build` | PASS |
 | `bunx playwright test tests/task283-manual-catalog.spec.ts --config=playwright.real-stack.config.ts --list` | PASS; 19 tests are registered, including the mobile discovery scenario |
 | `python3 scripts/validate-task-list.py` | PASS; 304 sequential tasks; only Task 303 status changed |
 | `python3 scripts/validate-traceability.py` | PASS |
 | `python3 scripts/check.py --quick` | PASS; changed-area, static, API, Go, frontend, and acceptance-contract lanes passed |
-| `python3 scripts/check.py` | Static, frontend build/unit/coverage, backend, and frontend verifier lanes passed; the complete browser lane was attempted with the API running but ended with 32 unrelated existing admin/import/register/Task 259 failures (317 passed, 83 skipped). |
+| `python3 scripts/check.py` | PASS; static, requirements, traceability, task-list, frontend build/unit/coverage, backend, local-stack, frontend verifier, and complete browser lanes passed. The browser lane completed with 349 passed and 83 intentional skips; Phase 08 Go coverage was the exact contracted 4,936/5,335 (92.5%). |
 | `python3 scripts/validate-task-list.py` | PASS; 304 sequential tasks; only Task 303 is `PREPARED` and Task 304 remains `OPEN` |
 | `git diff --check` | PASS |
 
@@ -69,7 +69,7 @@ The final read-only proof is `logs/real-stack-e2e/7767d35ec910e4ad2a36aa09/accep
 ## Remaining blockers and risks
 
 - The broader Task 283 aggregate still has five unrelated BLOCKED rows: `P08-SWR033-STEP-01` through `P08-SWR033-STEP-04` and `P08-SWR090-STEP-04`. They are outside Task 303's authorized scope.
-- The complete `python3 scripts/check.py` browser lane remains blocked by 32 unrelated existing failures in `admin-data-management.spec.ts`, `external-import-workflow.spec.ts`, `register.spec.ts`, and `task259-frontend-gate.spec.ts`; those tests are outside Task 303's authorized scope and were not changed.
+- The complete `python3 scripts/check.py` gate is green. Its browser lane intentionally skips unrelated capability-gated scenarios; those skips do not gate Task 303.
 - Task 294's recovery-focus/proof issue remains its own non-pass and is preserved as diagnostic evidence; it no longer gates Task 303.
-- The frontend coverage exception contract is resolved and its static/full coverage lanes pass; the remaining full-gate blocker is the unrelated browser suite, not coverage drift.
+- The frontend coverage exception contract is resolved and its static/full coverage lanes pass.
 - `P08-FIND-283-001` and `P08-FIND-283-005` remain ledger/Open Points entries for the Task 302 remediation gate; this task does not edit that ledger.
