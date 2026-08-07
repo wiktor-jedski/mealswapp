@@ -393,6 +393,107 @@ func TestGetOrLoadAutocompleteResponseAttachesMetadata(t *testing.T) {
 	}
 }
 
+func TestGetOrLoadAutocompleteResponseUsesFoodGenerationForDiscovery(t *testing.T) {
+	ctx := context.Background()
+	store := &generationMemoryStore{memoryStore: memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}}
+	loadCalls := 0
+	load := func(context.Context) (search.AutocompleteResponse, error) {
+		loadCalls++
+		return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: map[int]string{1: "Old item", 2: "New item"}[loadCalls], Rank: 1}}}, nil
+	}
+
+	if _, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load); err != nil {
+		t.Fatal(err)
+	}
+	store.generation++
+	response, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loadCalls != 2 || len(response.Items) != 1 || response.Items[0].Label != "New item" {
+		t.Fatalf("generation-aware autocomplete loadCalls=%d response=%+v", loadCalls, response)
+	}
+	if _, ok := store.values[searchCacheKeyForGeneration(BuildAutocompleteCacheKey("global item"), 0).String()]; !ok {
+		t.Fatal("generation-zero autocomplete entry was not stored")
+	}
+	if _, ok := store.values[searchCacheKeyForGeneration(BuildAutocompleteCacheKey("global item"), 1).String()]; !ok {
+		t.Fatal("generation-one autocomplete entry was not stored")
+	}
+}
+
+func TestInFlightAutocompleteMissCannotRepopulateAfterClassificationInvalidation(t *testing.T) {
+	ctx := context.Background()
+	store := &generationMemoryStore{memoryStore: memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	loadCalls := 0
+	load := func(context.Context) (search.AutocompleteResponse, error) {
+		loadCalls++
+		if loadCalls == 1 {
+			close(started)
+			<-release
+			return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: "Stale item", Rank: 1}}}, nil
+		}
+		return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: "Fresh item", Rank: 1}}}, nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load)
+		done <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("autocomplete loader did not start")
+	}
+	store.generation++
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("in-flight autocomplete load error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("in-flight autocomplete load did not finish")
+	}
+
+	currentKey := searchCacheKeyForGeneration(BuildAutocompleteCacheKey("global item"), store.generation)
+	if _, hit, err := GetRedis[search.AutocompleteResponse](ctx, store, currentKey); err != nil || hit {
+		t.Fatalf("stale autocomplete cache hit=%v err=%v, want miss", hit, err)
+	}
+	fresh, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load)
+	if err != nil {
+		t.Fatalf("fresh autocomplete load error = %v", err)
+	}
+	if loadCalls != 2 || len(fresh.Items) != 1 || fresh.Items[0].Label != "Fresh item" {
+		t.Fatalf("generation-aware autocomplete loadCalls=%d response=%+v", loadCalls, fresh)
+	}
+}
+
+func TestAutocompleteSkipsWriteWhenGuardedGenerationLookupFails(t *testing.T) {
+	ctx := context.Background()
+	store := &failingGenerationStore{
+		memoryStore: memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}},
+		err:         errors.New("generation unavailable"),
+	}
+	key := BuildAutocompleteCacheKey("global item")
+	response, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, func(context.Context) (search.AutocompleteResponse, error) {
+		return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: "Fresh item", Rank: 1}}}, nil
+	})
+	if err != nil {
+		t.Fatalf("GetOrLoadAutocompleteResponse() error = %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].Label != "Fresh item" {
+		t.Fatalf("response = %+v", response)
+	}
+	if _, ok := store.values[key.String()]; ok {
+		t.Fatalf("guarded autocomplete wrote unscoped key %q", key.String())
+	}
+	if len(store.values) != 0 {
+		t.Fatalf("guarded autocomplete wrote unexpected keys: %#v", store.values)
+	}
+}
+
 func TestGetOrLoadFallsBackWhenRedisFails(t *testing.T) {
 	ctx := context.Background()
 	loadCalls := 0
@@ -510,6 +611,35 @@ func searchRequest(filters []search.SearchFilter) search.SearchRequest {
 type memoryStore struct {
 	values map[string]string
 	ttls   map[string]time.Duration
+}
+
+type generationMemoryStore struct {
+	memoryStore
+	generation uint64
+}
+
+type failingGenerationStore struct {
+	memoryStore
+	err error
+}
+
+func (s *failingGenerationStore) Current(context.Context) (uint64, error) {
+	return 0, s.err
+}
+
+func (s *failingGenerationStore) SetIfCurrent(context.Context, uint64, string, string, time.Duration) (bool, error) {
+	return false, errors.New("unexpected guarded write")
+}
+
+func (s *generationMemoryStore) Current(context.Context) (uint64, error) {
+	return s.generation, nil
+}
+
+func (s *generationMemoryStore) SetIfCurrent(ctx context.Context, generation uint64, key, value string, ttl time.Duration) (bool, error) {
+	if generation != s.generation {
+		return false, nil
+	}
+	return true, s.memoryStore.Set(ctx, key, value, ttl)
 }
 
 func (s *memoryStore) Get(_ context.Context, key string) (string, error) {

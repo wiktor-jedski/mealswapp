@@ -35,6 +35,14 @@ class Task283SafetyTests(unittest.TestCase):
         for key in ("http_status", "rollback_state", "request_correlation"):
             self.assertIn(f'"{key}"', reporter)
         self.assertIn("BACKEND_EVIDENCE_KEYS.has", reporter)
+
+    def test_task303_mobile_evidence_can_scope_its_required_project(self):
+        reporter = (Path(__file__).parents[1] / "frontend/tests/phase08-acceptance-reporter.ts").read_text()
+        helper = (Path(__file__).parents[1] / "frontend/tests/task281-acceptance-helpers.ts").read_text()
+        spec = (Path(__file__).parents[1] / "frontend/tests/task283-manual-catalog.spec.ts").read_text()
+        self.assertIn("requiredProjects", reporter)
+        self.assertIn("requiredProjects", helper)
+        self.assertIn('["real-stack-mobile-chromium"]', spec)
     def test_accepts_only_loopback_run_owned_test_database(self):
         module.parse_run_owned_database("postgres://127.0.0.1:5432/mealswapp_e2e_abc123_test")
 
@@ -95,6 +103,10 @@ class Task283SafetyTests(unittest.TestCase):
     def test_proof_uses_global_private_partition_not_global_owner_column(self):
         source = Path(module.__file__).read_text()
         self.assertIn("custom_food_items", source)
+        self.assertIn("information_schema.columns", source)
+        self.assertIn("'globalCount'", source)
+        self.assertIn("'privateCount'", source)
+        self.assertIn("'privateOwned'", source)
         self.assertNotIn("food_items WHERE owner_id", source)
 
     def test_redis_proof_reads_generation_key_and_independent_operation_snapshots(self):
@@ -202,6 +214,19 @@ class Task283SafetyTests(unittest.TestCase):
         self.assertIn("browser-diagnostics.txt", source)
         self.assertIn("write_synthetic_browser", source)
         self.assertIn('self.combine_results(evidence, "BLOCKED"', source)
+
+    def test_task294_preflight_and_proof_failures_do_not_gate_task283(self):
+        source = Path(module.__file__).read_text()
+        self.assertIn('"task294-diagnostics.txt"', source)
+        self.assertIn('"task294-proof-diagnostics.txt"', source)
+        self.assertIn('self.events.append("task294_product_nonpass")', source)
+        self.assertIn('self.events.append("task294_proof_nonpass")', source)
+        self.assertLess(
+            source.index('"--grep", "Task 294 production transport corruption"'),
+            source.index('"--grep-invert", "Task 294 production transport corruption"'),
+        )
+        self.assertLess(source.index("self.write_task294_proof(evidence)"), source.index("self.write_backend_evidence(evidence)"))
+        self.assertIn('suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"', source)
 
     def test_managed_browser_output_is_mandatory_and_both_projects_are_required(self):
         source = Path(module.__file__).read_text()

@@ -2,6 +2,18 @@
   "schema": "mealswapp.phase08-acceptance-manifest.v1",
   "design": "DESIGN-014 MetricsCollector",
   "source": "req_tests.md",
+  "projectScopeAllowList": {
+    "P08-SWR033-STEP-05": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-01": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-02": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-03": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-04": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-05": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-06": ["real-stack-mobile-chromium"],
+    "P08-SWR056-ACCEPT-01": ["real-stack-mobile-chromium"],
+    "P08-SWR056-ACCEPT-05": ["real-stack-mobile-chromium"],
+    "P08-SWR056-ACCEPT-06": ["real-stack-mobile-chromium"]
+  },
   "scenarios": [
     {
       "id": "P08-SWR019-CLASSIFICATION-FILTERING",

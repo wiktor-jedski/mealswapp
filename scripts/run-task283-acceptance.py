@@ -242,6 +242,10 @@ class Task283Harness(real_stack.Harness):
             (evidence / "backend/task283-redis-before.json").write_text(json.dumps(generation_before, sort_keys=True) + "\n")
             browser_failure = None
             browser_errors = []
+            suite_environment = dict(playwright_env)
+            suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"
+            suite_environment["MEALSWAPP_TASK294_CORRUPT_MANUAL_ITEM_RESPONSE_ONCE"] = "0"
+            suite_environment["MEALSWAPP_TASK283_AUTH_STATE_DIR"] = str(self.raw_dir / "task283-auth-state-suite")
             try:
                 real_stack.run_command(
                     ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep", "Task 294 production transport corruption"],
@@ -249,10 +253,8 @@ class Task283Harness(real_stack.Harness):
                 )
             except BaseException as error:
                 browser_errors.append(error)
-            suite_environment = dict(playwright_env)
-            suite_environment["MEALSWAPP_TASK294_REAL_E2E"] = "0"
-            suite_environment["MEALSWAPP_TASK294_CORRUPT_MANUAL_ITEM_RESPONSE_ONCE"] = "0"
-            suite_environment["MEALSWAPP_TASK283_AUTH_STATE_DIR"] = str(self.raw_dir / "task283-auth-state-suite")
+                self.events.append("task294_product_nonpass")
+                self.write_playwright_diagnostic(evidence, error, "task294-diagnostics.txt", user["email"], user["password"])
             try:
                 real_stack.run_command(
                     ["bunx", "playwright", "test", "-c", "playwright.real-stack.config.ts", "tests/task283-manual-catalog.spec.ts", "--grep-invert", "Task 294 production transport corruption"],
@@ -294,8 +296,12 @@ class Task283Harness(real_stack.Harness):
             if not expected_projects.issubset(set(browser_payload.get("projects", []))):
                 self.write_synthetic_browser(evidence, "BLOCKED")
             try:
-                if (evidence / "task294-transport-proof.json").is_file():
-                    self.write_task294_proof(evidence)
+                self.write_task294_proof(evidence)
+            except Exception as error:
+                self.events.append("task294_proof_nonpass")
+                detail = str(error).replace("\n", " ")[:400]
+                (evidence / "task294-proof-diagnostics.txt").write_text(f"{type(error).__name__}: {detail}\n", encoding="utf-8")
+            try:
                 self.write_backend_evidence(evidence)
             except Exception as error:
                 self.events.append("backend_proof_nonpass")
@@ -307,6 +313,18 @@ class Task283Harness(real_stack.Harness):
             self.events.append("task283_results_finalized")
         finally:
             for reservation in reservations: reservation.release()
+
+    def write_playwright_diagnostic(self, evidence: Path, error: BaseException, filename: str, *secrets: str) -> None:
+        """Persist a redacted, bounded diagnostic for an isolated Playwright run."""
+        diagnostic = "\n".join(
+            value.decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value)
+            for value in (getattr(error, "stdout", None), getattr(error, "stderr", None))
+            if value
+        )
+        for secret in (*secrets, self.run_id):
+            diagnostic = diagnostic.replace(secret, "[redacted]")
+        safe_lines = [line[:400] for line in diagnostic.splitlines() if any(marker in line for marker in ("task283", "Task 294", "Error", "Expected", "Received", "Timeout"))][:100]
+        (evidence / filename).write_text(f"{type(error).__name__}\n" + "\n".join(safe_lines) + "\n", encoding="utf-8")
 
     def write_task294_proof(self, evidence: Path) -> None:
         """Prove the browser-recovered Task 294 mutation has exactly-once effects."""
@@ -481,6 +499,27 @@ class Task283Harness(real_stack.Harness):
                 (entity_id,),
             )))
             actual["ownerless"] = int(read_only_psql(self.target, self.database, "SELECT count(*) FROM custom_food_items WHERE name=%s", (name,))) == 0
+            private_item_id = operation.get("privateItemId")
+            if private_item_id is not None:
+                if not isinstance(private_item_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", private_item_id, re.I):
+                    raise ValueError("item private partition identity is invalid")
+                if not isinstance(expected.get("partition"), dict):
+                    raise ValueError("item private partition expectation is invalid")
+                actual["partition"] = json.loads(read_only_psql(
+                    self.target, self.database,
+                    """SELECT json_build_object(
+                        'globalCount', (SELECT count(*) FROM food_items WHERE id=%s::uuid),
+                        'privateCount', (SELECT count(*) FROM custom_food_items WHERE id=%s::uuid),
+                        'globalOwnerless', NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema='public' AND table_name='food_items' AND column_name='owner_id'
+                        ),
+                        'privateOwned', EXISTS (
+                            SELECT 1 FROM custom_food_items WHERE id=%s::uuid AND owner_id IS NOT NULL
+                        )
+                    )""",
+                    (entity_id, private_item_id, private_item_id),
+                ))
             actual["auditActions"] = json.loads(read_only_psql(
                 self.target, self.database,
                 "SELECT COALESCE(json_object_agg(action, amount), '{}'::json)::text FROM (SELECT action,count(*) amount FROM admin_audit_entries WHERE entity_type='food_item' AND entity_id=%s::uuid GROUP BY action) grouped",

@@ -20,6 +20,13 @@ interface State {
 	roles: Array<{ id: string; name: string; kind: "culinary_role" }>;
 	user: Record<string, unknown>;
 	conflictNextRetry?: boolean;
+	abortNextCreate?: boolean;
+	corruptNextCreate?: boolean;
+	corruptCreateWithoutCommit?: boolean;
+	createRequests: Array<Record<string, unknown>>;
+	corruptNextUpdate?: boolean;
+	updateRequests: Array<Record<string, unknown>>;
+	failNextItemRead?: boolean;
 	lastItemPut?: Record<string, unknown>;
 	lastClassificationPut?: Record<string, unknown>;
 	deletedItemIds: string[];
@@ -29,6 +36,7 @@ interface State {
 	itemReadDelays?: Record<string, number>;
 	itemSearchDelays?: Record<string, number>;
 	itemSearchItems?: Array<Record<string, unknown>>;
+	staleNextItemSearch?: boolean;
 	failNextItemSearch?: boolean;
 	itemSearchReads: number;
 	classificationMutationWaits?: Record<string, Promise<void>>;
@@ -44,7 +52,7 @@ async function stubApp(page: Page): Promise<State> {
 		categories: [{ id: categoryParentId, name: "Food", kind: "food_category" }, { id: categoryId, name: "Produce", kind: "food_category", parentId: categoryParentId }, { id: conflictId, name: "In use", kind: "food_category" }],
 		roles: [{ id: roleId, name: "Base", kind: "culinary_role" }],
 		user: { id: userId, email: "minimal@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", deletion: { requestId: deletionId, status: "failed", failureCategory: "unknown", retryCount: 1, requestedAt: "2026-07-20T00:00:00Z" } },
-		deletedItemIds: [], classificationReads: 0, itemSearchReads: 0
+		deletedItemIds: [], classificationReads: 0, itemSearchReads: 0, createRequests: [], updateRequests: []
 	};
 	const session = ok({ userId: "admin-256", role: "admin", hasVerifiedLoginMethod: true, accessExpiresAt: "2026-07-21T22:00:00Z", refreshExpiresAt: "2026-07-28T22:00:00Z" });
 	await page.route(/\/api\/v1\/(profile|auth\/refresh|billing\/entitlement|search-history|saved-items|search\/autocomplete|auth\/csrf-token)(\?.*)?$/, async (route) => {
@@ -76,12 +84,40 @@ async function stubApp(page: Page): Promise<State> {
 			}] : []);
 			const matching = values.filter(({ name }) => String(name).toLowerCase().includes(query.trim().toLowerCase()));
 			const pageNumber = Number(url.searchParams.get("page") ?? 1); const pageSize = Number(url.searchParams.get("pageSize") ?? 10); const offset = (pageNumber - 1) * pageSize;
-			return json(route, 200, ok({ items: matching.slice(offset, offset + pageSize), page: pageNumber, pageSize, total: matching.length }));
+			const responseItems = state.staleNextItemSearch ? matching.map((value) => ({ ...value, name: "Tofu" })) : matching;
+			state.staleNextItemSearch = false;
+			return json(route, 200, ok({ items: responseItems.slice(offset, offset + pageSize), page: pageNumber, pageSize, total: matching.length }));
 		}
-		if (path === "/api/v1/admin/items" && method === "POST") { const body = request.postDataJSON(); state.item = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] }; return json(route, 201, ok(state.item)); }
-		if (path === `/api/v1/admin/items/${itemId}` && method === "GET") { const delay = state.itemReadDelays?.[itemId] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); return state.item ? json(route, 200, ok(state.item)) : json(route, 404, failure(404, "not_found")); }
+		if (path === "/api/v1/admin/items" && method === "POST") {
+			const body = request.postDataJSON() as Record<string, unknown>;
+			state.createRequests.push(structuredClone(body));
+			if (state.abortNextCreate) { state.abortNextCreate = false; return route.abort("connectionreset"); }
+			const created = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] };
+			if (!state.corruptCreateWithoutCommit) state.item = created;
+			const corrupt = state.corruptNextCreate;
+			state.corruptNextCreate = false; state.corruptCreateWithoutCommit = false;
+			if (corrupt) return json(route, 201, { status: "ok", requestId: "req-create-294", data: { id: itemId } });
+			return json(route, 201, ok(created));
+		}
+		if (path === `/api/v1/admin/items/${itemId}` && method === "GET") {
+			const delay = state.itemReadDelays?.[itemId] ?? 0;
+			if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+			if (state.failNextItemRead) { state.failNextItemRead = false; return json(route, 503, failure(503, "dependency_unavailable")); }
+			return state.item ? json(route, 200, ok(state.item)) : json(route, 404, failure(404, "not_found"));
+		}
 		if (path === `/api/v1/admin/items/${secondItemId}` && method === "GET") return json(route, 200, ok({ ...state.item, id: secondItemId, name: "Second item" }));
-		if (path === `/api/v1/admin/items/${itemId}` && method === "PUT") { const body = request.postDataJSON() as Record<string, unknown>; state.lastItemPut = body; if (body.name === "Audit fail") return json(route, 500, failure(500, "audit_write_failed")); const mutationProjection = { ...state.item, ...body }; state.item = { ...mutationProjection, ...(state.authoritativeNameAfterPut ? { name: state.authoritativeNameAfterPut } : {}) }; return json(route, 200, ok(mutationProjection)); }
+		if (path === `/api/v1/admin/items/${itemId}` && method === "PUT") {
+			const body = request.postDataJSON() as Record<string, unknown>;
+			state.lastItemPut = body; state.updateRequests.push(structuredClone(body));
+			if (body.name === "Audit fail") return json(route, 500, failure(500, "audit_write_failed"));
+			const { densitySourceProvider: _densitySourceProvider, densitySourceFoodId: _densitySourceFoodId, ...withoutImportedDensity } = state.item ?? {};
+			const mutationProjection = { ...(body.densitySourceKind ? withoutImportedDensity : state.item), ...body };
+			state.item = { ...mutationProjection, ...(state.authoritativeNameAfterPut ? { name: state.authoritativeNameAfterPut } : {}) };
+			const corrupt = state.corruptNextUpdate;
+			state.corruptNextUpdate = false;
+			if (corrupt) return json(route, 200, { status: "ok", requestId: "req-update-294", data: { id: itemId } });
+			return json(route, 200, ok(state.item));
+		}
 		if (path.startsWith("/api/v1/admin/items/") && method === "DELETE") { const id = path.split("/").at(-1)!; state.deletedItemIds.push(id); if (id === itemId) state.item = undefined; state.itemSearchItems = state.itemSearchItems?.filter(({ itemId: candidate }) => candidate !== id); return json(route, 204); }
 		if (path === "/api/v1/admin/users" && method === "GET") { const query = url.searchParams.get("email") ?? url.searchParams.get("userId") ?? ""; const delay = state.userLookupDelays?.[query] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); return json(route, 200, ok({ users: [{ ...state.user, email: query.includes("@") ? query : state.user.email }] })); }
 		if (path === `/api/v1/admin/users/${userId}/deletion-requests/${deletionId}/retry` && method === "POST") {
@@ -151,7 +187,7 @@ test("keyboard cancellation restores focus for every destructive confirmation an
 	await cancelWithKeyboard(page);
 	await expect(itemDelete).toBeFocused();
 
-	const classificationDelete = page.getByRole("listitem").filter({ hasText: "Produce" }).getByRole("button", { name: "Delete" });
+	const classificationDelete = page.getByRole("treeitem").filter({ hasText: "Produce" }).getByRole("button", { name: "Delete" });
 	await classificationDelete.focus();
 	await classificationDelete.press("Enter");
 	await cancelWithKeyboard(page);
@@ -279,11 +315,11 @@ test("ambiguous update recovery detects conflicts and keeps failed or missing re
 // DESIGN-009 TagManager/UserAdminPanel, and SW-REQ-054/SW-REQ-057/SW-REQ-073.
 test("classification conflicts and legal deletion retries preserve authoritative state", async ({ page }) => {
 	const state = await stubApp(page); await openAdmin(page);
-	await page.getByLabel("Name", { exact: true }).last().fill("Vegetable"); await page.getByRole("button", { name: "Create", exact: true }).click(); await expect(page.getByRole("listitem").filter({ hasText: "Vegetable" })).toBeVisible();
-	const produce = page.getByRole("listitem").filter({ hasText: "Produce" }); await produce.getByRole("button", { name: "Rename" }).click(); await page.getByLabel("Name", { exact: true }).last().fill("Fresh produce"); await page.getByRole("button", { name: "Save rename" }).click(); await expect(page.getByRole("listitem").filter({ hasText: "Fresh produce" })).toBeVisible();
+	await page.getByLabel("Name", { exact: true }).last().fill("Vegetable"); await page.getByRole("button", { name: "Create", exact: true }).click(); await expect(page.getByRole("treeitem").filter({ hasText: "Vegetable" })).toBeVisible();
+	const produce = page.getByRole("treeitem").filter({ hasText: "Produce" }); await produce.getByRole("button", { name: "Edit" }).click(); await page.getByLabel("Name", { exact: true }).last().fill("Fresh produce"); await page.getByRole("button", { name: "Save classification" }).click(); await expect(page.getByRole("treeitem").filter({ hasText: "Fresh produce" })).toBeVisible();
 	expect(state.lastClassificationPut).toEqual({ name: "Fresh produce", parentId: categoryParentId });
 	expect(state.categories.find(({ id }) => id === categoryId)?.parentId).toBe(categoryParentId);
-	const inUse = page.getByRole("listitem").filter({ hasText: "In use" }); await inUse.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click(); await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data"); await expect(page.getByRole("listitem").filter({ hasText: "In use" })).toBeVisible();
+	const inUse = page.getByRole("treeitem").filter({ hasText: "In use" }); await inUse.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click(); await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data"); await expect(page.getByRole("treeitem").filter({ hasText: "In use" })).toBeVisible();
 	await page.getByLabel("Email or user ID").fill("minimal@example.test"); await page.getByRole("button", { name: "Look up" }).click();
 	await expect(page.locator("[data-admin-user]")).toContainText("unknown · retries 1"); state.conflictNextRetry = true; await page.getByRole("button", { name: "Retry legal deletion" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
 	await expect(page.locator("[data-admin-user-error]")).toContainText("authoritative data"); await expect(page.locator("[data-admin-user]")).toContainText("pending"); await expect(page.getByText("Deletion retry accepted and authoritative state refreshed.")).toHaveCount(0);
@@ -294,10 +330,10 @@ test("classification conflicts and legal deletion retries preserve authoritative
 test("unused classification delete reloads the authoritative hierarchy", async ({ page }) => {
 	const state = await stubApp(page); await openAdmin(page);
 	const readsBeforeDelete = state.classificationReads;
-	const produce = page.getByRole("listitem").filter({ hasText: "Produce" });
+	const produce = page.getByRole("treeitem").filter({ hasText: "Produce" });
 	await produce.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
 	await expect(page.getByText("Classification deleted and refreshed.")).toBeVisible();
-	await expect(page.getByRole("listitem").filter({ hasText: "Produce" })).toHaveCount(0);
+	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toHaveCount(0);
 	expect(state.classificationReads).toBeGreaterThanOrEqual(readsBeforeDelete + 2);
 });
 
@@ -317,7 +353,7 @@ test("item replacement preserves all fields and renders the differing authoritat
 	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
 	expect(state.lastItemPut).toMatchObject({
 		name: "Submitted milk", prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240,
-		densityGramsPerMilliliter: 1.2, densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported",
+		densityGramsPerMilliliter: 1.2, densitySourceKind: "manual",
 		macrosPer100: { protein: 10, carbohydrates: 110, fat: 5 }, micros: { sodium: 42 }, foodCategoryIds: [categoryId], culinaryRoleIds: [roleId], allergenKeys: ["dairy"], imageUrl: "https://images.example.test/milk.png"
 	});
 });
@@ -414,9 +450,14 @@ test("picker refreshes after committed mutations and recovers a failed read with
 	await page.locator('form[aria-label="Search global items"]').getByRole("button", { name: "Search", exact: true }).click();
 	await page.getByRole("button", { name: "Edit Tofu" }).click();
 	const readsBeforeUpdate = state.itemSearchReads;
-	await page.getByLabel("Name", { exact: true }).first().fill("Tofu refreshed");
+	const nameInput = page.getByLabel("Name", { exact: true }).first();
+	await expect(nameInput).toHaveValue("Tofu");
+	await nameInput.fill("Tofu refreshed");
+	await expect(nameInput).toHaveValue("Tofu refreshed");
+	state.staleNextItemSearch = true;
 	await page.getByRole("button", { name: "Save item" }).click();
 	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
+	expect(state.lastItemPut?.name).toBe("Tofu refreshed");
 	expect(state.itemSearchReads).toBeGreaterThan(readsBeforeUpdate);
 	await expect(page.locator("[data-admin-item-search-results]")).toContainText("Tofu refreshed");
 
@@ -459,7 +500,7 @@ test("picker recovers to the previous page when deleting its last later-page ite
 	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(10);
 });
 
-test("older classification mutations and refreshes cannot overwrite the latest projection", async ({ page }) => {
+test("in-flight classification mutations keep the editor locked until authoritative refresh", async ({ page }) => {
 	let releaseSlowMutation = () => {};
 	let completeSlowMutation = () => {};
 	const slowMutationCompleted = new Promise<void>((resolve) => { completeSlowMutation = resolve; });
@@ -468,12 +509,11 @@ test("older classification mutations and refreshes cannot overwrite the latest p
 	await name.fill("Slow category");
 	const slowRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/admin/classifications/food_category") && request.method() === "POST" && request.postDataJSON().name === "Slow category");
 	await form.evaluate((element: HTMLFormElement) => element.requestSubmit()); await slowRequest;
-	await name.fill("Latest category"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
-	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible();
+	await expect(name).toBeDisabled();
 	releaseSlowMutation();
 	await slowMutationCompleted;
-	await expect(page.getByRole("listitem").filter({ hasText: "Latest category" })).toBeVisible();
-	await expect(page.getByRole("listitem").filter({ hasText: "Slow category" })).toHaveCount(0);
+	await expect(page.getByRole("treeitem").filter({ hasText: "Slow category" })).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Latest category" })).toHaveCount(0);
 });
 
 test("admin views remain keyboard-accessible, responsive, and theme-safe", async ({ page }, testInfo) => {

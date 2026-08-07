@@ -304,18 +304,37 @@ func GetOrLoadSearchResponse(ctx context.Context, store RedisStore, req search.S
 // GetOrLoadAutocompleteResponse returns cached autocomplete results or falls back to the source loader.
 // Implements DESIGN-011 RedisCache autocomplete cache metadata and redis_down fallback behavior.
 func GetOrLoadAutocompleteResponse(ctx context.Context, store RedisStore, query string, ttl time.Duration, load func(context.Context) (search.AutocompleteResponse, error)) (search.AutocompleteResponse, error) {
-	key := BuildAutocompleteCacheKey(query)
-	if cached, hit, err := GetRedis[search.AutocompleteResponse](ctx, store, key); err == nil && hit {
-		cached.Cache = cacheMetadataPtr(key, search.CacheStatusHit, ttl)
-		return cached, nil
+	metadataKey := BuildAutocompleteCacheKey(query)
+	key := metadataKey
+	var generation uint64
+	guard, guarded := store.(SearchResponseGeneration)
+	generationReady := !guarded
+	if guarded {
+		if current, err := guard.Current(ctx); err == nil {
+			generation = current
+			key = searchCacheKeyForGeneration(key, generation)
+			generationReady = true
+		}
+	}
+	if generationReady {
+		if cached, hit, err := GetRedis[search.AutocompleteResponse](ctx, store, key); err == nil && hit {
+			cached.Cache = cacheMetadataPtr(metadataKey, search.CacheStatusHit, ttl)
+			return cached, nil
+		}
 	}
 
 	response, err := load(ctx)
 	if err != nil {
 		return response, err
 	}
-	response.Cache = cacheMetadataPtr(key, search.CacheStatusMiss, ttl)
-	_ = SetRedis(ctx, store, key, autocompleteWithoutCacheMetadata(response), ttl)
+	response.Cache = cacheMetadataPtr(metadataKey, search.CacheStatusMiss, ttl)
+	if guarded && generationReady {
+		if payload, marshalErr := json.Marshal(autocompleteWithoutCacheMetadata(response)); marshalErr == nil {
+			_, _ = guard.SetIfCurrent(ctx, generation, key.String(), string(payload), ttl)
+		}
+	} else if !guarded {
+		_ = SetRedis(ctx, store, key, autocompleteWithoutCacheMetadata(response), ttl)
+	}
 	return response, nil
 }
 
