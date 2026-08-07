@@ -1310,9 +1310,7 @@ export interface CustomItemRequest {
 	averageUnitWeightGrams?: number;
 	averageServingVolumeMilliliters?: number;
 	densityGramsPerMilliliter?: number;
-	densitySourceProvider?: string;
-	densitySourceFoodId?: string;
-	densitySourceKind?: "imported" | "manual" | "estimated";
+	densitySourceKind?: "manual" | "estimated";
 	macrosPer100: MacroProfile;
 	micros: Record<string, number>;
 	foodCategoryIds?: string[];
@@ -1383,10 +1381,13 @@ export type ExternalProviderWarningCode =
 
 // Implements DESIGN-009 ExternalSearchProxy safe normalized candidate projection.
 export interface ExternalCandidate {
-	provider: "usda" | "openfoodfacts";
+	provider: string;
 	externalId: string;
+	recordToken: string;
 	name: string;
 	physicalState: "solid" | "liquid";
+	densityGramsPerMilliliter?: number;
+	densitySourceKind?: "imported";
 	macrosPer100: MacroProfile;
 	micronutrients: Record<string, number>;
 	imageUrl?: string;
@@ -1394,7 +1395,7 @@ export interface ExternalCandidate {
 }
 
 export interface ExternalDataWarning {
-	provider: "usda" | "openfoodfacts" | "external";
+	provider: string;
 	code: ExternalProviderWarningCode;
 	message: ExternalProviderWarningCode;
 }
@@ -1408,9 +1409,9 @@ export interface ExternalSearchData {
 export type ExternalSearchEnvelope = OkEnvelope<ExternalSearchData>;
 
 // Implements DESIGN-009 DataImporter editable normalized request boundary.
-export interface CuratedImportRequest extends CustomItemRequest {
-	sourceProvider?: "usda" | "openfoodfacts";
-	externalId?: string;
+export interface CuratedImportRequest extends Omit<CustomItemRequest, "densitySourceKind"> {
+	externalRecordToken?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
 	confirmNameConflict?: boolean;
 	foodCategoryIds: string[];
 	culinaryRoleIds: string[];
@@ -1434,9 +1435,12 @@ export interface AdminItemRequest extends CustomItemRequest {
 }
 
 /** Ownerless global item projection without private ownership or audit state. */
-export interface AdminItem extends AdminItemRequest {
+export interface AdminItem extends Omit<AdminItemRequest, "densitySourceKind"> {
 	id: string;
 	prepTimeMinutes: number;
+	densitySourceProvider?: string;
+	densitySourceFoodId?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
 	foodCategories: ClassificationSummary[];
 	culinaryRoles: ClassificationSummary[];
 }

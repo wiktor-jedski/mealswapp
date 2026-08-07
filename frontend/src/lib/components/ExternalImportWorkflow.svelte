@@ -13,8 +13,7 @@
     ExternalAdminClientError,
     importCuratedItem,
     loadAdminClassifications,
-    searchExternalFoods,
-    type ExternalProvider
+    searchExternalFoods
   } from "../api/external-admin-client";
 
   // Implements DESIGN-009 ExternalSearchProxy, ItemCurator, and DataImporter administration workflow.
@@ -25,13 +24,11 @@
 
   interface SearchRequest {
     query: string;
-    provider: ExternalProvider;
     page: number;
   }
 
   let { onViewLocalItem = () => undefined }: Props = $props();
   let query = $state("");
-  let provider = $state<ExternalProvider>("all");
   let page = $state(1);
   let searchState = $state<"idle" | "loading" | "results" | "empty" | "error">("idle");
   let searchMessage = $state("");
@@ -101,7 +98,7 @@
 
   function requestSearch(targetPage = 1): void {
     if (!query.trim() || importState === "importing") return;
-    const request = { query: query.trim(), provider, page: targetPage };
+    const request = { query: query.trim(), page: targetPage };
     if (!draft) {
       resetCuration();
       void runSearch(request);
@@ -122,7 +119,7 @@
     candidates = [];
     providerWarnings = [];
     try {
-      const result = await searchExternalFoods(request.query, request.provider, request.page, controller.signal);
+      const result = await searchExternalFoods(request.query, "all", request.page, controller.signal);
       if (sequence !== searchSequence) return;
       page = result.page;
       candidates = result.candidates;
@@ -143,14 +140,14 @@
     invalidateImportOwnership();
     pendingSearch = null;
     draft = {
-      sourceProvider: candidate.provider,
-      externalId: candidate.externalId,
+      externalRecordToken: candidate.recordToken,
       name: candidate.name,
       physicalState: candidate.physicalState,
       macrosPer100: { ...candidate.macrosPer100 },
       micros: { ...candidate.micronutrients },
       foodCategoryIds: [],
       culinaryRoleIds: [],
+      ...(candidate.densityGramsPerMilliliter ? { densityGramsPerMilliliter: candidate.densityGramsPerMilliliter, densitySourceKind: "imported" as const } : {}),
       ...(candidate.imageUrl ? { imageUrl: candidate.imageUrl } : {})
     };
     selectedWarnings = candidate.warnings;
@@ -240,7 +237,7 @@
       draft = { ...draft, physicalState };
       return;
     }
-    draft = { ...draft, physicalState, densityGramsPerMilliliter: undefined, densitySourceKind: undefined, densitySourceProvider: undefined, densitySourceFoodId: undefined, averageServingVolumeMilliliters: undefined };
+    draft = { ...draft, physicalState, densityGramsPerMilliliter: undefined, densitySourceKind: undefined, averageServingVolumeMilliliters: undefined };
   }
 
   function updateDensity(density: number): void {
@@ -249,9 +246,9 @@
     draft = { ...draft, densityGramsPerMilliliter: normalizedDensity, ...normalizedDensity && normalizedDensity > 0 && !draft.densitySourceKind ? { densitySourceKind: "manual" as const } : {} };
   }
 
-  function updateDensitySourceKind(kind: "manual" | "estimated"): void {
+  function updateDensitySourceKind(kind: "imported" | "manual" | "estimated"): void {
     if (!draft) return;
-    draft = { ...draft, densitySourceKind: kind, densitySourceProvider: undefined, densitySourceFoodId: undefined };
+    draft = { ...draft, densitySourceKind: kind };
   }
 
   async function submitImport(confirmNameConflict = false): Promise<void> {
@@ -296,14 +293,14 @@
     const macros = value.macrosPer100;
     const validBase = value.name.trim().length > 0 && [macros.protein, macros.carbohydrates, macros.fat].every((number) => Number.isFinite(number) && number >= 0);
     if (!validBase) return false;
-    if (value.physicalState === "solid") return value.densityGramsPerMilliliter === undefined && value.densitySourceKind === undefined && value.densitySourceProvider === undefined && value.densitySourceFoodId === undefined;
+    if (value.physicalState === "solid") return value.densityGramsPerMilliliter === undefined && value.densitySourceKind === undefined;
     return hasValidLiquidDensity(value);
   }
 
   function hasValidLiquidDensity(value: CuratedImportRequest | null): boolean {
     if (!value || value.physicalState !== "liquid" || typeof value.densityGramsPerMilliliter !== "number" || !Number.isFinite(value.densityGramsPerMilliliter) || value.densityGramsPerMilliliter <= 0) return false;
-    if (value.densitySourceKind === "manual" || value.densitySourceKind === "estimated") return !value.densitySourceProvider && !value.densitySourceFoodId;
-    return value.densitySourceKind === "imported" && (value.densitySourceProvider === "usda" || value.densitySourceProvider === "openfoodfacts") && Boolean(value.densitySourceFoodId);
+    if (value.densitySourceKind === "manual" || value.densitySourceKind === "estimated") return true;
+    return value.densitySourceKind === "imported" && Boolean(value.externalRecordToken);
   }
 
   function startFreshImport(): void {
@@ -362,18 +359,10 @@
     <p class="text-sm text-[var(--color-muted)]">Search normalized provider records, review every field, then explicitly import one local item.</p>
   </header>
 
-  <form class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto]" onsubmit={(event) => { event.preventDefault(); requestSearch(1); }} data-external-search-form>
+  <form class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onsubmit={(event) => { event.preventDefault(); requestSearch(1); }} data-external-search-form>
     <label class="grid gap-1 text-sm font-medium">
       External food search
       <input bind:this={searchInput} class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={query} disabled={importState === "importing"} required maxlength="200" />
-    </label>
-    <label class="grid gap-1 text-sm font-medium">
-      Provider
-      <select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={provider} disabled={importState === "importing"}>
-        <option value="all">USDA + OpenFoodFacts</option>
-        <option value="usda">USDA</option>
-        <option value="openfoodfacts">OpenFoodFacts</option>
-      </select>
     </label>
     <button type="submit" class="self-end rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2" disabled={importState === "importing"}>
       {searchState === "loading" ? "Search again" : "Search"}
@@ -446,7 +435,7 @@
         <label class="grid gap-1 text-sm font-medium">Image URL<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="url" bind:value={draft.imageUrl} /></label>
         {#if draft.physicalState === "liquid"}
           <label class="grid gap-1 text-sm font-medium">Density (g/ml)<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" type="number" min="0.001" step="any" value={draft.densityGramsPerMilliliter ?? ""} oninput={(event) => updateDensity(event.currentTarget.valueAsNumber)} required /></label>
-          <label class="grid gap-1 text-sm font-medium">Density provenance<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value={draft.densitySourceKind ?? ""} onchange={(event) => updateDensitySourceKind(event.currentTarget.value as "manual" | "estimated")} required><option value="" disabled>Select provenance</option><option value="manual">Administrator supplied</option><option value="estimated">Administrator estimate</option></select></label>
+          <label class="grid gap-1 text-sm font-medium">Density provenance<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value={draft.densitySourceKind ?? ""} onchange={(event) => updateDensitySourceKind(event.currentTarget.value as "imported" | "manual" | "estimated")} required><option value="" disabled>Select provenance</option>{#if draft.densitySourceKind === "imported"}<option value="imported">External provider supplied</option>{/if}<option value="manual">Administrator supplied</option><option value="estimated">Administrator estimate</option></select></label>
           {#if hasValidLiquidDensity(draft)}<p class="text-sm text-[var(--color-muted)]" data-density-curation-state>Liquid density and provenance supplied.</p>{/if}
         {/if}
       </div>

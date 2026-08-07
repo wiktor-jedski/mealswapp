@@ -15,6 +15,7 @@ import type {
 const candidate: ExternalCandidate = {
   provider: "usda",
   externalId: "usda-apple-255",
+  recordToken: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   name: "Provider Apple Drink",
   physicalState: "liquid",
   macrosPer100: { protein: 0.2, carbohydrates: 12, fat: 0.1 },
@@ -127,12 +128,9 @@ test("searches every provider, paginates partial results, curates warnings/class
   await expect(workflow).toBeVisible();
   await workflow.getByLabel("External food search").fill("apple drink");
 
-  for (const [label, expected] of [["USDA", "usda:1"], ["OpenFoodFacts", "openfoodfacts:1"], ["USDA + OpenFoodFacts", "all:1"]] as const) {
-    await workflow.getByLabel("Provider").selectOption({ label });
-    await workflow.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(workflow.locator("[data-external-results]")).toBeVisible();
-    expect(searches.at(-1)).toBe(expected);
-  }
+  await workflow.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(workflow.locator("[data-external-results]")).toBeVisible();
+  expect(searches.at(-1)).toBe("all:1");
   await expect(workflow.locator("[data-provider-warnings]")).toContainText("timed out");
   await workflow.getByRole("button", { name: "Next" }).click();
   expect(searches.at(-1)).toBe("all:2");
@@ -346,7 +344,6 @@ test("disables incompatible controls during import and starts a completed workfl
   await importStarted;
 
   await expect(workflow.getByLabel("External food search")).toBeDisabled();
-  await expect(workflow.getByLabel("Provider")).toBeDisabled();
   await expect(workflow.getByRole("button", { name: "Search", exact: true })).toBeDisabled();
   await expect(workflow.getByRole("button", { name: "Next" })).toBeDisabled();
   await expect(workflow.getByRole("button", { name: "Curate" }).first()).toBeDisabled();

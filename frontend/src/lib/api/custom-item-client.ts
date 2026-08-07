@@ -44,6 +44,7 @@ export async function fetchCustomFoodObject(itemId: string, signal?: AbortSignal
 function decodeCustomItem(value: unknown): CustomItem {
 	if (!record(value) || !uuid(value.id) || typeof value.name !== "string" || value.name.trim() === "" ||
 		"ownerId" in value || "userId" in value || "OwnerID" in value || "UserID" in value ||
+		"densitySourceProvider" in value || "densitySourceFoodId" in value ||
 		(value.physicalState !== "solid" && value.physicalState !== "liquid") || !record(value.macrosPer100) ||
 		!finiteNonnegative(value.macrosPer100.protein) || !finiteNonnegative(value.macrosPer100.carbohydrates) ||
 		!finiteNonnegative(value.macrosPer100.fat) || !Array.isArray(value.foodCategories) || !Array.isArray(value.culinaryRoles)) {

@@ -101,7 +101,7 @@ func TestTask261ProviderHTTPImportPostgresFlow(t *testing.T) {
 	assertTask261PersistenceCounts(t, db, 0, 0, 0)
 
 	candidate := externalResult.Candidates[0]
-	request := dataimporter.Request{SourceProvider: candidate.Provider, ExternalID: candidate.ExternalID, Request: customitem.Request{
+	request := dataimporter.Request{ExternalRecordToken: candidate.RecordToken, Request: customitem.Request{
 		Name: candidate.Name + " curated", PhysicalState: candidate.PhysicalState, MacrosPer100: candidate.MacrosPer100,
 		Micros: candidate.Micronutrients, FoodCategoryIDs: []uuid.UUID{}, CulinaryRoleIDs: []uuid.UUID{},
 	}}

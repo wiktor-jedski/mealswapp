@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 )
 
 // Implements DESIGN-009 DataImporter conflict outcomes.
@@ -217,7 +218,7 @@ func createValidatedCuratedFood(ctx context.Context, tx AdminMutationExecutor, i
 // updateValidatedCuratedFood merges an explicitly confirmed draft after one validation pass.
 // Implements DESIGN-009 DataImporter explicit conflict confirmation.
 func updateValidatedCuratedFood(ctx context.Context, tx AdminMutationExecutor, item FoodItemEntity) error {
-	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL))
+	result, err := tx.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, marshalMicros(item.Micros), nullableString(item.ImageURL), nil)
 	if err != nil {
 		return mapPostgresError(err, "update curated food item")
 	}
@@ -311,8 +312,14 @@ func validateCuratedImportConfirmation(claim CuratedImportConfirmation, tx Admin
 		return validationError("curated import transaction and admin are required")
 	}
 	provider, externalID := strings.ToLower(strings.TrimSpace(claim.SourceProvider)), strings.TrimSpace(claim.ExternalID)
-	if (provider == "") != (externalID == "") || (provider != "" && provider != "usda" && provider != "openfoodfacts") {
+	if (provider == "") != (externalID == "") {
 		return validationError("curated import provider identity is invalid")
+	}
+	if provider != "" {
+		identity, err := providerregistry.Default().Normalize(provider, externalID)
+		if err != nil || identity.Provider != claim.SourceProvider || identity.ExternalID != claim.ExternalID {
+			return validationError("curated import provider identity is invalid")
+		}
 	}
 	if provider == "" && (len(strings.TrimSpace(claim.IdempotencyKey)) < 8 || len(claim.IdempotencyKey) > 255 || strings.ContainsRune(claim.IdempotencyKey, '\x00')) {
 		return validationError("curated import idempotency key is invalid")

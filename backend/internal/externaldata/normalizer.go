@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/repository"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/security"
 )
@@ -143,8 +144,8 @@ func (n *DataNormalizer) NormalizeRecordsWithWarnings(ctx context.Context, recor
 // boundedProvider keeps malformed record diagnostics in the closed provider vocabulary.
 // Implements DESIGN-009 ExternalSearchProxy bounded warnings.
 func boundedProvider(provider string) string {
-	if provider == "usda" || provider == "openfoodfacts" {
-		return provider
+	if canonical, err := providerregistry.Default().NormalizeProvider(provider); err == nil {
+		return canonical
 	}
 	return "external"
 }
@@ -276,11 +277,10 @@ type nutrientTarget struct {
 // validateExternalRecord revalidates provider projections at the normalization trust boundary.
 // Implements DESIGN-012 DataNormalizer invalid external payload handling.
 func validateExternalRecord(record ExternalFoodRecord) (ExternalFoodRecord, error) {
-	provider, providerErr := security.NormalizeInput(security.InputFieldCurationProvider, record.Provider)
-	externalID, idErr := security.NormalizeInput(security.InputFieldProviderIdentifier, record.ExternalID)
+	identity, identityErr := providerregistry.Default().Normalize(record.Provider, record.ExternalID)
 	name, nameErr := security.NormalizeInput(security.InputFieldProviderText, record.Name)
 	image, imageErr := security.NormalizeInput(security.InputFieldImageURL, record.ImageURL)
-	if providerErr != nil || idErr != nil || nameErr != nil || imageErr != nil || name.Value == "" || record.Nutrients == nil || len(record.Nutrients) > maxExternalNutrientFields {
+	if identityErr != nil || nameErr != nil || imageErr != nil || name.Value == "" || record.Nutrients == nil || len(record.Nutrients) > maxExternalNutrientFields {
 		return ExternalFoodRecord{}, invalidNormalization()
 	}
 	for key, value := range record.Nutrients {
@@ -288,7 +288,7 @@ func validateExternalRecord(record ExternalFoodRecord) (ExternalFoodRecord, erro
 			return ExternalFoodRecord{}, invalidNormalization()
 		}
 	}
-	record.Provider, record.ExternalID, record.Name, record.ImageURL = provider.Value, externalID.Value, name.Value, image.Value
+	record.Provider, record.ExternalID, record.Name, record.ImageURL = identity.Provider, identity.ExternalID, name.Value, image.Value
 	return record, nil
 }
 

@@ -371,7 +371,11 @@ func TestProfileControllerCustomItemRejectsEscapedNULProvenanceBeforeService(t *
 		}
 		envelope := decodeEnvelope(t, resp.Body)
 		resp.Body.Close()
-		if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != "validation_failed" || service.createUser != uuid.Nil {
+		wantCode := "invalid_json"
+		if field == "densitySourceKind" {
+			wantCode = "validation_failed"
+		}
+		if resp.StatusCode != fiber.StatusBadRequest || envelope.Error == nil || envelope.Error.Code != wantCode || service.createUser != uuid.Nil {
 			t.Fatalf("escaped NUL %s = %d %+v serviceUser=%s", field, resp.StatusCode, envelope, service.createUser)
 		}
 	}
@@ -448,6 +452,29 @@ func TestProfileControllerCustomItemClassificationProjectionOmitsParentID(t *tes
 	}
 	if resp.StatusCode != fiber.StatusOK || body.Data["averageUnitWeightGrams"] != 28.3495 || !strings.Contains(string(encoded), classificationID.String()) || strings.Contains(string(encoded), "parentId") {
 		t.Fatalf("classification HTTP projection = %d %s", resp.StatusCode, encoded)
+	}
+}
+
+// Implements DESIGN-008 ProfileController closed private custom-item response contract.
+func TestCustomItemDataOmitsDensityProviderIdentityFields(t *testing.T) {
+	data := customItemData(customitem.Item{
+		ID: uuid.New(), Name: "Private item", PhysicalState: repository.PhysicalStateLiquid,
+		DensityGramsPerMilliliter: 1.02, DensitySourceProvider: "usda", DensitySourceFoodID: "171265", DensitySourceKind: "manual",
+		MacrosPer100: repository.MacroValues{}, Micros: repository.MicroValues{},
+		FoodCategories: []customitem.ClassificationSummary{}, CulinaryRoles: []customitem.ClassificationSummary{},
+	})
+	expected := map[string]struct{}{
+		"id": {}, "name": {}, "physicalState": {}, "prepTimeMinutes": {}, "averageUnitWeightGrams": {},
+		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {}, "densitySourceKind": {},
+		"macrosPer100": {}, "micros": {}, "foodCategories": {}, "culinaryRoles": {}, "imageUrl": {},
+	}
+	if len(data) != len(expected) {
+		t.Fatalf("private response keys=%v, want exactly %v", data, expected)
+	}
+	for key := range data {
+		if _, ok := expected[key]; !ok {
+			t.Fatalf("private response emitted contract-excluded field %q", key)
+		}
 	}
 }
 

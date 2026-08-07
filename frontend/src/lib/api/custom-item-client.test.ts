@@ -51,6 +51,8 @@ test("fails closed on malformed or unsuccessful custom-item responses", async ()
 	await expect(fetchCustomFoodObject(itemId)).rejects.toThrow("custom foods could not be loaded");
 	globalThis.fetch = (async () => Response.json(envelope([{ ...customItem(), ownerId: itemId }]))) as typeof fetch;
 	await expect(listCustomFoodObjects()).rejects.toThrow("custom foods could not be loaded");
+	globalThis.fetch = (async () => Response.json(envelope([{ ...customItem(), densitySourceProvider: "usda", densitySourceFoodId: "171265" }]))) as typeof fetch;
+	await expect(listCustomFoodObjects()).rejects.toThrow("custom foods could not be loaded");
 });
 
 function envelope(data: unknown): Record<string, unknown> {

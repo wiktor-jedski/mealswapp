@@ -6,10 +6,10 @@ import { join } from "node:path";
 
 const source = readFileSync(join(import.meta.dir, "ExternalImportWorkflow.svelte"), "utf8");
 
-test("covers provider selection, pagination, and all safe external states", () => {
-	expect(source).toContain('value="usda"');
-	expect(source).toContain('value="openfoodfacts"');
-	expect(source).toContain('value="all"');
+test("uses the server registry through combined search, pagination, and all safe external states", () => {
+	expect(source).toContain('searchExternalFoods(request.query, "all"');
+	expect(source).not.toContain('value="usda"');
+	expect(source).not.toContain('value="openfoodfacts"');
 	expect(source).toContain("requestSearch(page - 1)");
 	expect(source).toContain("requestSearch(page + 1)");
 	for (const state of ["loading", "empty", "error"]) expect(source).toContain(`searchState === "${state}"`);
@@ -35,6 +35,7 @@ test("provides editable drafts, normalization warnings, density, and classificat
 	expect(source).toContain("foodCategoryIds");
 	expect(source).toContain("culinaryRoleIds");
 	expect(source).toContain("densitySourceKind");
+	expect(source).toContain("External provider supplied");
 	expect(source).toContain("updateDensity");
 	expect(source).toContain("updatePhysicalState");
 	expect(source).toContain("Density provenance");

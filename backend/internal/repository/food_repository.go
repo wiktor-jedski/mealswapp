@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 )
 
 // Implements DESIGN-005 FoodItemEntity search query.
@@ -442,8 +443,13 @@ func validateFoodDensity(item FoodItemEntity) error {
 	if item.DensitySourceKind != "imported" && item.DensitySourceKind != "manual" && item.DensitySourceKind != "estimated" {
 		return validationError("density source kind is invalid")
 	}
-	if item.DensitySourceKind == "imported" && ((item.DensitySourceProvider != "usda" && item.DensitySourceProvider != "openfoodfacts") || item.DensitySourceFoodID == "") {
-		return validationError("imported density requires trusted provider evidence")
+	if item.DensitySourceKind == "imported" {
+		identity, err := providerregistry.Default().Normalize(item.DensitySourceProvider, item.DensitySourceFoodID)
+		if err != nil || identity.Provider != item.DensitySourceProvider || identity.ExternalID != item.DensitySourceFoodID {
+			return validationError("imported density requires canonical provider evidence")
+		}
+	} else if item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" {
+		return validationError("manual density cannot contain external provider evidence")
 	}
 	return nil
 }

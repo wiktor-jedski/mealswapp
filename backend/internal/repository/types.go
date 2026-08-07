@@ -121,6 +121,13 @@ type CustomFoodItemCreateClaimResult struct {
 // Implements DESIGN-008 ProfileController durable custom-item creation.
 type CustomFoodItemResponseEncoder func(CustomFoodItemEntity) ([]byte, error)
 
+// RecordEvidenceRepository persists short-lived server-selected external records.
+// Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
+type RecordEvidenceRepository interface {
+	StoreRecordEvidence(context.Context, string, string, string, time.Time) error
+	ResolveRecordEvidence(context.Context, string, time.Time) (string, string, error)
+}
+
 // FoodObjectType distinguishes the object kinds accepted by Daily Diet entries.
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 type FoodObjectType string

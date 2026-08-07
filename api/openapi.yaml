@@ -990,7 +990,8 @@ paths:
           required: true
           schema:
             type: string
-            enum: [usda, openfoodfacts, all]
+            minLength: 1
+            maxLength: 64
         - name: page
           in: query
           required: true
@@ -1053,7 +1054,7 @@ paths:
     post:
       operationId: postApiV1AdminImport
       summary: Confirm an edited external candidate for local import
-      description: Provider identity supplies natural idempotency. Idempotency-Key is required only when sourceProvider and externalId are absent. Raw provider payloads and audit snapshots are never accepted or returned.
+      description: Server-issued external-record evidence supplies natural idempotency. Idempotency-Key is required only for manual administrator imports without external evidence. Raw provider payloads and audit snapshots are never accepted or returned.
       security:
         - cookieAuth: []
           csrfHeader: []
@@ -1641,7 +1642,7 @@ components:
       name: Idempotency-Key
       in: header
       required: false
-      description: Stable administrator-generated retry key. Required for curated imports without sourceProvider and externalId; otherwise provider identity is the natural idempotency key.
+      description: Stable administrator-generated retry key. Required for manual curated imports without external evidence; otherwise the selected server record supplies the natural idempotency key.
       schema:
         type: string
         minLength: 8
@@ -2059,15 +2060,21 @@ components:
     ExternalCandidate:
       type: object
       additionalProperties: false
-      required: [provider, externalId, name, physicalState, macrosPer100, micronutrients, warnings]
+      required: [provider, externalId, recordToken, name, physicalState, macrosPer100, micronutrients, warnings]
       properties:
         provider:
           type: string
-          enum: [usda, openfoodfacts]
+          minLength: 1
+          maxLength: 64
         externalId:
           type: string
           minLength: 1
           maxLength: 200
+        recordToken:
+          type: string
+          minLength: 32
+          maxLength: 32
+          pattern: "^[A-Za-z0-9_-]+$"
         name:
           type: string
           minLength: 1
@@ -2075,6 +2082,12 @@ components:
         physicalState:
           type: string
           enum: [solid, liquid]
+        densityGramsPerMilliliter:
+          type: number
+          exclusiveMinimum: 0
+        densitySourceKind:
+          type: string
+          const: imported
         macrosPer100:
           $ref: "#/components/schemas/MacroProfile"
         micronutrients:
@@ -2102,7 +2115,8 @@ components:
       properties:
         provider:
           type: string
-          enum: [usda, openfoodfacts, external]
+          minLength: 1
+          maxLength: 64
         code:
           type: string
           enum: [provider_rate_limited, provider_unavailable, timeout, retry_exhausted, invalid_external_payload]
@@ -2179,18 +2193,19 @@ components:
         - type: object
           required: [foodCategoryIds, culinaryRoleIds]
           properties:
-            sourceProvider:
+            externalRecordToken:
               type: string
-              enum: [usda, openfoodfacts]
-            externalId:
+              minLength: 32
+              maxLength: 32
+              pattern: "^[A-Za-z0-9_-]+$"
+            densitySourceKind:
               type: string
-              minLength: 1
-              maxLength: 200
+              enum: [imported, manual, estimated]
             confirmNameConflict:
               type: boolean
               default: false
       unevaluatedProperties: false
-      description: Editable normalized fields only. sourceProvider and externalId must be supplied together. Raw provider records and audit snapshots are unsupported.
+      description: Editable normalized fields plus an opaque server-issued external-record selection. Provider identity, raw provider records, and audit snapshots are unsupported.
     CuratedImportResult:
       type: object
       additionalProperties: false
@@ -2232,6 +2247,9 @@ components:
         - type: object
           required: [allergenKeys]
           properties:
+            densitySourceKind:
+              type: string
+              enum: [manual, estimated]
             allergenKeys:
               type: array
               maxItems: 100
@@ -2427,6 +2445,17 @@ components:
         - type: object
           required: [id, updatedAt, prepTimeMinutes, micros, foodCategories, culinaryRoles, allergenKeys]
           properties:
+            densitySourceProvider:
+              type: string
+              minLength: 1
+              maxLength: 64
+            densitySourceFoodId:
+              type: string
+              minLength: 1
+              maxLength: 200
+            densitySourceKind:
+              type: string
+              enum: [imported, manual, estimated]
             id:
               type: string
               format: uuid
@@ -3196,18 +3225,6 @@ components:
           type: number
           exclusiveMinimum: 0
           description: Metric grams per milliliter.
-        densitySourceProvider:
-          type: string
-          maxLength: 200
-          pattern: '^[^\x00]*$'
-        densitySourceFoodId:
-          type: string
-          maxLength: 200
-          pattern: '^[^\x00]*$'
-        densitySourceKind:
-          type: string
-          enum: [imported, manual, estimated]
-          pattern: '^[^\x00]*$'
         macrosPer100:
           $ref: "#/components/schemas/MacroProfile"
         micros:
@@ -3242,6 +3259,11 @@ components:
     CustomItemRequest:
       allOf:
         - $ref: "#/components/schemas/CustomItemFields"
+        - type: object
+          properties:
+            densitySourceKind:
+              type: string
+              enum: [manual, estimated]
       unevaluatedProperties: false
       description: Client-editable private item fields. userId and ownerId are intentionally unsupported.
     # Implements DESIGN-008 ProfileController and DataExporter private-item projection.
@@ -3251,6 +3273,9 @@ components:
         - type: object
           required: [id, prepTimeMinutes, micros, foodCategories, culinaryRoles]
           properties:
+            densitySourceKind:
+              type: string
+              enum: [manual, estimated]
             id:
               type: string
               format: uuid

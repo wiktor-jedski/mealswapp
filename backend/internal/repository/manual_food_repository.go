@@ -174,6 +174,9 @@ func (r *PostgresManualFoodItemRepository) Update(ctx context.Context, tx AdminM
 	if item.ID == uuid.Nil {
 		return validationError("food item id is required")
 	}
+	if err := validateManualDensityAuthority(item); err != nil {
+		return err
+	}
 	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
 		return err
 	}
@@ -221,6 +224,9 @@ func (r *PostgresManualFoodItemRepository) Delete(ctx context.Context, tx AdminM
 // createManualFoodItem persists one ownerless global row and its classifications.
 // Implements DESIGN-009 ItemCurator global/private separation.
 func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEntity) (uuid.UUID, error) {
+	if err := validateManualDensityAuthority(item); err != nil {
+		return uuid.Nil, err
+	}
 	if err := lockMicronutrientItemWriteTables(ctx, tx); err != nil {
 		return uuid.Nil, err
 	}
@@ -242,6 +248,15 @@ func createManualFoodItem(ctx context.Context, tx sqlExecutor, item FoodItemEnti
 		return uuid.Nil, err
 	}
 	return id, nil
+}
+
+// validateManualDensityAuthority prevents administrator-authored items from claiming provider provenance.
+// Implements DESIGN-012 DataNormalizer manual-administrator trust boundary.
+func validateManualDensityAuthority(item FoodItemEntity) error {
+	if item.DensitySourceKind == "imported" || item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" {
+		return validationError("manual food density cannot contain imported provenance")
+	}
+	return nil
 }
 
 // canonicalManualFoodName collapses internal whitespace at the global-item persistence boundary.

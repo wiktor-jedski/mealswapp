@@ -221,8 +221,7 @@ test("external search, curated import, and dependency failure are independently 
 	record("external_search", searchBody.requestId!, "external_search", "external_catalog", "succeeded");
 
 	const importBody: CuratedImportRequest = {
-		sourceProvider: candidate!.provider,
-		externalId: candidate!.externalId,
+		externalRecordToken: candidate!.recordToken,
 		name: `${fixture("MEALSWAPP_TASK285_MARKER")}-import`,
 		physicalState: "solid",
 		macrosPer100: candidate!.macrosPer100,

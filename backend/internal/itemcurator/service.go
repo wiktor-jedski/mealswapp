@@ -35,8 +35,8 @@ type Request struct {
 	AverageUnitWeightGrams          float64                  `json:"averageUnitWeightGrams,omitempty"`
 	AverageServingVolumeMilliliters float64                  `json:"averageServingVolumeMilliliters,omitempty"`
 	DensityGramsPerMilliliter       float64                  `json:"densityGramsPerMilliliter,omitempty"`
-	DensitySourceProvider           string                   `json:"densitySourceProvider,omitempty"`
-	DensitySourceFoodID             string                   `json:"densitySourceFoodId,omitempty"`
+	DensitySourceProvider           string                   `json:"-"`
+	DensitySourceFoodID             string                   `json:"-"`
 	DensitySourceKind               string                   `json:"densitySourceKind,omitempty"`
 	MacrosPer100                    repository.MacroValues   `json:"macrosPer100"`
 	Micros                          repository.MicroValues   `json:"micros"`

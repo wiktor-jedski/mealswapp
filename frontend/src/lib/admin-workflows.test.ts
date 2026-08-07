@@ -4,7 +4,7 @@ import { adminItemMatchesRequest, deletionRetryEligible, newAdminItemKey, parseA
 // Implements DESIGN-009 ItemCurator and UserAdminPanel validation and legal-retry verification.
 
 const valid = (overrides: Partial<AdminItemForm> = {}): AdminItemForm => ({
-	name: "Broth", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "10", carbohydrates: "20", fat: "5", density: "", densitySourceProvider: "", densitySourceFoodId: "", densitySourceKind: "", micros: "{\"sodium\":1}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "", ...overrides
+	name: "Broth", physicalState: "solid", prepTimeMinutes: "", averageUnitWeightGrams: "", averageServingVolumeMilliliters: "", protein: "10", carbohydrates: "20", fat: "5", density: "", densitySourceKind: "", micros: "{\"sodium\":1}", foodCategoryIds: [], culinaryRoleIds: [], allergenKeys: [], imageUrl: "", ...overrides
 });
 
 test("builds generated-contract solid and liquid item requests", () => {
@@ -12,13 +12,13 @@ test("builds generated-contract solid and liquid item requests", () => {
 	expect(parseAdminItemForm(valid({ physicalState: "liquid", density: "1.02" })).request).toMatchObject({ physicalState: "liquid", densityGramsPerMilliliter: 1.02, densitySourceKind: "manual" });
 });
 
-test("round-trips image, preparation, measures, and imported density provenance", () => {
+test("round-trips image, preparation, measures, and manual density provenance", () => {
 	expect(parseAdminItemForm(valid({
 		physicalState: "liquid", prepTimeMinutes: "12", averageUnitWeightGrams: "250", averageServingVolumeMilliliters: "240", density: "1.03",
-		densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported", imageUrl: "https://images.example.test/milk.png"
+		densitySourceKind: "estimated", imageUrl: "https://images.example.test/milk.png"
 	})).request).toMatchObject({
 		prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240, densityGramsPerMilliliter: 1.03,
-		densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported", imageUrl: "https://images.example.test/milk.png"
+		densitySourceKind: "estimated", imageUrl: "https://images.example.test/milk.png"
 	});
 });
 
@@ -62,6 +62,7 @@ test("normalizes names and compares every persisted item value independent of se
 		allergenKeys: [...request.allergenKeys].reverse()
 	};
 	expect(adminItemMatchesRequest(item, request)).toBeTrue();
+	expect(adminItemMatchesRequest({ ...item, densitySourceProvider: "usda", densitySourceFoodId: "171265" }, request)).toBeTrue();
 	expect(adminItemMatchesRequest({ ...item, macrosPer100: { ...item.macrosPer100, protein: 11 } }, request)).toBeFalse();
 	expect(adminItemMatchesRequest({ ...item, imageUrl: "https://example.test/different.png" }, request)).toBeFalse();
 });

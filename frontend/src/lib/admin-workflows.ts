@@ -13,9 +13,7 @@ export interface AdminItemForm {
 	carbohydrates: string;
 	fat: string;
 	density: string;
-	densitySourceProvider: string;
-	densitySourceFoodId: string;
-	densitySourceKind: "" | "imported" | "manual" | "estimated";
+	densitySourceKind: "" | "manual" | "estimated";
 	micros: string;
 	foodCategoryIds: string[];
 	culinaryRoleIds: string[];
@@ -61,15 +59,9 @@ export function parseAdminItemForm(form: AdminItemForm): { request?: AdminItemRe
 	if (form.physicalState === "liquid") {
 		const density = number(form.density);
 		if (density === undefined || density <= 0 || density > 99_999_999.9999) return { error: "Liquid items require a positive density." };
-		const densitySourceProvider = form.densitySourceProvider.trim();
-		const densitySourceFoodId = form.densitySourceFoodId.trim();
 		const densitySourceKind = form.densitySourceKind || "manual";
-		if (densitySourceProvider.length > 200 || densitySourceFoodId.length > 200 || densitySourceProvider.includes("\0") || densitySourceFoodId.includes("\0")) return { error: "Density provenance fields must be at most 200 characters." };
-		if (densitySourceKind === "imported" && (!densitySourceFoodId || !["usda", "openfoodfacts"].includes(densitySourceProvider))) return { error: "Imported density requires a trusted provider and source food ID." };
 		request.densityGramsPerMilliliter = density;
 		request.densitySourceKind = densitySourceKind;
-		if (densitySourceProvider) request.densitySourceProvider = densitySourceProvider;
-		if (densitySourceFoodId) request.densitySourceFoodId = densitySourceFoodId;
 		if (averageServingVolumeMilliliters !== undefined) request.averageServingVolumeMilliliters = averageServingVolumeMilliliters;
 	}
 	return { request };
@@ -85,8 +77,6 @@ export function adminItemMatchesRequest(item: AdminItem, request: AdminItemReque
 		&& item.averageUnitWeightGrams === request.averageUnitWeightGrams
 		&& item.averageServingVolumeMilliliters === request.averageServingVolumeMilliliters
 		&& item.densityGramsPerMilliliter === request.densityGramsPerMilliliter
-		&& item.densitySourceProvider === request.densitySourceProvider
-		&& item.densitySourceFoodId === request.densitySourceFoodId
 		&& item.densitySourceKind === request.densitySourceKind
 		&& item.imageUrl === request.imageUrl
 		&& item.macrosPer100.protein === request.macrosPer100.protein

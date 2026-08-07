@@ -44,7 +44,7 @@ func TestCuratedImportHTTPCommitsSafeResponseAndAudit(t *testing.T) {
 	controller := NewCuratedImportAdminController(audit, service, invalidator)
 	app := mustNewRouter(t, Dependencies{Config: cfg, Auth: auth, Audit: &auditSink{}, Routes: controller.Routes()})
 	csrf, csrfCookies := fetchCSRFToken(t, app)
-	body := `{"sourceProvider":"usda","externalId":"fdc-1","name":"Curated tofu","physicalState":"solid","macrosPer100":{"protein":18,"carbohydrates":4,"fat":8},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
+	body := `{"externalRecordToken":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","name":"Curated tofu","physicalState":"solid","macrosPer100":{"protein":18,"carbohydrates":4,"fat":8},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`
 	req := httptest.NewRequest(fiber.MethodPost, "/api/v1/admin/imports", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-CSRF-Token", csrf)
@@ -57,7 +57,7 @@ func TestCuratedImportHTTPCommitsSafeResponseAndAudit(t *testing.T) {
 	}
 	defer resp.Body.Close()
 	envelope := decodeEnvelope(t, resp.Body)
-	if resp.StatusCode != fiber.StatusCreated || service.calls != 1 || service.adminID != adminID || service.req.SourceProvider != "usda" || len(audit.entries) != 1 || audit.entries[0].EntityID == nil || *audit.entries[0].EntityID != foodID || invalidator.calls != 1 {
+	if resp.StatusCode != fiber.StatusCreated || service.calls != 1 || service.adminID != adminID || service.req.ExternalRecordToken != "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" || len(audit.entries) != 1 || audit.entries[0].EntityID == nil || *audit.entries[0].EntityID != foodID || invalidator.calls != 1 {
 		t.Fatalf("status=%d envelope=%+v service=%+v audit=%+v", resp.StatusCode, envelope, service, audit.entries)
 	}
 	if strings.Contains(string(audit.entries[0].After), "usda") || string(audit.entries[0].After) != `{"physicalState":"solid","status":"imported"}` {
@@ -98,6 +98,8 @@ func TestCuratedImportHTTPValidationAndConflictMapping(t *testing.T) {
 	for _, body := range []string{
 		`{"name":"Missing fields"}`,
 		`{"name":"Food","physicalState":"solid","macrosPer100":{"protein":0,"carbohydrates":0,"fat":0},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[],"unknown":true}`,
+		`{"sourceProvider":"usda","externalId":"forged","name":"Food","physicalState":"solid","macrosPer100":{"protein":0,"carbohydrates":0,"fat":0},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`,
+		`{"densitySourceProvider":"usda","densitySourceFoodId":"forged","densitySourceKind":"imported","densityGramsPerMilliliter":1,"name":"Food","physicalState":"liquid","macrosPer100":{"protein":0,"carbohydrates":0,"fat":0},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`,
 		`{"name":"Food","name":"Other","physicalState":"solid","macrosPer100":{"protein":0,"carbohydrates":0,"fat":0},"micros":{},"foodCategoryIds":[],"culinaryRoleIds":[]}`,
 	} {
 		req := httptest.NewRequest(fiber.MethodPost, "/", strings.NewReader(body))
@@ -111,6 +113,15 @@ func TestCuratedImportHTTPValidationAndConflictMapping(t *testing.T) {
 			t.Fatalf("invalid body accepted: %s", body)
 		}
 		resp.Body.Close()
+	}
+	var evidenceError AppError
+	if !errors.As(curatedImportError(dataimporter.ErrExternalRecordEvidence), &evidenceError) || evidenceError.HTTPStatus != fiber.StatusUnprocessableEntity || evidenceError.Code != "external_record_evidence_invalid" {
+		t.Fatalf("evidence error mapped=%+v", evidenceError)
+	}
+	dependencyError := curatedImportError(dataimporter.ErrExternalRecordEvidenceUnavailable)
+	var unavailable AppError
+	if !errors.As(dependencyError, &unavailable) || unavailable.HTTPStatus != fiber.StatusServiceUnavailable || unavailable.Code != "external_record_evidence_unavailable" || !unavailable.Retryable {
+		t.Fatalf("evidence dependency error mapped=%+v", dependencyError)
 	}
 }
 
