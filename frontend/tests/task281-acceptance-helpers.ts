@@ -73,10 +73,11 @@ export async function recordAcceptance(
 	requestIds: string[],
 	evidence: Array<{ type: "playwright" | "backend"; path: string }>,
 	backendEvidence: string[],
-	rootCauseId?: string
+	rootCauseId?: string,
+	requiredProjects?: string[]
 ): Promise<void> {
 	await testInfo.attach("phase08-acceptance", {
-		body: JSON.stringify({ criterionIds, requestIds, evidence, backendEvidence, rootCauseId }),
+		body: JSON.stringify({ criterionIds, requestIds, evidence, backendEvidence, rootCauseId, requiredProjects }),
 		contentType: "application/json"
 	});
 }

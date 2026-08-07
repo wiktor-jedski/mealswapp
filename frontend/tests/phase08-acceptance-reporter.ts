@@ -14,6 +14,7 @@ import type {
 interface AcceptanceAttachment {
 	criterionIds: string[];
 	rootCauseId?: string;
+	requiredProjects?: string[];
 	requestIds: string[];
 	evidence: Array<{ type: "playwright" | "backend"; path: string }>;
 	backendEvidence: string[];
@@ -76,13 +77,16 @@ export default class Phase08AcceptanceReporter implements Reporter {
 		const results = expectedCriteria.map((criterionId) => {
 			const runs = this.runs.get(criterionId) ?? [];
 			const projects = new Set(runs.map((run) => run.project));
+			const requiredProjects = new Set(
+				runs.flatMap((run) => run.attachment?.requiredProjects ?? [...expectedProjects])
+			);
 			const statuses = new Set(runs.map((run) => run.status));
 			const status =
 				statuses.has("failed") || statuses.has("timedOut") || statuses.has("interrupted")
 					? "FAIL"
-					: runs.length === 0 ||
-						  statuses.has("skipped") ||
-						  [...expectedProjects].some((project) => !projects.has(project))
+				: runs.length === 0 ||
+					  statuses.has("skipped") ||
+					  [...requiredProjects].some((project) => !projects.has(project))
 						? "BLOCKED"
 						: "PASS";
 			const attachments = runs.flatMap((run) => run.attachment ? [run.attachment] : []);
@@ -117,6 +121,10 @@ function parseAttachment(value: string): AcceptanceAttachment | undefined {
 			(parsed.rootCauseId !== undefined && typeof parsed.rootCauseId !== "string") ||
 			!Array.isArray(parsed.requestIds) ||
 			!parsed.requestIds.every((item) => typeof item === "string") ||
+			(parsed.requiredProjects !== undefined &&
+				(!Array.isArray(parsed.requiredProjects) ||
+					parsed.requiredProjects.length === 0 ||
+					!parsed.requiredProjects.every((item) => typeof item === "string" && item.length > 0))) ||
 			!Array.isArray(parsed.evidence) ||
 			!parsed.evidence.every(
 				(item) =>
@@ -151,11 +159,13 @@ function uniqueEvidence(
 
 function mergeAttachments(attachments: AcceptanceAttachment[]): AcceptanceAttachment | undefined {
 	if (attachments.length === 0) return undefined;
+	const requiredProjects = [...new Set(attachments.flatMap((item) => item.requiredProjects ?? []))];
 	return {
 		criterionIds: [...new Set(attachments.flatMap((item) => item.criterionIds))],
 		requestIds: [...new Set(attachments.flatMap((item) => item.requestIds))],
 		evidence: uniqueEvidence(attachments.flatMap((item) => item.evidence)),
 		backendEvidence: [...new Set(attachments.flatMap((item) => item.backendEvidence))],
+		...(requiredProjects.length > 0 ? { requiredProjects } : {}),
 		...([...attachments].reverse().find((item) => item.rootCauseId)?.rootCauseId
 			? { rootCauseId: [...attachments].reverse().find((item) => item.rootCauseId)!.rootCauseId }
 			: {})

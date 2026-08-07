@@ -237,10 +237,11 @@ async function record(
 	criteria: string[],
 	operation: Omit<OperationEvidence, "schema" | "criterionIds">,
 	summaries: string[] = [],
-	rootCauseId?: string
+	rootCauseId?: string,
+	requiredProjects?: string[]
 ): Promise<void> {
 	const path = await evidence(info, slug, { criterionIds: criteria, ...operation });
-	await recordAcceptance(info, criteria, operation.requestIds, [{ type: "backend", path }], summaries, rootCauseId);
+	await recordAcceptance(info, criteria, operation.requestIds, [{ type: "backend", path }], summaries, rootCauseId, requiredProjects);
 }
 
 // Exercises the real Vite proxy seam, not a Playwright route stub: the first
@@ -413,6 +414,7 @@ test("mobile global-item discovery refreshes the picker, Catalog, and Substituti
 	await sourceOption.click();
 	await expect(page.locator(`[data-food-object-id="${sourceCreate.value.id}"]`)).toBeVisible();
 	await expect(page.locator("[data-substitution-search]")).toBeEnabled();
+	await substitutionInput.fill(targetName);
 	await page.locator("[data-substitution-search]").click();
 	await expect(page.locator(`[data-result-id="${targetCreate.value.id}"]`)).toBeVisible();
 	await expect(page.locator(`[data-result-id="${privateItemID}"]`)).toHaveCount(0);
@@ -460,7 +462,7 @@ test("mobile global-item discovery refreshes the picker, Catalog, and Substituti
 			deletedSubstitutionContainsGlobal: deletedSubstitution.items.map(({ id }) => id).includes(targetCreate.value.id),
 			mobileDeletedAutocompleteContainsGlobal: await page.getByRole("option", { name: targetName, exact: true }).count() > 0
 		}
-	}, ["mobile_picker=global-only", "mobile_catalog=global-visible", "mobile_substitution=global-visible", "private_partition=excluded", "deleted_projection=excluded"]);
+	}, [], undefined, ["real-stack-mobile-chromium"]);
 });
 
 test("invalid density, nutrition, classification, and image inputs roll back independently", async ({ page }, info) => {

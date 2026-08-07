@@ -421,6 +421,55 @@ func TestGetOrLoadAutocompleteResponseUsesFoodGenerationForDiscovery(t *testing.
 	}
 }
 
+func TestInFlightAutocompleteMissCannotRepopulateAfterClassificationInvalidation(t *testing.T) {
+	ctx := context.Background()
+	store := &generationMemoryStore{memoryStore: memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	loadCalls := 0
+	load := func(context.Context) (search.AutocompleteResponse, error) {
+		loadCalls++
+		if loadCalls == 1 {
+			close(started)
+			<-release
+			return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: "Stale item", Rank: 1}}}, nil
+		}
+		return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: "Fresh item", Rank: 1}}}, nil
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load)
+		done <- err
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("autocomplete loader did not start")
+	}
+	store.generation++
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("in-flight autocomplete load error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("in-flight autocomplete load did not finish")
+	}
+
+	currentKey := searchCacheKeyForGeneration(BuildAutocompleteCacheKey("global item"), store.generation)
+	if _, hit, err := GetRedis[search.AutocompleteResponse](ctx, store, currentKey); err != nil || hit {
+		t.Fatalf("stale autocomplete cache hit=%v err=%v, want miss", hit, err)
+	}
+	fresh, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load)
+	if err != nil {
+		t.Fatalf("fresh autocomplete load error = %v", err)
+	}
+	if loadCalls != 2 || len(fresh.Items) != 1 || fresh.Items[0].Label != "Fresh item" {
+		t.Fatalf("generation-aware autocomplete loadCalls=%d response=%+v", loadCalls, fresh)
+	}
+}
+
 func TestGetOrLoadFallsBackWhenRedisFails(t *testing.T) {
 	ctx := context.Background()
 	loadCalls := 0

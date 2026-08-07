@@ -199,7 +199,7 @@ export function requestSubstitutionSearch(): void {
 		}
 		return {
 			...state,
-			submittedQuery: "",
+			submittedQuery: state.query,
 			searchSubmitted: state.substitutionInputs.length > 0,
 			page: 1
 		};
