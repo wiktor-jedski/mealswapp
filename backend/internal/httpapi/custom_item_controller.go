@@ -276,8 +276,7 @@ func customItemData(item customitem.Item) map[string]any {
 	return map[string]any{
 		"id": item.ID, "name": item.Name, "physicalState": item.PhysicalState, "prepTimeMinutes": item.PrepTimeMinutes,
 		"averageUnitWeightGrams": item.AverageUnitWeightGrams, "averageServingVolumeMilliliters": item.AverageServingVolumeMilliliters,
-		"densityGramsPerMilliliter": item.DensityGramsPerMilliliter, "densitySourceProvider": item.DensitySourceProvider,
-		"densitySourceFoodId": item.DensitySourceFoodID, "densitySourceKind": item.DensitySourceKind, "macrosPer100": item.MacrosPer100,
+		"densityGramsPerMilliliter": item.DensityGramsPerMilliliter, "densitySourceKind": item.DensitySourceKind, "macrosPer100": item.MacrosPer100,
 		"micros": item.Micros, "foodCategories": item.FoodCategories, "culinaryRoles": item.CulinaryRoles, "imageUrl": item.ImageURL,
 	}
 }

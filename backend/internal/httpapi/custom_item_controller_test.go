@@ -455,6 +455,29 @@ func TestProfileControllerCustomItemClassificationProjectionOmitsParentID(t *tes
 	}
 }
 
+// Implements DESIGN-008 ProfileController closed private custom-item response contract.
+func TestCustomItemDataOmitsDensityProviderIdentityFields(t *testing.T) {
+	data := customItemData(customitem.Item{
+		ID: uuid.New(), Name: "Private item", PhysicalState: repository.PhysicalStateLiquid,
+		DensityGramsPerMilliliter: 1.02, DensitySourceProvider: "usda", DensitySourceFoodID: "171265", DensitySourceKind: "manual",
+		MacrosPer100: repository.MacroValues{}, Micros: repository.MicroValues{},
+		FoodCategories: []customitem.ClassificationSummary{}, CulinaryRoles: []customitem.ClassificationSummary{},
+	})
+	expected := map[string]struct{}{
+		"id": {}, "name": {}, "physicalState": {}, "prepTimeMinutes": {}, "averageUnitWeightGrams": {},
+		"averageServingVolumeMilliliters": {}, "densityGramsPerMilliliter": {}, "densitySourceKind": {},
+		"macrosPer100": {}, "micros": {}, "foodCategories": {}, "culinaryRoles": {}, "imageUrl": {},
+	}
+	if len(data) != len(expected) {
+		t.Fatalf("private response keys=%v, want exactly %v", data, expected)
+	}
+	for key := range data {
+		if _, ok := expected[key]; !ok {
+			t.Fatalf("private response emitted contract-excluded field %q", key)
+		}
+	}
+}
+
 func TestProfileControllerCustomItemMapsInvalidMicronutrientsToStructuredValidation(t *testing.T) {
 	cfg := testConfig()
 	userID := uuid.New()
