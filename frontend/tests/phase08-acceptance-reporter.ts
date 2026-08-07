@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
 	FullConfig,
 	FullResult,
@@ -31,6 +32,7 @@ const CRITERION_ID_PATTERN = /^P08-SWR\d{3}-(?:STEP|ACCEPT)-\d{2}$/;
 const BACKEND_EVIDENCE_PATTERN = /^[a-z][a-z0-9_]*=[a-zA-Z0-9._:-]+$/;
 const BACKEND_EVIDENCE_KEYS = new Set(["http_status", "mutation_count", "audit_count", "row_count", "owner_state", "cache_generation", "worker_state", "provider_state", "log_sink_state", "metric_basis", "export_record_count", "request_correlation", "rollback_state"]);
 const DEFAULT_INFRASTRUCTURE_ROOT = "ROOT-T281-ACCEPTANCE-INFRASTRUCTURE";
+const PROJECT_SCOPE_ALLOWLIST = loadProjectScopeAllowList();
 
 /** Collects isolated Playwright outcomes into the Task 280 producer contract. */
 export default class Phase08AcceptanceReporter implements Reporter {
@@ -77,9 +79,12 @@ export default class Phase08AcceptanceReporter implements Reporter {
 		const results = expectedCriteria.map((criterionId) => {
 			const runs = this.runs.get(criterionId) ?? [];
 			const projects = new Set(runs.map((run) => run.project));
-			const requiredProjects = new Set(
-				runs.flatMap((run) => run.attachment?.requiredProjects ?? [...expectedProjects])
-			);
+			const requiredProjects = new Set<string>();
+			for (const run of runs) {
+				for (const project of resolveRequiredProjects(criterionId, run.attachment?.requiredProjects, expectedProjects)) {
+					requiredProjects.add(project);
+				}
+			}
 			const statuses = new Set(runs.map((run) => run.status));
 			const status =
 				statuses.has("failed") || statuses.has("timedOut") || statuses.has("interrupted")
@@ -109,6 +114,46 @@ export default class Phase08AcceptanceReporter implements Reporter {
 			mode: 0o600
 		});
 	}
+}
+
+/** Resolves producer-requested project scope against the manifest-owned allow-list. */
+export function resolveRequiredProjects(
+	criterionId: string,
+	requestedProjects: string[] | undefined,
+	expectedProjects: ReadonlySet<string>
+): Set<string> {
+	const requested = [...new Set(requestedProjects ?? [])];
+	const allowed = PROJECT_SCOPE_ALLOWLIST[criterionId];
+	if (
+		!allowed ||
+		allowed.length !== requested.length ||
+		!allowed.every((project) => requested.includes(project)) ||
+		!requested.every((project) => expectedProjects.has(project))
+	) {
+		return new Set(expectedProjects);
+	}
+	return new Set(requested);
+}
+
+function loadProjectScopeAllowList(): Readonly<Record<string, readonly string[]>> {
+	const manifestPath = fileURLToPath(new URL("../../docs/testing/phase08/acceptance-manifest.json", import.meta.url));
+	const manifest: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+	if (!isRecord(manifest) || !isRecord(manifest.projectScopeAllowList)) {
+		throw new Error("Phase 08 acceptance manifest is missing projectScopeAllowList");
+	}
+	const allowList: Record<string, readonly string[]> = {};
+	for (const [criterionId, projects] of Object.entries(manifest.projectScopeAllowList)) {
+		if (
+			!CRITERION_ID_PATTERN.test(criterionId) ||
+			!Array.isArray(projects) ||
+			projects.length === 0 ||
+			!projects.every((project): project is string => typeof project === "string" && project.length > 0)
+		) {
+			throw new Error("Phase 08 acceptance manifest has an invalid project scope");
+		}
+		allowList[criterionId] = [...new Set(projects)];
+	}
+	return allowList;
 }
 
 function parseAttachment(value: string): AcceptanceAttachment | undefined {

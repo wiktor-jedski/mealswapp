@@ -332,7 +332,7 @@ func GetOrLoadAutocompleteResponse(ctx context.Context, store RedisStore, query 
 		if payload, marshalErr := json.Marshal(autocompleteWithoutCacheMetadata(response)); marshalErr == nil {
 			_, _ = guard.SetIfCurrent(ctx, generation, key.String(), string(payload), ttl)
 		}
-	} else {
+	} else if !guarded {
 		_ = SetRedis(ctx, store, key, autocompleteWithoutCacheMetadata(response), ttl)
 	}
 	return response, nil

@@ -5,6 +5,11 @@
 `req_tests.md` to one stable criterion ID, requirement, scenario owner, required
 environment, and permitted evidence type.
 
+Its `projectScopeAllowList` is the manifest-owned exception policy for the
+mobile-only Task 303 criteria. The acceptance reporter accepts a producer's
+mobile scope only for those exact criterion IDs; all other criteria retain the
+configured desktop-and-mobile requirement.
+
 The manifest covers `SW-REQ-019`, `SW-REQ-032`, `SW-REQ-033`, `SW-REQ-043`,
 `SW-REQ-054`, `SW-REQ-055`, `SW-REQ-056`, `SW-REQ-057`, `SW-REQ-072`,
 `SW-REQ-073`, `SW-REQ-084`, and `SW-REQ-090`.

@@ -470,6 +470,30 @@ func TestInFlightAutocompleteMissCannotRepopulateAfterClassificationInvalidation
 	}
 }
 
+func TestAutocompleteSkipsWriteWhenGuardedGenerationLookupFails(t *testing.T) {
+	ctx := context.Background()
+	store := &failingGenerationStore{
+		memoryStore: memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}},
+		err:         errors.New("generation unavailable"),
+	}
+	key := BuildAutocompleteCacheKey("global item")
+	response, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, func(context.Context) (search.AutocompleteResponse, error) {
+		return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: "Fresh item", Rank: 1}}}, nil
+	})
+	if err != nil {
+		t.Fatalf("GetOrLoadAutocompleteResponse() error = %v", err)
+	}
+	if len(response.Items) != 1 || response.Items[0].Label != "Fresh item" {
+		t.Fatalf("response = %+v", response)
+	}
+	if _, ok := store.values[key.String()]; ok {
+		t.Fatalf("guarded autocomplete wrote unscoped key %q", key.String())
+	}
+	if len(store.values) != 0 {
+		t.Fatalf("guarded autocomplete wrote unexpected keys: %#v", store.values)
+	}
+}
+
 func TestGetOrLoadFallsBackWhenRedisFails(t *testing.T) {
 	ctx := context.Background()
 	loadCalls := 0
@@ -592,6 +616,19 @@ type memoryStore struct {
 type generationMemoryStore struct {
 	memoryStore
 	generation uint64
+}
+
+type failingGenerationStore struct {
+	memoryStore
+	err error
+}
+
+func (s *failingGenerationStore) Current(context.Context) (uint64, error) {
+	return 0, s.err
+}
+
+func (s *failingGenerationStore) SetIfCurrent(context.Context, uint64, string, string, time.Duration) (bool, error) {
+	return false, errors.New("unexpected guarded write")
 }
 
 func (s *generationMemoryStore) Current(context.Context) (uint64, error) {
