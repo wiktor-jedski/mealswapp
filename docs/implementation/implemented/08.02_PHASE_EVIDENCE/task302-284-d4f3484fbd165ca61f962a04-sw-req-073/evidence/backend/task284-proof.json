@@ -1,0 +1,91 @@
+{
+  "after": {
+    "a": {
+      "consent": 0,
+      "customItemClassifications": 0,
+      "customItems": 0,
+      "customItemsRetained": 0,
+      "deletionStatus": "completed",
+      "entitlements": 0,
+      "history": 0,
+      "mutationIdempotency": 0,
+      "oauthIdentities": 0,
+      "passwordResetTokens": 0,
+      "profiles": 0,
+      "receiptPresent": true,
+      "receiptPseudonymous": true,
+      "retryCount": 0,
+      "savedDietEntries": 0,
+      "savedDiets": 0,
+      "savedItems": 0,
+      "sessions": 0,
+      "usageWindows": 0,
+      "userExists": false,
+      "users": 0
+    },
+    "b": {
+      "customItems": 1,
+      "customItemsRetained": 1,
+      "rowHash": "3716ceb28a755bdf4770e531abab9e48",
+      "userExists": true
+    },
+    "cache": {
+      "a": 0,
+      "b": 1
+    },
+    "global": {
+      "rowCount": 1,
+      "rowHash": "dbb7747c773c458c91bb374b3441e61c"
+    },
+    "phase": "after",
+    "schema": "mealswapp.task284-snapshot.v1"
+  },
+  "assertionFailures": [],
+  "before": {
+    "a": {
+      "consent": 1,
+      "customItemClassifications": 0,
+      "customItems": 1,
+      "customItemsRetained": 1,
+      "deletionStatus": null,
+      "entitlements": 1,
+      "history": 1,
+      "mutationIdempotency": 2,
+      "oauthIdentities": 1,
+      "passwordResetTokens": 1,
+      "profiles": 1,
+      "receiptPresent": false,
+      "receiptPseudonymous": false,
+      "retryCount": 0,
+      "savedDietEntries": 1,
+      "savedDiets": 1,
+      "savedItems": 1,
+      "sessions": 2,
+      "usageWindows": 1,
+      "userExists": true,
+      "users": 1
+    },
+    "b": {
+      "customItems": 1,
+      "customItemsRetained": 1,
+      "rowHash": "3716ceb28a755bdf4770e531abab9e48",
+      "userExists": true
+    },
+    "cache": {
+      "a": 1,
+      "b": 1
+    },
+    "global": {
+      "rowCount": 1,
+      "rowHash": "dbb7747c773c458c91bb374b3441e61c"
+    },
+    "phase": "before",
+    "schema": "mealswapp.task284-snapshot.v1"
+  },
+  "cacheTargetRunOwned": true,
+  "databaseTransactionReadOnly": true,
+  "queriesParameterized": true,
+  "queryObservationCount": 292,
+  "schema": "mealswapp.task284-proof.v1",
+  "workerProcess": "production"
+}

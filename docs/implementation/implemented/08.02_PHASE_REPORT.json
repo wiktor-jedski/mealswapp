@@ -34,11 +34,11 @@
   "controls": [
     {
       "path": "docs/implementation/02_TASK_LIST.md",
-      "sha256": "397957169d5110e34431139a4fb59101a255e43d3e023610e987f794196f3e4c"
+      "sha256": "d0a28a4de51df4f67ff359b3a3cf8c21d3b803cd42c356bdf4cc660e764c89ca"
     },
     {
       "path": "docs/implementation/04_OPEN.md",
-      "sha256": "a591145996bc75ae60fda368f42274b622310908cb81bcf88529d405308d82ca"
+      "sha256": "5cacbf68d07b67bcea9cce60d63e74945b3525ee52f136f8164d04b1058a199a"
     },
     {
       "path": "docs/testing/phase08/acceptance-manifest.json",
@@ -50,12 +50,12 @@
     }
   ],
   "counts": {
-    "BLOCKED": 8,
-    "FAIL": 3,
-    "PASS": 80
+    "BLOCKED": 16,
+    "FAIL": 0,
+    "PASS": 75
   },
   "gateStatus": "FAIL",
-  "generatedAtUtc": "2026-07-29T10:15:00Z",
+  "generatedAtUtc": "2026-08-07T00:00:00Z",
   "historicalUat": {
     "path": "docs/implementation/implemented/08_PHASE_UAT.md",
     "sha256": "371361f141ec2fe883e448e21480a63ddf9e8fa1d37910ea7fd9209bf511a9c0"
@@ -63,6 +63,7 @@
   "openFindings": [
     "P08-FIND-281-002",
     "P08-FIND-283-001",
+    "P08-FIND-283-005",
     "P08-FIND-283-006",
     "P08-FIND-285-001",
     "P08-FIND-285-002",
@@ -71,11 +72,11 @@
   "renderedArtifacts": [
     {
       "path": "docs/implementation/implemented/08.02_PHASE_REPORT.html",
-      "sha256": "47f4d172ca989d39f8c592e81a0540f0f732ddd3fce0e4f869c9436f6cef9e45"
+      "sha256": "67162b1c74429d1a9c00de8dbd2db8c8c9eb0bb19782dc5897ff61a407e6b2ee"
     },
     {
       "path": "docs/implementation/implemented/08.02_PHASE_UAT.md",
-      "sha256": "4578c9e080e2635d823bdd6f5d711c500207366f030412940fbc40fef1feef71"
+      "sha256": "839d33a8578755187e2d7110a1829cc5bb8a4125f58cfa87da5b472d83dd07f5"
     }
   ],
   "results": [
@@ -111,20 +112,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.json",
           "requestIds": [
-            "03003fdb-29d3-407e-8686-810867d9ac09",
-            "05258f78-abfe-4cee-879f-1064dc7e3f03",
-            "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
-            "3d1dc3a0-cd65-4574-ba93-068caca58390",
-            "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
-            "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
-            "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
-            "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
-            "9b007de7-c99e-459c-a8d6-3d6433a480e4",
-            "a6776740-230e-4298-8f5f-dd6bd1b84581",
-            "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
-            "c72a6953-0437-47a5-b5eb-c28e3ae1860b"
+            "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3",
+            "0cf9aa40-c648-4842-bbfb-aa704b9e50c4",
+            "0e1862c0-8738-4344-a6cb-69e4e4844415",
+            "14dd3f60-7b1c-40a4-b76d-361985d6d951",
+            "187d7b87-bae3-4201-8f11-873af2acff55",
+            "43b23361-7a8f-4f17-89ce-26d371d51307",
+            "4ba9adc1-8e1f-4985-a727-d9f601494588",
+            "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+            "88b60be3-1eae-4761-bdb4-8cbca6e286c5",
+            "c45530d2-d3bd-4bac-91bd-04c48f70ece6",
+            "eb56224f-45ad-4b76-9c88-16e30648dc86",
+            "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -166,20 +167,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.json",
           "requestIds": [
-            "03003fdb-29d3-407e-8686-810867d9ac09",
-            "05258f78-abfe-4cee-879f-1064dc7e3f03",
-            "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
-            "3d1dc3a0-cd65-4574-ba93-068caca58390",
-            "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
-            "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
-            "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
-            "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
-            "9b007de7-c99e-459c-a8d6-3d6433a480e4",
-            "a6776740-230e-4298-8f5f-dd6bd1b84581",
-            "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
-            "c72a6953-0437-47a5-b5eb-c28e3ae1860b"
+            "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3",
+            "0cf9aa40-c648-4842-bbfb-aa704b9e50c4",
+            "0e1862c0-8738-4344-a6cb-69e4e4844415",
+            "14dd3f60-7b1c-40a4-b76d-361985d6d951",
+            "187d7b87-bae3-4201-8f11-873af2acff55",
+            "43b23361-7a8f-4f17-89ce-26d371d51307",
+            "4ba9adc1-8e1f-4985-a727-d9f601494588",
+            "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+            "88b60be3-1eae-4761-bdb4-8cbca6e286c5",
+            "c45530d2-d3bd-4bac-91bd-04c48f70ece6",
+            "eb56224f-45ad-4b76-9c88-16e30648dc86",
+            "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -221,20 +222,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.json",
           "requestIds": [
-            "03003fdb-29d3-407e-8686-810867d9ac09",
-            "05258f78-abfe-4cee-879f-1064dc7e3f03",
-            "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
-            "3d1dc3a0-cd65-4574-ba93-068caca58390",
-            "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
-            "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
-            "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
-            "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
-            "9b007de7-c99e-459c-a8d6-3d6433a480e4",
-            "a6776740-230e-4298-8f5f-dd6bd1b84581",
-            "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
-            "c72a6953-0437-47a5-b5eb-c28e3ae1860b"
+            "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3",
+            "0cf9aa40-c648-4842-bbfb-aa704b9e50c4",
+            "0e1862c0-8738-4344-a6cb-69e4e4844415",
+            "14dd3f60-7b1c-40a4-b76d-361985d6d951",
+            "187d7b87-bae3-4201-8f11-873af2acff55",
+            "43b23361-7a8f-4f17-89ce-26d371d51307",
+            "4ba9adc1-8e1f-4985-a727-d9f601494588",
+            "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+            "88b60be3-1eae-4761-bdb4-8cbca6e286c5",
+            "c45530d2-d3bd-4bac-91bd-04c48f70ece6",
+            "eb56224f-45ad-4b76-9c88-16e30648dc86",
+            "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -276,20 +277,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.json",
           "requestIds": [
-            "03003fdb-29d3-407e-8686-810867d9ac09",
-            "05258f78-abfe-4cee-879f-1064dc7e3f03",
-            "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
-            "3d1dc3a0-cd65-4574-ba93-068caca58390",
-            "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
-            "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
-            "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
-            "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
-            "9b007de7-c99e-459c-a8d6-3d6433a480e4",
-            "a6776740-230e-4298-8f5f-dd6bd1b84581",
-            "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
-            "c72a6953-0437-47a5-b5eb-c28e3ae1860b"
+            "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3",
+            "0cf9aa40-c648-4842-bbfb-aa704b9e50c4",
+            "0e1862c0-8738-4344-a6cb-69e4e4844415",
+            "14dd3f60-7b1c-40a4-b76d-361985d6d951",
+            "187d7b87-bae3-4201-8f11-873af2acff55",
+            "43b23361-7a8f-4f17-89ce-26d371d51307",
+            "4ba9adc1-8e1f-4985-a727-d9f601494588",
+            "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+            "88b60be3-1eae-4761-bdb4-8cbca6e286c5",
+            "c45530d2-d3bd-4bac-91bd-04c48f70ece6",
+            "eb56224f-45ad-4b76-9c88-16e30648dc86",
+            "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -330,16 +331,16 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-032/report.json",
           "requestIds": [
-            "188e0a40-77d6-4da2-a613-ee82139cad77",
-            "328f1bfc-9f1a-4e88-ae3f-a435bbaba895",
-            "34f7d5fd-43d9-4c9a-9fdf-7e72c7dcecc6",
-            "3cfa2533-c540-4832-8e19-6fcd81f156b6",
-            "abec9c78-6094-4ae3-bcf5-f87b740f1fea",
-            "e4b4c189-b52f-4b47-920a-78ea45e45257",
-            "ea98ed6e-bf4e-4fa4-af65-cee8fccf72da",
-            "f4994291-bdec-4f77-86a7-648da5e5dc03"
+            "07244ba1-8394-48d6-a1e9-c2b0337e1f8b",
+            "3479aea0-9c7e-49df-8eb1-f6b83ad0a8bb",
+            "7113bdd8-cb20-4600-9086-6b7a04d193ab",
+            "7784889d-63bf-4b49-a2ea-94724dc9fa63",
+            "86a2c665-336e-4c7e-8fbf-e3749ae47722",
+            "ceca32b0-fdd0-4963-8356-07836359ecc4",
+            "e51c5e62-ee4c-4302-b7c2-ab343689737b",
+            "fa2ce5b3-4255-4620-9d4b-aff776ebd6b4"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -380,16 +381,16 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-032/report.json",
           "requestIds": [
-            "188e0a40-77d6-4da2-a613-ee82139cad77",
-            "328f1bfc-9f1a-4e88-ae3f-a435bbaba895",
-            "34f7d5fd-43d9-4c9a-9fdf-7e72c7dcecc6",
-            "3cfa2533-c540-4832-8e19-6fcd81f156b6",
-            "abec9c78-6094-4ae3-bcf5-f87b740f1fea",
-            "e4b4c189-b52f-4b47-920a-78ea45e45257",
-            "ea98ed6e-bf4e-4fa4-af65-cee8fccf72da",
-            "f4994291-bdec-4f77-86a7-648da5e5dc03"
+            "07244ba1-8394-48d6-a1e9-c2b0337e1f8b",
+            "3479aea0-9c7e-49df-8eb1-f6b83ad0a8bb",
+            "7113bdd8-cb20-4600-9086-6b7a04d193ab",
+            "7784889d-63bf-4b49-a2ea-94724dc9fa63",
+            "86a2c665-336e-4c7e-8fbf-e3749ae47722",
+            "ceca32b0-fdd0-4963-8356-07836359ecc4",
+            "e51c5e62-ee4c-4302-b7c2-ab343689737b",
+            "fa2ce5b3-4255-4620-9d4b-aff776ebd6b4"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -430,16 +431,16 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-032/report.json",
           "requestIds": [
-            "188e0a40-77d6-4da2-a613-ee82139cad77",
-            "328f1bfc-9f1a-4e88-ae3f-a435bbaba895",
-            "34f7d5fd-43d9-4c9a-9fdf-7e72c7dcecc6",
-            "3cfa2533-c540-4832-8e19-6fcd81f156b6",
-            "abec9c78-6094-4ae3-bcf5-f87b740f1fea",
-            "e4b4c189-b52f-4b47-920a-78ea45e45257",
-            "ea98ed6e-bf4e-4fa4-af65-cee8fccf72da",
-            "f4994291-bdec-4f77-86a7-648da5e5dc03"
+            "07244ba1-8394-48d6-a1e9-c2b0337e1f8b",
+            "3479aea0-9c7e-49df-8eb1-f6b83ad0a8bb",
+            "7113bdd8-cb20-4600-9086-6b7a04d193ab",
+            "7784889d-63bf-4b49-a2ea-94724dc9fa63",
+            "86a2c665-336e-4c7e-8fbf-e3749ae47722",
+            "ceca32b0-fdd0-4963-8356-07836359ecc4",
+            "e51c5e62-ee4c-4302-b7c2-ab343689737b",
+            "fa2ce5b3-4255-4620-9d4b-aff776ebd6b4"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -451,10 +452,14 @@
     },
     {
       "criterionId": "P08-SWR033-STEP-01",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-DISCOVERY-PARTITION"
+      ],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -476,15 +481,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -493,28 +498,32 @@
         {
           "backendEvidence": [],
           "evidence": [],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Import a solid provider item."
     },
     {
       "criterionId": "P08-SWR033-STEP-02",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-DISCOVERY-PARTITION"
+      ],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
           "backendEvidence": [
             "metric_basis=100ml",
-            "provider_state=rejected_candidate"
+            "provider_state=partial_normalization"
           ],
           "evidence": [
             {
@@ -522,9 +531,9 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.json",
           "requestIds": [
-            "7858a3ea-bef8-4958-b82c-e7ab2717bf0a"
+            "05756855-9787-4c47-ab97-95b07b62217f"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -533,22 +542,26 @@
         {
           "backendEvidence": [],
           "evidence": [],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Import a liquid provider item."
     },
     {
       "criterionId": "P08-SWR033-STEP-03",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-DISCOVERY-PARTITION"
+      ],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -570,15 +583,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -587,22 +600,26 @@
         {
           "backendEvidence": [],
           "evidence": [],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Compare displayed/stored macro bases with 100g and 100ml."
     },
     {
       "criterionId": "P08-SWR033-STEP-04",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-DISCOVERY-PARTITION"
+      ],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -624,15 +641,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -641,22 +658,26 @@
         {
           "backendEvidence": [],
           "evidence": [],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json",
           "requestIds": [],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Verify changing display units does not change canonical nutritional values."
     },
     {
       "criterionId": "P08-SWR033-STEP-05",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-DISCOVERY-PARTITION"
+      ],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -678,15 +699,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -710,45 +731,29 @@
               "type": "backend"
             },
             {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
-              "type": "backend"
-            },
-            {
               "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
               "type": "backend"
             },
             {
               "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
               "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-liquid-create.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-solid-create.json",
-              "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json",
           "requestIds": [
-            "05a3e7a7-a9d9-438e-b2d4-dceac820309b",
-            "1024230d-57fc-4c36-ad33-e55ce6526ecf",
-            "12a30b49-8225-4936-95f0-545078864424",
-            "8a98e6f9-1564-458d-995b-e1ceb92a1c6c",
-            "a42a4f0b-59c4-44bb-bcc9-af32686176a4",
-            "dc1eebaf-7bb5-42b6-b6b8-d4021472d3f1"
+            "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+            "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+            "523c0355-530e-46f1-80e0-925f1d58acee",
+            "697ee799-6f18-41bb-85e7-58c95f741c6a",
+            "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+            "9a946c22-698c-4fed-b3f1-c3ad815d954b"
           ],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Confirm no liquid path silently assumes 1 ml = 1 g."
     },
     {
@@ -761,7 +766,7 @@
       "sources": [
         {
           "backendEvidence": [
-            "owner_state=projection_leak"
+            "owner_state=owner_free"
           ],
           "evidence": [
             {
@@ -769,7 +774,7 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.json",
           "requestIds": [],
           "rootCauseId": null,
           "status": "PASS",
@@ -804,18 +809,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -850,18 +855,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -896,18 +901,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -942,18 +947,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1404,15 +1409,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1431,15 +1436,31 @@
       "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
       "sources": [
         {
-          "backendEvidence": [],
+          "backendEvidence": [
+            "mutation_count=0",
+            "provider_state=controlled",
+            "request_correlation=server_derived",
+            "rollback_state=complete"
+          ],
           "evidence": [
             {
               "path": "evidence/backend/curation.json",
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
-          "requestIds": [],
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
+          "requestIds": [
+            "11fcddb3-d33f-4df6-b5d0-7c98e83006b8",
+            "25bed500-e66a-4922-9edc-34775d9f3070",
+            "2c0eeb46-feda-4d3e-b272-eddf890e5692",
+            "39cdb6db-bb7e-4aa4-bf70-571d9d14ded6",
+            "45b31564-ebdb-416a-961e-954635ddc401",
+            "49711031-cbe2-4daf-bb35-ab5c9ca9891b",
+            "6b252619-4491-47bc-8e72-758724948985",
+            "78704aaa-a77e-4b9b-b0f1-1a2cd9ee7ea5",
+            "94cef75f-1010-4ccb-9f64-aec313f1d04d",
+            "bcfda104-8076-4184-893f-97f31d4d1dc8"
+          ],
           "rootCauseId": null,
           "status": "PASS",
           "taskId": 282
@@ -1475,15 +1496,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1520,15 +1541,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1565,15 +1586,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1610,15 +1631,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1637,15 +1658,31 @@
       "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
       "sources": [
         {
-          "backendEvidence": [],
+          "backendEvidence": [
+            "mutation_count=0",
+            "provider_state=controlled",
+            "request_correlation=server_derived",
+            "rollback_state=complete"
+          ],
           "evidence": [
             {
               "path": "evidence/backend/curation.json",
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
-          "requestIds": [],
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
+          "requestIds": [
+            "11fcddb3-d33f-4df6-b5d0-7c98e83006b8",
+            "25bed500-e66a-4922-9edc-34775d9f3070",
+            "2c0eeb46-feda-4d3e-b272-eddf890e5692",
+            "39cdb6db-bb7e-4aa4-bf70-571d9d14ded6",
+            "45b31564-ebdb-416a-961e-954635ddc401",
+            "49711031-cbe2-4daf-bb35-ab5c9ca9891b",
+            "6b252619-4491-47bc-8e72-758724948985",
+            "78704aaa-a77e-4b9b-b0f1-1a2cd9ee7ea5",
+            "94cef75f-1010-4ccb-9f64-aec313f1d04d",
+            "bcfda104-8076-4184-893f-97f31d4d1dc8"
+          ],
           "rootCauseId": null,
           "status": "PASS",
           "taskId": 282
@@ -1681,15 +1718,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1727,16 +1764,16 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "6804cdbe-870f-4b4e-8707-16c00b4fadf8",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec",
+            "ec64390d-9b5b-4210-90f0-26ef725128b2"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1773,15 +1810,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1818,15 +1855,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1863,15 +1900,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1908,15 +1945,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1953,15 +1990,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -1973,10 +2010,14 @@
     },
     {
       "criterionId": "P08-SWR056-ACCEPT-01",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-001"
+      ],
       "kind": "criterion",
       "requirement": "SW-REQ-056",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-MANUAL-CATALOG"
+      ],
       "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
       "sources": [
         {
@@ -1997,45 +2038,29 @@
               "type": "backend"
             },
             {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
-              "type": "backend"
-            },
-            {
               "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
               "type": "backend"
             },
             {
               "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
               "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-liquid-create.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-solid-create.json",
-              "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "05a3e7a7-a9d9-438e-b2d4-dceac820309b",
-            "1024230d-57fc-4c36-ad33-e55ce6526ecf",
-            "12a30b49-8225-4936-95f0-545078864424",
-            "8a98e6f9-1564-458d-995b-e1ceb92a1c6c",
-            "a42a4f0b-59c4-44bb-bcc9-af32686176a4",
-            "dc1eebaf-7bb5-42b6-b6b8-d4021472d3f1"
+            "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+            "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+            "523c0355-530e-46f1-80e0-925f1d58acee",
+            "697ee799-6f18-41bb-85e7-58c95f741c6a",
+            "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+            "9a946c22-698c-4fed-b3f1-c3ad815d954b"
           ],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Created items are global and have no private owner."
     },
     {
@@ -2094,16 +2119,16 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "34d55f23-b0f3-471d-9e35-6f22b987a8b1",
-            "530ec4e4-7f48-47ba-a440-e3a6d29f09d2",
-            "7673a131-89b4-4fb1-89bd-443eac0c0301",
-            "8ca9a4b0-f98f-4af5-8e20-bb783f889b53",
-            "a385a8db-a679-40ed-b978-50d8e3728fbb",
-            "ab827496-8470-40b5-b164-5352ee03e9d3",
-            "c3bacd32-689b-4eb9-943b-f85f71ceecb5",
-            "fb79c201-14c5-4dd7-839a-35b44e77b2a6"
+            "11c93098-c5fd-49d0-a51e-b71cdcc9f271",
+            "4ea5041b-6a21-4f38-85d6-d4996609804c",
+            "665c0dd1-e82d-46ec-a4e9-5ae51973257a",
+            "68209180-1fb2-40ec-b9d8-85ae5cd7ae12",
+            "69cf7d0a-f1b0-446f-b6c2-c885c2ebaee6",
+            "982cde31-9093-467a-8db2-ec43af269fce",
+            "eef6b457-37ca-4792-90ab-812d0588a36c",
+            "eefcb1c7-2325-4cb3-9a20-df93519fcf59"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2185,16 +2210,16 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "34d55f23-b0f3-471d-9e35-6f22b987a8b1",
-            "530ec4e4-7f48-47ba-a440-e3a6d29f09d2",
-            "7673a131-89b4-4fb1-89bd-443eac0c0301",
-            "8ca9a4b0-f98f-4af5-8e20-bb783f889b53",
-            "a385a8db-a679-40ed-b978-50d8e3728fbb",
-            "ab827496-8470-40b5-b164-5352ee03e9d3",
-            "c3bacd32-689b-4eb9-943b-f85f71ceecb5",
-            "fb79c201-14c5-4dd7-839a-35b44e77b2a6"
+            "11c93098-c5fd-49d0-a51e-b71cdcc9f271",
+            "4ea5041b-6a21-4f38-85d6-d4996609804c",
+            "665c0dd1-e82d-46ec-a4e9-5ae51973257a",
+            "68209180-1fb2-40ec-b9d8-85ae5cd7ae12",
+            "69cf7d0a-f1b0-446f-b6c2-c885c2ebaee6",
+            "982cde31-9093-467a-8db2-ec43af269fce",
+            "eef6b457-37ca-4792-90ab-812d0588a36c",
+            "eefcb1c7-2325-4cb3-9a20-df93519fcf59"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2236,12 +2261,12 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "67a0f3e2-d9ae-4e55-9d62-0f052da4431d",
-            "6950dee9-64e1-482b-a49d-4ef8ab41b923",
-            "7347131c-0d66-457f-aab3-f37fcac257ed",
-            "919c3454-3341-46ec-902a-f0b97f754392"
+            "5b3dfacb-1a96-4339-b4f2-f0e60ade5345",
+            "706cf2a7-c343-46e1-a1ba-9a9cba56942d",
+            "b337b1ec-e56d-4dec-8b97-5e0a291b1533",
+            "ec715dd1-7e4c-45c5-8e6e-0ca81b59f80c"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2283,18 +2308,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "1495355d-73d2-4a61-bb2c-1d86f4ae54a6",
-            "274b6b71-a5d0-424d-af8b-8f008dee7119",
-            "28903967-a2fe-41dd-a719-847e4e6846d2",
-            "36f5d728-edde-45e9-906b-06b76b7c7fd5",
-            "5e4824c9-6a12-41fe-9ec7-b9aac0302ede",
-            "67cff9be-535b-4f9f-8159-2f9897b20708",
-            "6e494104-b076-48aa-be93-90b88ac4f0e0",
-            "cc6a8c37-fdd2-4d86-ad5b-bd85128cfa8d",
-            "e419eb98-1c7a-4a53-8bca-60329c18cfdb",
-            "f1faf323-16ef-4db4-8482-e006c529d122"
+            "2caa087c-e629-49be-867a-c69d7c128ba4",
+            "3f1b3526-9bf6-423b-9def-bedec1db1b0e",
+            "4bbfdb18-4d17-4496-98a2-af7872488b45",
+            "73c8cbe4-03e5-4c65-9a04-89b7d73fc3f4",
+            "7bc492c7-6e9b-4d05-8092-516f4159b42f",
+            "7d72537c-ad35-4470-bbfd-25cb2ac00a61",
+            "a2784152-113c-401b-877a-f4d316a4daff",
+            "b054c973-8350-4a58-975e-50b260d1f74a",
+            "c6decdbe-f639-40dd-b317-b19130c75753",
+            "c99e857f-862f-43d0-a597-532bfee00cf0",
+            "cc465b03-6b6a-4410-b430-122014bab5a0",
+            "e215a08d-6b76-444c-9ae3-486dbf8a003d"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2306,14 +2333,10 @@
     },
     {
       "criterionId": "P08-SWR056-ACCEPT-06",
-      "findingIds": [
-        "P08-FIND-283-001"
-      ],
+      "findingIds": [],
       "kind": "criterion",
       "requirement": "SW-REQ-056",
-      "rootCauseIds": [
-        "ROOT-T283-MANUAL-CATALOG"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
       "sources": [
         {
@@ -2340,33 +2363,37 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "19d41b1d-6421-434c-8263-b3254f95853f",
-            "1e9b152e-1a9c-4a0f-9acd-c0ad4c490263",
-            "3200d7d3-0348-4677-80ac-95c894a5e7fa",
-            "329cb9a3-e00c-4c1b-a6cc-6f6f925a73c6",
-            "33766ef7-b684-40a4-8693-6b7da772c174",
-            "37ebce04-a166-4ebf-a85a-f72ac30b4842",
-            "3b4e5652-609b-46c5-b120-2f3c96523841",
-            "458caace-9f00-49a1-ad6d-3f9f814209b2",
-            "4cda2924-eecc-4373-a071-6be223c47bcb",
-            "4e8f35b1-f5c4-435e-a92e-c59dce785dac",
-            "55cff9fd-2d2e-4a66-93f3-79cbc23f10ce",
-            "63705e37-30e6-4634-8b84-2ba36ed5638a",
-            "85d25b9a-cf82-4f62-8df4-5885456bde1d",
-            "8da765c2-b070-496b-ac90-96f233d83a66",
-            "ca896ccf-6e31-4dcc-aa00-847d15f54232",
-            "dffa8fae-551d-48b5-bfca-5a499cc64566",
-            "f1079b7e-06cd-43c0-836f-901ce9e5d67e",
-            "f3eeacad-ebc6-4dd7-8553-1ca3acbd490e"
+            "12eeb71c-cf1f-4a13-8782-1eb3e3b3127d",
+            "1ad490aa-740d-434c-8a73-6ee2c6982336",
+            "1e066062-ef25-4529-99ad-00712766c61e",
+            "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+            "46844cbd-466b-45f5-a892-e6c476d493ec",
+            "46d7a963-a74a-4088-9940-e01f5c4a9b62",
+            "520f4571-c774-4de6-94d9-25f887d420de",
+            "53857cfa-4b90-4975-bfa7-6318e839ac14",
+            "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+            "75778645-b33d-4930-b0fb-42918d7d2096",
+            "7dbd85a3-d2f4-42d7-a585-07c2030a2d5d",
+            "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+            "91e6b756-df1a-4170-8d1e-2bc07150a161",
+            "949e46d3-de58-4032-90d4-f2cc4c374ef5",
+            "a4a8e840-07dd-4c7e-8f1c-d54e7baea020",
+            "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+            "b6b4534b-f883-4b77-a5d6-fc3a69fc903b",
+            "b9a73e49-6880-476c-bcba-c5a324934abe",
+            "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+            "cf5e031e-2b4d-46bf-aa0d-dc0155322ff6",
+            "dcb22271-3c8d-414d-ae9d-221ebd4c0ee5",
+            "e1d2d19f-b66b-4539-801d-77a2833e2a14"
           ],
-          "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Deletion removes the item from active search."
     },
     {
@@ -2401,10 +2428,10 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "0e93e855-1f2e-483b-9981-6895ff747906",
-            "c7ba4788-93f1-44a9-8bb8-1a22256fe82f"
+            "91a0fb72-05fe-445b-bd27-9d0adfdfe0c3",
+            "f9673b3b-5da9-4e4b-9c3a-28f5d7db6ed1"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2416,10 +2443,14 @@
     },
     {
       "criterionId": "P08-SWR056-STEP-01",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-001"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-056",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-MANUAL-CATALOG"
+      ],
       "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
       "sources": [
         {
@@ -2440,53 +2471,41 @@
               "type": "backend"
             },
             {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
-              "type": "backend"
-            },
-            {
               "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
               "type": "backend"
             },
             {
               "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
               "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-liquid-create.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-solid-create.json",
-              "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "05a3e7a7-a9d9-438e-b2d4-dceac820309b",
-            "1024230d-57fc-4c36-ad33-e55ce6526ecf",
-            "12a30b49-8225-4936-95f0-545078864424",
-            "8a98e6f9-1564-458d-995b-e1ceb92a1c6c",
-            "a42a4f0b-59c4-44bb-bcc9-af32686176a4",
-            "dc1eebaf-7bb5-42b6-b6b8-d4021472d3f1"
+            "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+            "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+            "523c0355-530e-46f1-80e0-925f1d58acee",
+            "697ee799-6f18-41bb-85e7-58c95f741c6a",
+            "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+            "9a946c22-698c-4fed-b3f1-c3ad815d954b"
           ],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Create a solid item."
     },
     {
       "criterionId": "P08-SWR056-STEP-02",
-      "findingIds": [],
+      "findingIds": [
+        "P08-FIND-283-001"
+      ],
       "kind": "step",
       "requirement": "SW-REQ-056",
-      "rootCauseIds": [],
+      "rootCauseIds": [
+        "ROOT-T283-MANUAL-CATALOG"
+      ],
       "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
       "sources": [
         {
@@ -2507,45 +2526,29 @@
               "type": "backend"
             },
             {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
-              "type": "backend"
-            },
-            {
               "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
               "type": "backend"
             },
             {
               "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
               "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-liquid-create.json",
-              "type": "backend"
-            },
-            {
-              "path": "evidence/operations/real-stack-mobile-chromium-solid-create.json",
-              "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "05a3e7a7-a9d9-438e-b2d4-dceac820309b",
-            "1024230d-57fc-4c36-ad33-e55ce6526ecf",
-            "12a30b49-8225-4936-95f0-545078864424",
-            "8a98e6f9-1564-458d-995b-e1ceb92a1c6c",
-            "a42a4f0b-59c4-44bb-bcc9-af32686176a4",
-            "dc1eebaf-7bb5-42b6-b6b8-d4021472d3f1"
+            "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+            "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+            "523c0355-530e-46f1-80e0-925f1d58acee",
+            "697ee799-6f18-41bb-85e7-58c95f741c6a",
+            "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+            "9a946c22-698c-4fed-b3f1-c3ad815d954b"
           ],
-          "rootCauseId": null,
-          "status": "PASS",
+          "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
+          "status": "BLOCKED",
           "taskId": 283
         }
       ],
-      "status": "PASS",
+      "status": "BLOCKED",
       "text": "Create a liquid item with density."
     },
     {
@@ -2580,18 +2583,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "1495355d-73d2-4a61-bb2c-1d86f4ae54a6",
-            "274b6b71-a5d0-424d-af8b-8f008dee7119",
-            "28903967-a2fe-41dd-a719-847e4e6846d2",
-            "36f5d728-edde-45e9-906b-06b76b7c7fd5",
-            "5e4824c9-6a12-41fe-9ec7-b9aac0302ede",
-            "67cff9be-535b-4f9f-8159-2f9897b20708",
-            "6e494104-b076-48aa-be93-90b88ac4f0e0",
-            "cc6a8c37-fdd2-4d86-ad5b-bd85128cfa8d",
-            "e419eb98-1c7a-4a53-8bca-60329c18cfdb",
-            "f1faf323-16ef-4db4-8482-e006c529d122"
+            "2caa087c-e629-49be-867a-c69d7c128ba4",
+            "3f1b3526-9bf6-423b-9def-bedec1db1b0e",
+            "4bbfdb18-4d17-4496-98a2-af7872488b45",
+            "73c8cbe4-03e5-4c65-9a04-89b7d73fc3f4",
+            "7bc492c7-6e9b-4d05-8092-516f4159b42f",
+            "7d72537c-ad35-4470-bbfd-25cb2ac00a61",
+            "a2784152-113c-401b-877a-f4d316a4daff",
+            "b054c973-8350-4a58-975e-50b260d1f74a",
+            "c6decdbe-f639-40dd-b317-b19130c75753",
+            "c99e857f-862f-43d0-a597-532bfee00cf0",
+            "cc465b03-6b6a-4410-b430-122014bab5a0",
+            "e215a08d-6b76-444c-9ae3-486dbf8a003d"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2633,18 +2638,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "1495355d-73d2-4a61-bb2c-1d86f4ae54a6",
-            "274b6b71-a5d0-424d-af8b-8f008dee7119",
-            "28903967-a2fe-41dd-a719-847e4e6846d2",
-            "36f5d728-edde-45e9-906b-06b76b7c7fd5",
-            "5e4824c9-6a12-41fe-9ec7-b9aac0302ede",
-            "67cff9be-535b-4f9f-8159-2f9897b20708",
-            "6e494104-b076-48aa-be93-90b88ac4f0e0",
-            "cc6a8c37-fdd2-4d86-ad5b-bd85128cfa8d",
-            "e419eb98-1c7a-4a53-8bca-60329c18cfdb",
-            "f1faf323-16ef-4db4-8482-e006c529d122"
+            "2caa087c-e629-49be-867a-c69d7c128ba4",
+            "3f1b3526-9bf6-423b-9def-bedec1db1b0e",
+            "4bbfdb18-4d17-4496-98a2-af7872488b45",
+            "73c8cbe4-03e5-4c65-9a04-89b7d73fc3f4",
+            "7bc492c7-6e9b-4d05-8092-516f4159b42f",
+            "7d72537c-ad35-4470-bbfd-25cb2ac00a61",
+            "a2784152-113c-401b-877a-f4d316a4daff",
+            "b054c973-8350-4a58-975e-50b260d1f74a",
+            "c6decdbe-f639-40dd-b317-b19130c75753",
+            "c99e857f-862f-43d0-a597-532bfee00cf0",
+            "cc465b03-6b6a-4410-b430-122014bab5a0",
+            "e215a08d-6b76-444c-9ae3-486dbf8a003d"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2656,14 +2663,10 @@
     },
     {
       "criterionId": "P08-SWR056-STEP-05",
-      "findingIds": [
-        "P08-FIND-283-001"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-056",
-      "rootCauseIds": [
-        "ROOT-T283-MANUAL-CATALOG"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
       "sources": [
         {
@@ -2690,45 +2693,45 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "19d41b1d-6421-434c-8263-b3254f95853f",
-            "1e9b152e-1a9c-4a0f-9acd-c0ad4c490263",
-            "3200d7d3-0348-4677-80ac-95c894a5e7fa",
-            "329cb9a3-e00c-4c1b-a6cc-6f6f925a73c6",
-            "33766ef7-b684-40a4-8693-6b7da772c174",
-            "37ebce04-a166-4ebf-a85a-f72ac30b4842",
-            "3b4e5652-609b-46c5-b120-2f3c96523841",
-            "458caace-9f00-49a1-ad6d-3f9f814209b2",
-            "4cda2924-eecc-4373-a071-6be223c47bcb",
-            "4e8f35b1-f5c4-435e-a92e-c59dce785dac",
-            "55cff9fd-2d2e-4a66-93f3-79cbc23f10ce",
-            "63705e37-30e6-4634-8b84-2ba36ed5638a",
-            "85d25b9a-cf82-4f62-8df4-5885456bde1d",
-            "8da765c2-b070-496b-ac90-96f233d83a66",
-            "ca896ccf-6e31-4dcc-aa00-847d15f54232",
-            "dffa8fae-551d-48b5-bfca-5a499cc64566",
-            "f1079b7e-06cd-43c0-836f-901ce9e5d67e",
-            "f3eeacad-ebc6-4dd7-8553-1ca3acbd490e"
+            "12eeb71c-cf1f-4a13-8782-1eb3e3b3127d",
+            "1ad490aa-740d-434c-8a73-6ee2c6982336",
+            "1e066062-ef25-4529-99ad-00712766c61e",
+            "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+            "46844cbd-466b-45f5-a892-e6c476d493ec",
+            "46d7a963-a74a-4088-9940-e01f5c4a9b62",
+            "520f4571-c774-4de6-94d9-25f887d420de",
+            "53857cfa-4b90-4975-bfa7-6318e839ac14",
+            "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+            "75778645-b33d-4930-b0fb-42918d7d2096",
+            "7dbd85a3-d2f4-42d7-a585-07c2030a2d5d",
+            "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+            "91e6b756-df1a-4170-8d1e-2bc07150a161",
+            "949e46d3-de58-4032-90d4-f2cc4c374ef5",
+            "a4a8e840-07dd-4c7e-8f1c-d54e7baea020",
+            "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+            "b6b4534b-f883-4b77-a5d6-fc3a69fc903b",
+            "b9a73e49-6880-476c-bcba-c5a324934abe",
+            "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+            "cf5e031e-2b4d-46bf-aa0d-dc0155322ff6",
+            "dcb22271-3c8d-414d-ae9d-221ebd4c0ee5",
+            "e1d2d19f-b66b-4539-801d-77a2833e2a14"
           ],
-          "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Delete them."
     },
     {
       "criterionId": "P08-SWR056-STEP-06",
-      "findingIds": [
-        "P08-FIND-283-001"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-056",
-      "rootCauseIds": [
-        "ROOT-T283-MANUAL-CATALOG"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
       "sources": [
         {
@@ -2755,33 +2758,37 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
           "requestIds": [
-            "19d41b1d-6421-434c-8263-b3254f95853f",
-            "1e9b152e-1a9c-4a0f-9acd-c0ad4c490263",
-            "3200d7d3-0348-4677-80ac-95c894a5e7fa",
-            "329cb9a3-e00c-4c1b-a6cc-6f6f925a73c6",
-            "33766ef7-b684-40a4-8693-6b7da772c174",
-            "37ebce04-a166-4ebf-a85a-f72ac30b4842",
-            "3b4e5652-609b-46c5-b120-2f3c96523841",
-            "458caace-9f00-49a1-ad6d-3f9f814209b2",
-            "4cda2924-eecc-4373-a071-6be223c47bcb",
-            "4e8f35b1-f5c4-435e-a92e-c59dce785dac",
-            "55cff9fd-2d2e-4a66-93f3-79cbc23f10ce",
-            "63705e37-30e6-4634-8b84-2ba36ed5638a",
-            "85d25b9a-cf82-4f62-8df4-5885456bde1d",
-            "8da765c2-b070-496b-ac90-96f233d83a66",
-            "ca896ccf-6e31-4dcc-aa00-847d15f54232",
-            "dffa8fae-551d-48b5-bfca-5a499cc64566",
-            "f1079b7e-06cd-43c0-836f-901ce9e5d67e",
-            "f3eeacad-ebc6-4dd7-8553-1ca3acbd490e"
+            "12eeb71c-cf1f-4a13-8782-1eb3e3b3127d",
+            "1ad490aa-740d-434c-8a73-6ee2c6982336",
+            "1e066062-ef25-4529-99ad-00712766c61e",
+            "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+            "46844cbd-466b-45f5-a892-e6c476d493ec",
+            "46d7a963-a74a-4088-9940-e01f5c4a9b62",
+            "520f4571-c774-4de6-94d9-25f887d420de",
+            "53857cfa-4b90-4975-bfa7-6318e839ac14",
+            "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+            "75778645-b33d-4930-b0fb-42918d7d2096",
+            "7dbd85a3-d2f4-42d7-a585-07c2030a2d5d",
+            "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+            "91e6b756-df1a-4170-8d1e-2bc07150a161",
+            "949e46d3-de58-4032-90d4-f2cc4c374ef5",
+            "a4a8e840-07dd-4c7e-8f1c-d54e7baea020",
+            "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+            "b6b4534b-f883-4b77-a5d6-fc3a69fc903b",
+            "b9a73e49-6880-476c-bcba-c5a324934abe",
+            "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+            "cf5e031e-2b4d-46bf-aa0d-dc0155322ff6",
+            "dcb22271-3c8d-414d-ae9d-221ebd4c0ee5",
+            "e1d2d19f-b66b-4539-801d-77a2833e2a14"
           ],
-          "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
-          "status": "FAIL",
+          "rootCauseId": null,
+          "status": "PASS",
           "taskId": 283
         }
       ],
-      "status": "FAIL",
+      "status": "PASS",
       "text": "Verify they disappear from search."
     },
     {
@@ -2816,20 +2823,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2871,20 +2878,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2926,20 +2933,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "03003fdb-29d3-407e-8686-810867d9ac09",
-            "05258f78-abfe-4cee-879f-1064dc7e3f03",
-            "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
-            "3d1dc3a0-cd65-4574-ba93-068caca58390",
-            "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
-            "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
-            "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
-            "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
-            "9b007de7-c99e-459c-a8d6-3d6433a480e4",
-            "a6776740-230e-4298-8f5f-dd6bd1b84581",
-            "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
-            "c72a6953-0437-47a5-b5eb-c28e3ae1860b"
+            "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3",
+            "0cf9aa40-c648-4842-bbfb-aa704b9e50c4",
+            "0e1862c0-8738-4344-a6cb-69e4e4844415",
+            "14dd3f60-7b1c-40a4-b76d-361985d6d951",
+            "187d7b87-bae3-4201-8f11-873af2acff55",
+            "43b23361-7a8f-4f17-89ce-26d371d51307",
+            "4ba9adc1-8e1f-4985-a727-d9f601494588",
+            "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+            "88b60be3-1eae-4761-bdb4-8cbca6e286c5",
+            "c45530d2-d3bd-4bac-91bd-04c48f70ece6",
+            "eb56224f-45ad-4b76-9c88-16e30648dc86",
+            "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -2981,20 +2988,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3016,7 +3023,7 @@
           "backendEvidence": [
             "audit_count=2",
             "cache_generation=advanced",
-            "http_status=200",
+            "http_status=409",
             "mutation_count=2",
             "request_correlation=cross_instance"
           ],
@@ -3054,28 +3061,28 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "03003fdb-29d3-407e-8686-810867d9ac09",
-            "05258f78-abfe-4cee-879f-1064dc7e3f03",
-            "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
-            "33748522-a448-4d86-9961-7549197238a2",
-            "3d1dc3a0-cd65-4574-ba93-068caca58390",
-            "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
-            "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
-            "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
-            "61179bce-f6d7-4920-bca4-938ab9a78646",
-            "6776ac14-1f6e-40f3-becc-ba5368e9e603",
-            "75e06c0a-7256-4212-b851-d1e9b41e9b9b",
-            "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
-            "8c4e07a7-a6ad-490a-b3d2-fd6e32dc68c7",
-            "921e0cbb-62e9-4a44-af78-c3cd01c63d1f",
-            "9b007de7-c99e-459c-a8d6-3d6433a480e4",
-            "a6776740-230e-4298-8f5f-dd6bd1b84581",
-            "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
-            "c72a6953-0437-47a5-b5eb-c28e3ae1860b",
-            "e5acd1ec-b3fd-4563-8154-1c98a766e594",
-            "f5666077-5cfe-4054-8f24-5889999c4306"
+            "05569f82-45de-434b-81ed-107e812db925",
+            "06928799-2fd4-4919-bc82-394cbbe9d349",
+            "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3",
+            "0cf9aa40-c648-4842-bbfb-aa704b9e50c4",
+            "0e1862c0-8738-4344-a6cb-69e4e4844415",
+            "14dd3f60-7b1c-40a4-b76d-361985d6d951",
+            "187d7b87-bae3-4201-8f11-873af2acff55",
+            "21304fe7-97f9-45bc-8b47-e10b8b4b5dd7",
+            "3ee41f81-75fb-4334-86a3-2e0256c7c28c",
+            "43b23361-7a8f-4f17-89ce-26d371d51307",
+            "4ba9adc1-8e1f-4985-a727-d9f601494588",
+            "5a31f314-d779-456f-94c1-bebde3b66c2b",
+            "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+            "7ae5e481-4904-4905-86af-b6ce0082af51",
+            "88b60be3-1eae-4761-bdb4-8cbca6e286c5",
+            "8df5db1f-76bb-4a2b-917b-bc5750944fdd",
+            "c45530d2-d3bd-4bac-91bd-04c48f70ece6",
+            "e3b8bfe1-c85b-47f8-9ce5-a26ffaf020b3",
+            "eb56224f-45ad-4b76-9c88-16e30648dc86",
+            "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3117,20 +3124,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3172,20 +3179,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3227,20 +3234,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3282,20 +3289,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3337,20 +3344,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3392,20 +3399,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3447,20 +3454,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3502,20 +3509,20 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
-            "0908b3d0-d620-427c-83af-a1bd44fca2ce",
-            "190a3eef-1389-4749-96f6-91801d9f1458",
-            "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
-            "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
-            "2d76cba5-6fb2-4160-89cb-7384901f08cd",
-            "4b36224c-6e99-4766-a6bb-7961649b0333",
-            "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
-            "98d53bcb-f832-45ac-abbe-fd13064ccedf",
-            "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
-            "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
-            "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+            "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+            "18346920-9cc8-4819-b9c0-51fe29c20867",
+            "45d85da3-ce9d-44c1-9b73-23a5fe8d1b6e",
+            "559eb57a-5d96-4ca3-a38d-24b621ddad3f",
+            "573b2856-effb-4228-afae-ee4599c1c178",
+            "6505f0bc-dbc9-4d02-bf9e-6b6ed2a91c9b",
+            "87e6807a-c15b-440e-b8ef-00dbdc1be7cb",
+            "a334e66b-013e-4087-a29c-5af3c9f7047f",
+            "c8ad3830-a9f1-444a-b0e6-29830aedc34a",
+            "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+            "f0574afe-334b-40b9-9147-47405a8e0542",
+            "f0692a90-3dfb-4042-bb22-4f6d935c7262"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3535,7 +3542,7 @@
       "sources": [
         {
           "backendEvidence": [
-            "http_status=200",
+            "http_status=409",
             "request_correlation=cross_instance"
           ],
           "evidence": [
@@ -3556,16 +3563,16 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
           "requestIds": [
-            "33748522-a448-4d86-9961-7549197238a2",
-            "61179bce-f6d7-4920-bca4-938ab9a78646",
-            "6776ac14-1f6e-40f3-becc-ba5368e9e603",
-            "75e06c0a-7256-4212-b851-d1e9b41e9b9b",
-            "8c4e07a7-a6ad-490a-b3d2-fd6e32dc68c7",
-            "921e0cbb-62e9-4a44-af78-c3cd01c63d1f",
-            "e5acd1ec-b3fd-4563-8154-1c98a766e594",
-            "f5666077-5cfe-4054-8f24-5889999c4306"
+            "05569f82-45de-434b-81ed-107e812db925",
+            "06928799-2fd4-4919-bc82-394cbbe9d349",
+            "21304fe7-97f9-45bc-8b47-e10b8b4b5dd7",
+            "3ee41f81-75fb-4334-86a3-2e0256c7c28c",
+            "5a31f314-d779-456f-94c1-bebde3b66c2b",
+            "7ae5e481-4904-4905-86af-b6ce0082af51",
+            "8df5db1f-76bb-4a2b-917b-bc5750944fdd",
+            "e3b8bfe1-c85b-47f8-9ce5-a26ffaf020b3"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3600,18 +3607,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3646,18 +3653,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3692,18 +3699,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3723,7 +3730,7 @@
       "sources": [
         {
           "backendEvidence": [
-            "owner_state=projection_leak"
+            "owner_state=owner_free"
           ],
           "evidence": [
             {
@@ -3731,7 +3738,7 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
           "requestIds": [],
           "rootCauseId": null,
           "status": "PASS",
@@ -3766,18 +3773,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3812,18 +3819,18 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
           "requestIds": [
-            "16524184-6153-4a9c-b4a5-23b96e0135e3",
-            "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
-            "61e3a78a-e286-4577-92fc-071de5556204",
-            "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
-            "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
-            "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
-            "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
-            "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
-            "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
-            "ee3364a2-136d-4635-9d0d-05906ff44339"
+            "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+            "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+            "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+            "8a447566-57b7-40a5-84ee-7d468984eced",
+            "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+            "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+            "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+            "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+            "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+            "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3854,11 +3861,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
           "requestIds": [
-            "1adf5895-a643-4998-8b44-e8529f28bcd7",
-            "27553949-9028-4021-8fec-200fab6890ea",
-            "5a77068f-28e2-4649-889c-4131a8c4c317"
+            "58ed8f00-380c-48e1-965f-99457a2c3c66",
+            "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+            "bca8a7af-c046-4271-a1ba-99063060795e"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3889,11 +3896,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
           "requestIds": [
-            "1adf5895-a643-4998-8b44-e8529f28bcd7",
-            "27553949-9028-4021-8fec-200fab6890ea",
-            "5a77068f-28e2-4649-889c-4131a8c4c317"
+            "58ed8f00-380c-48e1-965f-99457a2c3c66",
+            "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+            "bca8a7af-c046-4271-a1ba-99063060795e"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3924,11 +3931,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
           "requestIds": [
-            "1adf5895-a643-4998-8b44-e8529f28bcd7",
-            "27553949-9028-4021-8fec-200fab6890ea",
-            "5a77068f-28e2-4649-889c-4131a8c4c317"
+            "58ed8f00-380c-48e1-965f-99457a2c3c66",
+            "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+            "bca8a7af-c046-4271-a1ba-99063060795e"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3959,11 +3966,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
           "requestIds": [
-            "1adf5895-a643-4998-8b44-e8529f28bcd7",
-            "27553949-9028-4021-8fec-200fab6890ea",
-            "5a77068f-28e2-4649-889c-4131a8c4c317"
+            "58ed8f00-380c-48e1-965f-99457a2c3c66",
+            "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+            "bca8a7af-c046-4271-a1ba-99063060795e"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -3994,11 +4001,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
           "requestIds": [
-            "1adf5895-a643-4998-8b44-e8529f28bcd7",
-            "27553949-9028-4021-8fec-200fab6890ea",
-            "5a77068f-28e2-4649-889c-4131a8c4c317"
+            "58ed8f00-380c-48e1-965f-99457a2c3c66",
+            "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+            "bca8a7af-c046-4271-a1ba-99063060795e"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4029,11 +4036,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
           "requestIds": [
-            "1adf5895-a643-4998-8b44-e8529f28bcd7",
-            "27553949-9028-4021-8fec-200fab6890ea",
-            "5a77068f-28e2-4649-889c-4131a8c4c317"
+            "58ed8f00-380c-48e1-965f-99457a2c3c66",
+            "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+            "bca8a7af-c046-4271-a1ba-99063060795e"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4294,15 +4301,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4367,14 +4374,14 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json",
           "requestIds": [
-            "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
-            "29067bc9-3413-4f71-a7b0-0c41bde8a422",
-            "32fb15e4-3c0d-4386-a911-23a7705225ee",
-            "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
-            "bdc87907-60c1-4a5f-843e-f4bbd675030a",
-            "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+            "08ac4662-faaa-46e6-93a6-99c30891a057",
+            "2d37bca7-877f-42aa-8bfe-a217f88aaffe",
+            "49ee37b2-bc9b-40bb-bbc8-ed93baa0c12f",
+            "872dfd59-cd64-4b1d-976d-1dba7befc6e8",
+            "b3db8445-aeb1-4f2f-a60b-4fbd25a29c5f",
+            "e9eae50d-41ea-415e-a669-ac9ed65e02b9"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4411,15 +4418,15 @@
               "type": "playwright"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.json",
           "requestIds": [
-            "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
-            "36a90431-2b97-4bb8-a726-6872c2883659",
-            "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
-            "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
-            "9ac1e9a2-767e-4130-980b-6a936f88ee28",
-            "b02e5afd-b9b5-49a9-a93d-e684b185faba",
-            "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+            "16beb41d-36cd-4521-ba8f-67752d3e6c13",
+            "1ea77583-5afa-461b-a534-d935c571ca92",
+            "71eb1951-ad7a-4a8f-8f5d-9b510818b73e",
+            "79881356-e3c4-4d63-92b0-0c51489499e2",
+            "8076f46b-cc78-4fd4-9f17-c21e3e2101e6",
+            "811a1655-c4f5-45b9-b37e-030459461c19",
+            "d692292b-ab4f-40da-8404-58e5bfa134ec"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4468,14 +4475,14 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json",
           "requestIds": [
-            "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
-            "29067bc9-3413-4f71-a7b0-0c41bde8a422",
-            "32fb15e4-3c0d-4386-a911-23a7705225ee",
-            "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
-            "bdc87907-60c1-4a5f-843e-f4bbd675030a",
-            "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+            "08ac4662-faaa-46e6-93a6-99c30891a057",
+            "2d37bca7-877f-42aa-8bfe-a217f88aaffe",
+            "49ee37b2-bc9b-40bb-bbc8-ed93baa0c12f",
+            "872dfd59-cd64-4b1d-976d-1dba7befc6e8",
+            "b3db8445-aeb1-4f2f-a60b-4fbd25a29c5f",
+            "e9eae50d-41ea-415e-a669-ac9ed65e02b9"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4504,11 +4511,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.json",
           "requestIds": [
-            "2d3e7150-3230-47f2-b5ec-89c0c6e7cd1b",
-            "3498c6f7-e5aa-4879-a0be-cd799adb8ec8",
-            "80db79eb-783d-4d9f-bde9-15240f64c829"
+            "45389c6d-fb5c-45e7-8e3b-08dee56ccd66",
+            "4e9f507b-47ac-49e1-b71c-c3ded477b38b",
+            "8b47e43a-ea7d-46af-9f1f-351e922d73ac"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4557,14 +4564,14 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json",
           "requestIds": [
-            "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
-            "29067bc9-3413-4f71-a7b0-0c41bde8a422",
-            "32fb15e4-3c0d-4386-a911-23a7705225ee",
-            "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
-            "bdc87907-60c1-4a5f-843e-f4bbd675030a",
-            "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+            "08ac4662-faaa-46e6-93a6-99c30891a057",
+            "2d37bca7-877f-42aa-8bfe-a217f88aaffe",
+            "49ee37b2-bc9b-40bb-bbc8-ed93baa0c12f",
+            "872dfd59-cd64-4b1d-976d-1dba7befc6e8",
+            "b3db8445-aeb1-4f2f-a60b-4fbd25a29c5f",
+            "e9eae50d-41ea-415e-a669-ac9ed65e02b9"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4593,11 +4600,11 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.json",
           "requestIds": [
-            "2d3e7150-3230-47f2-b5ec-89c0c6e7cd1b",
-            "3498c6f7-e5aa-4879-a0be-cd799adb8ec8",
-            "80db79eb-783d-4d9f-bde9-15240f64c829"
+            "45389c6d-fb5c-45e7-8e3b-08dee56ccd66",
+            "4e9f507b-47ac-49e1-b71c-c3ded477b38b",
+            "8b47e43a-ea7d-46af-9f1f-351e922d73ac"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4646,14 +4653,14 @@
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json",
           "requestIds": [
-            "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
-            "29067bc9-3413-4f71-a7b0-0c41bde8a422",
-            "32fb15e4-3c0d-4386-a911-23a7705225ee",
-            "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
-            "bdc87907-60c1-4a5f-843e-f4bbd675030a",
-            "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+            "08ac4662-faaa-46e6-93a6-99c30891a057",
+            "2d37bca7-877f-42aa-8bfe-a217f88aaffe",
+            "49ee37b2-bc9b-40bb-bbc8-ed93baa0c12f",
+            "872dfd59-cd64-4b1d-976d-1dba7befc6e8",
+            "b3db8445-aeb1-4f2f-a60b-4fbd25a29c5f",
+            "e9eae50d-41ea-415e-a669-ac9ed65e02b9"
           ],
           "rootCauseId": null,
           "status": "PASS",
@@ -4676,16 +4683,14 @@
       "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
       "sources": [
         {
-          "backendEvidence": [
-            "mutation_count=0"
-          ],
+          "backendEvidence": [],
           "evidence": [
             {
               "path": "evidence/backend/curation.json",
               "type": "backend"
             }
           ],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.json",
           "requestIds": [],
           "rootCauseId": null,
           "status": "PASS",
@@ -4694,7 +4699,7 @@
         {
           "backendEvidence": [],
           "evidence": [],
-          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.json",
+          "report": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json",
           "requestIds": [],
           "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION",
           "status": "BLOCKED",
@@ -4719,40 +4724,52 @@
       "sha256": "a4786355016977f589850c7683eed3deb9df9f612cbb35a96e0e3dea1508e464"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-282/eed925ef7313fed9671c514c/diagnostics.json",
-      "sha256": "517dc145dcb5492a14eb80e1d225e6915a45745d25bda217414b67371cb966d3"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/282-303bd5578242f68218a0c939/diagnostics.json",
+      "sha256": "dd68f360360427a043831ae7ea4b65ca55de20c0eabd65db2c6267e835395128"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-282/eed925ef7313fed9671c514c/results.json",
-      "sha256": "6f6b633035da8f1f1717e3f8598bcda74b91bf7b0315df963c1ee2ea50076d44"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/282-303bd5578242f68218a0c939/results.json",
+      "sha256": "a720bab3fd16277ee65a181038286b057fa83406c698dfad250cc369c65a259d"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-282/eed925ef7313fed9671c514c/trace.ndjson",
-      "sha256": "a4786355016977f589850c7683eed3deb9df9f612cbb35a96e0e3dea1508e464"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/282-303bd5578242f68218a0c939/state.json",
+      "sha256": "8840bd7cd2661dd746be73776528d156b0d13710a713163bf4565fc6343ebb61"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-283/eed925ef7313fed9671c514c/diagnostics.json",
-      "sha256": "517dc145dcb5492a14eb80e1d225e6915a45745d25bda217414b67371cb966d3"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/282-303bd5578242f68218a0c939/trace.ndjson",
+      "sha256": "3bfd6a41466ab35d17ae0c73bd3eac061ddf80c5d527347729e7929adad7c584"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-283/eed925ef7313fed9671c514c/results.json",
-      "sha256": "6f6b633035da8f1f1717e3f8598bcda74b91bf7b0315df963c1ee2ea50076d44"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/diagnostics.json",
+      "sha256": "24e7c4bfe2bab4131e2dde61d5e29df490048eb0ebf4d1b4f09c9ae4b9557a60"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-283/eed925ef7313fed9671c514c/trace.ndjson",
-      "sha256": "a4786355016977f589850c7683eed3deb9df9f612cbb35a96e0e3dea1508e464"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/results.json",
+      "sha256": "5f673debd702526996ef54ddd6c4ba43304024781e8e4c3407fda23fd95f1003"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-284/eed925ef7313fed9671c514c/diagnostics.json",
-      "sha256": "517dc145dcb5492a14eb80e1d225e6915a45745d25bda217414b67371cb966d3"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/state.json",
+      "sha256": "d1f96cbb0f88a612854bb26bafc569d58f25960eca13b047f309937c0c6c1991"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-284/eed925ef7313fed9671c514c/results.json",
-      "sha256": "6f6b633035da8f1f1717e3f8598bcda74b91bf7b0315df963c1ee2ea50076d44"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/trace.ndjson",
+      "sha256": "94b764d8a66e46bae5bf2b21d732d55474502ac8006fc77cc30fba61281eeae7"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-284/eed925ef7313fed9671c514c/trace.ndjson",
-      "sha256": "a4786355016977f589850c7683eed3deb9df9f612cbb35a96e0e3dea1508e464"
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/284-d4f3484fbd165ca61f962a04/diagnostics.json",
+      "sha256": "691962b58abd95ee6acf420df67a229586044123e1de93ae811ef29b420f8baf"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/284-d4f3484fbd165ca61f962a04/results.json",
+      "sha256": "483a26688a3b93dff67991c3e78def6c6c9c4f39d7bbd73e26892e5206ccb6b2"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/284-d4f3484fbd165ca61f962a04/state.json",
+      "sha256": "0222ce570c3e3859a4b5c0e07b5b9529149a2d266d98190d5e721aadabbca135"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/284-d4f3484fbd165ca61f962a04/trace.ndjson",
+      "sha256": "0104ebe6d70f30df283e64349cf6091515b532dca8e9a5cf942dd6b0cae7a456"
     }
   ],
   "schema": "mealswapp.phase08.02-uat-report.v1",
@@ -4794,466 +4811,6 @@
       "sha256": "3c613656c45fdc319af9e636559a7624e10b90aa05efc029a040d867ab61f4da"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/evidence/backend/curation.json",
-      "sha256": "c0c41f703cab7ddc08c43e33ec1561a40aefbff9fc8ee1e5e699ebab2ea1d91b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
-      "sha256": "84f65a4f578b4d82860cb8e1f5341b6c7ec7d22653d58b0c52f390fdaed12f3f"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.html",
-      "sha256": "fa86bbbbb6cdf4c3221990ce6090b8a6744bc67be260e4b7716ebfdf0ed7d94a"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-033/report.json",
-      "sha256": "783d31b105c75f0b7ecdfbe5e572d5937403fa80a45f0f7cb7f91fedab0fe9c7"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/evidence/backend/curation.json",
-      "sha256": "c0c41f703cab7ddc08c43e33ec1561a40aefbff9fc8ee1e5e699ebab2ea1d91b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
-      "sha256": "84f65a4f578b4d82860cb8e1f5341b6c7ec7d22653d58b0c52f390fdaed12f3f"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.html",
-      "sha256": "182dc62512b3954da8531c9de4bcbfe39064109be16e0ef1342cb9d5f4fe54ba"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-055/report.json",
-      "sha256": "bef34cad5ad64b0ef16dc9f79f7b56afdcde9336be19a0a037b341cfc8c3f7a6"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/evidence/backend/curation.json",
-      "sha256": "c0c41f703cab7ddc08c43e33ec1561a40aefbff9fc8ee1e5e699ebab2ea1d91b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
-      "sha256": "84f65a4f578b4d82860cb8e1f5341b6c7ec7d22653d58b0c52f390fdaed12f3f"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.html",
-      "sha256": "aebc8816d740d369fd5d166bffd2be869ffe154df279528f4c63b198f84f7901"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task282-7e90a8f191987741e6caac1f-sw-req-090/report.json",
-      "sha256": "0f5d85acf56c9dcf519638493fd3b5bcf05324a8fb3792b01a928b27b3e523ba"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
-      "sha256": "d03bd7aed677402b24c8cafb99ca1ef46b8d8aa2ede327759390e70e1f8d68ae"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
-      "sha256": "3b5dc4644996ab07657bd50f3e200002171be0609c224469ff8d2c2707ae6af2"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
-      "sha256": "d7399c6803abfec5d3ab209635b3b52711af1ab26f044c21e3ea513cdc0b931a"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
-      "sha256": "ba88d57b345cdbb24ff6f944ebc28fb03841f8637f3035acbf3ea078dc9d6cd4"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/report.html",
-      "sha256": "ab2ed1e4a4fe24be4d4a776aa153461eab4e0ce3b313304a06b87eb6656ad85e"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-019/report.json",
-      "sha256": "a08631357672a911e3a95b1c7dfb8a84ed5ff7c2962fc6cb3502d9c64e32d3c4"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/evidence/backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
-      "sha256": "855c3224c4b52db4742ec457925b0fb3ec00c582d3f011aadeae1024548115db"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/evidence/backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
-      "sha256": "d94f4203ac31c287b0e02e6e97b0bfb1f089aa545921e62cf17ef3b2e76837e8"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/evidence/operations/real-stack-desktop-chromium-metric-imperial.json",
-      "sha256": "06077361fcbcac6cc677045f03517eb5b105a5bc5137904366f6259b03fcff44"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/evidence/operations/real-stack-mobile-chromium-metric-imperial.json",
-      "sha256": "e20318a9e75d3e315446783f7e7211551bf6f87e86cb6bb7863f4c622337d641"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/report.html",
-      "sha256": "fd6b8daf3a9301a1a16e424146015d5b96f95acbc97dbaa77a599482bb5ae810"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-032/report.json",
-      "sha256": "4a9249b64ab9b048063aa752836139be45615be40ec0f6e33105050c9504179d"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
-      "sha256": "2fa6e845dd9879325130133e8d77fe4801edd970d3605a56189834c53563b9e3"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
-      "sha256": "b297f109630af3fbb2dfe3ee16aea8572a1aa6861fc5628e0a26b25708cc8b43"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
-      "sha256": "ed30fca3221c05840c025c11d33c18a48a047fa190f64405b6985ca6e03cee8c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
-      "sha256": "48cf4a531fb19d0ac8c19f9c39a303f12863abdae36f6623151f90fa10f69397"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/operations/real-stack-desktop-chromium-liquid-create.json",
-      "sha256": "453b34d1876d9133e4472a5ca4614b25718fe6170042d5c24965178ffd79f8f1"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/operations/real-stack-desktop-chromium-solid-create.json",
-      "sha256": "8d521a793ecdf4622a2e973b6aa535cf6f6dd875e09aafb5cae11021e260788b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/operations/real-stack-mobile-chromium-liquid-create.json",
-      "sha256": "ea219fe9945e16c5b2ea3fd64b78815915caac86e72664881a7138e0ab98b0cd"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/evidence/operations/real-stack-mobile-chromium-solid-create.json",
-      "sha256": "6cf57ca3eba327050b18ee2fa0927138cc0965ce27ab494e3dae92bd8240abdd"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.html",
-      "sha256": "1e050f3ef5730249c1532972a490ab22d6f4ed2175828a092aed16811586c9ed"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-033/report.json",
-      "sha256": "232dc19c2963f1bc9a5215b5bff41840f083e2b7783686cbc5367069c3cf8e62"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-audit-rollback-proof.json",
-      "sha256": "d36b1ef44364fe3de3b280081b16ff284ef580bbdca802fbe07635a25842aed7"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-idempotent-replay-proof.json",
-      "sha256": "f501ea07e1dde80eeaa8e6cad461a7ad2d45d31942ee8f363a44efda0c8a2bda"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-invalid-0-proof.json",
-      "sha256": "a5360e400422c3c688ed335b3de97d588e292189ab5f3508c18a087e95ef612e"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-invalid-1-proof.json",
-      "sha256": "b8f49ab5b7d54a9cfb79db59b96d817e04c075c3fb12f759ae0675017658f6d8"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-invalid-2-proof.json",
-      "sha256": "a1c1f7a7bc34547b38d030cb057ba2d95520ca600a75f1a52ae4f742d6f76f55"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-invalid-3-proof.json",
-      "sha256": "cc9bf7bb63671ed73775daa47b890fb7a2affc1828a7a06110b4406914f19876"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
-      "sha256": "2fa6e845dd9879325130133e8d77fe4801edd970d3605a56189834c53563b9e3"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
-      "sha256": "b297f109630af3fbb2dfe3ee16aea8572a1aa6861fc5628e0a26b25708cc8b43"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
-      "sha256": "f38d16574c1c96c950b93bf486831aaa28296a3f02e020f5f01836bc836f3e1c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-desktop-chromium-update-search-proof.json",
-      "sha256": "8ecfa06bdc76e501c3fb16b10e0751d3eeccb31a0dfe8f28a351f405e6a0ccd4"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-audit-rollback-proof.json",
-      "sha256": "7ca533c5d69ffff82777d9a023869f286905a974548c6d0fd991fc7343862071"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-idempotent-replay-proof.json",
-      "sha256": "19df3392b76eda73e0368c92365108e1a92d5b0062e722d2d2d87a8cc656a668"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-invalid-0-proof.json",
-      "sha256": "8ad2ece3fcb600fd7d7e302e54cf4c9d495ea08bf5d0105a1a70056ddbbf9ff5"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-invalid-1-proof.json",
-      "sha256": "b64629c729bbb711401132b81181be6d8506bb3582e638dd499d13342f55d371"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-invalid-2-proof.json",
-      "sha256": "dc9187ea30bfb5102aa1365b580924a186038aa5a8608e85420819e3b7c6fe56"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-invalid-3-proof.json",
-      "sha256": "70b382c9e94ef373a41f753a2dabc72dffe83df852aef5df77cceacf82d4218c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
-      "sha256": "ed30fca3221c05840c025c11d33c18a48a047fa190f64405b6985ca6e03cee8c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
-      "sha256": "48cf4a531fb19d0ac8c19f9c39a303f12863abdae36f6623151f90fa10f69397"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
-      "sha256": "dc41484b71f89b4e66bb066b7944b6c3a27ebe6dcfec9c6df021f789687c3bdc"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/backend/task283-real-stack-mobile-chromium-update-search-proof.json",
-      "sha256": "cd9d92a46b0805ae1463d79d21bba242beb25115abc7b036e68dae9e1e2fced7"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-audit-rollback.json",
-      "sha256": "30019c50ef930af3ffce266c07979ff698b7d1feae663122e9b05c1ffaa526ef"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-idempotent-replay.json",
-      "sha256": "c120bb41e3e5f73e5e8c8156b972ba5bef6462cc7da7a3f9ff33afccf68d6603"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-invalid-0.json",
-      "sha256": "f177a27a4d4b29f9fcca1ddc234d21b1733bfc0c9a9d2fc8173c962d53297207"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-invalid-1.json",
-      "sha256": "648388f802360adcc3a5bb5eabd2a7ac7b86e7c6ec5800407ff158b0dc2d7e40"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-invalid-2.json",
-      "sha256": "661c11a1bda1964adf56acc709388351e9aec3627dd03dde8621866a827aabca"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-invalid-3.json",
-      "sha256": "02adc947f0d58f2ca82315b263ceca1832f8054403eb178ca86400dcc7de79c7"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-liquid-create.json",
-      "sha256": "453b34d1876d9133e4472a5ca4614b25718fe6170042d5c24965178ffd79f8f1"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-solid-create.json",
-      "sha256": "8d521a793ecdf4622a2e973b6aa535cf6f6dd875e09aafb5cae11021e260788b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-update-delete-search.json",
-      "sha256": "b3b3e8d4823fc6550d1fe85f1e7be7fa589c698fef6d9c76a77ecf90b8e07759"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-desktop-chromium-update-search.json",
-      "sha256": "811c269e22b3360889d1ca9b0b0f804e2b9f87e6c85cbe7936a249741928992c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-audit-rollback.json",
-      "sha256": "c9990b7f9dcd21eef86b6a24f44a3a83bb44a135f1c4dc6ccac6de9296640537"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-idempotent-replay.json",
-      "sha256": "73d121df9a69cbca3fa505c9fdbce0508098608af8c0508b65cc0aa0cc6f3866"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-invalid-0.json",
-      "sha256": "9137634abd7e9b5752699093a0f3726790066e6e8fb3e9645dd96aca5efed1a6"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-invalid-1.json",
-      "sha256": "6ab29dcc2bab034d00b0453fe5cd6ff5adf9345907efa04be2ab905c2f78c6c4"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-invalid-2.json",
-      "sha256": "2de4f5c2a2cd73168e056204d62feff5d331a988bad7d55b3142327c4af9f2c3"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-invalid-3.json",
-      "sha256": "d9534900d41e1a9cf96a58d8d324fe9a7849551f1d30182fb0375f4be5ab3f59"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-liquid-create.json",
-      "sha256": "ea219fe9945e16c5b2ea3fd64b78815915caac86e72664881a7138e0ab98b0cd"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-solid-create.json",
-      "sha256": "6cf57ca3eba327050b18ee2fa0927138cc0965ce27ab494e3dae92bd8240abdd"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-update-delete-search.json",
-      "sha256": "86644e5636f0c2bab85826cc8a84c4105e3462265faa86d2d01654872e865ccb"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/evidence/operations/real-stack-mobile-chromium-update-search.json",
-      "sha256": "1c5ed19145c6416697773d9acdd713c6abd6a0ca5e792c50212fa195c409e98b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.html",
-      "sha256": "49b9b12f90ee2e8b42c166b231504e33ed057dac7c6af516250fb2a3f0b30e2b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-056/report.json",
-      "sha256": "18fe29ae9abc283440c39f2d72b2e2dddfc1805b7cad401db416c332931e2356"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
-      "sha256": "abdc6c62a93356eb0ab5b19eb3f899657c2651f45e1264cb5ca468d6399f0911"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/backend/task283-real-stack-desktop-chromium-cross-instance-stale-write-proof.json",
-      "sha256": "231d356d45c61fc5928bd25a4843a712653f46e2a116c2d1e770a979666dffcf"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
-      "sha256": "d03bd7aed677402b24c8cafb99ca1ef46b8d8aa2ede327759390e70e1f8d68ae"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
-      "sha256": "8854788ef1a423d13994ef66323f3c1fb07d9caf991063c24de5941591e0c3af"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/backend/task283-real-stack-mobile-chromium-cross-instance-stale-write-proof.json",
-      "sha256": "7e4c69ef68e1e6715740cfe3e0c43f1a73ff0143c2fbc12ca80f2183f28cad70"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
-      "sha256": "3b5dc4644996ab07657bd50f3e200002171be0609c224469ff8d2c2707ae6af2"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
-      "sha256": "399986c131b736604a81b8befe6541b3e8c1bb44ce379016c13bad6c37a5ebff"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/operations/real-stack-desktop-chromium-cross-instance-stale-write.json",
-      "sha256": "5a9a780d0e6a8fa2d07c8e50627947b6731a78bd94f0ec3e36f6044b7a743c18"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
-      "sha256": "d7399c6803abfec5d3ab209635b3b52711af1ab26f044c21e3ea513cdc0b931a"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
-      "sha256": "97e072dfcb2179a44fdff93f39410a8c9e9a011c1bfeee5d67022cf6abd1b154"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/operations/real-stack-mobile-chromium-cross-instance-stale-write.json",
-      "sha256": "b9987ba1ac7df8757330a4afb2076b184d96068faac9c211f97617fce91de233"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
-      "sha256": "ba88d57b345cdbb24ff6f944ebc28fb03841f8637f3035acbf3ea078dc9d6cd4"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.html",
-      "sha256": "01aedfe1833be9dd80165f7e0e49ee75270d205ec48fe0add126c18b089220bb"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-057/report.json",
-      "sha256": "4e3e4b96bd6fa9955e5e7b7eccddb9314b3b2f6f18361eb963b72624ff2aa01a"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/backend/task283-real-stack-desktop-chromium-canonical-sodium-proof.json",
-      "sha256": "f5c4d47e30cc1fa3891c397e6991850e002ed625164e033d7524e512a4b9ee4a"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/backend/task283-real-stack-desktop-chromium-micro-alias-proof.json",
-      "sha256": "320b7b6d01ea8da1c7d40ad5120b50adcc41183d8f32d04737a3c36942335a58"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/backend/task283-real-stack-desktop-chromium-micro-unknown-proof.json",
-      "sha256": "3f691bff872c7c0cf59f189610f75e88dc17154d4d32705d41aba60aa58a11d8"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/backend/task283-real-stack-mobile-chromium-canonical-sodium-proof.json",
-      "sha256": "1a242402275d77d54a9f826621418b4397e251f846f23ee0cc2c6cc9544dcc38"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/backend/task283-real-stack-mobile-chromium-micro-alias-proof.json",
-      "sha256": "e69ead02fdac664d4b5dcc869b2dcbebe5f465c333c1aa183c7c8e9c9e7d30b3"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/backend/task283-real-stack-mobile-chromium-micro-unknown-proof.json",
-      "sha256": "04d34fa24d2e9e81b2c81242d90a968d649daeb4b0a4b94000c63ad744701643"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/operations/real-stack-desktop-chromium-canonical-sodium.json",
-      "sha256": "eb6f97770969bb178980ab9b313cac2cdf716af11a434d358154015ced07ca77"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/operations/real-stack-desktop-chromium-micro-alias.json",
-      "sha256": "55a91bed11f469ba2abb604e041f8e3d9ba1cf03d3ae9d95430d076d45ad458a"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/operations/real-stack-desktop-chromium-micro-unknown.json",
-      "sha256": "dadac8ecd3c316934040a27231491a8032442643a0d7ab40b8f35b66e2f09b53"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/operations/real-stack-mobile-chromium-canonical-sodium.json",
-      "sha256": "77ab2dd39ab0cd85c7967ead5fb0124f6257c23603cd0a85879e61e235592170"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/operations/real-stack-mobile-chromium-micro-alias.json",
-      "sha256": "7d678b01b7842b2da80b606d9a8341a44ba0d29c913deb155f14cd9c8d8768ba"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/evidence/operations/real-stack-mobile-chromium-micro-unknown.json",
-      "sha256": "bd2e2cc2f2d50ff073060a8b9388218928568dd3fa7666ee28b08be266c4ac5e"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.html",
-      "sha256": "341629782a59a98aa67a22a9a9126618eb5d71fe1fce7766d1a961725224fa05"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task283-f50ec3f0e8eb47a07ce0de77-sw-req-090/report.json",
-      "sha256": "3e1e2bb70db8456e997b21807384796fc83b712a6263c50594f5abeee68452a2"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/evidence/backend/task284-proof.json",
-      "sha256": "8ac592484b370fd06e48d15364de9cd7ac74cb206c5a7f2e3000d1c48e9f57b0"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
-      "sha256": "1ac7350663bbe9086f879abace5d1849fdf40bcff40db0a4a516dc8c0b00ba5c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.html",
-      "sha256": "483066ef4b89111faa36b1064a211b741ff17bb0ff0ca910e5dccc168b6c42d0"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-043/report.json",
-      "sha256": "821a8326b7b316826ecab12089bdb58cfa56ef358d38c84685a5b53d6e17f7c5"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/evidence/backend/task284-proof.json",
-      "sha256": "8ac592484b370fd06e48d15364de9cd7ac74cb206c5a7f2e3000d1c48e9f57b0"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
-      "sha256": "1ac7350663bbe9086f879abace5d1849fdf40bcff40db0a4a516dc8c0b00ba5c"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.html",
-      "sha256": "c694d81e197ffd31f65e3ceb3ed623a60bb204a3402874e5e99e3228e62e919b"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-072/report.json",
-      "sha256": "1f2828911dc58aadb221a462a1f96b9fa569e019e52fa75ce50c9e75aacbb6b6"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/evidence/backend/task284-proof.json",
-      "sha256": "8ac592484b370fd06e48d15364de9cd7ac74cb206c5a7f2e3000d1c48e9f57b0"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.html",
-      "sha256": "4d61209c91fb1af6e59f57750c9a296a0e4603fa0db77f941b339211a3478085"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task284-00807a2ec1a53daf7b4d7161-sw-req-073/report.json",
-      "sha256": "6db00f6aae2653d83a0cda52795f3206ff97af976de2c9a1faeb1e0e0e277074"
-    },
-    {
       "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task285-abcdab7626a34fa9ed348a6a/evidence/sink-evidence.json",
       "sha256": "124b899b1a6ad0405b38ad91b835db9b665b83bc2e4131f2d83fb5001c0a5585"
     },
@@ -5264,6 +4821,102 @@
     {
       "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task285-abcdab7626a34fa9ed348a6a/report.json",
       "sha256": "56ce05eb2086d1ed2b33ce36561892486f8353cb87985be308bf86de48b8e2fe"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.json",
+      "sha256": "5376ec5ea17563a4e03cbd75c4f6310aa073998fc56b910a24b95db8ae553526"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-033/report.html",
+      "sha256": "eee970b1e6efbdfb5896aa30a7259d056dd2483baa71cb223ae3767b66dd6f25"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.json",
+      "sha256": "95e35ba4a3519c027c791c67f107f35d55f4319a8b6d6beb8cebc721a7c25425"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-055/report.html",
+      "sha256": "c2f9a543f1cf7f6d1615f5ccb51a5c9f53b3ebb76f189aaa6494fb10c6f8c6a6"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.json",
+      "sha256": "0bcc816aa54036dd90402318b958916fdff3326576bed97499f45e69830df009"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-282-303bd5578242f68218a0c939-sw-req-090/report.html",
+      "sha256": "62f11147bbb368aac9760c3c8ca36615c982fb5e16376c6ff5d0a5938f3aaf9d"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.json",
+      "sha256": "ba19996074c8e8e1dc364e11d209107c7dfe7091e2ec2f3224bdcf7ad5944488"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-019/report.html",
+      "sha256": "3e5c2d86b33f2e80ad5ed59d38f68fa978ef137efe723c63d9318f1699172c72"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-032/report.json",
+      "sha256": "0133912bb30570c07979341953a26891d36151e99b761a07baca8cbec499e37c"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-032/report.html",
+      "sha256": "932ca04233b2f9e3316189af88f6bf4f08fdafb5a8b4061dea414cec0d6c2b31"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.json",
+      "sha256": "c93eb43316952d410b9f990bf27d40ed38b028c0d897c73d95db9837939c4547"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-033/report.html",
+      "sha256": "185394e3f8bd8dd0b72b51ccf0358c6e901baffdc19e8be47c4e3bb8f8285de6"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.json",
+      "sha256": "48d0433b93d005a52cc78317d81efcff5b0c16980e7d2ad82fcb4a43bcd6c0ea"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-056/report.html",
+      "sha256": "15c7ecb2e8c8d5079246b674181369f670a989429c7e1f44c276ba1474b948ad"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.json",
+      "sha256": "3eb5a1be034725b03fe8f5b41156576a8061e8d6caad7a13105c3cd0469eca13"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-057/report.html",
+      "sha256": "2c02fe6f9c2cf88fc3e60649316fec2b3a020384098a0c464678c1d45065291e"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.json",
+      "sha256": "e177185e86c5a362a9cb261366222966d8b8126cef81c1f2a30173367c1607af"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-283-cbbc7115a645e31169391973-sw-req-090/report.html",
+      "sha256": "30c5a70910953f15737b77251e159f356baf4ac63a84533d219f599fe853e4c4"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.json",
+      "sha256": "33f24a8bb3c3e0e86ceb272aedb232d9ce8dc42e3eedb65cde13c09a551bba8e"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-043/report.html",
+      "sha256": "e8a034a1ae3b54d4dc4e808d7a8629b642a2741ba1eeddccc5da76dc5ea11be5"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.json",
+      "sha256": "10df22119270697775f3b6c55cc43ea1b026692cb5f21fdf21c091df44b3806c"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-072/report.html",
+      "sha256": "e7ab97d4c64c2b48fed676f785717bb5c66e1fe2c64c63c619086f94c14d4e46"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.json",
+      "sha256": "fc1f5863a47db24c29502a0c250c44b8cc3524f65e2f282669463f8e52eeece4"
+    },
+    {
+      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/task302-284-d4f3484fbd165ca61f962a04-sw-req-073/report.html",
+      "sha256": "e513288b5b7270cab26adb50dace288da16f47c6cc1d45e23f67a577b1a1adfd"
     }
   ],
   "taskTrace": [
@@ -5466,6 +5119,25 @@
       "status": "PASSED",
       "taskId": 286,
       "verificationCriteria": "The new UAT and report are self-contained, preserve the historical Phase 08 UAT unchanged, trace Tasks 276-286 and all required SW-REQ IDs, distinguish supporting mocked/component evidence from mandatory real-stack/deployed evidence, and match the Task 280 manifest/report plus `04_OPEN.md` finding state exactly. Automated integrity tests reject missing criteria, contradictory statuses, orphan evidence, non-pass results without open findings, closed findings without passing retest evidence, unaccepted mandatory failures/blockers, claimed centralized logging from console output, claimed erasure without worker/backend evidence, or acceptance without owner/date. All required scenarios pass or each remaining deviation is explicitly owner-accepted; acceptance decision remains unchecked otherwise. UAT/report validation, task-list/traceability validation, sanitized-artifact scanning, and `git diff --check` pass."
+    },
+    {
+      "component": "Phase 08.02 final remediation acceptance",
+      "dependsOn": "281,282,283,284,285",
+      "description": "Synchronize the final Task 282-284 real-stack evidence, repair only acceptance integration seams, preserve truthful open findings, and refresh the separate Phase 08.02 report/UAT artifacts without changing the task list.",
+      "evidence": [
+        {
+          "path": "docs/implementation/implemented/08.02_PHASE_UAT.md",
+          "sha256": "839d33a8578755187e2d7110a1829cc5bb8a4125f58cfa87da5b472d83dd07f5"
+        },
+        {
+          "path": "docs/implementation/04_OPEN.md",
+          "sha256": "5cacbf68d07b67bcea9cce60d63e74945b3525ee52f136f8164d04b1058a199a"
+        }
+      ],
+      "staticAspect": "DESIGN-014: MetricsCollector",
+      "status": "IN PROGRESS",
+      "taskId": 302,
+      "verificationCriteria": "The final per-requirement reports and run-context artifacts are committed, the aggregate remains truthful, all mandatory checks are run, and no task-list or unrelated-task changes are introduced."
     }
   ]
 }

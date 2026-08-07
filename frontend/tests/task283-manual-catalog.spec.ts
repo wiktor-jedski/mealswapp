@@ -724,7 +724,7 @@ test("canonical Sodium persists exactly while alias and unknown-key failures lea
 test("admin surface remains responsive, keyboard reachable, and reportable", async ({ page }, info) => {
 	await requireManaged();
 	await admin(page, info);
-	await page.getByRole("form", { name: "Classification form" }).getByLabel("Name").focus();
+	await page.getByRole("form", { name: "Classification form" }).getByLabel("Name").first().focus();
 	expect(await page.evaluate(() => document.activeElement?.tagName)).toBe("INPUT");
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });

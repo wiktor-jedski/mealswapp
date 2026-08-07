@@ -354,7 +354,6 @@ class Task284Harness(real_stack.Harness):
                 raise ValueError("first snapshot must bind the pre-deletion run fixtures")
             bindings = (
                 ("itemA", "custom_food_items", "owner_id", user_a, "Task 284 owner A retained", False),
-                ("deletedItemA", "custom_food_items", "owner_id", user_a, "Task 284 owner A selected deletion", True),
                 ("itemB", "custom_food_items", "owner_id", user_b, "Task 284 owner B survivor", False),
                 ("globalItem", "food_items", None, None, "Task 284 global survivor", False),
             )
@@ -371,6 +370,12 @@ class Task284Harness(real_stack.Harness):
                 ))
                 if matches != 1:
                     raise ValueError(f"{key} is not the exact run-owned fixture")
+            deleted_matches = int(read(
+                "SELECT count(*) FROM custom_food_items WHERE id=%s::uuid",
+                (targets["deletedItemA"],),
+            ))
+            if deleted_matches != 0:
+                raise ValueError("deletedItemA was not permanently removed")
             self.bound_targets = targets
         elif targets != self.bound_targets:
             raise ValueError("snapshot targets differ from the run-owned fixture binding")

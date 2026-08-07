@@ -1,0 +1,24 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-ACCEPT-03"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 invalid classification real-stack-mobile-chromium",
+  "idempotencyKey": "8522aa31-677e-4de7-8dcc-baaf86ab536d",
+  "requestIds": [
+    "eef6b457-37ca-4792-90ab-812d0588a36c"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "idempotencyCount": 0,
+    "generationBefore": "30",
+    "generationAfter": "30",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "d1c2982f-458f-4415-95c8-65feedc001db",
+    "generationAfter": "99e54e91-d115-451b-aeab-7215e6cd6f9d"
+  }
+}

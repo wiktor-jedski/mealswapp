@@ -6,10 +6,13 @@ import { join } from "node:path";
 
 const source = readFileSync(join(import.meta.dir, "ExternalImportWorkflow.svelte"), "utf8");
 
-test("uses the server registry through combined search, pagination, and all safe external states", () => {
-	expect(source).toContain('searchExternalFoods(request.query, "all"');
-	expect(source).not.toContain('value="usda"');
-	expect(source).not.toContain('value="openfoodfacts"');
+test("uses the server registry through provider selection, pagination, and all safe external states", () => {
+	expect(source).toContain("type ExternalProvider");
+	expect(source).toContain('let provider = $state<ExternalProvider>("all")');
+	expect(source).toContain('searchExternalFoods(request.query, request.provider');
+	expect(source).toContain('value="all"');
+	expect(source).toContain('value="usda"');
+	expect(source).toContain('value="openfoodfacts"');
 	expect(source).toContain("requestSearch(page - 1)");
 	expect(source).toContain("requestSearch(page + 1)");
 	for (const state of ["loading", "empty", "error"]) expect(source).toContain(`searchState === "${state}"`);

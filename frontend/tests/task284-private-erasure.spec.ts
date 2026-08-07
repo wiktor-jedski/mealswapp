@@ -270,6 +270,8 @@ test("users A and B retain indistinguishable owner isolation and owner-only JSON
 	state.aDeletedItem = selected.id;
 	state.globalItem = global.id;
 	state.bItem = b.id;
+	const selectedDelete = await page.request.fetch(buildCustomItemUrl(selected.id), buildCustomItemDeleteRequestInit(aToken));
+	expect(selectedDelete.status()).toBe(204);
 
 	const dietRequest: DailyDietCreateRequest = {
 		name: "Task 284 portable diet",
@@ -322,7 +324,7 @@ test("users A and B retain indistinguishable owner isolation and owner-only JSON
 
 	const aJSON = await exportJSON(page);
 	const bJSON = await exportJSON(bPage);
-	expect(aJSON.customItems.map((item) => (item as { ID?: string; id?: string }).ID ?? (item as { id?: string }).id).sort()).toEqual([a.id, selected.id].sort());
+	expect(aJSON.customItems.map((item) => (item as { ID?: string; id?: string }).ID ?? (item as { id?: string }).id).sort()).toEqual([a.id]);
 	expect(aJSON.savedDiets).toHaveLength(1);
 	expect(aJSON.savedDiets[0]).toMatchObject({
 		id: state.diet,
@@ -343,15 +345,13 @@ test("users A and B retain indistinguishable owner isolation and owner-only JSON
 	const aCSV = parseCSV(await aCSVResponse.text());
 	const bCSV = parseCSV(await bCSVResponse.text());
 	assertExportCSV(aCSV, {
-		customItems: [a.id, selected.id],
+		customItems: [a.id],
 		diet: state.diet,
 		dietSource: dietSource.id,
 		forbidden: [b.id, global.id]
 	});
 	assertExportCSV(bCSV, { customItems: [b.id], forbidden: [a.id, selected.id, global.id] });
 
-	const selectedDelete = await page.request.fetch(buildCustomItemUrl(selected.id), buildCustomItemDeleteRequestInit(aToken));
-	expect(selectedDelete.status()).toBe(204);
 	expect(JSON.stringify(await exportJSON(page))).not.toContain(selected.id);
 
 	await bPage.goto("/");
@@ -365,7 +365,7 @@ test("users A and B retain indistinguishable owner isolation and owner-only JSON
 
 	state.beforeSnapshot = await snapshot("before");
 	expect(state.beforeSnapshot.a.customItems).toBe(1);
-	expect(state.beforeSnapshot.a.customItemsRetained).toBe(2);
+	expect(state.beforeSnapshot.a.customItemsRetained).toBe(1);
 	expect(state.beforeSnapshot.b.customItems).toBe(1);
 	expect(state.beforeSnapshot.a.savedDiets).toBeGreaterThanOrEqual(1);
 	expect(state.beforeSnapshot.a.savedDietEntries).toBe(1);

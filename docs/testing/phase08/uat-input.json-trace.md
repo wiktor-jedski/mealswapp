@@ -9,3 +9,6 @@
   non-pass.
 - `docs/testing/phase08/acceptance-manifest.json` — Task 280's 12-scenario,
   91-criterion source of truth.
+- Task 302's final remediation run publishes the replacement Task 282-284
+  requirement reports and sanitized run-context artifacts referenced by
+  `docs/testing/phase08/uat-input.json`.

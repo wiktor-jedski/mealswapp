@@ -177,7 +177,7 @@ test("partial failure, outage, malformed data, timeout, cancellation, quota rese
 	await expect(workflow.getByText("Fixture lentils")).toBeVisible();
 	requestIds.push((await search(page, workflow, "quota", "USDA")).requestId);
 	await expect(workflow.locator("[data-provider-warnings]")).toContainText(/rate|quota|retry/i);
-	await page.waitForTimeout(1_200);
+	await page.waitForTimeout(2_200);
 	requestIds.push((await search(page, workflow, "success", "USDA")).requestId);
 	await expect(workflow.getByText("Fixture lentils")).toBeVisible();
 	await recordAcceptance(

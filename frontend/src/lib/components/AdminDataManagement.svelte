@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from "svelte";
-	import { adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
-	import type { AdminClassification, AdminItem, AdminItemSearchSummary, AdminUser } from "../api/generated";
-	import { deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
+	import { AdminClientError, adminApi, type AdminApi, type ClassificationKind } from "../api/admin-client";
+	import type { AdminClassification, AdminItem, AdminItemRequest, AdminItemSearchSummary, AdminUser } from "../api/generated";
+	import { adminItemMatchesRequest, deletionRetryEligible, newAdminItemKey, parseAdminItemForm, type AdminItemForm } from "../admin-workflows";
 	import { classificationHierarchy } from "../classification-hierarchy";
 
 	// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel authoritative administration workflows.
@@ -21,6 +21,20 @@
 	let itemError = $state("");
 	let createKey = $state("");
 	let createBody = $state("");
+	type AmbiguousItemMutation = Readonly<{
+		kind: "create" | "update";
+		request: AdminItemRequest;
+		form: AdminItemForm;
+		body: string;
+		createKey?: string;
+		itemId?: string;
+		requestId?: string;
+		retryAllowed: boolean;
+	}>;
+	let ambiguousItemMutation = $state<AmbiguousItemMutation | undefined>();
+	let conflictingItem = $state<AdminItem | undefined>();
+	let recoveryNotice = $state<HTMLElement | undefined>();
+	let itemErrorNotice = $state<HTMLElement | undefined>();
 	let itemSearchQuery = $state("");
 	let itemSearchItems = $state<AdminItemSearchSummary[]>([]);
 	let itemSearchPage = $state(1);
@@ -177,6 +191,7 @@
 	}
 
 	async function loadSearchResult(item: AdminItemSearchSummary): Promise<void> {
+		if (ambiguousItemMutation?.kind === "create") { await verifyCreateCandidate(item.itemId); return; }
 		itemId = item.itemId;
 		await loadItem();
 	}
@@ -536,7 +551,19 @@
 <div class="grid gap-6" data-admin-data-management bind:this={adminRoot} tabindex="-1">
 	<div class="contents" data-admin-background inert={confirmation ? true : undefined}>
 	<section class="grid gap-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4" aria-labelledby="manual-items-title">
-		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Search active ownerless items by name, then load the authoritative item to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy}>New item</button></div>
+		<div class="flex flex-wrap items-start justify-between gap-3"><div><h2 id="manual-items-title" class="text-lg font-bold">Manual global items</h2><p class="text-sm text-[var(--color-muted)]">Search active ownerless items by name, then load the authoritative item to edit it.</p></div><button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={newItem} disabled={itemBusy || Boolean(ambiguousItemMutation)}>New item</button></div>
+		{#if ambiguousItemMutation}
+			<div class="grid gap-2 rounded border border-[var(--color-error)] p-3" role="alert" tabindex="-1" bind:this={recoveryNotice} data-admin-item-recovery>
+				<p class="font-semibold">Verification required</p>
+				<p class="text-sm">The {ambiguousItemMutation.kind} request may already be committed. The submitted fields are locked and no ordinary mutation can be sent.</p>
+				{#if ambiguousItemMutation.requestId}<p class="break-all font-data text-xs">Request ID: {ambiguousItemMutation.requestId}</p>{/if}
+				{#if conflictingItem}<p class="text-sm">Conflicting authoritative item: {conflictingItem.name}.</p>{/if}
+				<div class="flex flex-wrap gap-2">
+					<button type="button" class="rounded bg-[var(--color-primary)] px-3 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={() => void verifyAmbiguousItem()}>{ambiguousItemMutation.kind === "update" ? "Verify saved update" : "Check authoritative items"}</button>
+					{#if ambiguousItemMutation.kind === "create" && ambiguousItemMutation.retryAllowed}<button type="button" class="rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={() => void retryAmbiguousCreate()}>Retry original create safely</button>{/if}
+				</div>
+			</div>
+		{/if}
 		<form class="flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void searchItems(1); }} aria-label="Search global items"><label class="grid flex-1 gap-1 text-sm">Item name<input maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemSearchQuery} /></label><button type="submit" class="self-end rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemSearchStatus === "loading"}>Search</button></form>
 		<div class="grid gap-2" aria-live="polite" aria-busy={itemSearchStatus === "loading"} data-admin-item-search-results>
 			{#if itemSearchStatus === "loading"}<p role="status" class="text-sm text-[var(--color-muted)]">Loading matching global items…</p>
@@ -548,7 +575,7 @@
 					{#each itemSearchItems as item (item.itemId)}
 						<li class="grid gap-2 rounded border border-[var(--color-border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]" data-admin-item-search-result>
 							<div class="grid min-w-0 gap-1"><h3 class="font-bold">{item.name}</h3><p class="break-all font-data text-xs text-[var(--color-muted)]">ID {item.itemId}</p><p class="text-sm">{item.physicalState === "solid" ? "Solid" : "Liquid"} · P {item.macrosPer100.protein} · C {item.macrosPer100.carbohydrates} · F {item.macrosPer100.fat}</p><p class="text-sm">Food Categories: {item.foodCategories.length ? item.foodCategories.map(({ name }) => name).join(", ") : "None"} · Culinary Roles: {item.culinaryRoles.length ? item.culinaryRoles.map(({ name }) => name).join(", ") : "None"}</p></div>
-							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>Edit {item.name}</button>
+							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>{ambiguousItemMutation?.kind === "create" ? "Verify" : "Edit"} {item.name}</button>
 						</li>
 					{/each}
 				</ul>
@@ -557,6 +584,7 @@
 		</div>
 		<details class="rounded border border-[var(--color-border)] p-3"><summary class="cursor-pointer font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]">Advanced: load by item ID</summary><form class="mt-3 flex flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void loadItem(); }} aria-label="Load global item"><label class="grid flex-1 gap-1 text-sm">Item ID<input class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 font-data focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={itemId} /></label><button type="submit" class="self-end rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>Load by ID</button></form></details>
 		<form class="grid gap-3 sm:grid-cols-2" onsubmit={saveItem} aria-label="Manual global item form">
+			<fieldset class="contents" disabled={Boolean(ambiguousItemMutation)}>
 			<label class="grid gap-1 text-sm sm:col-span-2">Name<input required maxlength="200" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.name} /></label>
 			<label class="grid gap-1 text-sm">Physical state<select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.physicalState}><option value="solid">Solid</option><option value="liquid">Liquid</option></select></label>
 			<label class="grid gap-1 text-sm">Preparation time (minutes)<input inputmode="numeric" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.prepTimeMinutes} /></label>
@@ -574,7 +602,8 @@
 			<label class="grid gap-1 text-sm">Food Categories<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.foodCategoryIds}>{#each classifications.food_category as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm">Culinary Roles<select multiple size="4" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.culinaryRoleIds}>{#each classifications.culinary_role as value (value.id)}<option value={value.id}>{value.name}</option>{/each}</select></label>
 			<label class="grid gap-1 text-sm sm:col-span-2">Allergens<select multiple size="7" class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={form.allergenKeys}>{#each allergenOptions as key}<option value={key}>{key.replaceAll("_", " ")}</option>{/each}</select></label>
-				<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
+			<div class="flex flex-wrap gap-2 sm:col-span-2"><button type="submit" class="rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy}>{currentItem ? "Save item" : "Create item"}</button>{#if currentItem}<button type="button" class="rounded border border-[var(--color-error)] px-4 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" disabled={itemBusy} onclick={(event) => confirm({ action: "item", id: currentItem!.id, label: currentItem!.name }, event.currentTarget)}>Delete item</button>{/if}</div>
+			</fieldset>
 			</form>
 		{#if itemError}<p role="alert" tabindex="-1" bind:this={itemErrorNotice} class="text-sm text-[var(--color-error)]" data-admin-item-error>{itemError}</p>{:else if itemMessage}<p role="status" class="text-sm text-[var(--color-muted)]">{itemMessage}</p>{/if}
 	</section>

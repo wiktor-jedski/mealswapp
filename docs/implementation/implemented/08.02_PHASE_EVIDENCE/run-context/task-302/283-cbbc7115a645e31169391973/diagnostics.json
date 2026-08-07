@@ -1,0 +1,17 @@
+{
+  "run_id": "cbbc7115a645e31169391973",
+  "request_ids": [
+    "06ce71d0-e13c-4a91-a93b-3af4b3743cc4",
+    "166f9108-1e3a-4d11-bf65-eff8423af0b2",
+    "3e2d5434-a291-4e5c-8a2f-4e690d8ebcf9"
+  ],
+  "events": [
+    "database_created",
+    "redis_ready",
+    "second_api_ready",
+    "administrator_bootstrapped",
+    "browser_product_nonpass",
+    "task283_results_finalized"
+  ],
+  "result": "passed"
+}

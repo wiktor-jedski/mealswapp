@@ -1,0 +1,38 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "28",
+    "generationBefore": "28",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR090-STEP-02",
+      "P08-SWR090-ACCEPT-01"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "28",
+      "generationBefore": "28",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "5cd4ffb4-326d-4a35-a60d-514bdd865e1a",
+      "generationBefore": "d9a03e7e-04b0-4166-8b51-09ef5d6c0026"
+    },
+    "idempotencyKey": "b565eb3d-b9de-4895-b214-94849458cadd",
+    "kind": "rejected_item",
+    "name": "Task 283 micro alias real-stack-desktop-chromium",
+    "requestIds": [
+      "872dfd59-cd64-4b1d-976d-1dba7befc6e8"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

@@ -1,0 +1,256 @@
+{
+  "exitCode": 0,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR073-STEP-01",
+      "kind": "step",
+      "owner": "privacy-erasure",
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "requirement": "SW-REQ-073",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR073-RIGHT-TO-ERASURE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 153
+      },
+      "status": "PASS",
+      "text": "Create a disposable test account with private items and history."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR073-STEP-02",
+      "kind": "step",
+      "owner": "privacy-erasure",
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "requirement": "SW-REQ-073",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR073-RIGHT-TO-ERASURE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 154
+      },
+      "status": "PASS",
+      "text": "Request account deletion."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR073-STEP-03",
+      "kind": "step",
+      "owner": "privacy-erasure",
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "requirement": "SW-REQ-073",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR073-RIGHT-TO-ERASURE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 155
+      },
+      "status": "PASS",
+      "text": "Verify new writes are blocked while deletion is pending."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR073-STEP-04",
+      "kind": "step",
+      "owner": "privacy-erasure",
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "requirement": "SW-REQ-073",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR073-RIGHT-TO-ERASURE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 156
+      },
+      "status": "PASS",
+      "text": "Let the worker complete deletion."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR073-STEP-05",
+      "kind": "step",
+      "owner": "privacy-erasure",
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "requirement": "SW-REQ-073",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR073-RIGHT-TO-ERASURE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 157
+      },
+      "status": "PASS",
+      "text": "Attempt login, profile access, export and custom-item access."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR073-STEP-06",
+      "kind": "step",
+      "owner": "privacy-erasure",
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "requirement": "SW-REQ-073",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR073-RIGHT-TO-ERASURE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 158
+      },
+      "status": "PASS",
+      "text": "Confirm another user and global items remain unaffected."
+    }
+  ],
+  "rootCauses": [],
+  "runId": "task302-284-d4f3484fbd165ca61f962a04-sw-req-073",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "PASS"
+}

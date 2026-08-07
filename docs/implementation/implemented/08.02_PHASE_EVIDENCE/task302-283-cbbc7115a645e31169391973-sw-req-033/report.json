@@ -1,0 +1,191 @@
+{
+  "exitCode": 2,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR033-STEP-01",
+      "evidence": [],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
+      "id": "P08-SWR033-STEP-01",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 112
+      },
+      "status": "BLOCKED",
+      "text": "Import a solid provider item."
+    },
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR033-STEP-02",
+      "evidence": [],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
+      "id": "P08-SWR033-STEP-02",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 113
+      },
+      "status": "BLOCKED",
+      "text": "Import a liquid provider item."
+    },
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR033-STEP-03",
+      "evidence": [],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
+      "id": "P08-SWR033-STEP-03",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 114
+      },
+      "status": "BLOCKED",
+      "text": "Compare displayed/stored macro bases with 100g and 100ml."
+    },
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR033-STEP-04",
+      "evidence": [],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
+      "id": "P08-SWR033-STEP-04",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 115
+      },
+      "status": "BLOCKED",
+      "text": "Verify changing display units does not change canonical nutritional values."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR033-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-283-005"
+      ],
+      "id": "P08-SWR033-STEP-05",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [
+        "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+        "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+        "523c0355-530e-46f1-80e0-925f1d58acee",
+        "697ee799-6f18-41bb-85e7-58c95f741c6a",
+        "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+        "9a946c22-698c-4fed-b3f1-c3ad815d954b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-DISCOVERY-PARTITION",
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 116
+      },
+      "status": "BLOCKED",
+      "text": "Confirm no liquid path silently assumes 1 ml = 1 g."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR033-STEP-01",
+        "P08-SWR033-STEP-02",
+        "P08-SWR033-STEP-03",
+        "P08-SWR033-STEP-04",
+        "P08-SWR033-STEP-05"
+      ],
+      "id": "ROOT-T283-DISCOVERY-PARTITION"
+    }
+  ],
+  "runId": "task302-283-cbbc7115a645e31169391973-sw-req-033",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "BLOCKED"
+}

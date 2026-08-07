@@ -13,7 +13,8 @@
     ExternalAdminClientError,
     importCuratedItem,
     loadAdminClassifications,
-    searchExternalFoods
+    searchExternalFoods,
+    type ExternalProvider
   } from "../api/external-admin-client";
 
   // Implements DESIGN-009 ExternalSearchProxy, ItemCurator, and DataImporter administration workflow.
@@ -24,11 +25,13 @@
 
   interface SearchRequest {
     query: string;
+    provider: ExternalProvider;
     page: number;
   }
 
   let { onViewLocalItem = () => undefined }: Props = $props();
   let query = $state("");
+  let provider = $state<ExternalProvider>("all");
   let page = $state(1);
   let searchState = $state<"idle" | "loading" | "results" | "empty" | "error">("idle");
   let searchMessage = $state("");
@@ -98,7 +101,7 @@
 
   function requestSearch(targetPage = 1): void {
     if (!query.trim() || importState === "importing") return;
-    const request = { query: query.trim(), page: targetPage };
+    const request = { query: query.trim(), provider, page: targetPage };
     if (!draft) {
       resetCuration();
       void runSearch(request);
@@ -119,7 +122,7 @@
     candidates = [];
     providerWarnings = [];
     try {
-      const result = await searchExternalFoods(request.query, "all", request.page, controller.signal);
+      const result = await searchExternalFoods(request.query, request.provider, request.page, controller.signal);
       if (sequence !== searchSequence) return;
       page = result.page;
       candidates = result.candidates;
@@ -359,10 +362,18 @@
     <p class="text-sm text-[var(--color-muted)]">Search normalized provider records, review every field, then explicitly import one local item.</p>
   </header>
 
-  <form class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onsubmit={(event) => { event.preventDefault(); requestSearch(1); }} data-external-search-form>
+  <form class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto]" onsubmit={(event) => { event.preventDefault(); requestSearch(1); }} data-external-search-form>
     <label class="grid gap-1 text-sm font-medium">
       External food search
       <input bind:this={searchInput} class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={query} disabled={importState === "importing"} required maxlength="200" />
+    </label>
+    <label class="grid gap-1 text-sm font-medium">
+      Provider
+      <select class="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" bind:value={provider} disabled={importState === "importing"}>
+        <option value="all">USDA + OpenFoodFacts</option>
+        <option value="usda">USDA</option>
+        <option value="openfoodfacts">OpenFoodFacts</option>
+      </select>
     </label>
     <button type="submit" class="self-end rounded bg-[var(--color-primary)] px-4 py-2 font-semibold text-[var(--color-on-primary)] transition-all duration-200 motion-reduce:transition-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2" disabled={importState === "importing"}>
       {searchState === "loading" ? "Search again" : "Search"}
