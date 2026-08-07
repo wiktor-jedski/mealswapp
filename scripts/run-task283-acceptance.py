@@ -454,6 +454,27 @@ class Task283Harness(real_stack.Harness):
                 (entity_id,),
             )))
             actual["ownerless"] = int(read_only_psql(self.target, self.database, "SELECT count(*) FROM custom_food_items WHERE name=%s", (name,))) == 0
+            private_item_id = operation.get("privateItemId")
+            if private_item_id is not None:
+                if not isinstance(private_item_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", private_item_id, re.I):
+                    raise ValueError("item private partition identity is invalid")
+                if not isinstance(expected.get("partition"), dict):
+                    raise ValueError("item private partition expectation is invalid")
+                actual["partition"] = json.loads(read_only_psql(
+                    self.target, self.database,
+                    """SELECT json_build_object(
+                        'globalCount', (SELECT count(*) FROM food_items WHERE id=%s::uuid),
+                        'privateCount', (SELECT count(*) FROM custom_food_items WHERE id=%s::uuid),
+                        'globalOwnerless', NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema='public' AND table_name='food_items' AND column_name='owner_id'
+                        ),
+                        'privateOwned', EXISTS (
+                            SELECT 1 FROM custom_food_items WHERE id=%s::uuid AND owner_id IS NOT NULL
+                        )
+                    )""",
+                    (entity_id, private_item_id, private_item_id),
+                ))
             actual["auditActions"] = json.loads(read_only_psql(
                 self.target, self.database,
                 "SELECT COALESCE(json_object_agg(action, amount), '{}'::json)::text FROM (SELECT action,count(*) amount FROM admin_audit_entries WHERE entity_type='food_item' AND entity_id=%s::uuid GROUP BY action) grouped",

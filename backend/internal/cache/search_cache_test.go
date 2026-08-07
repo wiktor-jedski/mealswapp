@@ -393,6 +393,34 @@ func TestGetOrLoadAutocompleteResponseAttachesMetadata(t *testing.T) {
 	}
 }
 
+func TestGetOrLoadAutocompleteResponseUsesFoodGenerationForDiscovery(t *testing.T) {
+	ctx := context.Background()
+	store := &generationMemoryStore{memoryStore: memoryStore{values: map[string]string{}, ttls: map[string]time.Duration{}}}
+	loadCalls := 0
+	load := func(context.Context) (search.AutocompleteResponse, error) {
+		loadCalls++
+		return search.AutocompleteResponse{Items: []search.RankedAutocomplete{{Label: map[int]string{1: "Old item", 2: "New item"}[loadCalls], Rank: 1}}}, nil
+	}
+
+	if _, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load); err != nil {
+		t.Fatal(err)
+	}
+	store.generation++
+	response, err := GetOrLoadAutocompleteResponse(ctx, store, "global item", time.Minute, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loadCalls != 2 || len(response.Items) != 1 || response.Items[0].Label != "New item" {
+		t.Fatalf("generation-aware autocomplete loadCalls=%d response=%+v", loadCalls, response)
+	}
+	if _, ok := store.values[searchCacheKeyForGeneration(BuildAutocompleteCacheKey("global item"), 0).String()]; !ok {
+		t.Fatal("generation-zero autocomplete entry was not stored")
+	}
+	if _, ok := store.values[searchCacheKeyForGeneration(BuildAutocompleteCacheKey("global item"), 1).String()]; !ok {
+		t.Fatal("generation-one autocomplete entry was not stored")
+	}
+}
+
 func TestGetOrLoadFallsBackWhenRedisFails(t *testing.T) {
 	ctx := context.Background()
 	loadCalls := 0
@@ -510,6 +538,22 @@ func searchRequest(filters []search.SearchFilter) search.SearchRequest {
 type memoryStore struct {
 	values map[string]string
 	ttls   map[string]time.Duration
+}
+
+type generationMemoryStore struct {
+	memoryStore
+	generation uint64
+}
+
+func (s *generationMemoryStore) Current(context.Context) (uint64, error) {
+	return s.generation, nil
+}
+
+func (s *generationMemoryStore) SetIfCurrent(ctx context.Context, generation uint64, key, value string, ttl time.Duration) (bool, error) {
+	if generation != s.generation {
+		return false, nil
+	}
+	return true, s.memoryStore.Set(ctx, key, value, ttl)
 }
 
 func (s *memoryStore) Get(_ context.Context, key string) (string, error) {

@@ -95,6 +95,10 @@ class Task283SafetyTests(unittest.TestCase):
     def test_proof_uses_global_private_partition_not_global_owner_column(self):
         source = Path(module.__file__).read_text()
         self.assertIn("custom_food_items", source)
+        self.assertIn("information_schema.columns", source)
+        self.assertIn("'globalCount'", source)
+        self.assertIn("'privateCount'", source)
+        self.assertIn("'privateOwned'", source)
         self.assertNotIn("food_items WHERE owner_id", source)
 
     def test_redis_proof_reads_generation_key_and_independent_operation_snapshots(self):

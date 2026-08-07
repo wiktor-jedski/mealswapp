@@ -74,6 +74,7 @@ interface OperationEvidence {
 	criterionIds: string[];
 	kind: "item" | "classification" | "rejected_item" | "rejected_classification" | "audit_rollback";
 	entityId?: string;
+	privateItemId?: string;
 	name: string;
 	idempotencyKey?: string;
 	requestIds: string[];
@@ -341,6 +342,125 @@ test("solid and liquid creation persists ownerless canonical state and density p
 		requestIds: [await responseRequestId(liquidCreate.response), await responseRequestId(secondRead), await responseRequestId(createdSubstitution.response)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "liquid", metricBasis: "100ml", density: 0.92, densitySourceKind: "manual", macros: liquidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100ml"]);
+});
+
+// Implements DESIGN-009 AdminController and DESIGN-001 SearchView mobile global-item discovery surfaces for Task 303.
+test("mobile global-item discovery refreshes the picker, Catalog, and Substitution projections", async ({ page }, info) => {
+	if (info.project.name !== "real-stack-mobile-chromium") test.skip(true, "Task 303 evidence runs on the required mobile project");
+	await requireManaged();
+	await admin(page, info);
+	const sourceName = `Task 283 Task 303 mobile source ${info.project.name}`;
+	const targetName = `Task 283 Task 303 mobile target ${info.project.name}`;
+	const privateItemID = fixture("MEALSWAPP_TASK283_PRIVATE_ITEM_ID");
+
+	const warmAutocomplete = await page.request.get(`${secondAPI()}/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const warmCatalog = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] }, secondAPI());
+	const warmPicker = await adminSearch(page, targetName, secondAPI());
+	expect(warmAutocomplete.status()).toBe(200);
+	expect(warmCatalog.items).toHaveLength(0);
+	expect(warmPicker.items).toHaveLength(0);
+
+	const token = await csrf(page);
+	const sourceCreate = await createItem(page, token, solid(sourceName, { protein: 18, carbohydrates: 9, fat: 4 }));
+	const warmAutocompleteAfterSource = await page.request.get(`${secondAPI()}/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const warmCatalogAfterSource = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] }, secondAPI());
+	const warmPickerAfterSource = await adminSearch(page, targetName, secondAPI());
+	expect(warmAutocompleteAfterSource.status()).toBe(200);
+	expect(warmCatalogAfterSource.items).toHaveLength(0);
+	expect(warmPickerAfterSource.items).toHaveLength(0);
+
+	const targetToken = await csrf(page);
+	const targetCreate = await createItem(page, targetToken, solid(targetName));
+	const createdAutocomplete = await page.request.get(`/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const createdAutocompleteBody = await createdAutocomplete.json() as { data?: { items?: Array<{ itemId: string; label: string }> } };
+	const createdCatalog = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] });
+	const createdSubstitution = await search(page, {
+		query: targetName, mode: "substitution", page: 1, filters: [],
+		substitutionInputs: [{ foodObjectId: sourceCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
+	}, secondAPI());
+	const createdPicker = await adminSearch(page, targetName, secondAPI());
+	expect(createdAutocomplete.status()).toBe(200);
+	expect(createdAutocompleteBody.data?.items).toContainEqual(expect.objectContaining({ itemId: targetCreate.value.id, label: targetName }));
+	expect(createdCatalog.items.map(({ id }) => id)).toContain(targetCreate.value.id);
+	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privateItemID);
+	expect(createdSubstitution.items.map(({ id }) => id)).toContain(targetCreate.value.id);
+	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privateItemID);
+	expect(createdPicker.items).toContainEqual(expect.objectContaining({ itemId: targetCreate.value.id, name: targetName }));
+	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privateItemID);
+
+	const pickerForm = page.getByRole("form", { name: "Search global items" });
+	await pickerForm.getByLabel("Item name").fill(targetName);
+	await pickerForm.getByRole("button", { name: "Search", exact: true }).click();
+	const pickerResult = page.locator("[data-admin-item-search-result]").filter({ hasText: targetName });
+	await expect(pickerResult).toBeVisible();
+	await pickerResult.getByRole("button", { name: `Edit ${targetName}`, exact: true }).click();
+	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue(targetName);
+
+	await page.goto("/");
+	const catalogInput = page.getByLabel("Food search");
+	await catalogInput.fill(targetName);
+	const catalogOption = page.getByRole("option", { name: targetName, exact: true });
+	await expect(catalogOption).toBeVisible();
+	await catalogOption.click();
+	await expect(page.locator(`[data-result-id="${targetCreate.value.id}"]`)).toBeVisible();
+	await expect(page.locator(`[data-result-id="${privateItemID}"]`)).toHaveCount(0);
+
+	await page.goto("/?mode=substitution");
+	const substitutionInput = page.getByLabel("Food search");
+	await substitutionInput.fill(sourceName);
+	const sourceOption = page.getByRole("option", { name: sourceName, exact: true });
+	await expect(sourceOption).toBeVisible();
+	await sourceOption.click();
+	await expect(page.locator(`[data-food-object-id="${sourceCreate.value.id}"]`)).toBeVisible();
+	await expect(page.locator("[data-substitution-search]")).toBeEnabled();
+	await page.locator("[data-substitution-search]").click();
+	await expect(page.locator(`[data-result-id="${targetCreate.value.id}"]`)).toBeVisible();
+	await expect(page.locator(`[data-result-id="${privateItemID}"]`)).toHaveCount(0);
+
+	const deletion = await page.request.delete(`${secondAPI()}/api/v1/admin/items/${targetCreate.value.id}`, { headers: { "X-CSRF-Token": await csrf(page, secondAPI()) } });
+	const deletedAutocomplete = await page.request.get(`${secondAPI()}/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const deletedAutocompleteBody = await deletedAutocomplete.json() as { data?: { items?: Array<{ itemId: string }> } };
+	const deletedPicker = await adminSearch(page, targetName, secondAPI());
+	const deletedCatalog = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] }, secondAPI());
+	const deletedSubstitution = await search(page, {
+		query: targetName, mode: "substitution", page: 1, filters: [],
+		substitutionInputs: [{ foodObjectId: sourceCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
+	}, secondAPI());
+	expect(deletion.status()).toBe(204);
+	expect((deletedAutocompleteBody.data?.items ?? []).map(({ itemId }) => itemId)).not.toContain(targetCreate.value.id);
+	expect(deletedPicker.items.map(({ itemId }) => itemId)).not.toContain(targetCreate.value.id);
+	expect(deletedCatalog.items.map(({ id }) => id)).not.toContain(targetCreate.value.id);
+	expect(deletedSubstitution.items.map(({ id }) => id)).not.toContain(targetCreate.value.id);
+
+	await page.goto("/");
+	await page.getByLabel("Food search").fill(targetName);
+	await expect(page.getByRole("option", { name: targetName, exact: true })).toHaveCount(0);
+	const criteria = ["P08-SWR056-STEP-01", "P08-SWR056-STEP-02", "P08-SWR056-STEP-03", "P08-SWR056-STEP-04", "P08-SWR056-STEP-05", "P08-SWR056-STEP-06", "P08-SWR056-ACCEPT-01", "P08-SWR056-ACCEPT-05", "P08-SWR056-ACCEPT-06", "P08-SWR033-STEP-05"];
+	await record(info, "mobile-global-discovery", criteria, {
+		kind: "item", entityId: targetCreate.value.id, privateItemId: privateItemID, name: targetName, idempotencyKey: targetCreate.key,
+		requestIds: [await responseRequestId(sourceCreate.response), await responseRequestId(targetCreate.response), await responseRequestId(warmCatalog.response), await responseRequestId(warmCatalogAfterSource.response), await responseRequestId(createdAutocomplete), await responseRequestId(createdCatalog.response), await responseRequestId(createdSubstitution.response), await responseRequestId(createdPicker.response), await responseRequestId(deletedAutocomplete), await responseRequestId(deletedPicker.response), await responseRequestId(deletedCatalog.response), await responseRequestId(deletedSubstitution.response)],
+		expected: {
+			active: false, deleted: true, ownerless: true,
+			auditActions: { manual_create: 1, manual_delete: 1 }, idempotencyCount: 1, name: targetName,
+			partition: { globalCount: 1, privateCount: 1, globalOwnerless: true, privateOwned: true },
+			mobilePickerContainsGlobal: true, mobileCatalogContainsGlobal: true, mobileSubstitutionContainsGlobal: true,
+			catalogExcludesPrivate: true, substitutionExcludesPrivate: true, deletedAutocompleteContainsGlobal: false,
+			deletedPickerContainsGlobal: false, deletedCatalogContainsGlobal: false, deletedSubstitutionContainsGlobal: false,
+			mobileDeletedAutocompleteContainsGlobal: false
+		},
+		observed: {
+			mobilePickerContainsGlobal: true,
+			mobileCatalogContainsGlobal: (createdCatalog.items.map(({ id }) => id)).includes(targetCreate.value.id),
+			mobileSubstitutionContainsGlobal: (createdSubstitution.items.map(({ id }) => id)).includes(targetCreate.value.id),
+			catalogExcludesPrivate: !createdCatalog.items.map(({ id }) => id).includes(privateItemID),
+			substitutionExcludesPrivate: !createdSubstitution.items.map(({ id }) => id).includes(privateItemID),
+			deletedAutocompleteContainsGlobal: (deletedAutocompleteBody.data?.items ?? []).map(({ itemId }) => itemId).includes(targetCreate.value.id),
+			deletedPickerContainsGlobal: deletedPicker.items.map(({ itemId }) => itemId).includes(targetCreate.value.id),
+			deletedCatalogContainsGlobal: deletedCatalog.items.map(({ id }) => id).includes(targetCreate.value.id),
+			deletedSubstitutionContainsGlobal: deletedSubstitution.items.map(({ id }) => id).includes(targetCreate.value.id),
+			mobileDeletedAutocompleteContainsGlobal: await page.getByRole("option", { name: targetName, exact: true }).count() > 0
+		}
+	}, ["mobile_picker=global-only", "mobile_catalog=global-visible", "mobile_substitution=global-visible", "private_partition=excluded", "deleted_projection=excluded"]);
 });
 
 test("invalid density, nutrition, classification, and image inputs roll back independently", async ({ page }, info) => {
