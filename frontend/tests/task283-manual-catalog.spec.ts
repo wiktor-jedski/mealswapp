@@ -17,7 +17,6 @@ const ROOTS = {
 } as const;
 const BLOCKED_CRITERIA = [
 	"P08-SWR033-STEP-01", "P08-SWR033-STEP-02", "P08-SWR033-STEP-03", "P08-SWR033-STEP-04",
-	"P08-SWR090-STEP-04"
 ] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 test.skip(!enabled, "Run scripts/run-task283-acceptance.py for isolated real-stack evidence.");
@@ -42,6 +41,7 @@ interface AdminItem {
 	densitySourceKind?: string;
 	macrosPer100: MacroProfile;
 	micros: Record<string, number>;
+	allergenKeys: string[];
 	foodCategories: Array<{ id: string; name: string; kind: string }>;
 	culinaryRoles: Array<{ id: string; name: string; kind: string }>;
 }
@@ -74,6 +74,7 @@ interface OperationEvidence {
 	criterionIds: string[];
 	kind: "item" | "classification" | "rejected_item" | "rejected_classification" | "audit_rollback";
 	entityId?: string;
+	privateItemId?: string;
 	name: string;
 	idempotencyKey?: string;
 	requestIds: string[];
@@ -132,7 +133,13 @@ async function csrf(page: Page, baseURL = ""): Promise<string> {
 }
 
 async function item(response: APIResponse): Promise<AdminItem> {
-	const body = await response.json() as { data?: AdminItem };
+	const raw = await response.text();
+	let body: { data?: AdminItem };
+	try {
+		body = JSON.parse(raw) as { data?: AdminItem };
+	} catch (error) {
+		throw new Error(`Task 283 item response is not JSON: ${raw.slice(0, 500)}`, { cause: error });
+	}
 	expect(body.data?.id).toMatch(UUID);
 	return body.data!;
 }
@@ -236,10 +243,11 @@ async function record(
 	criteria: string[],
 	operation: Omit<OperationEvidence, "schema" | "criterionIds">,
 	summaries: string[] = [],
-	rootCauseId?: string
+	rootCauseId?: string,
+	requiredProjects?: string[]
 ): Promise<void> {
 	const path = await evidence(info, slug, { criterionIds: criteria, ...operation });
-	await recordAcceptance(info, criteria, operation.requestIds, [{ type: "backend", path }], summaries, rootCauseId);
+	await recordAcceptance(info, criteria, operation.requestIds, [{ type: "backend", path }], summaries, rootCauseId, requiredProjects);
 }
 
 // Exercises the real Vite proxy seam, not a Playwright route stub: the first
@@ -341,6 +349,126 @@ test("solid and liquid creation persists ownerless canonical state and density p
 		requestIds: [await responseRequestId(liquidCreate.response), await responseRequestId(secondRead), await responseRequestId(createdSubstitution.response)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "liquid", metricBasis: "100ml", density: 0.92, densitySourceKind: "manual", macros: liquidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100ml"]);
+});
+
+// Implements DESIGN-009 AdminController and DESIGN-001 SearchView mobile global-item discovery surfaces for Task 303.
+test("mobile global-item discovery refreshes the picker, Catalog, and Substitution projections", async ({ page }, info) => {
+	if (info.project.name !== "real-stack-mobile-chromium") test.skip(true, "Task 303 evidence runs on the required mobile project");
+	await requireManaged();
+	await admin(page, info);
+	const sourceName = `Task 283 Task 303 mobile source ${info.project.name}`;
+	const targetName = `Task 283 Task 303 mobile target ${info.project.name}`;
+	const privateItemID = fixture("MEALSWAPP_TASK283_PRIVATE_ITEM_ID");
+
+	const warmAutocomplete = await page.request.get(`${secondAPI()}/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const warmCatalog = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] }, secondAPI());
+	const warmPicker = await adminSearch(page, targetName, secondAPI());
+	expect(warmAutocomplete.status()).toBe(200);
+	expect(warmCatalog.items).toHaveLength(0);
+	expect(warmPicker.items).toHaveLength(0);
+
+	const token = await csrf(page);
+	const sourceCreate = await createItem(page, token, solid(sourceName, { protein: 18, carbohydrates: 9, fat: 4 }));
+	const warmAutocompleteAfterSource = await page.request.get(`${secondAPI()}/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const warmCatalogAfterSource = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] }, secondAPI());
+	const warmPickerAfterSource = await adminSearch(page, targetName, secondAPI());
+	expect(warmAutocompleteAfterSource.status()).toBe(200);
+	expect(warmCatalogAfterSource.items).toHaveLength(0);
+	expect(warmPickerAfterSource.items).toHaveLength(0);
+
+	const targetToken = await csrf(page);
+	const targetCreate = await createItem(page, targetToken, solid(targetName));
+	const createdAutocomplete = await page.request.get(`/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const createdAutocompleteBody = await createdAutocomplete.json() as { data?: { items?: Array<{ itemId: string; label: string }> } };
+	const createdCatalog = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] });
+	const createdSubstitution = await search(page, {
+		query: targetName, mode: "substitution", page: 1, filters: [],
+		substitutionInputs: [{ foodObjectId: sourceCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
+	}, secondAPI());
+	const createdPicker = await adminSearch(page, targetName, secondAPI());
+	expect(createdAutocomplete.status()).toBe(200);
+	expect(createdAutocompleteBody.data?.items).toContainEqual(expect.objectContaining({ itemId: targetCreate.value.id, label: targetName }));
+	expect(createdCatalog.items.map(({ id }) => id)).toContain(targetCreate.value.id);
+	expect(createdCatalog.items.map(({ id }) => id)).not.toContain(privateItemID);
+	expect(createdSubstitution.items.map(({ id }) => id)).toContain(targetCreate.value.id);
+	expect(createdSubstitution.items.map(({ id }) => id)).not.toContain(privateItemID);
+	expect(createdPicker.items).toContainEqual(expect.objectContaining({ itemId: targetCreate.value.id, name: targetName }));
+	expect(createdPicker.items.map(({ itemId }) => itemId)).not.toContain(privateItemID);
+
+	const pickerForm = page.getByRole("form", { name: "Search global items" });
+	await pickerForm.getByLabel("Item name").fill(targetName);
+	await pickerForm.getByRole("button", { name: "Search", exact: true }).click();
+	const pickerResult = page.locator("[data-admin-item-search-result]").filter({ hasText: targetName });
+	await expect(pickerResult).toBeVisible();
+	await pickerResult.getByRole("button", { name: `Edit ${targetName}`, exact: true }).click();
+	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue(targetName);
+
+	await page.goto("/");
+	const catalogInput = page.getByLabel("Food search");
+	await catalogInput.fill(targetName);
+	const catalogOption = page.getByRole("option", { name: targetName, exact: true });
+	await expect(catalogOption).toBeVisible();
+	await catalogOption.click();
+	await expect(page.locator(`[data-result-id="${targetCreate.value.id}"]`)).toBeVisible();
+	await expect(page.locator(`[data-result-id="${privateItemID}"]`)).toHaveCount(0);
+
+	await page.goto("/?mode=substitution");
+	const substitutionInput = page.getByLabel("Food search");
+	await substitutionInput.fill(sourceName);
+	const sourceOption = page.getByRole("option", { name: sourceName, exact: true });
+	await expect(sourceOption).toBeVisible();
+	await sourceOption.click();
+	await expect(page.locator(`[data-food-object-id="${sourceCreate.value.id}"]`)).toBeVisible();
+	await expect(page.locator("[data-substitution-search]")).toBeEnabled();
+	await substitutionInput.fill(targetName);
+	await page.locator("[data-substitution-search]").click();
+	await expect(page.locator(`[data-result-id="${targetCreate.value.id}"]`)).toBeVisible();
+	await expect(page.locator(`[data-result-id="${privateItemID}"]`)).toHaveCount(0);
+
+	const deletion = await page.request.delete(`${secondAPI()}/api/v1/admin/items/${targetCreate.value.id}`, { headers: { "X-CSRF-Token": await csrf(page, secondAPI()) } });
+	const deletedAutocomplete = await page.request.get(`${secondAPI()}/api/v1/search/autocomplete?query=${encodeURIComponent(targetName)}`);
+	const deletedAutocompleteBody = await deletedAutocomplete.json() as { data?: { items?: Array<{ itemId: string }> } };
+	const deletedPicker = await adminSearch(page, targetName, secondAPI());
+	const deletedCatalog = await search(page, { query: targetName, mode: "catalog", page: 1, filters: [] }, secondAPI());
+	const deletedSubstitution = await search(page, {
+		query: targetName, mode: "substitution", page: 1, filters: [],
+		substitutionInputs: [{ foodObjectId: sourceCreate.value.id, foodObjectType: "food_item", quantity: 100, unit: "g" }]
+	}, secondAPI());
+	expect(deletion.status()).toBe(204);
+	expect((deletedAutocompleteBody.data?.items ?? []).map(({ itemId }) => itemId)).not.toContain(targetCreate.value.id);
+	expect(deletedPicker.items.map(({ itemId }) => itemId)).not.toContain(targetCreate.value.id);
+	expect(deletedCatalog.items.map(({ id }) => id)).not.toContain(targetCreate.value.id);
+	expect(deletedSubstitution.items.map(({ id }) => id)).not.toContain(targetCreate.value.id);
+
+	await page.goto("/");
+	await page.getByLabel("Food search").fill(targetName);
+	await expect(page.getByRole("option", { name: targetName, exact: true })).toHaveCount(0);
+	const criteria = ["P08-SWR056-STEP-01", "P08-SWR056-STEP-02", "P08-SWR056-STEP-03", "P08-SWR056-STEP-04", "P08-SWR056-STEP-05", "P08-SWR056-STEP-06", "P08-SWR056-ACCEPT-01", "P08-SWR056-ACCEPT-05", "P08-SWR056-ACCEPT-06", "P08-SWR033-STEP-05"];
+	await record(info, "mobile-global-discovery", criteria, {
+		kind: "item", entityId: targetCreate.value.id, privateItemId: privateItemID, name: targetName, idempotencyKey: targetCreate.key,
+		requestIds: [await responseRequestId(sourceCreate.response), await responseRequestId(targetCreate.response), await responseRequestId(warmCatalog.response), await responseRequestId(warmCatalogAfterSource.response), await responseRequestId(createdAutocomplete), await responseRequestId(createdCatalog.response), await responseRequestId(createdSubstitution.response), await responseRequestId(createdPicker.response), await responseRequestId(deletedAutocomplete), await responseRequestId(deletedPicker.response), await responseRequestId(deletedCatalog.response), await responseRequestId(deletedSubstitution.response)],
+		expected: {
+			active: false, deleted: true, ownerless: true,
+			auditActions: { manual_create: 1, manual_delete: 1 }, idempotencyCount: 1, name: targetName,
+			partition: { globalCount: 1, privateCount: 1, globalOwnerless: true, privateOwned: true },
+			mobilePickerContainsGlobal: true, mobileCatalogContainsGlobal: true, mobileSubstitutionContainsGlobal: true,
+			catalogExcludesPrivate: true, substitutionExcludesPrivate: true, deletedAutocompleteContainsGlobal: false,
+			deletedPickerContainsGlobal: false, deletedCatalogContainsGlobal: false, deletedSubstitutionContainsGlobal: false,
+			mobileDeletedAutocompleteContainsGlobal: false
+		},
+		observed: {
+			mobilePickerContainsGlobal: true,
+			mobileCatalogContainsGlobal: (createdCatalog.items.map(({ id }) => id)).includes(targetCreate.value.id),
+			mobileSubstitutionContainsGlobal: (createdSubstitution.items.map(({ id }) => id)).includes(targetCreate.value.id),
+			catalogExcludesPrivate: !createdCatalog.items.map(({ id }) => id).includes(privateItemID),
+			substitutionExcludesPrivate: !createdSubstitution.items.map(({ id }) => id).includes(privateItemID),
+			deletedAutocompleteContainsGlobal: (deletedAutocompleteBody.data?.items ?? []).map(({ itemId }) => itemId).includes(targetCreate.value.id),
+			deletedPickerContainsGlobal: deletedPicker.items.map(({ itemId }) => itemId).includes(targetCreate.value.id),
+			deletedCatalogContainsGlobal: deletedCatalog.items.map(({ id }) => id).includes(targetCreate.value.id),
+			deletedSubstitutionContainsGlobal: deletedSubstitution.items.map(({ id }) => id).includes(targetCreate.value.id),
+			mobileDeletedAutocompleteContainsGlobal: await page.getByRole("option", { name: targetName, exact: true }).count() > 0
+		}
+	}, [], undefined, ["real-stack-mobile-chromium"]);
 });
 
 test("invalid density, nutrition, classification, and image inputs roll back independently", async ({ page }, info) => {
@@ -688,34 +816,118 @@ test("metric and imperial quantities preserve solid and liquid backend calculati
 	await expect(liquidCard.locator("[data-result-macro-basis]")).toHaveText("values per 3.4 fl oz");
 });
 
-test("canonical Sodium persists exactly while alias and unknown-key failures leave no state", async ({ page }, info) => {
+test("canonical vocabulary, allergen, and classification values persist with exact rollback evidence", async ({ page }, info) => {
 	await requireManaged();
 	await admin(page, info);
-	const token = await csrf(page);
-	const valid = await createItem(page, token, solid(`Task 283 Sodium ${info.project.name}`, undefined, { micros: { Sodium: 125.5 } }));
-	expect(valid.value.micros).toEqual({ Sodium: 125.5 });
-	await record(info, "canonical-sodium", ["P08-SWR090-STEP-01", "P08-SWR090-ACCEPT-01"], {
+	let token = await csrf(page);
+	const createClassification = async (kind: "food_category" | "culinary_role", name: string) => {
+		const before = generationSnapshot();
+		const response = await page.request.post(`/api/v1/admin/classifications/${kind}`, {
+			headers: { "X-CSRF-Token": token }, data: { name }
+		});
+		expect(response.status()).toBe(201);
+		const value = await classification(response);
+		const after = generationSnapshot();
+		expect(Number(after.value) - Number(before.value)).toBe(1);
+		return { response, value, before, after };
+	};
+	const category = await createClassification("food_category", `Task 283 Task 304 category ${info.project.name}`);
+	const role = await createClassification("culinary_role", `Task 283 Task 304 role ${info.project.name}`);
+	await record(info, "task304-category", ["P08-SWR057-STEP-01"], {
+		kind: "classification", entityId: category.value.id, name: category.value.name,
+		requestIds: [await responseRequestId(category.response)],
+		expected: { active: true, deleted: false, kind: "food_category", auditActions: { "classification.create": 1 }, generationBefore: category.before.value, generationAfter: category.after.value, generationDelta: 1 },
+		generationSnapshots: { generationBefore: category.before.id, generationAfter: category.after.id }
+	}, ["mutation_count=1", "audit_count=1", "cache_generation=incremented"]);
+	await record(info, "task304-role", ["P08-SWR057-STEP-02"], {
+		kind: "classification", entityId: role.value.id, name: role.value.name,
+		requestIds: [await responseRequestId(role.response)],
+		expected: { active: true, deleted: false, kind: "culinary_role", auditActions: { "classification.create": 1 }, generationBefore: role.before.value, generationAfter: role.after.value, generationDelta: 1 },
+		generationSnapshots: { generationBefore: role.before.id, generationAfter: role.after.id }
+	}, ["mutation_count=1", "audit_count=1", "cache_generation=incremented"]);
+
+	const vocabularyKey = `Task304Micro${info.project.name.replace(/[^A-Za-z0-9]/g, "")}`;
+	const vocabularyBefore = generationSnapshot();
+	const vocabularyCreate = await page.request.post("/api/v1/admin/micronutrients", {
+		headers: { "X-CSRF-Token": token }, data: { key: vocabularyKey, displayName: "Task 304 Micro", unit: "mg" }
+	});
+	expect(vocabularyCreate.status()).toBe(201);
+	const deactivate = await page.request.post(`${secondAPI()}/api/v1/admin/micronutrients/${vocabularyKey}/deactivate`, {
+		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) }
+	});
+	expect(deactivate.status()).toBe(200);
+	const inactive = await deactivate.json() as { data?: { micronutrient?: { active?: boolean } } };
+	expect(inactive.data?.micronutrient?.active).toBe(false);
+	const reactivate = await page.request.post(`${secondAPI()}/api/v1/admin/micronutrients/${vocabularyKey}/reactivate`, {
+		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) }
+	});
+	expect(reactivate.status()).toBe(200);
+	const active = await reactivate.json() as { data?: { micronutrient?: { active?: boolean } } };
+	expect(active.data?.micronutrient?.active).toBe(true);
+	expect(generationSnapshot().value).toBe(vocabularyBefore.value);
+	const inactiveVocabularyKey = `Task304Inactive${info.project.name.replace(/[^A-Za-z0-9]/g, "")}`;
+	token = await csrf(page);
+	const inactiveVocabularyCreate = await page.request.post("/api/v1/admin/micronutrients", {
+		headers: { "X-CSRF-Token": token }, data: { key: inactiveVocabularyKey, displayName: "Task 304 Inactive", unit: "mg" }
+	});
+	expect(inactiveVocabularyCreate.status()).toBe(201);
+	const inactiveVocabularyDeactivate = await page.request.post(`${secondAPI()}/api/v1/admin/micronutrients/${inactiveVocabularyKey}/deactivate`, {
+		headers: { "X-CSRF-Token": await csrf(page, secondAPI()) }
+	});
+	expect(inactiveVocabularyDeactivate.status()).toBe(200);
+	const inactiveVocabulary = await inactiveVocabularyDeactivate.json() as { data?: { micronutrient?: { active?: boolean } } };
+	expect(inactiveVocabulary.data?.micronutrient?.active).toBe(false);
+	expect(generationSnapshot().value).toBe(vocabularyBefore.value);
+
+	const validBefore = generationSnapshot();
+	token = await csrf(page);
+	const valid = await createItem(page, token, solid(`Task 283 Task 304 canonical ${info.project.name}`, undefined, {
+		micros: { Sodium: 125.5, [vocabularyKey]: 7.25 },
+		foodCategoryIds: [category.value.id], culinaryRoleIds: [role.value.id], allergenKeys: ["peanut", "dairy"]
+	}));
+	const validAfter = generationSnapshot();
+	expect(Number(validAfter.value) - Number(validBefore.value)).toBe(1);
+	expect(valid.value.micros).toEqual({ Sodium: 125.5, [vocabularyKey]: 7.25 });
+	expect(valid.value.allergenKeys).toEqual(["dairy", "peanut"]);
+	expect(valid.value.foodCategories.map(({ id }) => id)).toEqual([category.value.id]);
+	expect(valid.value.culinaryRoles.map(({ id }) => id)).toEqual([role.value.id]);
+	const crossInstanceRead = await page.request.get(`${secondAPI()}/api/v1/admin/items/${valid.value.id}`);
+	expect(crossInstanceRead.status()).toBe(200);
+	expect(await item(crossInstanceRead)).toEqual(valid.value);
+	await record(info, "task304-canonical-values", ["P08-SWR090-STEP-01", "P08-SWR090-ACCEPT-01"], {
 		kind: "item", entityId: valid.value.id, name: valid.value.name, idempotencyKey: valid.key,
-		requestIds: [await responseRequestId(valid.response)],
-		expected: { active: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, micros: { Sodium: 125.5 } }
-	}, ["mutation_count=1", "audit_count=1", "row_count=1"]);
-	for (const [slug, micros, criterion] of [
+		requestIds: [await responseRequestId(category.response), await responseRequestId(role.response), await responseRequestId(vocabularyCreate), await responseRequestId(deactivate), await responseRequestId(reactivate), await responseRequestId(valid.response)],
+		expected: {
+			active: true, ownerless: true, auditActions: { manual_create: 1 },
+			requestAuditActions: { "classification.create": 2, "micronutrient.create": 1, "micronutrient.deactivate": 1, "micronutrient.reactivate": 1, manual_create: 1 },
+			idempotencyCount: 1, micros: { Sodium: 125.5, [vocabularyKey]: 7.25 },
+			foodCategoryIds: [category.value.id], culinaryRoleIds: [role.value.id], allergenKeys: ["dairy", "peanut"],
+			generationBefore: validBefore.value, generationAfter: validAfter.value, generationDelta: 1
+		},
+		generationSnapshots: { generationBefore: validBefore.id, generationAfter: validAfter.id }
+	}, ["mutation_count=1", "audit_count=1", "row_count=1", "owner_state=global", "cache_generation=incremented"]);
+
+	const invalidInputs = [
 		["alias", { Na: 1 }, "P08-SWR090-STEP-02"],
-		["unknown", { unknown_key: 1 }, "P08-SWR090-STEP-03"]
-	] as const) {
-		const name = `Task 283 micro ${slug} ${info.project.name}`;
+		["unknown", { unknown_key: 1 }, "P08-SWR090-STEP-03"],
+		["inactive", { [inactiveVocabularyKey]: 1 }, "P08-SWR090-STEP-04"],
+		["allergen", { Sodium: 1 }, "P08-SWR056-ACCEPT-03", { allergenKeys: ["not_in_vocabulary"] }],
+		["classification", { Sodium: 1 }, "P08-SWR056-ACCEPT-03", { foodCategoryIds: [role.value.id] }]
+	] as const;
+	for (const [slug, micros, criterion, extra = {}] of invalidInputs) {
+		const name = `Task 283 Task 304 invalid ${slug} ${info.project.name}`;
 		const key = crypto.randomUUID();
 		const before = generationSnapshot();
 		const response = await page.request.post(`${secondAPI()}/api/v1/admin/items`, {
 			headers: { "X-CSRF-Token": await csrf(page, secondAPI()), "Idempotency-Key": key },
-			data: solid(name, undefined, { micros })
+			data: solid(name, undefined, { micros, ...extra })
 		});
 		expect(response.status()).toBe(400);
 		const after = generationSnapshot();
 		expect(after.value).toBe(before.value);
-		await record(info, `micro-${slug}`, [criterion, "P08-SWR090-ACCEPT-01"], {
+		await record(info, `task304-invalid-${slug}`, [criterion, ...(criterion.startsWith("P08-SWR090") ? ["P08-SWR090-ACCEPT-01"] : [])], {
 			kind: "rejected_item", name, idempotencyKey: key, requestIds: [await responseRequestId(response)],
-			expected: { rowCount: 0, auditCount: 0, idempotencyCount: 0, generationBefore: before.value, generationAfter: after.value, generationDelta: 0 },
+			expected: { rowCount: 0, auditCount: 0, requestAuditActions: {}, idempotencyCount: 0, generationBefore: before.value, generationAfter: after.value, generationDelta: 0 },
 			generationSnapshots: { generationBefore: before.id, generationAfter: after.id }
 		}, ["http_status=400", "rollback_state=complete", "cache_generation=unchanged"]);
 	}

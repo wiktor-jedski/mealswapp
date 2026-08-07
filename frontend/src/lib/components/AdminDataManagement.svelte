@@ -183,6 +183,7 @@
 			if (page > resultPages) return searchItems(resultPages);
 			itemSearchItems = result.items; itemSearchPage = result.page; itemSearchPageSize = result.pageSize; itemSearchTotal = result.total;
 			itemSearchStatus = result.items.length ? "success" : "empty";
+			await tick();
 			return true;
 		} catch (error) {
 			if (currentItemSearch(generation, controller) && !aborted(error)) { itemSearchError = message(error); itemSearchStatus = "error"; }
@@ -198,6 +199,25 @@
 
 	async function refreshItemSearch(): Promise<boolean> {
 		return !itemSearchQuery.trim() || searchItems(Math.min(itemSearchPage, itemSearchPages));
+	}
+
+	function reconcileItemSearch(item: AdminItem): void {
+		const query = itemSearchQuery.trim().toLowerCase();
+		if (!query) return;
+		const index = itemSearchItems.findIndex(({ itemId }) => itemId === item.id);
+		if (!item.name.toLowerCase().includes(query)) {
+			if (index >= 0) {
+				itemSearchItems = itemSearchItems.filter(({ itemId }) => itemId !== item.id);
+				itemSearchTotal = Math.max(0, itemSearchTotal - 1);
+			}
+			return;
+		}
+		const summary: AdminItemSearchSummary = { itemId: item.id, name: item.name, physicalState: item.physicalState, macrosPer100: item.macrosPer100, foodCategories: item.foodCategories, culinaryRoles: item.culinaryRoles };
+		if (index >= 0) itemSearchItems = itemSearchItems.map((value, valueIndex) => valueIndex === index ? summary : value);
+		else if (itemSearchPage === 1) {
+			itemSearchItems = [summary, ...itemSearchItems].slice(0, itemSearchPageSize);
+			itemSearchTotal = Math.max(itemSearchTotal, itemSearchItems.length);
+		}
 	}
 
 	function applyItem(item: AdminItem): void {
@@ -236,6 +256,7 @@
 			if (currentItemOperation(generation, controller)) {
 				applyItem(projection); createKey = ""; createBody = "";
 				const refreshed = await refreshItemSearch();
+				if (currentItemOperation(generation, controller) && refreshed) { reconcileItemSearch(projection); await tick(); }
 				if (currentItemOperation(generation, controller)) itemMessage = refreshed ? (wasEditing ? "Item saved and refreshed." : "Item created and refreshed.") : (wasEditing ? "Item saved, but search results could not be refreshed." : "Item created, but search results could not be refreshed.");
 			}
 		} catch (error) {
@@ -575,7 +596,7 @@
 					{#each itemSearchItems as item (item.itemId)}
 						<li class="grid gap-2 rounded border border-[var(--color-border)] p-3 sm:grid-cols-[minmax(0,1fr)_auto]" data-admin-item-search-result>
 							<div class="grid min-w-0 gap-1"><h3 class="font-bold">{item.name}</h3><p class="break-all font-data text-xs text-[var(--color-muted)]">ID {item.itemId}</p><p class="text-sm">{item.physicalState === "solid" ? "Solid" : "Liquid"} · P {item.macrosPer100.protein} · C {item.macrosPer100.carbohydrates} · F {item.macrosPer100.fat}</p><p class="text-sm">Food Categories: {item.foodCategories.length ? item.foodCategories.map(({ name }) => name).join(", ") : "None"} · Culinary Roles: {item.culinaryRoles.length ? item.culinaryRoles.map(({ name }) => name).join(", ") : "None"}</p></div>
-							<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>{ambiguousItemMutation?.kind === "create" ? "Verify" : "Edit"} {item.name}</button>
+									<button type="button" class="self-start rounded border px-3 py-2 transition-all duration-200 motion-reduce:transition-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadSearchResult(item)} disabled={itemBusy}>{ambiguousItemMutation?.kind === "create" ? "Verify" : "Edit"} {item.name}</button>
 						</li>
 					{/each}
 				</ul>

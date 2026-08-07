@@ -84,13 +84,13 @@ class Phase08BackendCoverageContractTests(unittest.TestCase):
 		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
 		contract = check.marked_contract(section, "phase08-backend-coverage-contract")
 		rows = check.parse_backend_exceptions(contract)
-		self.assertIn("Measured Phase 08 scope: `4698/5042` statements (`93.2%`).", contract)
-		self.assertEqual(rows["internal/app/app.go"][0], check.GoCoverage(110, 116, "98.86-100.4,117.69-122.18,122.18-124.5,130.17-132.4,165.4-169.10"))
-		self.assertEqual(rows["internal/httpapi/manual_item_controller.go"][0].covered, 105)
-		self.assertEqual(rows["internal/httpapi/custom_item_controller.go"][0].covered, 110)
-		self.assertEqual(rows["internal/itemcurator/service.go"][0].total, 97)
-		self.assertEqual(rows["internal/repository/compliance_repository.go"][0], check.GoCoverage(277, 280, "546.31-547.31,547.31-549.4,550.10-551.56"))
-		self.assertEqual(rows["internal/repository/manual_food_repository.go"][0].total, 120)
+		self.assertIn("Measured Phase 08 scope: `4936/5335` statements (`92.5%`).", contract)
+		self.assertEqual(rows["internal/app/app.go"][0], check.GoCoverage(113, 120, "100.86-102.4,109.95-111.4,127.69-132.18,132.18-134.5,140.17-142.4,176.4-180.10"))
+		self.assertEqual(rows["internal/httpapi/manual_item_controller.go"][0].covered, 121)
+		self.assertEqual(rows["internal/httpapi/custom_item_controller.go"][0].covered, 117)
+		self.assertEqual(rows["internal/itemcurator/service.go"][0].total, 115)
+		self.assertEqual(rows["internal/repository/compliance_repository.go"][0], check.GoCoverage(279, 281, "547.31-549.4,550.10-551.56"))
+		self.assertEqual(rows["internal/repository/manual_food_repository.go"][0].total, 163)
 
 
 class FrontendCoverageContractTests(unittest.TestCase):
@@ -126,9 +126,9 @@ class FrontendCoverageContractTests(unittest.TestCase):
 	def test_task297_frontend_metrics_are_current(self) -> None:
 		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
 		rows = check.parse_frontend_exceptions(check.marked_contract(section, "frontend-coverage-contract"))
-		self.assertEqual(rows["src/lib/api/custom-item-client.ts"][1], check.FrontendCoverage("92.31", "91.67", "73-75,94-95,109-110"))
-		self.assertEqual(rows["src/lib/admin-workflows.ts"][1], check.FrontendCoverage("83.33", "98.55", "-"))
-		self.assertEqual(rows["src/lib/api/admin-client.ts"][1], check.FrontendCoverage("95.95", "100.00", "-"))
+		self.assertEqual(rows["src/lib/api/custom-item-client.ts"][1], check.FrontendCoverage("92.31", "91.76", "74-76,95-96,110-111"))
+		self.assertEqual(rows["src/lib/admin-workflows.ts"][1], check.FrontendCoverage("94.44", "98.84", "-"))
+		self.assertEqual(rows["src/lib/api/admin-client.ts"][1], check.FrontendCoverage("95.83", "100.00", "-"))
 
 
 class CoverageReportTests(unittest.TestCase):
@@ -137,11 +137,11 @@ class CoverageReportTests(unittest.TestCase):
 			generate_report.parse_bun_coverage("All files | 95.46 | 96.06 |\n"),
 			document(backend_rows=backend_row(), frontend_rows=frontend_row()).replace(
 				"Measured Phase 08 scope: `0/1` statements (`0.0%`).",
-				"Measured Phase 08 scope: `4698/5042` statements (`93.2%`).",
+				"Measured Phase 08 scope: `4936/5335` statements (`92.5%`).",
 			),
 		)
 
-		self.assertIn("4,698/5,042 statements (93.2%)", html)
+		self.assertIn("4,936/5,335 statements (92.5%)", html)
 		self.assertNotIn("4,537/4,849", html)
 
 	def test_frontend_summary_uses_current_aggregate_measurements(self) -> None:

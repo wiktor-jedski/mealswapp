@@ -384,9 +384,9 @@
     <p role="status" aria-live="polite" data-external-loading>Searching external providers…</p>
   {:else if searchState === "empty"}
     {#if hasRejectedCandidates}
-      <p role="status" data-external-rejected>Some provider candidates were rejected because required data was invalid.</p>
+      <p role="status" data-external-empty>Provider candidates were rejected because their data could not be used.</p>
     {:else if hasProviderFailure}
-      <p role="status" data-external-provider-failure>External providers could not return results.</p>
+      <p role="status" data-external-empty>External providers could not complete this search.</p>
     {:else}
       <p role="status" data-external-empty>No external candidates matched this search.</p>
     {/if}
