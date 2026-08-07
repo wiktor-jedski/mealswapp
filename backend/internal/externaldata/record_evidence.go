@@ -109,7 +109,7 @@ func (s *RecordEvidenceStore) Resolve(token string) (providerregistry.Identity, 
 // ResolveContext resolves evidence from the deployment-shared backend when configured.
 // Implements DESIGN-012 DataNormalizer stale and unknown evidence rejection.
 func (s *RecordEvidenceStore) ResolveContext(ctx context.Context, token string) (providerregistry.Identity, error) {
-	if s == nil || len(token) != 32 {
+	if s == nil || s.registry == nil || len(token) != 32 {
 		return providerregistry.Identity{}, ErrRecordEvidenceInvalid
 	}
 	if _, err := base64.RawURLEncoding.DecodeString(token); err != nil {

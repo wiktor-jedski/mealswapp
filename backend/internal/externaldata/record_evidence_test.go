@@ -105,6 +105,14 @@ func TestRecordEvidenceStoreResolvesExactCanonicalIdentityAndRejectsInvalidEvide
 	}
 }
 
+// Implements DESIGN-012 DataNormalizer fail-closed evidence verification.
+func TestRecordEvidenceStoreWithoutRegistryRejectsEvidence(t *testing.T) {
+	store := NewRecordEvidenceStore(nil)
+	if _, err := store.Resolve("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"); !errors.Is(err, ErrRecordEvidenceInvalid) {
+		t.Fatalf("Resolve() error=%v, want %v", err, ErrRecordEvidenceInvalid)
+	}
+}
+
 // Implements DESIGN-012 DataNormalizer deployment-shared evidence verification.
 func TestRecordEvidenceStoreDelegatesToSharedBackend(t *testing.T) {
 	backend := &evidenceBackendStub{}
