@@ -77,8 +77,6 @@ export function adminItemMatchesRequest(item: AdminItem, request: AdminItemReque
 		&& item.averageUnitWeightGrams === request.averageUnitWeightGrams
 		&& item.averageServingVolumeMilliliters === request.averageServingVolumeMilliliters
 		&& item.densityGramsPerMilliliter === request.densityGramsPerMilliliter
-		&& item.densitySourceProvider === request.densitySourceProvider
-		&& item.densitySourceFoodId === request.densitySourceFoodId
 		&& item.densitySourceKind === request.densitySourceKind
 		&& item.imageUrl === request.imageUrl
 		&& item.macrosPer100.protein === request.macrosPer100.protein

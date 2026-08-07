@@ -62,6 +62,7 @@ test("normalizes names and compares every persisted item value independent of se
 		allergenKeys: [...request.allergenKeys].reverse()
 	};
 	expect(adminItemMatchesRequest(item, request)).toBeTrue();
+	expect(adminItemMatchesRequest({ ...item, densitySourceProvider: "usda", densitySourceFoodId: "171265" }, request)).toBeTrue();
 	expect(adminItemMatchesRequest({ ...item, macrosPer100: { ...item.macrosPer100, protein: 11 } }, request)).toBeFalse();
 	expect(adminItemMatchesRequest({ ...item, imageUrl: "https://example.test/different.png" }, request)).toBeFalse();
 });
