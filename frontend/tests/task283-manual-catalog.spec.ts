@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type APIResponse, type Page, type TestInfo } from "@playwright/test";
-import { fixture, openSidebarForControl, recordAcceptance, responseRequestId, signIn, screenshot } from "./task281-acceptance-helpers";
+import { fixture, openSidebarForControl, recordAcceptance, responseRequestId, safeEnvelope, signIn, screenshot } from "./task281-acceptance-helpers";
 
 // Implements DESIGN-009 AdminController manual catalog/classification acceptance.
 const enabled = process.env.MEALSWAPP_TASK283_REAL_E2E === "1" && process.env.MEALSWAPP_REAL_STACK_MANAGED === "1";
@@ -15,9 +15,6 @@ const ROOTS = {
 	"057": "ROOT-T283-CLASSIFICATION-LIFECYCLE",
 	"090": "ROOT-T283-MICRONUTRIENT-VALIDATION"
 } as const;
-const BLOCKED_CRITERIA = [
-	"P08-SWR033-STEP-01", "P08-SWR033-STEP-02", "P08-SWR033-STEP-03", "P08-SWR033-STEP-04",
-] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 test.skip(!enabled, "Run scripts/run-task283-acceptance.py for isolated real-stack evidence.");
 test.beforeAll(async ({}, info) => {
@@ -89,6 +86,34 @@ function rootFor(criterionId: string): string {
 
 async function requireManaged(): Promise<void> {
 	if (!enabled) test.skip(true, "Task 283 requires the managed real stack");
+}
+
+async function openExternalImport(page: Page): Promise<ReturnType<Page["locator"]>> {
+	await page.goto("/");
+	await signIn(page);
+	const control = page.locator("[data-sidebar-nav-administration]");
+	await openSidebarForControl(page, control);
+	await control.click();
+	const workflow = page.locator("[data-external-import-workflow]");
+	await expect(workflow).toBeVisible();
+	return workflow;
+}
+
+async function externalSearch(
+	page: Page,
+	workflow: ReturnType<Page["locator"]>,
+	query: string,
+	provider: "USDA" | "OpenFoodFacts" | "USDA + OpenFoodFacts"
+): Promise<string> {
+	await workflow.getByLabel("External food search").fill(query);
+	await workflow.locator("[data-external-search-form] select").selectOption({ label: provider });
+	const pending = page.waitForResponse((response) =>
+		response.url().includes("/api/v1/admin/external-search?") && response.request().method() === "GET"
+	);
+	await workflow.getByRole("button", { name: /Search/ }).click();
+	const response = await pending;
+	const body = await safeEnvelope(response);
+	return body.requestId!;
 }
 
 async function admin(page: Page, _info: TestInfo): Promise<void> {
@@ -350,6 +375,127 @@ test("solid and liquid creation persists ownerless canonical state and density p
 		requestIds: [await responseRequestId(liquidCreate.response), await responseRequestId(secondRead), await responseRequestId(createdSubstitution.response)],
 		expected: { active: true, ownerless: true, auditActions: { manual_create: 1 }, idempotencyCount: 1, physicalState: "liquid", metricBasis: "100ml", density: 0.92, densitySourceKind: "manual", macros: liquidCreate.value.macrosPer100 }
 	}, ["mutation_count=1", "audit_count=1", "owner_state=global", "metric_basis=100ml"]);
+});
+
+// Implements DESIGN-009 ExternalSearchProxy and DataImporter provider-storage acceptance.
+test("controlled providers import solid and liquid canonical items without changing display-independent values", async ({ page }, info) => {
+	test.setTimeout(60_000);
+	await requireManaged();
+	const workflow = await openExternalImport(page);
+	const criteria = ["P08-SWR033-STEP-01", "P08-SWR033-STEP-02", "P08-SWR033-STEP-03", "P08-SWR033-STEP-04"];
+
+	const solidSearchRequestId = await externalSearch(page, workflow, `task283-${info.project.name}`, "USDA");
+	await expect(workflow.getByText("Fixture lentils")).toBeVisible();
+	await workflow.getByText("Fixture lentils").locator("..").locator("..").getByRole("button", { name: "Curate" }).click();
+	const solidDraft = workflow.locator("[data-curation-draft]");
+	const solidName = `Task 283 provider solid ${info.project.name}`;
+	await solidDraft.getByLabel("Name", { exact: true }).fill(solidName);
+	await solidDraft.getByLabel("Protein per 100").fill("12.5");
+	await solidDraft.getByLabel("Carbohydrates per 100").fill("18.25");
+	await solidDraft.getByLabel("Fat per 100").fill("3.75");
+	const solidImportResponse = page.waitForResponse((response) =>
+		response.url().endsWith("/api/v1/admin/imports") && response.request().method() === "POST"
+	);
+	await solidDraft.getByRole("button", { name: "Import curated item" }).click();
+	const solidImport = await solidImportResponse;
+	const solidImportBody = await safeEnvelope(solidImport) as { requestId?: string; data?: { foodItemId?: string; name?: string } };
+	expect(solidImport.status()).toBe(201);
+	expect(solidImportBody.data).toMatchObject({ name: solidName });
+	expect(solidImportBody.data?.foodItemId).toMatch(UUID);
+	const solidRead = await page.request.get(`/api/v1/admin/items/${solidImportBody.data!.foodItemId}`);
+	expect(solidRead.status()).toBe(200);
+	const solidStored = await item(solidRead);
+	expect(solidStored).toMatchObject({
+		name: solidName,
+		physicalState: "solid",
+		macrosPer100: { protein: 12.5, carbohydrates: 18.25, fat: 3.75 }
+	});
+
+	const liquidSearchRequestId = await externalSearch(page, workflow, `task283-liquid-${info.project.name}`, "OpenFoodFacts");
+	await expect(workflow.getByText("Fixture chickpeas")).toBeVisible();
+	await workflow.getByText("Fixture chickpeas").locator("..").locator("..").getByRole("button", { name: "Curate" }).click();
+	const liquidDraft = workflow.locator("[data-curation-draft]");
+	const liquidName = `Task 283 provider liquid ${info.project.name}`;
+	await liquidDraft.getByLabel("Name", { exact: true }).fill(liquidName);
+	await liquidDraft.getByLabel("Protein per 100").fill("2.5");
+	await liquidDraft.getByLabel("Carbohydrates per 100").fill("6.25");
+	await liquidDraft.getByLabel("Fat per 100").fill("1.75");
+	await liquidDraft.getByLabel("Physical state").selectOption("liquid");
+	await liquidDraft.getByLabel("Density (g/ml)").fill("0.92");
+	await liquidDraft.getByLabel("Density provenance").selectOption("manual");
+	const liquidImportResponse = page.waitForResponse((response) =>
+		response.url().endsWith("/api/v1/admin/imports") && response.request().method() === "POST"
+	);
+	await liquidDraft.getByRole("button", { name: "Import curated item" }).click();
+	const liquidImport = await liquidImportResponse;
+	const liquidImportBody = await safeEnvelope(liquidImport) as { requestId?: string; data?: { foodItemId?: string; name?: string } };
+	expect(liquidImport.status()).toBe(201);
+	expect(liquidImportBody.data).toMatchObject({ name: liquidName });
+	expect(liquidImportBody.data?.foodItemId).toMatch(UUID);
+	const liquidRead = await page.request.get(`/api/v1/admin/items/${liquidImportBody.data!.foodItemId}`);
+	expect(liquidRead.status()).toBe(200);
+	const liquidStored = await item(liquidRead);
+	expect(liquidStored).toMatchObject({
+		name: liquidName,
+		physicalState: "liquid",
+		densityGramsPerMilliliter: 0.92,
+		densitySourceKind: "manual",
+		macrosPer100: { protein: 2.5, carbohydrates: 6.25, fat: 1.75 }
+	});
+
+	const solidCatalog = await search(page, { query: solidName, mode: "catalog", page: 1, filters: [] });
+	const liquidCatalog = await search(page, { query: liquidName, mode: "catalog", page: 1, filters: [] });
+	const solidResult = solidCatalog.items.find(({ id }) => id === solidStored.id);
+	const liquidResult = liquidCatalog.items.find(({ id }) => id === liquidStored.id);
+	expect(solidResult).toMatchObject({ physicalState: "solid", macroBasis: "100g", macros: solidStored.macrosPer100 });
+	expect(liquidResult).toMatchObject({ physicalState: "liquid", macroBasis: "100ml", macros: liquidStored.macrosPer100 });
+
+	await workflow.getByRole("button", { name: "View in local search" }).click();
+	const searchNavigation = page.locator("[data-sidebar-nav-search]");
+	if (!(await searchNavigation.isVisible())) await page.getByRole("button", { name: "Open activity sidebar" }).click();
+	await searchNavigation.click();
+	const units = page.locator("#sidebar-unit-system");
+	const setUnits = async (value: "metric" | "imperial") => {
+		await units.selectOption(value, { force: true });
+		const close = page.getByRole("button", { name: "Close activity sidebar" });
+		if (await close.isVisible()) await close.click();
+	};
+	await setUnits("metric");
+	await page.getByLabel("Food search").fill(solidName);
+	await page.getByLabel("Food search").press("Enter");
+	const solidCard = page.locator(`[data-result-card][data-result-id="${solidStored.id}"]`);
+	await expect(solidCard).toBeVisible();
+	await expect(solidCard.locator("[data-result-macro-basis]")).toHaveText("values per 100 g");
+	await setUnits("imperial");
+	await expect(solidCard.locator("[data-result-macro-basis]")).toHaveText("values per 3.5 oz");
+	await setUnits("metric");
+	await page.getByLabel("Food search").fill(liquidName);
+	await page.getByLabel("Food search").press("Enter");
+	const liquidCard = page.locator(`[data-result-card][data-result-id="${liquidStored.id}"]`);
+	await expect(liquidCard).toBeVisible();
+	await expect(liquidCard.locator("[data-result-macro-basis]")).toHaveText("values per 100 ml");
+	await setUnits("imperial");
+	await expect(liquidCard.locator("[data-result-macro-basis]")).toHaveText("values per 3.4 fl oz");
+	await setUnits("metric");
+	const shot = await screenshot(page, info, "provider-storage", "[data-results-grid]");
+
+	const solidEvidence = await evidence(info, "provider-solid", {
+		criterionIds: criteria, kind: "item", entityId: solidStored.id, name: solidName,
+		requestIds: [solidSearchRequestId, solidImportBody.requestId!, await responseRequestId(solidRead), await responseRequestId(solidCatalog.response)],
+		expected: { active: true, ownerless: true, physicalState: "solid", metricBasis: "100g", macros: solidStored.macrosPer100 }
+	});
+	const liquidEvidence = await evidence(info, "provider-liquid", {
+		criterionIds: criteria, kind: "item", entityId: liquidStored.id, name: liquidName,
+		requestIds: [liquidSearchRequestId, liquidImportBody.requestId!, await responseRequestId(liquidRead), await responseRequestId(liquidCatalog.response)],
+		expected: { active: true, ownerless: true, physicalState: "liquid", metricBasis: "100ml", density: 0.92, densitySourceKind: "manual", macros: liquidStored.macrosPer100 }
+	});
+	await recordAcceptance(
+		info,
+		criteria,
+		[solidSearchRequestId, solidImportBody.requestId!, liquidSearchRequestId, liquidImportBody.requestId!],
+		[{ type: "backend", path: solidEvidence }, { type: "backend", path: liquidEvidence }, { type: "playwright", path: shot }],
+		["provider_state=controlled", "mutation_count=2", "owner_state=global", "metric_basis=100g", "metric_basis=100ml", "request_correlation=server_derived"]
+	);
 });
 
 // Implements DESIGN-009 AdminController and DESIGN-001 SearchView mobile global-item discovery surfaces for Task 303.
@@ -944,10 +1090,3 @@ test("admin surface remains responsive, keyboard reachable, and reportable", asy
 	const shot = await screenshot(page, info, "manual-catalog-responsive", "[data-admin-data-management]");
 	await recordAcceptance(info, [], [], [{ type: "playwright", path: shot }], []);
 });
-
-for (const criterionId of BLOCKED_CRITERIA) {
-	test(`capability blocker: ${criterionId}`, async ({}, info) => {
-		await recordAcceptance(info, [criterionId], [], [], [], rootFor(criterionId));
-		test.skip(true, `Task 283 capability is unavailable: ${criterionId}`);
-	});
-}

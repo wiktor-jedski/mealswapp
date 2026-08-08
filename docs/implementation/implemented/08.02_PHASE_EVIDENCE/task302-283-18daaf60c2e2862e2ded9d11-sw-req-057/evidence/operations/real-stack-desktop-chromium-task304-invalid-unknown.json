@@ -1,0 +1,26 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR090-STEP-03",
+    "P08-SWR090-ACCEPT-01"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 Task 304 invalid unknown real-stack-desktop-chromium",
+  "idempotencyKey": "81a2bdfd-918b-422e-aa76-0eb1b1857fd7",
+  "requestIds": [
+    "d00b0f51-6c62-4fed-bc20-0268b07dc2e3"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "requestAuditActions": {},
+    "idempotencyCount": 0,
+    "generationBefore": "32",
+    "generationAfter": "32",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "f0fe9a1a-2f32-4bfd-a327-8db76f9377e0",
+    "generationAfter": "eabbbb38-93ac-488c-b38e-b72ba0b277c4"
+  }
+}

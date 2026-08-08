@@ -1,0 +1,2934 @@
+{
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=canonical",
+        "request_correlation=metric_imperial"
+      ],
+      "criterionId": "P08-SWR032-STEP-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "46396772-174e-48f3-ac8b-f4a5c35edfbb",
+        "657834a0-15d7-468d-aec6-057acc632f2b",
+        "7fa3e293-1334-4235-9d3d-d467dcfaa1a4",
+        "a67a99e4-87db-4f9f-a193-2a0f1412c2b3",
+        "a9eb9fb1-3c82-423e-849b-2123aa720878",
+        "b2040ae5-972d-4acf-99fb-860c2ffb67a5",
+        "f370074c-f658-4732-9143-79121a3be0d0",
+        "f64037e4-14ea-4c7c-987a-c5850e51447a"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=canonical",
+        "request_correlation=metric_imperial"
+      ],
+      "criterionId": "P08-SWR032-STEP-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "46396772-174e-48f3-ac8b-f4a5c35edfbb",
+        "657834a0-15d7-468d-aec6-057acc632f2b",
+        "7fa3e293-1334-4235-9d3d-d467dcfaa1a4",
+        "a67a99e4-87db-4f9f-a193-2a0f1412c2b3",
+        "a9eb9fb1-3c82-423e-849b-2123aa720878",
+        "b2040ae5-972d-4acf-99fb-860c2ffb67a5",
+        "f370074c-f658-4732-9143-79121a3be0d0",
+        "f64037e4-14ea-4c7c-987a-c5850e51447a"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=canonical",
+        "request_correlation=metric_imperial"
+      ],
+      "criterionId": "P08-SWR032-STEP-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "46396772-174e-48f3-ac8b-f4a5c35edfbb",
+        "657834a0-15d7-468d-aec6-057acc632f2b",
+        "7fa3e293-1334-4235-9d3d-d467dcfaa1a4",
+        "a67a99e4-87db-4f9f-a193-2a0f1412c2b3",
+        "a9eb9fb1-3c82-423e-849b-2123aa720878",
+        "b2040ae5-972d-4acf-99fb-860c2ffb67a5",
+        "f370074c-f658-4732-9143-79121a3be0d0",
+        "f64037e4-14ea-4c7c-987a-c5850e51447a"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR033-STEP-05",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "03635d55-5c45-4cd2-a9f9-74c5f6cb790d",
+        "06f8beb8-2c5c-44b2-bb79-9395bd6e7837",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "3a37051c-771e-40de-8764-b1f98e199c7b",
+        "3f70e7ec-8975-45a3-a5f1-8f96db87a5e4",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "55dd8010-74e7-4376-a06d-0d58c1f96363",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "6ebcb0c8-a6dd-48a8-adc7-ff5d6c325281",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e4de7b8-543e-4afa-845e-a8f1568aa392",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "a7ed1872-7cb1-4696-aed3-cf7a28d886b3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "b46b143d-3d4b-42a7-ad87-6ecea8db7a03",
+        "b7daba22-1fac-4e97-a120-55dfbfbb585e",
+        "e5e7a989-df1a-43bd-9dbd-111d624e741c",
+        "ef697db4-a4e5-498f-86d7-5ea888448149",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR056-STEP-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "03635d55-5c45-4cd2-a9f9-74c5f6cb790d",
+        "06f8beb8-2c5c-44b2-bb79-9395bd6e7837",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "3a37051c-771e-40de-8764-b1f98e199c7b",
+        "3f70e7ec-8975-45a3-a5f1-8f96db87a5e4",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "55dd8010-74e7-4376-a06d-0d58c1f96363",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "6ebcb0c8-a6dd-48a8-adc7-ff5d6c325281",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e4de7b8-543e-4afa-845e-a8f1568aa392",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "a7ed1872-7cb1-4696-aed3-cf7a28d886b3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "b46b143d-3d4b-42a7-ad87-6ecea8db7a03",
+        "b7daba22-1fac-4e97-a120-55dfbfbb585e",
+        "e5e7a989-df1a-43bd-9dbd-111d624e741c",
+        "ef697db4-a4e5-498f-86d7-5ea888448149",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR056-STEP-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "03635d55-5c45-4cd2-a9f9-74c5f6cb790d",
+        "06f8beb8-2c5c-44b2-bb79-9395bd6e7837",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "3a37051c-771e-40de-8764-b1f98e199c7b",
+        "3f70e7ec-8975-45a3-a5f1-8f96db87a5e4",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "55dd8010-74e7-4376-a06d-0d58c1f96363",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "6ebcb0c8-a6dd-48a8-adc7-ff5d6c325281",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e4de7b8-543e-4afa-845e-a8f1568aa392",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "a7ed1872-7cb1-4696-aed3-cf7a28d886b3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "b46b143d-3d4b-42a7-ad87-6ecea8db7a03",
+        "b7daba22-1fac-4e97-a120-55dfbfbb585e",
+        "e5e7a989-df1a-43bd-9dbd-111d624e741c",
+        "ef697db4-a4e5-498f-86d7-5ea888448149",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "mutation_count=2",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-update-search-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "0d80be1f-c234-4a95-bc18-3333468b997c",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "86ab45e6-cd44-4f3a-8b80-7e4f939b91d5",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e2abd71-022a-4e3b-9572-f61a2d4ba4db",
+        "90990436-c45e-43dc-bb54-7b491ad9a702",
+        "91d7a8bf-bbea-48d4-b861-65edb52b7645",
+        "99577a93-3eb2-4b2a-8f0e-af2fcbd84a6c",
+        "a368d6b7-c061-4c41-8bad-6b1a428940a3",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a650e5f7-4ce8-4077-baca-106a0de88086",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "d0780535-8c2a-4d60-862f-5efeb23ee859",
+        "d7e47719-e5db-4da3-8da9-b70235775762",
+        "e3e0c4c9-2538-459b-8306-7123a7444b66",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5",
+        "f73fdad5-fe34-455d-b13a-d20fa762d2cb"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "mutation_count=2",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-update-search-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "0d80be1f-c234-4a95-bc18-3333468b997c",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "86ab45e6-cd44-4f3a-8b80-7e4f939b91d5",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e2abd71-022a-4e3b-9572-f61a2d4ba4db",
+        "90990436-c45e-43dc-bb54-7b491ad9a702",
+        "91d7a8bf-bbea-48d4-b861-65edb52b7645",
+        "99577a93-3eb2-4b2a-8f0e-af2fcbd84a6c",
+        "a368d6b7-c061-4c41-8bad-6b1a428940a3",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a650e5f7-4ce8-4077-baca-106a0de88086",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "d0780535-8c2a-4d60-862f-5efeb23ee859",
+        "d7e47719-e5db-4da3-8da9-b70235775762",
+        "e3e0c4c9-2538-459b-8306-7123a7444b66",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5",
+        "f73fdad5-fe34-455d-b13a-d20fa762d2cb"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=3",
+        "mutation_count=3",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-05",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0387a114-b590-453c-9bb5-db4f66a0ab95",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "0f845bfe-aaa6-4c8d-9af2-610b421076a8",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "1cac355e-7768-450f-bf1f-757f9a8e074c",
+        "2810de7b-b0b4-4dac-86e5-6db3628dd550",
+        "2edd2748-09f2-43a5-842f-74b7a4327cd3",
+        "3820e9d6-1514-460b-88c8-abf15b1ee9d2",
+        "3e1a10be-17ab-43c1-9ccc-e943d00531a3",
+        "40390e0f-be37-480b-b9a2-dcce553809e0",
+        "4295ef45-24c3-47dc-bcf2-41697a6e3622",
+        "4a7e3d4b-f1f0-44b8-ae76-76393537f28c",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "4ba03d96-cf15-423c-bf85-fd94b0c11421",
+        "5af3ab30-fafa-4bff-a274-eb9cc9ddbee9",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "61911ba6-8c2f-4a8e-9bb2-d836ac5ace4b",
+        "6a9825d2-0181-48bf-951f-2d0fdf57715d",
+        "6c261c24-1a94-46cb-8a0f-8bd726a14a13",
+        "6d6f1385-57f8-4470-996c-2cabf8505819",
+        "6fb742b5-7ff8-4f80-b3bc-994606c1abd0",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "7efa95bd-3466-47cd-9896-a33e3003c8e6",
+        "87001a85-78aa-4852-95a6-e26e9ea4cdda",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8d2ce63c-f75f-474a-9f17-daf46a9cf89a",
+        "90aa9033-013a-471c-b616-d52c4876a573",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "e2e5f77d-23ba-4287-84d6-5486d99c1bff",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=3",
+        "mutation_count=3",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-06",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0387a114-b590-453c-9bb5-db4f66a0ab95",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "0f845bfe-aaa6-4c8d-9af2-610b421076a8",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "1cac355e-7768-450f-bf1f-757f9a8e074c",
+        "2810de7b-b0b4-4dac-86e5-6db3628dd550",
+        "2edd2748-09f2-43a5-842f-74b7a4327cd3",
+        "3820e9d6-1514-460b-88c8-abf15b1ee9d2",
+        "3e1a10be-17ab-43c1-9ccc-e943d00531a3",
+        "40390e0f-be37-480b-b9a2-dcce553809e0",
+        "4295ef45-24c3-47dc-bcf2-41697a6e3622",
+        "4a7e3d4b-f1f0-44b8-ae76-76393537f28c",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "4ba03d96-cf15-423c-bf85-fd94b0c11421",
+        "5af3ab30-fafa-4bff-a274-eb9cc9ddbee9",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "61911ba6-8c2f-4a8e-9bb2-d836ac5ace4b",
+        "6a9825d2-0181-48bf-951f-2d0fdf57715d",
+        "6c261c24-1a94-46cb-8a0f-8bd726a14a13",
+        "6d6f1385-57f8-4470-996c-2cabf8505819",
+        "6fb742b5-7ff8-4f80-b3bc-994606c1abd0",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "7efa95bd-3466-47cd-9896-a33e3003c8e6",
+        "87001a85-78aa-4852-95a6-e26e9ea4cdda",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8d2ce63c-f75f-474a-9f17-daf46a9cf89a",
+        "90aa9033-013a-471c-b616-d52c4876a573",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "e2e5f77d-23ba-4287-84d6-5486d99c1bff",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "03635d55-5c45-4cd2-a9f9-74c5f6cb790d",
+        "06f8beb8-2c5c-44b2-bb79-9395bd6e7837",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "3a37051c-771e-40de-8764-b1f98e199c7b",
+        "3f70e7ec-8975-45a3-a5f1-8f96db87a5e4",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "55dd8010-74e7-4376-a06d-0d58c1f96363",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "6ebcb0c8-a6dd-48a8-adc7-ff5d6c325281",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e4de7b8-543e-4afa-845e-a8f1568aa392",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "a7ed1872-7cb1-4696-aed3-cf7a28d886b3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "b46b143d-3d4b-42a7-ad87-6ecea8db7a03",
+        "b7daba22-1fac-4e97-a120-55dfbfbb585e",
+        "e5e7a989-df1a-43bd-9dbd-111d624e741c",
+        "ef697db4-a4e5-498f-86d7-5ea888448149",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=unchanged",
+        "http_status=400",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-3.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-3.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-invalid-0-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-invalid-0-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "134e9d31-599f-45dc-8bd5-ac1bfbea08bb",
+        "3610ddc5-f9cf-4ae8-89b9-c13844589b40",
+        "4bd0d7e9-161e-4801-b269-12dea73624d2",
+        "526a1e85-082a-43a3-bbf4-37d6cda9f001",
+        "b4c90757-b891-4899-b461-a19e6c37071c",
+        "c59d7451-e17f-4582-9977-60832b1bc87d",
+        "c9979325-5357-4cf3-b5b4-48be520923ff",
+        "eec44ca5-9238-4142-8298-d371101f74eb"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-invalid-3.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-invalid-3.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-invalid-1-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-invalid-2-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-invalid-3-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-allergen-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-classification-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-invalid-1-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-invalid-2-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-invalid-3-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-allergen-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-classification-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "134e9d31-599f-45dc-8bd5-ac1bfbea08bb",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "3610ddc5-f9cf-4ae8-89b9-c13844589b40",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4bd0d7e9-161e-4801-b269-12dea73624d2",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "526a1e85-082a-43a3-bbf4-37d6cda9f001",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "b4c90757-b891-4899-b461-a19e6c37071c",
+        "c59d7451-e17f-4582-9977-60832b1bc87d",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "c9979325-5357-4cf3-b5b4-48be520923ff",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "eec44ca5-9238-4142-8298-d371101f74eb",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "mutation_count=1",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-idempotent-replay.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-idempotent-replay.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-idempotent-replay-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-idempotent-replay-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "200ad33b-7e69-4d4b-b1be-7ca9c0b51a2e",
+        "b757b5e7-5b18-43e8-8cae-8464d20bf25c",
+        "bbdb693d-5eb9-4816-80fe-810185c3a7e3",
+        "dd0bdf99-9e29-4ed4-9ca1-6674b276bbe3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "mutation_count=2",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-05",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-update-search-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "0d80be1f-c234-4a95-bc18-3333468b997c",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "86ab45e6-cd44-4f3a-8b80-7e4f939b91d5",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e2abd71-022a-4e3b-9572-f61a2d4ba4db",
+        "90990436-c45e-43dc-bb54-7b491ad9a702",
+        "91d7a8bf-bbea-48d4-b861-65edb52b7645",
+        "99577a93-3eb2-4b2a-8f0e-af2fcbd84a6c",
+        "a368d6b7-c061-4c41-8bad-6b1a428940a3",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a650e5f7-4ce8-4077-baca-106a0de88086",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "d0780535-8c2a-4d60-862f-5efeb23ee859",
+        "d7e47719-e5db-4da3-8da9-b70235775762",
+        "e3e0c4c9-2538-459b-8306-7123a7444b66",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5",
+        "f73fdad5-fe34-455d-b13a-d20fa762d2cb"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=3",
+        "mutation_count=3",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-06",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0387a114-b590-453c-9bb5-db4f66a0ab95",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "0f845bfe-aaa6-4c8d-9af2-610b421076a8",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "1cac355e-7768-450f-bf1f-757f9a8e074c",
+        "2810de7b-b0b4-4dac-86e5-6db3628dd550",
+        "2edd2748-09f2-43a5-842f-74b7a4327cd3",
+        "3820e9d6-1514-460b-88c8-abf15b1ee9d2",
+        "3e1a10be-17ab-43c1-9ccc-e943d00531a3",
+        "40390e0f-be37-480b-b9a2-dcce553809e0",
+        "4295ef45-24c3-47dc-bcf2-41697a6e3622",
+        "4a7e3d4b-f1f0-44b8-ae76-76393537f28c",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "4ba03d96-cf15-423c-bf85-fd94b0c11421",
+        "5af3ab30-fafa-4bff-a274-eb9cc9ddbee9",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "61911ba6-8c2f-4a8e-9bb2-d836ac5ace4b",
+        "6a9825d2-0181-48bf-951f-2d0fdf57715d",
+        "6c261c24-1a94-46cb-8a0f-8bd726a14a13",
+        "6d6f1385-57f8-4470-996c-2cabf8505819",
+        "6fb742b5-7ff8-4f80-b3bc-994606c1abd0",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "7efa95bd-3466-47cd-9896-a33e3003c8e6",
+        "87001a85-78aa-4852-95a6-e26e9ea4cdda",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8d2ce63c-f75f-474a-9f17-daf46a9cf89a",
+        "90aa9033-013a-471c-b616-d52c4876a573",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "e2e5f77d-23ba-4287-84d6-5486d99c1bff",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=unchanged",
+        "http_status=503",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-07",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-audit-rollback.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-audit-rollback.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-audit-rollback-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-audit-rollback-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "1d50d490-4b71-480a-ba08-70749c5c2d9c",
+        "74d7edad-97a1-44a2-b7f5-867c890327c4"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "audit_count=2",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "mutation_count=2",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR057-STEP-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-category-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-category-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "audit_count=2",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "mutation_count=2",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR057-STEP-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-role-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-role-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-05",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-06",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-07",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "http_status=409",
+        "request_correlation=cross_instance"
+      ],
+      "criterionId": "P08-SWR057-STEP-08",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "34421eaa-5c15-4474-a567-7f2a0dea0546",
+        "3470f2ab-3639-4c1f-9edf-afb25adce42a",
+        "47cc3c88-b669-4433-bd13-2818661a2e63",
+        "5d481a55-332d-4659-ac83-e15ab5053d65",
+        "6d6800c0-217e-461c-b694-563595386002",
+        "87e647e2-9d92-45b7-9119-c58c91292678",
+        "b706bf20-5392-47f9-a052-874a564d6bb1",
+        "f80ce60d-1519-4af1-a910-efef8c0c5cd3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "http_status=409",
+        "mutation_count=2",
+        "request_correlation=cross_instance"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-05",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "34421eaa-5c15-4474-a567-7f2a0dea0546",
+        "3470f2ab-3639-4c1f-9edf-afb25adce42a",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "47cc3c88-b669-4433-bd13-2818661a2e63",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "5d481a55-332d-4659-ac83-e15ab5053d65",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "6d6800c0-217e-461c-b694-563595386002",
+        "87e647e2-9d92-45b7-9119-c58c91292678",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "b706bf20-5392-47f9-a052-874a564d6bb1",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b",
+        "f80ce60d-1519-4af1-a910-efef8c0c5cd3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-06",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "0b6493e8-4863-46e7-bdd0-2dcd1b826847",
+        "18d99080-0a13-4e11-bc90-8efc1537f64b",
+        "1e8d08ae-f70d-4098-8f53-5b2c7b39337c",
+        "53d82ac0-0287-4cc0-924b-6b023319746c",
+        "71f199df-839a-41be-9659-3912c3ea07a0",
+        "73b41e30-f0d1-41ff-92a2-ba396ef37307",
+        "7d12c45c-5f52-4a6c-aeb4-934ab8f4084e",
+        "88118650-2d45-42e6-89d7-dd2e0ae24559",
+        "9486100e-5103-4e87-bb5e-69c523e7bec3",
+        "a5c03412-f7e6-4da2-85bd-6e1fa6678f85",
+        "d07d40bc-4958-4676-904a-87c2105a1911",
+        "fb6531eb-03d6-483e-973b-719910bdd0d3"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-02",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-03",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-04",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=incremented",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "owner_state=global",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-desktop-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-canonical-values.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-category.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-allergen.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-classification.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-inactive.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-invalid-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "operations/real-stack-mobile-chromium-task304-role.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-desktop-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-canonical-values-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-inactive-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "backend/task283-real-stack-mobile-chromium-task304-invalid-unknown-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "08095a39-07c9-4f6d-99e5-6c237166b0f9",
+        "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+        "1298be07-f835-4a5c-a241-71e0f749d98a",
+        "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+        "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+        "30ff6a58-2151-4682-89e3-34f46974eba1",
+        "34d3d18a-3e5d-4b59-99e4-427d98a29738",
+        "39864133-105c-41ea-9754-4561060abfa9",
+        "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+        "4a607f4b-6d2f-473a-b4e8-154d6cc462f9",
+        "4c32a319-31ce-4ab4-a9bd-45a65c26fca0",
+        "562d3776-419a-4af0-92e6-a96ba577a9b3",
+        "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+        "5f94847f-aec4-4f87-80e7-794accfca7a0",
+        "af566334-b9df-46bf-92ed-1fa11a6d3cb5",
+        "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+        "c7801a75-a958-4a75-949b-45d8a7c6263b",
+        "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+        "d00b0f51-6c62-4fed-bc20-0268b07dc2e3",
+        "dc536cbc-2112-4929-b1c5-3e1f3b976a48",
+        "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+        "fc2f39a1-388d-45db-8776-a298612af574"
+      ],
+      "status": "PASS"
+    }
+  ]
+}

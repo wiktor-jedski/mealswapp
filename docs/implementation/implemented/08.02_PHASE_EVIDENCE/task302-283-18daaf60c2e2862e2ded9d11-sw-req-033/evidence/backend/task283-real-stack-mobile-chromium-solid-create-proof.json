@@ -1,0 +1,65 @@
+{
+  "actual": {
+    "active": true,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1
+    },
+    "culinaryRoleIds": [],
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 solid real-stack-mobile-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "requestAuditActions": {
+      "manual_create": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-01",
+      "P08-SWR056-STEP-02",
+      "P08-SWR056-ACCEPT-01",
+      "P08-SWR033-STEP-05"
+    ],
+    "entityId": "cc12fca5-b8c7-46d8-b532-a73b4c1eca34",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "idempotencyCount": 1,
+      "macros": {
+        "carbohydrates": 20,
+        "fat": 3,
+        "protein": 10
+      },
+      "metricBasis": "100g",
+      "ownerless": true,
+      "physicalState": "solid"
+    },
+    "idempotencyKey": "e0aa733f-00c8-447e-bf2a-4e7a4fb5cb3d",
+    "kind": "item",
+    "name": "Task 283 solid real-stack-mobile-chromium",
+    "requestIds": [
+      "6ebcb0c8-a6dd-48a8-adc7-ff5d6c325281",
+      "8e4de7b8-543e-4afa-845e-a8f1568aa392",
+      "55dd8010-74e7-4376-a06d-0d58c1f96363"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

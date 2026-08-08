@@ -1,0 +1,38 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "39",
+    "generationBefore": "39",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "requestAuditActions": {},
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-02"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "39",
+      "generationBefore": "39",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "0c447a7c-a6fe-43cf-b3a0-eca0924088b6",
+      "generationBefore": "28795c9b-fe98-46f7-a123-0f8e18911620"
+    },
+    "idempotencyKey": "a697c52a-6661-4833-a574-31a27ba6209e",
+    "kind": "rejected_item",
+    "name": "Task 283 invalid density real-stack-mobile-chromium",
+    "requestIds": [
+      "3610ddc5-f9cf-4ae8-89b9-c13844589b40"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

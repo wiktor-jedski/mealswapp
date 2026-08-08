@@ -1,0 +1,440 @@
+{
+  "exitCode": 0,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR033-STEP-01",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 112
+      },
+      "status": "PASS",
+      "text": "Import a solid provider item."
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR033-STEP-02",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 113
+      },
+      "status": "PASS",
+      "text": "Import a liquid provider item."
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR033-STEP-03",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 114
+      },
+      "status": "PASS",
+      "text": "Compare displayed/stored macro bases with 100g and 100ml."
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=2",
+        "owner_state=global",
+        "provider_state=controlled",
+        "request_correlation=server_derived"
+      ],
+      "criterionId": "P08-SWR033-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-liquid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-provider-solid-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-liquid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-provider-solid.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-provider-storage.png",
+          "type": "playwright"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-mobile-chromium-provider-storage.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR033-STEP-04",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [
+        "0b2d9007-5b64-44d1-b13c-847fd0cc711a",
+        "253a8bed-45c8-4f6a-8052-daf6a6f588b0",
+        "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+        "7bcd39f7-52dc-40d5-a60e-f686d17ba25d",
+        "80a6e948-49c6-4241-83ff-bae825c5e2da",
+        "889596ba-a468-4a7b-97f6-ce112321ed12",
+        "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+        "aefe0c70-39bd-49a3-a96c-eaa8dc01f776"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 115
+      },
+      "status": "PASS",
+      "text": "Verify changing display units does not change canonical nutritional values."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR033-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-mobile-global-discovery-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-mobile-global-discovery.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-solid-create.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR033-STEP-05",
+      "kind": "step",
+      "owner": "backend-domain",
+      "requestIds": [
+        "03635d55-5c45-4cd2-a9f9-74c5f6cb790d",
+        "06f8beb8-2c5c-44b2-bb79-9395bd6e7837",
+        "09211d03-5c93-464e-955a-cd00220bc863",
+        "12769804-3666-4f39-b6cc-ffa960ef6ccb",
+        "3a37051c-771e-40de-8764-b1f98e199c7b",
+        "3f70e7ec-8975-45a3-a5f1-8f96db87a5e4",
+        "4b015d2b-bce7-480a-9ffc-3deac06c4d5d",
+        "55dd8010-74e7-4376-a06d-0d58c1f96363",
+        "5ce11e92-7aaf-450e-a2b7-3dfddf21ad19",
+        "6ebcb0c8-a6dd-48a8-adc7-ff5d6c325281",
+        "754e828d-2e49-4991-bc5a-9014faf43b8b",
+        "8a486b2c-1b9b-4306-8c6a-fc59370a6c22",
+        "8e4de7b8-543e-4afa-845e-a8f1568aa392",
+        "a3f2cb3c-7359-4748-98f4-5fa2c24dab5e",
+        "a57c8fe2-0014-4277-bcba-21f4900df85d",
+        "a676e564-535a-4772-891f-16fb4c0afde3",
+        "a7ed1872-7cb1-4696-aed3-cf7a28d886b3",
+        "aa125ec1-40b8-40c8-b76b-94dfc30352c7",
+        "b46b143d-3d4b-42a7-ad87-6ecea8db7a03",
+        "b7daba22-1fac-4e97-a120-55dfbfbb585e",
+        "e5e7a989-df1a-43bd-9dbd-111d624e741c",
+        "ef697db4-a4e5-498f-86d7-5ea888448149",
+        "f681f0b8-8522-40a7-a5f7-19d3968fada9",
+        "f686ea02-6aef-4d74-a465-e5185f504fe5"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-033",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
+      "source": {
+        "file": "req_tests.md",
+        "line": 116
+      },
+      "status": "PASS",
+      "text": "Confirm no liquid path silently assumes 1 ml = 1 g."
+    }
+  ],
+  "rootCauses": [],
+  "runId": "task283-18daaf60c2e2862e2ded9d11-sw-req-033",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "PASS"
+}

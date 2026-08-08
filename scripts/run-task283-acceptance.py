@@ -171,6 +171,7 @@ class Task283Harness(real_stack.Harness):
     """Own the Task 283 database, Redis, APIs, browser suite, evidence, and cleanup."""
 
     second_api_port: int | None = None
+    fixture_port: int | None = None
 
     def application_environment(self, database_url: str, redis_url: str, api_port: int, frontend_port: int) -> dict[str, str]:
         environment = super().application_environment(database_url, redis_url, api_port, frontend_port)
@@ -180,6 +181,13 @@ class Task283Harness(real_stack.Harness):
             "MEALSWAPP_TASK294_CORRUPT_MANUAL_ITEM_RESPONSE_ONCE": "1",
             "MEALSWAPP_TASK294_REAL_E2E": "1",
         })
+        if self.fixture_port is not None:
+            environment.update({
+                "MEALSWAPP_USDA_API_KEY": "task282-controlled-key",
+                "MEALSWAPP_USDA_ENDPOINT": f"http://127.0.0.1:{self.fixture_port}/usda",
+                "MEALSWAPP_OPENFOODFACTS_ENDPOINT": f"http://127.0.0.1:{self.fixture_port}/openfoodfacts",
+                "MEALSWAPP_EXTERNAL_PROVIDER_TIMEOUT": "300ms",
+            })
         return environment
 
     def start_application_stack(self, api_binary, database_url, redis_url, reservations):
@@ -199,16 +207,28 @@ class Task283Harness(real_stack.Harness):
         reservations = []
         try:
             real_stack.create_database(self.target, self.database, self.comment); self.events.append("database_created")
-            redis_port = self.start_redis(); reservations = real_stack.reserve_ports(2)
+            redis_port = self.start_redis(); reservations = real_stack.reserve_ports(3)
+            fixture_reservation, api_reservation, frontend_reservation = reservations
+            self.fixture_port = fixture_reservation.port
             database_url = self.target.database_url(self.database); redis_url = f"redis://127.0.0.1:{redis_port}/0"
-            env = self.application_environment(database_url, redis_url, reservations[0].port, reservations[1].port)
+            env = self.application_environment(database_url, redis_url, api_reservation.port, frontend_reservation.port)
             real_stack.run_command(["go", "run", "./cmd/migrate", "up"], cwd=ROOT / "backend", env=env, timeout=self.timeout)
             assert self.raw_dir is not None
             api_binary = self.raw_dir / "mealswapp-api"
             bootstrap_binary = self.raw_dir / "admin-bootstrap"
             real_stack.run_command(["go", "build", "-o", str(api_binary), "./cmd/api"], cwd=ROOT / "backend", env=env, timeout=self.timeout)
             real_stack.run_command(["go", "build", "-o", str(bootstrap_binary), "./cmd/admin-bootstrap"], cwd=ROOT / "backend", env=env, timeout=self.timeout)
-            env, api_port, frontend_port, _api, frontend = self.start_application_stack(api_binary, database_url, redis_url, reservations)
+            fixture = self.start_process(
+                "task282-provider-fixture",
+                [sys.executable, str(Path(__file__).with_name("task282_provider_fixture.py")), "--port", str(fixture_reservation.port)],
+                ROOT,
+                env,
+                "provider-fixture.raw.log",
+                fixture_reservation,
+            )
+            real_stack.wait_http(f"http://127.0.0.1:{fixture_reservation.port}/health", fixture, self.timeout)
+            self.events.append("provider_fixture_ready")
+            env, api_port, frontend_port, _api, frontend = self.start_application_stack(api_binary, database_url, redis_url, [api_reservation, frontend_reservation])
             user, ids = real_stack.register_fixture(f"http://127.0.0.1:{api_port}", self.run_id); self.request_ids.extend(ids)
             bootstrap = real_stack.run_command([str(bootstrap_binary), "--environment", "development", "--email", user["email"]], cwd=ROOT / "backend", env=env, timeout=self.timeout)
             if f"user_id={user['user_id']}" not in bootstrap.stdout or "actor=operator" not in bootstrap.stdout:

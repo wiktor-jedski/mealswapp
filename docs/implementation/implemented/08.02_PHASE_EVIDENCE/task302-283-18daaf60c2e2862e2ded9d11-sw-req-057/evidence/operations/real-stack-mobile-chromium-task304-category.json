@@ -1,0 +1,27 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR057-STEP-01"
+  ],
+  "kind": "classification",
+  "entityId": "e21e9764-4c2c-46e6-bde2-9d3c7d4c303e",
+  "name": "Task 283 Task 304 category real-stack-mobile-chromium",
+  "requestIds": [
+    "30ff6a58-2151-4682-89e3-34f46974eba1"
+  ],
+  "expected": {
+    "active": true,
+    "deleted": false,
+    "kind": "food_category",
+    "auditActions": {
+      "classification.create": 1
+    },
+    "generationBefore": "63",
+    "generationAfter": "64",
+    "generationDelta": 1
+  },
+  "generationSnapshots": {
+    "generationBefore": "b6df054f-5824-404e-b578-3f7f60e62b18",
+    "generationAfter": "5994413a-1125-4a0e-8c20-3c0f71830220"
+  }
+}
