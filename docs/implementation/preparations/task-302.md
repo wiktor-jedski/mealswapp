@@ -32,12 +32,24 @@ catalog assertions to the exact item names created by the scenario. This removes
 the broad shared-query pagination/order false negative without changing product
 code or weakening any assertion.
 
+The passing Task 292/303 closure evidence is applicable to `P08-FIND-283-005`:
+the committed Task 282 controlled-provider report is PASS for all five
+SW-REQ-033 steps, Task 292's integrated real-stack proofs establish the
+ownerless/private partition and Catalog/Substitution/deletion boundaries, and
+Task 303's final mobile proof confirms the cross-instance mobile path. The
+latest Task 283 run remains preserved as the final producer input; its four
+provider-capability BLOCKED rows are raw historical producer results, not a
+new discovery-partition defect.
+
 The synchronized finding state is:
 
 - Closed: `P08-FIND-283-001` and `P08-FIND-283-006`, with latest passing reports.
-- Still open: `P08-FIND-283-005` for the four blocked SW-REQ-033 criteria.
-- Unchanged: `P08-FIND-281-002` and the three deployed-environment Task 285
-  findings.
+- Closed: `P08-FIND-283-005`, using the mapped Task 282/292/303 closure package;
+  the latest Task 283 producer's four BLOCKED provider rows remain visible in
+  its source report and are not relabeled as deferred.
+- Still open/deferred accurately: `P08-FIND-281-002` remains the accepted
+  historical out-of-scope disposition, and the three deployed-environment Task
+  285 findings remain deferred to Phase 09.
 
 No Task 302 review checklist was present in `.git/reviews`; therefore this
 preparation does not claim review-gate completion or change the task-list
@@ -54,10 +66,11 @@ status to `PASSED`.
 - `python3 scripts/validate-traceability.py`: passed.
 - `python3 scripts/check.py --quick`: passed, including 109 acceptance-contract
   tests and the Go vulnerability scan.
-- `python3 scripts/check.py`: failed only in the static lane because the
-  concurrent run hit the existing temporary-child-process race in
-  `test_run_command_timeout_reaps_descendant_process_group`; frontend/browser
-  completed with 349 passed and 81 skipped, and the backend lane completed.
-- A focused rerun of `python3 -m unittest scripts/test_run_real_stack_e2e.py`
-  passed all 28 tests, so that full-gate failure was not reproducible.
+- `python3 scripts/check.py`: passed. The static and frontend/unit lanes
+  passed, the browser lane completed with 349 passed and 81 skipped, and the
+  backend lane completed with the documented Phase 08 coverage exception of
+  4936/5335 statements (92.5%).
+- Aggregate evidence integrity: passed with 91 aggregate report hashes,
+  `84 PASS / 0 FAIL / 7 BLOCKED`, and the acceptance gate correctly remaining
+  `FAIL` with owner decision `PENDING`.
 - Final `git diff --check`: passed.

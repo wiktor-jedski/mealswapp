@@ -31,8 +31,12 @@
       "sha256": "aab352c5e40affeb70dc260e8a3186d45829837b0fcf4cae545b9cfd04c5d8b6"
     },
     {
+      "path": "docs/implementation/preparations/task-303.md",
+      "sha256": "cd730f585aadce89a6c08df3dc2b86f55c468fc60de5becd779578c574ec1601"
+    },
+    {
       "path": "docs/implementation/preparations/task-302.md",
-      "sha256": "712d5c2f358b03a0c7e71018c2554b388f9f0ccec42b36a1d156ad29f71edf64"
+      "sha256": "b73cbf8027f5bcc3620fc9f9d83ea6d593302bac81bf52576d35c89bd8ee1d8f"
     }
   ],
   "controls": [
@@ -42,7 +46,7 @@
     },
     {
       "path": "docs/implementation/04_OPEN.md",
-      "sha256": "11db77b1e4b9fef7d711ec5be0661467ddd7f4c9b6dedcf78c0b87d074ccb25f"
+      "sha256": "2db45f50a761bb8641b57ef0be4ba10a5c78ccbf3a12622d65c316fa8fb7a743"
     },
     {
       "path": "docs/testing/phase08/acceptance-manifest.json",
@@ -51,22 +55,29 @@
     {
       "path": "docs/testing/phase08/finding-history.json",
       "sha256": "d18286a98a3e957cf7a2f4ece91c517337513c2b78a3c5dbd1a9983492d77e5b"
+    },
+    {
+      "path": "docs/testing/phase08/uat-input.json",
+      "sha256": "ebc44e7d83f4ddbc441db9ebc9564ea8fe9e785a311a3383e7019e8d84008aec"
+    },
+    {
+      "path": "docs/testing/phase08/uat-input.json-trace.md",
+      "sha256": "1f3f47c8528150ba9ab744cc415da049f362d5cd3a23e788707ad9b6a29502e4"
     }
   ],
   "counts": {
-    "BLOCKED": 11,
+    "BLOCKED": 7,
     "FAIL": 0,
-    "PASS": 80
+    "PASS": 84
   },
   "gateStatus": "FAIL",
-  "generatedAtUtc": "2026-08-07T00:00:00Z",
+  "generatedAtUtc": "2026-08-08T00:00:00Z",
   "historicalUat": {
     "path": "docs/implementation/implemented/08_PHASE_UAT.md",
     "sha256": "371361f141ec2fe883e448e21480a63ddf9e8fa1d37910ea7fd9209bf511a9c0"
   },
   "openFindings": [
     "P08-FIND-281-002",
-    "P08-FIND-283-005",
     "P08-FIND-285-001",
     "P08-FIND-285-002",
     "P08-FIND-285-003"
@@ -74,11 +85,11 @@
   "renderedArtifacts": [
     {
       "path": "docs/implementation/implemented/08.02_PHASE_REPORT.html",
-      "sha256": "dbc519c0a5bdcbae9395927d6c53d021b6a9963e7f8b6d93a68058ecc1047d8e"
+      "sha256": "261b2bfcf6b2a7ea5fd8e7f1fe1b0a16a1a679aab91e7b05f36e75ddae018865"
     },
     {
       "path": "docs/implementation/implemented/08.02_PHASE_UAT.md",
-      "sha256": "e2fe1ee29d4654cadebf74afc66e71fd0bf499a08f705ffa687d9ae54bbb3551"
+      "sha256": "bdce18c665efc91fee65e1edad9ab096b24dacba06b65d6bd6ca0237b8ba782f"
     }
   ],
   "results": [
@@ -454,14 +465,10 @@
     },
     {
       "criterionId": "P08-SWR033-STEP-01",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -507,19 +514,15 @@
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Import a solid provider item."
     },
     {
       "criterionId": "P08-SWR033-STEP-02",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -551,19 +554,15 @@
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Import a liquid provider item."
     },
     {
       "criterionId": "P08-SWR033-STEP-03",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -609,19 +608,15 @@
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Compare displayed/stored macro bases with 100g and 100ml."
     },
     {
       "criterionId": "P08-SWR033-STEP-04",
-      "findingIds": [
-        "P08-FIND-283-005"
-      ],
+      "findingIds": [],
       "kind": "step",
       "requirement": "SW-REQ-033",
-      "rootCauseIds": [
-        "ROOT-T283-DISCOVERY-PARTITION"
-      ],
+      "rootCauseIds": [],
       "scenarioId": "P08-SWR033-STANDARDIZED-STORAGE",
       "sources": [
         {
@@ -667,7 +662,7 @@
           "taskId": 283
         }
       ],
-      "status": "BLOCKED",
+      "status": "PASS",
       "text": "Verify changing display units does not change canonical nutritional values."
     },
     {
@@ -5664,22 +5659,6 @@
       "sha256": "3bfd6a41466ab35d17ae0c73bd3eac061ddf80c5d527347729e7929adad7c584"
     },
     {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/diagnostics.json",
-      "sha256": "24e7c4bfe2bab4131e2dde61d5e29df490048eb0ebf4d1b4f09c9ae4b9557a60"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/results.json",
-      "sha256": "5f673debd702526996ef54ddd6c4ba43304024781e8e4c3407fda23fd95f1003"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/state.json",
-      "sha256": "d1f96cbb0f88a612854bb26bafc569d58f25960eca13b047f309937c0c6c1991"
-    },
-    {
-      "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/283-cbbc7115a645e31169391973/trace.ndjson",
-      "sha256": "94b764d8a66e46bae5bf2b21d732d55474502ac8006fc77cc30fba61281eeae7"
-    },
-    {
       "path": "docs/implementation/implemented/08.02_PHASE_EVIDENCE/run-context/task-302/284-d4f3484fbd165ca61f962a04/diagnostics.json",
       "sha256": "691962b58abd95ee6acf420df67a229586044123e1de93ae811ef29b420f8baf"
     },
@@ -6067,15 +6046,15 @@
       "evidence": [
         {
           "path": "docs/implementation/implemented/08.02_PHASE_UAT.md",
-          "sha256": "e2fe1ee29d4654cadebf74afc66e71fd0bf499a08f705ffa687d9ae54bbb3551"
+          "sha256": "bdce18c665efc91fee65e1edad9ab096b24dacba06b65d6bd6ca0237b8ba782f"
         },
         {
           "path": "docs/implementation/04_OPEN.md",
-          "sha256": "11db77b1e4b9fef7d711ec5be0661467ddd7f4c9b6dedcf78c0b87d074ccb25f"
+          "sha256": "2db45f50a761bb8641b57ef0be4ba10a5c78ccbf3a12622d65c316fa8fb7a743"
         },
         {
           "path": "docs/implementation/preparations/task-302.md",
-          "sha256": "712d5c2f358b03a0c7e71018c2554b388f9f0ccec42b36a1d156ad29f71edf64"
+          "sha256": "b73cbf8027f5bcc3620fc9f9d83ea6d593302bac81bf52576d35c89bd8ee1d8f"
         }
       ],
       "staticAspect": "DESIGN-014: MetricsCollector",

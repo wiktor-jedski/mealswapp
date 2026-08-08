@@ -1,5 +1,10 @@
 # Phase 08.02 UAT input traceability
 
+- docs/implementation/preparations/task-292.md and
+  docs/implementation/preparations/task-303.md — passing closure evidence
+  for P08-FIND-283-005; these documents supplement the mandatory reports and
+  do not rewrite the raw BLOCKED rows in the final Task 283 producer report.
+
 - `docs/design/DESIGN-014.md` — `MetricsCollector`: selects the fresh
   requirement reports, preserves truthful `PASS`/`FAIL`/`BLOCKED` status, and
   binds every committed evidence artifact to a SHA-256 fingerprint.
