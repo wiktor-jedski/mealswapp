@@ -1,0 +1,246 @@
+{
+  "exitCode": 0,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR019-STEP-01",
+      "kind": "step",
+      "owner": "frontend-search",
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-019",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR019-CLASSIFICATION-FILTERING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 88
+      },
+      "status": "PASS",
+      "text": "Select an include classification and confirm only matching results appear."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR019-STEP-02",
+      "kind": "step",
+      "owner": "frontend-search",
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-019",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR019-CLASSIFICATION-FILTERING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 89
+      },
+      "status": "PASS",
+      "text": "Select an exclusion and confirm matching results disappear."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR019-STEP-03",
+      "kind": "step",
+      "owner": "frontend-search",
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-019",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR019-CLASSIFICATION-FILTERING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 90
+      },
+      "status": "PASS",
+      "text": "Verify requests use classification IDs, not display labels."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR019-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR019-STEP-04",
+      "kind": "step",
+      "owner": "frontend-search",
+      "requestIds": [
+        "01b23d11-8548-4b3c-85c5-15ed731bc781",
+        "121cfd81-55e3-46b2-901d-aa324feea84d",
+        "2a283235-6320-4639-9d95-e87b0e396108",
+        "38470988-10d7-41ce-a7fe-2644debbc555",
+        "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+        "5b24370a-8659-42f9-a155-af7eb099b1fa",
+        "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5",
+        "62dc06d9-f96c-422c-baa3-44cdd62a07d9",
+        "a8463546-44d4-4ffa-b5ea-be027ba32bdd",
+        "ab208076-c761-4125-9c03-59f0bc401817",
+        "f04860f6-b568-4878-b0dc-460e7191b27f",
+        "f06ba52a-aabf-45ff-872b-a40255a0a38b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-019",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR019-CLASSIFICATION-FILTERING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 91
+      },
+      "status": "PASS",
+      "text": "Rename a classification and confirm filtering still works."
+    }
+  ],
+  "rootCauses": [],
+  "runId": "task283-18daaf60c2e2862e2ded9d11-sw-req-019",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "PASS"
+}

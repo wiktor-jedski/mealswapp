@@ -1,0 +1,55 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR090-STEP-01",
+    "P08-SWR090-ACCEPT-01"
+  ],
+  "kind": "item",
+  "entityId": "967b5dec-24b8-4aaf-8723-87fa787f030a",
+  "name": "Task 283 Task 304 canonical real-stack-desktop-chromium",
+  "idempotencyKey": "8233cffd-c8aa-42ab-a81f-d5b4a10b82b2",
+  "requestIds": [
+    "b3751d5f-d28c-417d-8933-0cdea8fa0902",
+    "cf786ecb-bb33-46bb-9a31-ead323b2dbdf",
+    "5f94847f-aec4-4f87-80e7-794accfca7a0",
+    "f78f3edf-a15e-4f0c-a80e-acac98a298d1",
+    "42392e30-1bb1-49cc-ba29-cf1cf02a85e6",
+    "562d3776-419a-4af0-92e6-a96ba577a9b3"
+  ],
+  "expected": {
+    "active": true,
+    "ownerless": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "requestAuditActions": {
+      "classification.create": 2,
+      "micronutrient.create": 1,
+      "micronutrient.deactivate": 1,
+      "micronutrient.reactivate": 1,
+      "manual_create": 1
+    },
+    "idempotencyCount": 1,
+    "micros": {
+      "Sodium": 125.5,
+      "Task304Microrealstackdesktopchromium": 7.25
+    },
+    "foodCategoryIds": [
+      "3fd15732-e1f4-42a5-9a51-1f214887eaea"
+    ],
+    "culinaryRoleIds": [
+      "48d6787d-c990-4164-80ca-8fab3bbc20c3"
+    ],
+    "allergenKeys": [
+      "dairy",
+      "peanut"
+    ],
+    "generationBefore": "31",
+    "generationAfter": "32",
+    "generationDelta": 1
+  },
+  "generationSnapshots": {
+    "generationBefore": "db24a4cd-a719-4f93-bc8f-4601e08d99d0",
+    "generationAfter": "3d7e40d0-cb40-478f-91f5-5c852a654578"
+  }
+}

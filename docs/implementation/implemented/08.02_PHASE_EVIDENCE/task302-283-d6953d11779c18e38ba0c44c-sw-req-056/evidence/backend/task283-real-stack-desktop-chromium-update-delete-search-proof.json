@@ -1,0 +1,81 @@
+{
+  "actual": {
+    "active": false,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1,
+      "manual_delete": 1,
+      "manual_update": 1
+    },
+    "autocompleteContainsDeleted": false,
+    "culinaryRoleIds": [],
+    "deleted": true,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 12.5,
+      "fat": 2.75,
+      "protein": 21.25
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 update real-stack-desktop-chromium canonical",
+    "ownerless": true,
+    "physicalState": "solid",
+    "requestAuditActions": {
+      "manual_create": 1,
+      "manual_update": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-05",
+      "P08-SWR056-STEP-06",
+      "P08-SWR056-ACCEPT-06"
+    ],
+    "entityId": "7a7459cf-24c3-4d29-afbb-69c7a957c118",
+    "expected": {
+      "active": false,
+      "auditActions": {
+        "manual_create": 1,
+        "manual_delete": 1,
+        "manual_update": 1
+      },
+      "autocompleteContainsDeleted": false,
+      "deleted": true,
+      "idempotencyCount": 1,
+      "macros": {
+        "carbohydrates": 12.5,
+        "fat": 2.75,
+        "protein": 21.25
+      },
+      "name": "Task 283 update real-stack-desktop-chromium canonical"
+    },
+    "idempotencyKey": "ceaac2ce-40c8-4ef0-944d-aed7a261a5d1",
+    "kind": "item",
+    "name": "Task 283 update real-stack-desktop-chromium canonical",
+    "observed": {
+      "autocompleteContainsDeleted": false
+    },
+    "requestIds": [
+      "31d298a8-a79a-4a28-93a4-26a16a633d22",
+      "28b65caf-851c-4101-87fc-5a98d96a3fc7",
+      "f22035fd-1dd2-4569-afa5-e70500fc4b74",
+      "ce2ca41c-49a2-440d-8dbe-df6067ff079b",
+      "b940058e-8a70-44e5-9c0c-05687fbcec12",
+      "6441c3fc-d344-4918-824b-030ca8ee9211",
+      "28781f9d-8974-4c22-b1a0-53bbe565dd4e",
+      "93510e05-36fa-4302-ba73-9ef8aad57abc",
+      "1cf2edb4-9ff7-4078-92e1-2f0d54d7ae95",
+      "90b88335-731d-4a9c-9ab7-b7095060ce8f",
+      "63f8be43-7bf4-4ba2-b27b-594ec0f85a1a"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

@@ -1,0 +1,6 @@
+{"run_id": "303bd5578242f68218a0c939", "event": "database_created"}
+{"run_id": "303bd5578242f68218a0c939", "event": "redis_ready"}
+{"run_id": "303bd5578242f68218a0c939", "event": "migrations_applied"}
+{"run_id": "303bd5578242f68218a0c939", "event": "provider_fixture_ready"}
+{"run_id": "303bd5578242f68218a0c939", "event": "application_ready"}
+{"run_id": "303bd5578242f68218a0c939", "event": "task282_results_finalized"}

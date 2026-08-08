@@ -1,0 +1,874 @@
+{
+  "exitCode": 2,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [
+        "P08-FIND-283-001"
+      ],
+      "id": "P08-SWR056-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+        "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+        "523c0355-530e-46f1-80e0-925f1d58acee",
+        "697ee799-6f18-41bb-85e7-58c95f741c6a",
+        "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+        "9a946c22-698c-4fed-b3f1-c3ad815d954b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 49
+      },
+      "status": "BLOCKED",
+      "text": "Created items are global and have no private owner."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=unchanged",
+        "http_status=400",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-invalid-0-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-invalid-0-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-3.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-3.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-ACCEPT-02",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "11c93098-c5fd-49d0-a51e-b71cdcc9f271",
+        "4ea5041b-6a21-4f38-85d6-d4996609804c",
+        "665c0dd1-e82d-46ec-a4e9-5ae51973257a",
+        "68209180-1fb2-40ec-b9d8-85ae5cd7ae12",
+        "69cf7d0a-f1b0-446f-b6c2-c885c2ebaee6",
+        "982cde31-9093-467a-8db2-ec43af269fce",
+        "eef6b457-37ca-4792-90ab-812d0588a36c",
+        "eefcb1c7-2325-4cb3-9a20-df93519fcf59"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 50
+      },
+      "status": "PASS",
+      "text": "Liquid-density rules are enforced."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=unchanged",
+        "http_status=400",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-invalid-1-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-invalid-2-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-invalid-3-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-invalid-1-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-invalid-2-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-invalid-3-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-invalid-3.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-0.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-1.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-2.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-invalid-3.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-ACCEPT-03",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "11c93098-c5fd-49d0-a51e-b71cdcc9f271",
+        "4ea5041b-6a21-4f38-85d6-d4996609804c",
+        "665c0dd1-e82d-46ec-a4e9-5ae51973257a",
+        "68209180-1fb2-40ec-b9d8-85ae5cd7ae12",
+        "69cf7d0a-f1b0-446f-b6c2-c885c2ebaee6",
+        "982cde31-9093-467a-8db2-ec43af269fce",
+        "eef6b457-37ca-4792-90ab-812d0588a36c",
+        "eefcb1c7-2325-4cb3-9a20-df93519fcf59"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 51
+      },
+      "status": "PASS",
+      "text": "Invalid nutrition/classification/image data is rejected."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "mutation_count=1",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-idempotent-replay-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-idempotent-replay-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-idempotent-replay.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-idempotent-replay.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-ACCEPT-04",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "5b3dfacb-1a96-4339-b4f2-f0e60ade5345",
+        "706cf2a7-c343-46e1-a1ba-9a9cba56942d",
+        "b337b1ec-e56d-4dec-8b97-5e0a291b1533",
+        "ec715dd1-7e4c-45c5-8e6e-0ca81b59f80c"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 52
+      },
+      "status": "PASS",
+      "text": "Create retry does not duplicate the item."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "mutation_count=2",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-update-search.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-ACCEPT-05",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "2caa087c-e629-49be-867a-c69d7c128ba4",
+        "3f1b3526-9bf6-423b-9def-bedec1db1b0e",
+        "4bbfdb18-4d17-4496-98a2-af7872488b45",
+        "73c8cbe4-03e5-4c65-9a04-89b7d73fc3f4",
+        "7bc492c7-6e9b-4d05-8092-516f4159b42f",
+        "7d72537c-ad35-4470-bbfd-25cb2ac00a61",
+        "a2784152-113c-401b-877a-f4d316a4daff",
+        "b054c973-8350-4a58-975e-50b260d1f74a",
+        "c6decdbe-f639-40dd-b317-b19130c75753",
+        "c99e857f-862f-43d0-a597-532bfee00cf0",
+        "cc465b03-6b6a-4410-b430-122014bab5a0",
+        "e215a08d-6b76-444c-9ae3-486dbf8a003d"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 53
+      },
+      "status": "PASS",
+      "text": "Updates become visible in Catalog and Substitution Search."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=3",
+        "mutation_count=3",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-update-delete-search.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-ACCEPT-06",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "12eeb71c-cf1f-4a13-8782-1eb3e3b3127d",
+        "1ad490aa-740d-434c-8a73-6ee2c6982336",
+        "1e066062-ef25-4529-99ad-00712766c61e",
+        "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+        "46844cbd-466b-45f5-a892-e6c476d493ec",
+        "46d7a963-a74a-4088-9940-e01f5c4a9b62",
+        "520f4571-c774-4de6-94d9-25f887d420de",
+        "53857cfa-4b90-4975-bfa7-6318e839ac14",
+        "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+        "75778645-b33d-4930-b0fb-42918d7d2096",
+        "7dbd85a3-d2f4-42d7-a585-07c2030a2d5d",
+        "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+        "91e6b756-df1a-4170-8d1e-2bc07150a161",
+        "949e46d3-de58-4032-90d4-f2cc4c374ef5",
+        "a4a8e840-07dd-4c7e-8f1c-d54e7baea020",
+        "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+        "b6b4534b-f883-4b77-a5d6-fc3a69fc903b",
+        "b9a73e49-6880-476c-bcba-c5a324934abe",
+        "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+        "cf5e031e-2b4d-46bf-aa0d-dc0155322ff6",
+        "dcb22271-3c8d-414d-ae9d-221ebd4c0ee5",
+        "e1d2d19f-b66b-4539-801d-77a2833e2a14"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 54
+      },
+      "status": "PASS",
+      "text": "Deletion removes the item from active search."
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=unchanged",
+        "http_status=503",
+        "rollback_state=complete"
+      ],
+      "criterionId": "P08-SWR056-ACCEPT-07",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-audit-rollback-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-audit-rollback-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-audit-rollback.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-audit-rollback.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-ACCEPT-07",
+      "kind": "criterion",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "91a0fb72-05fe-445b-bd27-9d0adfdfe0c3",
+        "f9673b3b-5da9-4e4b-9c3a-28f5d7db6ed1"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 55
+      },
+      "status": "PASS",
+      "text": "Audit failure rolls back the entire mutation."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR056-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [
+        "P08-FIND-283-001"
+      ],
+      "id": "P08-SWR056-STEP-01",
+      "kind": "step",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+        "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+        "523c0355-530e-46f1-80e0-925f1d58acee",
+        "697ee799-6f18-41bb-85e7-58c95f741c6a",
+        "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+        "9a946c22-698c-4fed-b3f1-c3ad815d954b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 40
+      },
+      "status": "BLOCKED",
+      "text": "Create a solid item."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "metric_basis=100g",
+        "metric_basis=100ml",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR056-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-liquid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-solid-create-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-liquid-create.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-solid-create.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [
+        "P08-FIND-283-001"
+      ],
+      "id": "P08-SWR056-STEP-02",
+      "kind": "step",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "1edb5606-61ac-4775-b553-4a7aa21b3d16",
+        "4c1fd587-253f-4d13-8d81-c599a999b9e9",
+        "523c0355-530e-46f1-80e0-925f1d58acee",
+        "697ee799-6f18-41bb-85e7-58c95f741c6a",
+        "85b45777-435e-44a6-aa95-5db6f2f0cf8f",
+        "9a946c22-698c-4fed-b3f1-c3ad815d954b"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-MANUAL-CATALOG",
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 41
+      },
+      "status": "BLOCKED",
+      "text": "Create a liquid item with density."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "mutation_count=2",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-update-search.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-STEP-03",
+      "kind": "step",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "2caa087c-e629-49be-867a-c69d7c128ba4",
+        "3f1b3526-9bf6-423b-9def-bedec1db1b0e",
+        "4bbfdb18-4d17-4496-98a2-af7872488b45",
+        "73c8cbe4-03e5-4c65-9a04-89b7d73fc3f4",
+        "7bc492c7-6e9b-4d05-8092-516f4159b42f",
+        "7d72537c-ad35-4470-bbfd-25cb2ac00a61",
+        "a2784152-113c-401b-877a-f4d316a4daff",
+        "b054c973-8350-4a58-975e-50b260d1f74a",
+        "c6decdbe-f639-40dd-b317-b19130c75753",
+        "c99e857f-862f-43d0-a597-532bfee00cf0",
+        "cc465b03-6b6a-4410-b430-122014bab5a0",
+        "e215a08d-6b76-444c-9ae3-486dbf8a003d"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 42
+      },
+      "status": "PASS",
+      "text": "Update their names and nutrition."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "mutation_count=2",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-update-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-update-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-update-search.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-STEP-04",
+      "kind": "step",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "2caa087c-e629-49be-867a-c69d7c128ba4",
+        "3f1b3526-9bf6-423b-9def-bedec1db1b0e",
+        "4bbfdb18-4d17-4496-98a2-af7872488b45",
+        "73c8cbe4-03e5-4c65-9a04-89b7d73fc3f4",
+        "7bc492c7-6e9b-4d05-8092-516f4159b42f",
+        "7d72537c-ad35-4470-bbfd-25cb2ac00a61",
+        "a2784152-113c-401b-877a-f4d316a4daff",
+        "b054c973-8350-4a58-975e-50b260d1f74a",
+        "c6decdbe-f639-40dd-b317-b19130c75753",
+        "c99e857f-862f-43d0-a597-532bfee00cf0",
+        "cc465b03-6b6a-4410-b430-122014bab5a0",
+        "e215a08d-6b76-444c-9ae3-486dbf8a003d"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 43
+      },
+      "status": "PASS",
+      "text": "Verify updated search results."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=3",
+        "mutation_count=3",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-update-delete-search.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-STEP-05",
+      "kind": "step",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "12eeb71c-cf1f-4a13-8782-1eb3e3b3127d",
+        "1ad490aa-740d-434c-8a73-6ee2c6982336",
+        "1e066062-ef25-4529-99ad-00712766c61e",
+        "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+        "46844cbd-466b-45f5-a892-e6c476d493ec",
+        "46d7a963-a74a-4088-9940-e01f5c4a9b62",
+        "520f4571-c774-4de6-94d9-25f887d420de",
+        "53857cfa-4b90-4975-bfa7-6318e839ac14",
+        "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+        "75778645-b33d-4930-b0fb-42918d7d2096",
+        "7dbd85a3-d2f4-42d7-a585-07c2030a2d5d",
+        "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+        "91e6b756-df1a-4170-8d1e-2bc07150a161",
+        "949e46d3-de58-4032-90d4-f2cc4c374ef5",
+        "a4a8e840-07dd-4c7e-8f1c-d54e7baea020",
+        "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+        "b6b4534b-f883-4b77-a5d6-fc3a69fc903b",
+        "b9a73e49-6880-476c-bcba-c5a324934abe",
+        "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+        "cf5e031e-2b4d-46bf-aa0d-dc0155322ff6",
+        "dcb22271-3c8d-414d-ae9d-221ebd4c0ee5",
+        "e1d2d19f-b66b-4539-801d-77a2833e2a14"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 44
+      },
+      "status": "PASS",
+      "text": "Delete them."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=3",
+        "mutation_count=3",
+        "rollback_state=committed"
+      ],
+      "criterionId": "P08-SWR056-STEP-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-update-delete-search-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-update-delete-search.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-update-delete-search.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR056-STEP-06",
+      "kind": "step",
+      "owner": "admin-item-curation",
+      "requestIds": [
+        "12eeb71c-cf1f-4a13-8782-1eb3e3b3127d",
+        "1ad490aa-740d-434c-8a73-6ee2c6982336",
+        "1e066062-ef25-4529-99ad-00712766c61e",
+        "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+        "46844cbd-466b-45f5-a892-e6c476d493ec",
+        "46d7a963-a74a-4088-9940-e01f5c4a9b62",
+        "520f4571-c774-4de6-94d9-25f887d420de",
+        "53857cfa-4b90-4975-bfa7-6318e839ac14",
+        "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+        "75778645-b33d-4930-b0fb-42918d7d2096",
+        "7dbd85a3-d2f4-42d7-a585-07c2030a2d5d",
+        "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+        "91e6b756-df1a-4170-8d1e-2bc07150a161",
+        "949e46d3-de58-4032-90d4-f2cc4c374ef5",
+        "a4a8e840-07dd-4c7e-8f1c-d54e7baea020",
+        "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+        "b6b4534b-f883-4b77-a5d6-fc3a69fc903b",
+        "b9a73e49-6880-476c-bcba-c5a324934abe",
+        "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+        "cf5e031e-2b4d-46bf-aa0d-dc0155322ff6",
+        "dcb22271-3c8d-414d-ae9d-221ebd4c0ee5",
+        "e1d2d19f-b66b-4539-801d-77a2833e2a14"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-056",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 45
+      },
+      "status": "PASS",
+      "text": "Verify they disappear from search."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR056-ACCEPT-01",
+        "P08-SWR056-STEP-01",
+        "P08-SWR056-STEP-02"
+      ],
+      "id": "ROOT-T283-MANUAL-CATALOG"
+    }
+  ],
+  "runId": "task302-283-cbbc7115a645e31169391973-sw-req-056",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "BLOCKED"
+}

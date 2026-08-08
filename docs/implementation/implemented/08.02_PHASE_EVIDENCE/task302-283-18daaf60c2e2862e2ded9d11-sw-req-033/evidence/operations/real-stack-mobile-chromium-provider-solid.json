@@ -1,0 +1,29 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR033-STEP-01",
+    "P08-SWR033-STEP-02",
+    "P08-SWR033-STEP-03",
+    "P08-SWR033-STEP-04"
+  ],
+  "kind": "item",
+  "entityId": "6db35c6e-36a9-490e-bbb7-f8adaf71ab57",
+  "name": "Task 283 provider solid real-stack-mobile-chromium",
+  "requestIds": [
+    "2f0d06b2-2ca5-401a-9631-8d7329f5231e",
+    "98b8a4e7-5665-4750-8b42-257b2b4ee5f2",
+    "54be5c18-2a42-4c37-88d0-d9384e5d10b9",
+    "e09ca712-e85e-481a-ba98-c2e9a77a2cf7"
+  ],
+  "expected": {
+    "active": true,
+    "ownerless": true,
+    "physicalState": "solid",
+    "metricBasis": "100g",
+    "macros": {
+      "protein": 12.5,
+      "carbohydrates": 18.25,
+      "fat": 3.75
+    }
+  }
+}

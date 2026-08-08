@@ -1,0 +1,57 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1,
+      "manual_update": 1
+    },
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 8.0,
+      "fat": 9.0,
+      "protein": 7.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 stale real-stack-desktop-chromium fresh",
+    "ownerless": true,
+    "physicalState": "solid",
+    "rowCount": 1,
+    "staleWriteStatus": 409
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR057-STEP-08",
+      "P08-SWR057-ACCEPT-05"
+    ],
+    "entityId": "bd603977-da88-4a43-a7d6-b83884d1fed5",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1,
+        "manual_update": 1
+      },
+      "idempotencyCount": 1,
+      "staleWriteStatus": 409
+    },
+    "idempotencyKey": "d5e03798-d6c8-4378-8fb3-d10eb31f2464",
+    "kind": "item",
+    "name": "Task 283 stale real-stack-desktop-chromium",
+    "observed": {
+      "staleWriteStatus": 409
+    },
+    "requestIds": [
+      "8df5db1f-76bb-4a2b-917b-bc5750944fdd",
+      "7ae5e481-4904-4905-86af-b6ce0082af51",
+      "3ee41f81-75fb-4334-86a3-2e0256c7c28c",
+      "21304fe7-97f9-45bc-8b47-e10b8b4b5dd7"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

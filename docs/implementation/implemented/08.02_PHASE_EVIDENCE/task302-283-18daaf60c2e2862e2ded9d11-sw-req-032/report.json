@@ -1,0 +1,172 @@
+{
+  "exitCode": 0,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "metric_basis=canonical",
+        "request_correlation=metric_imperial"
+      ],
+      "criterionId": "P08-SWR032-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-metric-imperial.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR032-STEP-01",
+      "kind": "step",
+      "owner": "frontend-units",
+      "requestIds": [
+        "46396772-174e-48f3-ac8b-f4a5c35edfbb",
+        "657834a0-15d7-468d-aec6-057acc632f2b",
+        "7fa3e293-1334-4235-9d3d-d467dcfaa1a4",
+        "a67a99e4-87db-4f9f-a193-2a0f1412c2b3",
+        "a9eb9fb1-3c82-423e-849b-2123aa720878",
+        "b2040ae5-972d-4acf-99fb-860c2ffb67a5",
+        "f370074c-f658-4732-9143-79121a3be0d0",
+        "f64037e4-14ea-4c7c-987a-c5850e51447a"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-032",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR032-IMPERIAL-CONVERSION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 100
+      },
+      "status": "PASS",
+      "text": "Switch the UI between metric and imperial."
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=canonical",
+        "request_correlation=metric_imperial"
+      ],
+      "criterionId": "P08-SWR032-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-metric-imperial.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR032-STEP-02",
+      "kind": "step",
+      "owner": "frontend-units",
+      "requestIds": [
+        "46396772-174e-48f3-ac8b-f4a5c35edfbb",
+        "657834a0-15d7-468d-aec6-057acc632f2b",
+        "7fa3e293-1334-4235-9d3d-d467dcfaa1a4",
+        "a67a99e4-87db-4f9f-a193-2a0f1412c2b3",
+        "a9eb9fb1-3c82-423e-849b-2123aa720878",
+        "b2040ae5-972d-4acf-99fb-860c2ffb67a5",
+        "f370074c-f658-4732-9143-79121a3be0d0",
+        "f64037e4-14ea-4c7c-987a-c5850e51447a"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-032",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR032-IMPERIAL-CONVERSION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 101
+      },
+      "status": "PASS",
+      "text": "Verify solid and liquid displays."
+    },
+    {
+      "backendEvidence": [
+        "metric_basis=canonical",
+        "request_correlation=metric_imperial"
+      ],
+      "criterionId": "P08-SWR032-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-metric-imperial-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-metric-imperial.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-metric-imperial.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR032-STEP-03",
+      "kind": "step",
+      "owner": "frontend-units",
+      "requestIds": [
+        "46396772-174e-48f3-ac8b-f4a5c35edfbb",
+        "657834a0-15d7-468d-aec6-057acc632f2b",
+        "7fa3e293-1334-4235-9d3d-d467dcfaa1a4",
+        "a67a99e4-87db-4f9f-a193-2a0f1412c2b3",
+        "a9eb9fb1-3c82-423e-849b-2123aa720878",
+        "b2040ae5-972d-4acf-99fb-860c2ffb67a5",
+        "f370074c-f658-4732-9143-79121a3be0d0",
+        "f64037e4-14ea-4c7c-987a-c5850e51447a"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-032",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR032-IMPERIAL-CONVERSION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 102
+      },
+      "status": "PASS",
+      "text": "Submit an imperial quantity and verify backend calculations match its metric equivalent."
+    }
+  ],
+  "rootCauses": [],
+  "runId": "task283-18daaf60c2e2862e2ded9d11-sw-req-032",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "PASS"
+}

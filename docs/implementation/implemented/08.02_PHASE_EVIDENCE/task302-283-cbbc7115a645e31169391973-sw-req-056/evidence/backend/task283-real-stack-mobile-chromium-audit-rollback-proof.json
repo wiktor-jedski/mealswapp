@@ -1,0 +1,37 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "42",
+    "generationBefore": "42",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-07"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "42",
+      "generationBefore": "42",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "9c79303f-2e33-4dab-bcb7-1c8443449bad",
+      "generationBefore": "a92ea6fb-eed6-4160-8951-7771c4b8868e"
+    },
+    "idempotencyKey": "ce2dc8e2-f3dc-4d9c-b8b4-c2bf128631d8",
+    "kind": "audit_rollback",
+    "name": "Task 283 audit rollback real-stack-mobile-chromium",
+    "requestIds": [
+      "91a0fb72-05fe-445b-bd27-9d0adfdfe0c3"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

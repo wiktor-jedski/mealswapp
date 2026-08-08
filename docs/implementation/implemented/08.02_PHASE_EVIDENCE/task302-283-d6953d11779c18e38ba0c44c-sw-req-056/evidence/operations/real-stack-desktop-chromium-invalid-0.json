@@ -1,0 +1,24 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-ACCEPT-02"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 invalid density real-stack-desktop-chromium",
+  "idempotencyKey": "009b98ff-9079-49c9-8d1b-f71d95559c26",
+  "requestIds": [
+    "a719a24d-6c83-4c97-ab5e-079fb39cc358"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "idempotencyCount": 0,
+    "generationBefore": "3",
+    "generationAfter": "3",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "766984d9-fc76-4b3b-950c-aa27568672aa",
+    "generationAfter": "0062390b-3ad4-45e7-ae26-a20d9ebda104"
+  }
+}

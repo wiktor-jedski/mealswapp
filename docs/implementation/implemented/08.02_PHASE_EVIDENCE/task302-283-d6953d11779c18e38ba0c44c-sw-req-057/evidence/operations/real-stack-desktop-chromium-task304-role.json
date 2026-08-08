@@ -1,0 +1,27 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR057-STEP-02"
+  ],
+  "kind": "classification",
+  "entityId": "807d7902-f3ea-45f5-9302-f911360de3ff",
+  "name": "Task 283 Task 304 role real-stack-desktop-chromium",
+  "requestIds": [
+    "e63becf0-b891-4929-82c1-60f386eed522"
+  ],
+  "expected": {
+    "active": true,
+    "deleted": false,
+    "kind": "culinary_role",
+    "auditActions": {
+      "classification.create": 1
+    },
+    "generationBefore": "28",
+    "generationAfter": "29",
+    "generationDelta": 1
+  },
+  "generationSnapshots": {
+    "generationBefore": "4efb7e7f-d7c9-49c3-bb39-344b96ddbbcb",
+    "generationAfter": "76eafd41-8a5f-4f76-8685-aa4e11f5675d"
+  }
+}

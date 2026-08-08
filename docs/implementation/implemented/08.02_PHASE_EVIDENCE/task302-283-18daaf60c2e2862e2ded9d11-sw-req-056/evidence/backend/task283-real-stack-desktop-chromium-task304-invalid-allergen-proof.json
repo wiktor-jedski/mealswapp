@@ -1,0 +1,39 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "32",
+    "generationBefore": "32",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "requestAuditActions": {},
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-03"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "32",
+      "generationBefore": "32",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "requestAuditActions": {},
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "7b7ead62-f68b-4119-96dd-7921ace73aa3",
+      "generationBefore": "dde90ccc-9fa7-4110-b6cc-e368c982e072"
+    },
+    "idempotencyKey": "a8d89805-1a90-4f4a-b792-6582ac02d250",
+    "kind": "rejected_item",
+    "name": "Task 283 Task 304 invalid allergen real-stack-desktop-chromium",
+    "requestIds": [
+      "39864133-105c-41ea-9754-4561060abfa9"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

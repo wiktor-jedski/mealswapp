@@ -1,0 +1,55 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR090-STEP-01",
+    "P08-SWR090-ACCEPT-01"
+  ],
+  "kind": "item",
+  "entityId": "66dcf0d0-53cb-46ec-9814-b7fa925f1595",
+  "name": "Task 283 Task 304 canonical real-stack-mobile-chromium",
+  "idempotencyKey": "0c349d8a-da03-4991-a8b7-5eb4795edd35",
+  "requestIds": [
+    "30ff6a58-2151-4682-89e3-34f46974eba1",
+    "25767ec9-d5e2-47e9-bab1-1cb8d228e105",
+    "5c5a7aa6-0f28-4bb1-b59c-1a2e655c17ff",
+    "0c3326b1-d122-4f49-ac60-9f94795bf87e",
+    "23c4f64b-e123-48f5-84be-5d43f8fb840e",
+    "af566334-b9df-46bf-92ed-1fa11a6d3cb5"
+  ],
+  "expected": {
+    "active": true,
+    "ownerless": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "requestAuditActions": {
+      "classification.create": 2,
+      "micronutrient.create": 1,
+      "micronutrient.deactivate": 1,
+      "micronutrient.reactivate": 1,
+      "manual_create": 1
+    },
+    "idempotencyCount": 1,
+    "micros": {
+      "Sodium": 125.5,
+      "Task304Microrealstackmobilechromium": 7.25
+    },
+    "foodCategoryIds": [
+      "e21e9764-4c2c-46e6-bde2-9d3c7d4c303e"
+    ],
+    "culinaryRoleIds": [
+      "2845fe7c-f147-4756-a251-3577ac64aefc"
+    ],
+    "allergenKeys": [
+      "dairy",
+      "peanut"
+    ],
+    "generationBefore": "65",
+    "generationAfter": "66",
+    "generationDelta": 1
+  },
+  "generationSnapshots": {
+    "generationBefore": "b903fd89-1f61-4d44-a179-c2f04a56c550",
+    "generationAfter": "9a65ca22-db1e-483e-9d73-e3ce3b189f4e"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "classification.create": 1,
+      "classification.update": 1
+    },
+    "deleted": false,
+    "generationAfter": "8",
+    "generationBefore": "7",
+    "generationDelta": 1,
+    "kind": "food_category",
+    "name": "Task 283 filter real-stack-desktop-chromium renamed",
+    "parentId": null,
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR019-STEP-01",
+      "P08-SWR019-STEP-02",
+      "P08-SWR019-STEP-03",
+      "P08-SWR019-STEP-04",
+      "P08-SWR057-ACCEPT-03",
+      "P08-SWR057-ACCEPT-05"
+    ],
+    "entityId": "c9e8b38b-70b9-48e2-908f-1b2005178ff9",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "classification.create": 1,
+        "classification.update": 1
+      },
+      "generationAfter": "8",
+      "generationBefore": "7",
+      "generationDelta": 1,
+      "kind": "food_category",
+      "parentId": null
+    },
+    "generationSnapshots": {
+      "generationAfter": "9e464044-d9d0-4289-91d0-b7f4541953e0",
+      "generationBefore": "da925281-e8bd-4d5f-8e1b-e69a0dbe2ba5"
+    },
+    "kind": "classification",
+    "name": "Task 283 filter real-stack-desktop-chromium renamed",
+    "requestIds": [
+      "43b23361-7a8f-4f17-89ce-26d371d51307",
+      "69b13c45-45e8-48ef-b2b0-13eb40b98682",
+      "187d7b87-bae3-4201-8f11-873af2acff55",
+      "0e1862c0-8738-4344-a6cb-69e4e4844415",
+      "fa66c0a3-18d4-4a30-8e45-1a86a3a84b70",
+      "0bfbddbb-2e2d-41b5-baec-571bbfe22eb3"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

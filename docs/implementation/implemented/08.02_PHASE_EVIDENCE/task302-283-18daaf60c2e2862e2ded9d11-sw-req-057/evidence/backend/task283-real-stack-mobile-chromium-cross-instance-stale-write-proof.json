@@ -1,0 +1,64 @@
+{
+  "actual": {
+    "active": true,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1,
+      "manual_update": 1
+    },
+    "culinaryRoleIds": [],
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 8.0,
+      "fat": 9.0,
+      "protein": 7.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 stale real-stack-mobile-chromium fresh",
+    "ownerless": true,
+    "physicalState": "solid",
+    "requestAuditActions": {
+      "manual_create": 1,
+      "manual_update": 1
+    },
+    "rowCount": 1,
+    "staleWriteStatus": 409
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR057-STEP-08",
+      "P08-SWR057-ACCEPT-05"
+    ],
+    "entityId": "53b2f466-3e7b-4c97-9e1e-bf1cdd9a9890",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1,
+        "manual_update": 1
+      },
+      "idempotencyCount": 1,
+      "staleWriteStatus": 409
+    },
+    "idempotencyKey": "ef127de3-e52e-47aa-8455-9d83669bf62b",
+    "kind": "item",
+    "name": "Task 283 stale real-stack-mobile-chromium",
+    "observed": {
+      "staleWriteStatus": 409
+    },
+    "requestIds": [
+      "34421eaa-5c15-4474-a567-7f2a0dea0546",
+      "6d6800c0-217e-461c-b694-563595386002",
+      "b706bf20-5392-47f9-a052-874a564d6bb1",
+      "87e647e2-9d92-45b7-9119-c58c91292678"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

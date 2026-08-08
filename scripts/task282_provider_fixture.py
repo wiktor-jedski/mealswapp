@@ -12,9 +12,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 
-def usda_food(name: str = "Fixture lentils") -> dict[str, object]:
+def usda_food(name: str = "Fixture lentils", fdc_id: int = 282001) -> dict[str, object]:
     return {
-        "fdcId": 282001,
+        "fdcId": fdc_id,
         "description": name,
         "servingSize": 100,
         "servingSizeUnit": "g",
@@ -28,7 +28,7 @@ def usda_food(name: str = "Fixture lentils") -> dict[str, object]:
     }
 
 
-def off_product(metadata: bool = False, malformed: bool = False) -> dict[str, object]:
+def off_product(metadata: bool = False, malformed: bool = False, code: str = "282002") -> dict[str, object]:
     nutrients: dict[str, object] = {
         "proteins_100g": "bad" if malformed else 4.5,
         "carbohydrates_100g": 11,
@@ -38,7 +38,7 @@ def off_product(metadata: bool = False, malformed: bool = False) -> dict[str, ob
     if metadata:
         nutrients.update({"energy_modifier": "~", "proteins_unit": "g", "label": "fixture"})
     return {
-        "code": "282002",
+        "code": code,
         "product_name": "Fixture chickpeas",
         "serving_quantity": 100,
         "serving_quantity_unit": "g",
@@ -65,6 +65,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         parameters = parse_qs(parsed.query)
         query = (parameters.get("query") or parameters.get("search_terms") or [""])[0]
+        unique_identity = sum(ord(character) for character in query) if query.startswith("task283-") else 0
         if query in {"timeout", "cancel"}:
             time.sleep(2)
         if query == "outage" or query == "partial" and provider == "usda":
@@ -84,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
             if query == "zero":
                 self._json(200, {"totalHits": 0, "currentPage": 1, "totalPages": 0, "foods": []})
                 return
-            food = usda_food()
+            food = usda_food(fdc_id=282001 + unique_identity)
             if query == "rejected":
                 food["fdcId"] = 0
             if query == "optional":
@@ -100,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
         if query == "zero":
             self._json(200, {"count": 0, "page": 1, "page_count": 0, "page_size": 25, "products": []})
             return
-        product = off_product(metadata=query == "metadata", malformed=query == "malformed-consumed")
+        product = off_product(metadata=query == "metadata", malformed=query == "malformed-consumed", code=str(282002 + unique_identity))
         self._json(200, {"count": 1, "page": 1, "page_count": 1, "page_size": 25, "products": [product]})
 
     def log_message(self, _format: str, *_args: object) -> None:

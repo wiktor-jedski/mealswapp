@@ -1,0 +1,122 @@
+{
+  "actual": {
+    "active": false,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1,
+      "manual_delete": 1
+    },
+    "catalogExcludesPrivate": true,
+    "culinaryRoleIds": [],
+    "deleted": true,
+    "deletedAutocompleteContainsGlobal": false,
+    "deletedCatalogContainsGlobal": false,
+    "deletedPickerContainsGlobal": false,
+    "deletedSubstitutionContainsGlobal": false,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "mobileCatalogContainsGlobal": true,
+    "mobileDeletedAutocompleteContainsGlobal": false,
+    "mobilePickerContainsGlobal": true,
+    "mobileSubstitutionContainsGlobal": true,
+    "name": "Task 283 Task 303 mobile target real-stack-mobile-chromium",
+    "ownerless": true,
+    "partition": {
+      "globalCount": 1,
+      "globalOwnerless": true,
+      "privateCount": 1,
+      "privateOwned": true
+    },
+    "physicalState": "solid",
+    "requestAuditActions": {
+      "manual_create": 2
+    },
+    "rowCount": 1,
+    "substitutionExcludesPrivate": true
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-01",
+      "P08-SWR056-STEP-02",
+      "P08-SWR056-STEP-03",
+      "P08-SWR056-STEP-04",
+      "P08-SWR056-STEP-05",
+      "P08-SWR056-STEP-06",
+      "P08-SWR056-ACCEPT-01",
+      "P08-SWR056-ACCEPT-05",
+      "P08-SWR056-ACCEPT-06",
+      "P08-SWR033-STEP-05"
+    ],
+    "entityId": "3945b5d0-5b61-4c45-973a-1353ffeeeff0",
+    "expected": {
+      "active": false,
+      "auditActions": {
+        "manual_create": 1,
+        "manual_delete": 1
+      },
+      "catalogExcludesPrivate": true,
+      "deleted": true,
+      "deletedAutocompleteContainsGlobal": false,
+      "deletedCatalogContainsGlobal": false,
+      "deletedPickerContainsGlobal": false,
+      "deletedSubstitutionContainsGlobal": false,
+      "idempotencyCount": 1,
+      "mobileCatalogContainsGlobal": true,
+      "mobileDeletedAutocompleteContainsGlobal": false,
+      "mobilePickerContainsGlobal": true,
+      "mobileSubstitutionContainsGlobal": true,
+      "name": "Task 283 Task 303 mobile target real-stack-mobile-chromium",
+      "ownerless": true,
+      "partition": {
+        "globalCount": 1,
+        "globalOwnerless": true,
+        "privateCount": 1,
+        "privateOwned": true
+      },
+      "substitutionExcludesPrivate": true
+    },
+    "idempotencyKey": "800b4359-52c3-453d-a751-e8612d5a1c76",
+    "kind": "item",
+    "name": "Task 283 Task 303 mobile target real-stack-mobile-chromium",
+    "observed": {
+      "catalogExcludesPrivate": true,
+      "deletedAutocompleteContainsGlobal": false,
+      "deletedCatalogContainsGlobal": false,
+      "deletedPickerContainsGlobal": false,
+      "deletedSubstitutionContainsGlobal": false,
+      "mobileCatalogContainsGlobal": true,
+      "mobileDeletedAutocompleteContainsGlobal": false,
+      "mobilePickerContainsGlobal": true,
+      "mobileSubstitutionContainsGlobal": true,
+      "substitutionExcludesPrivate": true
+    },
+    "privateItemId": "46561b4d-a1aa-4f61-b95d-e4eaaa440287",
+    "requestIds": [
+      "bef8bfa0-52d9-4810-95af-c3644f9426db",
+      "097d743c-40d1-4214-bbc5-f3c4c8ee24db",
+      "3e016740-9fd9-4f69-9869-7f0af6d13ac7",
+      "cb2ad3eb-d9a9-4fa8-991d-09a3902173c9",
+      "6039d097-37c9-43da-8ff6-67e7927a25fd",
+      "d9c6489d-6c88-40ba-92f4-243bea061d82",
+      "0c5b5805-c79f-433e-8671-62c93632a613",
+      "7f05d31a-6ef4-455c-ad79-1e4add758240",
+      "7ebc46e0-9e32-4d8e-b496-23a8c9b3f65d",
+      "90e84775-aa7c-4544-884a-22889b05f21a",
+      "7feae63d-eebb-46c1-b756-fdea4b51bdb8",
+      "45304662-b027-4f3c-8c20-d9edd955e0c3"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

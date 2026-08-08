@@ -1,0 +1,49 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "classification.create": 1
+    },
+    "deleted": false,
+    "generationAfter": "31",
+    "generationBefore": "30",
+    "generationDelta": 1,
+    "kind": "culinary_role",
+    "name": "Task 283 Task 304 role real-stack-desktop-chromium",
+    "parentId": null,
+    "requestAuditActions": {
+      "classification.create": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR057-STEP-02"
+    ],
+    "entityId": "48d6787d-c990-4164-80ca-8fab3bbc20c3",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "classification.create": 1
+      },
+      "deleted": false,
+      "generationAfter": "31",
+      "generationBefore": "30",
+      "generationDelta": 1,
+      "kind": "culinary_role"
+    },
+    "generationSnapshots": {
+      "generationAfter": "213a6405-2c50-465b-aae2-69ad6daa1f15",
+      "generationBefore": "601fc02e-6e66-4a72-8ffb-4e423be76d6e"
+    },
+    "kind": "classification",
+    "name": "Task 283 Task 304 role real-stack-desktop-chromium",
+    "requestIds": [
+      "cf786ecb-bb33-46bb-9a31-ead323b2dbdf"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}
