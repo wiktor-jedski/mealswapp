@@ -9,9 +9,15 @@
     initSidebar
   } from "../stores/sidebar";
   import { resolvedTheme, setThemePreference } from "../stores/theme";
-  import { preferencesStore, setUnitSystem } from "../stores/preferences";
+  import {
+    preferencesStore,
+    retryUnitPreference,
+    setUnitSystem,
+    unitPreferenceStatusStore
+  } from "../stores/preferences";
   import { authSessionStore, clearAuthSession } from "../stores/auth-session";
   import { buildAuthGuardDecision } from "../stores/auth-surface";
+  import { resolveAdminAccess } from "../admin-access";
   import type {
     SavedItem,
     SavedItemsEnvelope,
@@ -25,9 +31,10 @@
   // Implements DESIGN-018 AuthenticatedActionGuard sidebar protected actions through AuthSessionStore.
 
   interface Props {
-    activeView?: "search" | "subscription" | "privacy" | "terms";
+    activeView?: "search" | "subscription" | "administration" | "privacy" | "terms";
     onNavigateSearch?: () => void;
     onNavigateSubscription?: () => void;
+    onNavigateAdministration?: () => void;
     onNavigatePrivacy?: () => void;
     onNavigateTerms?: () => void;
     onSignIn?: () => void;
@@ -38,6 +45,7 @@
     activeView = "search",
     onNavigateSearch = () => undefined,
     onNavigateSubscription = () => undefined,
+    onNavigateAdministration = () => undefined,
     onNavigatePrivacy = () => undefined,
     onNavigateTerms = () => undefined,
     onSignIn = () => undefined,
@@ -71,6 +79,8 @@
   let loadedForUserId = $state<string | null>(null);
   let authenticating = $derived($authSessionStore.status === "unknown" || $authSessionStore.status === "authenticating");
   let authenticated = $derived(sidebarProtectedActionsAllowed());
+  /** Fail-closed Administration visibility shared with the route guard. */
+  let administrationAllowed = $derived(resolveAdminAccess($authSessionStore) === "allowed");
 
   onMount(() => {
     initSidebar();
@@ -184,12 +194,14 @@
     setMobileOpen(false);
   }
 
-  /** Navigates between authenticated top-level Search and Subscription views while closing the mobile drawer. */
-  function onSidebarNavigationSelect(view: "search" | "subscription"): void {
+  /** Navigates between authenticated top-level Search, Subscription, and Administration views while closing the mobile drawer. */
+  function onSidebarNavigationSelect(view: "search" | "subscription" | "administration"): void {
     if (view === "search") {
       onNavigateSearch();
-    } else {
+    } else if (view === "subscription") {
       onNavigateSubscription();
+    } else {
+      onNavigateAdministration();
     }
     setMobileOpen(false);
   }
@@ -212,6 +224,14 @@
    */
   function onThemeToggle(): void {
     setThemePreference($resolvedTheme === "dark" ? "light" : "dark");
+  }
+
+  /** Keeps the confirmed value visible while an authenticated profile update is pending. */
+  function onUnitSystemChange(event: Event): void {
+    const select = event.currentTarget as HTMLSelectElement;
+    const requested = select.value as UnitSystem;
+    select.value = $preferencesStore.unitSystem;
+    void setUnitSystem(requested);
   }
 
   /** Branding shown in the sidebar header; falls back to the product name when the session has no display name. */
@@ -314,13 +334,35 @@
         id="sidebar-unit-system"
         class="min-w-0 flex-1 rounded border border-[var(--color-border)] bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         value={$preferencesStore.unitSystem}
-        onchange={(event) => setUnitSystem((event.currentTarget as HTMLSelectElement).value as UnitSystem)}
+        disabled={$unitPreferenceStatusStore.state === "loading"
+          || $unitPreferenceStatusStore.state === "saving"
+          || ($unitPreferenceStatusStore.state === "error" && $unitPreferenceStatusStore.operation === "load")}
+        aria-describedby={$unitPreferenceStatusStore.state === "error" ? "sidebar-unit-status" : undefined}
+        aria-busy={$unitPreferenceStatusStore.state === "loading" || $unitPreferenceStatusStore.state === "saving"}
+        onchange={onUnitSystemChange}
       >
         {#each unitSystems as unit (unit.value)}
           <option value={unit.value}>{unit.label}</option>
         {/each}
       </select>
     </div>
+    {#if $unitPreferenceStatusStore.state === "loading" || $unitPreferenceStatusStore.state === "saving"}
+      <p id="sidebar-unit-status" class="text-xs text-[var(--color-muted)]" aria-live="polite">
+        {$unitPreferenceStatusStore.state === "loading" ? "Loading account units…" : "Saving units…"}
+      </p>
+    {:else if $unitPreferenceStatusStore.state === "error"}
+      <div id="sidebar-unit-status" class="flex items-start gap-2 text-xs text-[var(--color-error)]" role="alert">
+        <span>{$unitPreferenceStatusStore.message}</span>
+        <button
+          type="button"
+          class="rounded underline focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          onclick={() => void retryUnitPreference()}
+          data-sidebar-units-retry
+        >
+          Retry
+        </button>
+      </div>
+    {/if}
 
     {#if !authenticating}
       {#if !authenticated}
@@ -365,6 +407,18 @@
           >
             Subscription
           </button>
+          {#if administrationAllowed}
+            <!-- Implements DESIGN-009 UserAdminPanel admin-only navigation visibility from the authenticated session role. -->
+            <button
+              type="button"
+              class="w-full rounded border px-3 py-2 text-left text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] {activeView === 'administration' ? 'border-[var(--color-primary)] text-[var(--color-text)]' : 'border-transparent text-[var(--color-muted)]'}"
+              aria-current={activeView === "administration" ? "page" : undefined}
+              onclick={() => onSidebarNavigationSelect("administration")}
+              data-sidebar-nav-administration
+            >
+              Administration
+            </button>
+          {/if}
         </nav>
 
         <!-- Implements DESIGN-001 SidebarComponent authenticated search history list loaded from generated Phase 03 contracts. -->

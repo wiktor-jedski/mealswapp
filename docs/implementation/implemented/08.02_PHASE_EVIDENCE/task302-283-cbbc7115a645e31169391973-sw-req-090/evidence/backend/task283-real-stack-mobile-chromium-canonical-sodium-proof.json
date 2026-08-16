@@ -1,0 +1,52 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {
+      "Sodium": 125.5
+    },
+    "name": "Task 283 Sodium real-stack-mobile-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR090-STEP-01",
+      "P08-SWR090-ACCEPT-01"
+    ],
+    "entityId": "eb2d04eb-fa2f-4394-9222-40de4ba67f97",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "idempotencyCount": 1,
+      "micros": {
+        "Sodium": 125.5
+      }
+    },
+    "idempotencyKey": "768ac227-6d58-4ba1-9179-ac4de41bc679",
+    "kind": "item",
+    "name": "Task 283 Sodium real-stack-mobile-chromium",
+    "requestIds": [
+      "08ac4662-faaa-46e6-93a6-99c30891a057"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

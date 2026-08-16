@@ -1,0 +1,45 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-STEP-05",
+    "P08-SWR056-STEP-06",
+    "P08-SWR056-ACCEPT-06"
+  ],
+  "kind": "item",
+  "entityId": "90ae7766-116a-4bce-ba27-ce0af45b5ea7",
+  "name": "Task 283 update real-stack-desktop-chromium canonical",
+  "idempotencyKey": "09d11365-500e-413f-be4b-db6c2ad94944",
+  "requestIds": [
+    "520f4571-c774-4de6-94d9-25f887d420de",
+    "540344a5-7449-4adc-8ce7-cfa1a0b6773f",
+    "ac5a58f3-a162-4db6-a82d-e8adb98bec40",
+    "53857cfa-4b90-4975-bfa7-6318e839ac14",
+    "1e066062-ef25-4529-99ad-00712766c61e",
+    "bfa3e22c-5354-4469-8a9c-88b2c7a68d3d",
+    "7dbfb83e-bd3f-4b7e-ab53-bbdb521b4a87",
+    "46844cbd-466b-45f5-a892-e6c476d493ec",
+    "1ad490aa-740d-434c-8a73-6ee2c6982336",
+    "25482ba1-d7fb-44f1-b2cf-5424119e4ad8",
+    "46d7a963-a74a-4088-9940-e01f5c4a9b62"
+  ],
+  "expected": {
+    "active": false,
+    "deleted": true,
+    "auditActions": {
+      "manual_create": 1,
+      "manual_update": 1,
+      "manual_delete": 1
+    },
+    "idempotencyCount": 1,
+    "name": "Task 283 update real-stack-desktop-chromium canonical",
+    "macros": {
+      "protein": 21.25,
+      "carbohydrates": 12.5,
+      "fat": 2.75
+    },
+    "autocompleteContainsDeleted": false
+  },
+  "observed": {
+    "autocompleteContainsDeleted": false
+  }
+}

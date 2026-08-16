@@ -7,13 +7,92 @@ import subprocess
 import sys
 import os
 import argparse
+import errno
+import select
+import threading
+import time
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
 OPEN_POINTS = ROOT / "docs" / "implementation" / "04_OPEN.md"
+PHASE08_COVERAGE_PROFILE = BACKEND / "phase08-coverage.out"
+_OUTPUT_LOCK = threading.Lock()
+
+
+def _write_text(stream: object, text: str, flush: bool = False) -> None:
+	"""Write complete synchronized gate output even when the parent descriptor is non-blocking."""
+	if not text:
+		return
+	with _OUTPUT_LOCK:
+		try:
+			fd = stream.fileno()  # type: ignore[attr-defined]
+		except (AttributeError, OSError):
+			stream.write(text)  # type: ignore[attr-defined]
+			if flush:
+				stream.flush()  # type: ignore[attr-defined]
+			return
+		encoding = getattr(stream, "encoding", None)
+		data = text.encode(encoding if isinstance(encoding, str) else "utf-8", errors="replace")
+		offset = 0
+		while offset < len(data):
+			try:
+				offset += os.write(fd, data[offset:])
+			except BlockingIOError as error:
+				if error.errno not in {errno.EAGAIN, errno.EWOULDBLOCK}:
+					raise
+				select.select([], [fd], [], 1)
+
+
+def safe_print(*values: object, sep: str = " ", end: str = "\n", file: object | None = None, flush: bool = False) -> None:
+	"""Serialize parent-process output without relying on TextIOWrapper's non-blocking writer."""
+	_write_text(file or sys.stdout, sep.join(str(value) for value in values) + end, flush)
+
+
+print = safe_print
+
+
+@dataclass(frozen=True)
+class CheckStep:
+	name: str
+	action: Callable[[], object]
+
+
+def execute_steps(steps: list[CheckStep], *, max_workers: int | None = None) -> dict[str, object]:
+	"""Run independent quality-gate steps concurrently and preserve failure semantics."""
+	if not steps:
+		return {}
+	workers = min(max_workers or len(steps), len(steps))
+	results: dict[str, object] = {}
+	failures: list[BaseException] = []
+
+	def execute(step: CheckStep) -> object:
+		started = time.perf_counter()
+		print(f"==> {step.name}", flush=True)
+		try:
+			return step.action()
+		finally:
+			elapsed = time.perf_counter() - started
+			print(f"<== {step.name} ({elapsed:.1f}s)", flush=True)
+
+	with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mealswapp-check") as executor:
+		futures = {executor.submit(execute, step): step for step in steps}
+		for future in as_completed(futures):
+			step = futures[future]
+			try:
+				results[step.name] = future.result()
+			except BaseException as exc:
+				print(f"FAILED: {step.name}: {exc}", file=sys.stderr, flush=True)
+				failures.append(exc)
+	if failures:
+		raise failures[0]
+	return results
 
 reqs = """[SW-REQ-001]
 [SW-REQ-002]
@@ -136,6 +215,13 @@ def validate_go_coverage() -> str:
 	result = run_env(["go", "tool", "cover", "-func=coverage.out"], BACKEND, capture=True)
 	print(result.stdout, end="")
 	validate_phase07_go_coverage(result.stdout)
+	print("+ go test ./internal/... -count=1 -coverpkg=./internal/... -coverprofile=phase08-coverage.out")
+	run_env(
+		["go", "test", "./internal/...", "-p", "1", "-count=1", "-coverpkg=./internal/...", "-coverprofile=phase08-coverage.out"],
+		BACKEND,
+		extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/12"},
+	)
+	validate_phase08_go_coverage(PHASE08_COVERAGE_PROFILE.read_text(encoding="utf-8"))
 	return result.stdout
 
 
@@ -150,31 +236,264 @@ def validate_frontend_coverage() -> str:
 	if len(columns) < 3 or columns[1] != "100.00" or columns[2] != "100.00":
 		validate_documented_frontend_coverage_deviations(coverage_output, all_files)
 	validate_phase07_frontend_coverage(coverage_output)
+	validate_phase08_frontend_coverage(coverage_output)
 	return coverage_output
 
 
 def validate_documented_frontend_coverage_deviations(coverage_output: str, all_files: str) -> None:
 	# Implements DESIGN-014 MetricsCollector documented coverage-deviation gate.
-	open_points = OPEN_POINTS.read_text(encoding="utf-8")
-	undocumented = []
-	for line in coverage_output.splitlines():
-		stripped = line.strip()
-		if not stripped.startswith("src/"):
-			continue
-		columns = [part.strip() for part in stripped.split("|")]
-		if len(columns) < 3:
-			continue
-		path, funcs, lines = columns[:3]
-		if funcs != "100.00" or lines != "100.00":
-			if path not in open_points:
-				undocumented.append(f"{path} ({funcs}% funcs, {lines}% lines)")
-	if undocumented:
-		raise SystemExit(
-			"Frontend coverage below 100% without documented deviations: "
-			+ ", ".join(undocumented)
-			+ f"; aggregate row: {all_files}"
-		)
+	validate_frontend_exception_contract(coverage_output, OPEN_POINTS.read_text(encoding="utf-8"))
 	print(f"Frontend coverage below 100% with documented deviations: {all_files}")
+
+
+PHASE08_GO_SOURCES = {
+	"internal/app/app.go",
+	"internal/cache/classification_generation.go",
+	"internal/cache/classification_invalidator.go",
+	"internal/cache/search_cache.go",
+	"internal/cache/user_purger.go",
+	"internal/curation/validation.go",
+	"internal/customitem/service.go",
+	"internal/dataimporter/service.go",
+	"internal/deletionworker/account_deletion.go",
+	"internal/externaldata/normalizer.go",
+	"internal/externaldata/openfoodfacts.go",
+	"internal/externaldata/rate_limit.go",
+	"internal/externaldata/search_proxy.go",
+	"internal/externaldata/usda.go",
+	"internal/httpapi/admin_controller.go",
+	"internal/httpapi/auth_controller.go",
+	"internal/httpapi/classification_admin_controller.go",
+	"internal/httpapi/curation_validation.go",
+	"internal/httpapi/custom_item_controller.go",
+	"internal/httpapi/external_search_controller.go",
+	"internal/httpapi/filter_option_controller.go",
+	"internal/httpapi/import_controller.go",
+	"internal/httpapi/manual_item_controller.go",
+	"internal/httpapi/profile_controller.go",
+	"internal/httpapi/router.go",
+	"internal/httpapi/search_validation.go",
+	"internal/httpapi/user_admin_controller.go",
+	"internal/itemcurator/service.go",
+	"internal/observability/admin_external.go",
+	"internal/repository/admin_user_repository.go",
+	"internal/repository/allergen_vocabulary_repository.go",
+	"internal/repository/classification_repository.go",
+	"internal/repository/compliance_repository.go",
+	"internal/repository/curated_import_repository.go",
+	"internal/repository/custom_food_repository.go",
+	"internal/repository/errors.go",
+	"internal/repository/food_repository.go",
+	"internal/repository/manual_food_repository.go",
+	"internal/repository/postgres.go",
+	"internal/search/catalog_service.go",
+	"internal/search/filter_options.go",
+	"internal/search/substitution_service.go",
+	"internal/security/normalizer.go",
+	"internal/tagmanager/service.go",
+	"internal/useradmin/service.go",
+	"internal/userdata/deletion.go",
+	"internal/userdata/export.go",
+}
+PHASE08_FRONTEND_SOURCES = {
+	"src/lib/admin-access.ts",
+	"src/lib/admin-workflows.ts",
+	"src/lib/api/account-data-client.ts",
+	"src/lib/api/admin-client.ts",
+	"src/lib/api/custom-item-client.ts",
+	"src/lib/api/external-admin-client.ts",
+	"src/lib/api/filter-options-client.ts",
+	"src/lib/api/generated.ts",
+	"src/lib/shell-routing.ts",
+	"src/lib/substitution-filter-options.ts",
+}
+BACKEND_EXCEPTION_REASONS = {
+	"B1": "Defensive dependency, encoder, or claim-corruption branch; evidence: focused unit and HTTP error-path suites.",
+	"B2": "Repeated safe repository or HTTP error mapping; evidence: repository, HTTP, and live integration suites.",
+	"B3": "Configuration, cache, or wiring fallback; evidence: aggregate bootstrap and live-dependency suites.",
+	"B4": "Instrumentation-only path; evidence: observability unit and load suites.",
+}
+FRONTEND_EXCEPTION_REASONS = {
+	"F1": "Bun emits no stable line range or only callback instrumentation; evidence: focused unit and browser suites.",
+	"F2": "Function instrumentation only; evidence: focused unit and browser suites.",
+	"F3": "Generated unreachable fallback; evidence: generated-contract drift and client suites.",
+	"F4": "Defensive decoder, transport, or browser-dependency fallback; evidence: focused client and browser suites.",
+	"F5": "Bounded guard, impossible-state projection, or formatting fallback; evidence: focused state and component suites.",
+}
+
+
+@dataclass(frozen=True)
+class GoCoverage:
+	covered: int
+	total: int
+	uncovered: str
+
+
+@dataclass(frozen=True)
+class FrontendCoverage:
+	functions: str
+	lines: str
+	uncovered: str
+
+
+def phase_section(document: str, phase: str) -> str:
+	match = re.search(rf"(?ms)^## {re.escape(phase)}\s*$.*?(?=^## |\Z)", document)
+	if not match:
+		raise SystemExit(f"Coverage contract is missing the {phase} section.")
+	return match.group(0)
+
+
+def marked_contract(section: str, name: str) -> str:
+	match = re.search(
+		rf"(?s)<!-- {re.escape(name)}:start -->(.*?)<!-- {re.escape(name)}:end -->",
+		section,
+	)
+	if not match:
+		raise SystemExit(f"Coverage contract is missing or malformed: {name}.")
+	return match.group(1)
+
+
+def parse_go_profile(profile: str) -> dict[str, GoCoverage]:
+	blocks: dict[tuple[str, str, str, int], bool] = {}
+	for line in profile.splitlines()[1:]:
+		match = re.fullmatch(r"\S+/backend/(internal/\S+?):(\d+\.\d+),(\d+\.\d+)\s+(\d+)\s+(\d+)", line.strip())
+		if not match:
+			raise SystemExit(f"Malformed Go coverage profile row: {line}")
+		path, start, end, statements, count = match.groups()
+		key = (path, start, end, int(statements))
+		blocks[key] = blocks.get(key, False) or int(count) > 0
+	rows: dict[str, GoCoverage] = {}
+	for path in sorted({key[0] for key in blocks}):
+		file_blocks = [(key, covered) for key, covered in blocks.items() if key[0] == path]
+		total = sum(key[3] for key, _ in file_blocks)
+		covered = sum(key[3] for key, hit in file_blocks if hit)
+		uncovered = ",".join(f"{key[1]}-{key[2]}" for key, hit in file_blocks if not hit)
+		rows[path] = GoCoverage(covered, total, uncovered or "-")
+	return rows
+
+
+def parse_frontend_coverage(coverage_output: str) -> dict[str, FrontendCoverage]:
+	rows = {}
+	for line in coverage_output.splitlines():
+		columns = [part.strip() for part in line.strip().split("|")]
+		if len(columns) >= 3 and columns[0].startswith("src/"):
+			rows[columns[0]] = FrontendCoverage(columns[1], columns[2], columns[3] if len(columns) > 3 and columns[3] else "-")
+	return rows
+
+
+def parse_reason_catalog(contract: str, reasons: dict[str, str]) -> None:
+	for reason_id, reason in reasons.items():
+		if f"- `{reason_id}` — {reason}" not in contract:
+			raise SystemExit(f"Coverage contract has a missing or unjustified reason {reason_id}.")
+
+
+def parse_backend_exceptions(contract: str) -> dict[str, tuple[GoCoverage, str]]:
+	rows = {}
+	for line in contract.splitlines():
+		if not line.lstrip().startswith("| `internal/"):
+			continue
+		columns = [part.strip() for part in line.strip().strip("|").split("|")]
+		if len(columns) != 5:
+			raise SystemExit(f"Malformed Phase 08 backend coverage exception row: {line}")
+		path = columns[0].strip("`")
+		count_match = re.fullmatch(r"`(\d+)/(\d+)`", columns[1])
+		coverage_match = re.fullmatch(r"`(\d+\.\d)%`", columns[2])
+		ranges_match = re.fullmatch(r"`([^`]+)`", columns[3])
+		reason_match = re.fullmatch(r"`(B[1-4])`", columns[4])
+		if not all((count_match, coverage_match, ranges_match, reason_match)):
+			raise SystemExit(f"Malformed Phase 08 backend coverage exception row: {line}")
+		covered, total = map(int, count_match.groups())
+		expected_percent = f"{covered / total * 100:.1f}"
+		if coverage_match.group(1) != expected_percent:
+			raise SystemExit(f"Malformed Phase 08 backend percentage for {path}: expected {expected_percent}%.")
+		if path in rows:
+			raise SystemExit(f"Duplicate Phase 08 backend coverage exception row: {path}.")
+		rows[path] = (GoCoverage(covered, total, ranges_match.group(1)), reason_match.group(1))
+	return rows
+
+
+def parse_frontend_exceptions(contract: str) -> dict[str, tuple[str, FrontendCoverage, str]]:
+	rows = {}
+	for line in contract.splitlines():
+		if not line.lstrip().startswith("| `src/"):
+			continue
+		columns = [part.strip() for part in line.strip().strip("|").split("|")]
+		if len(columns) != 6:
+			raise SystemExit(f"Malformed frontend coverage exception row: {line}")
+		path = columns[0].strip("`")
+		phase = columns[1]
+		funcs = columns[2].removesuffix("%")
+		lines = columns[3].removesuffix("%")
+		uncovered = columns[4].strip("`")
+		reason = columns[5].strip("`")
+		if not re.fullmatch(r"\d+\.\d{2}", funcs) or not re.fullmatch(r"\d+\.\d{2}", lines) or reason not in FRONTEND_EXCEPTION_REASONS:
+			raise SystemExit(f"Malformed frontend coverage exception row: {line}")
+		if path in rows:
+			raise SystemExit(f"Duplicate frontend coverage exception row: {path}.")
+		rows[path] = (phase, FrontendCoverage(funcs, lines, uncovered), reason)
+	return rows
+
+
+def validate_phase08_go_coverage(profile: str, document: str | None = None) -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 08 statement/range exception gate.
+	section = phase_section(document if document is not None else OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+	contract = marked_contract(section, "phase08-backend-coverage-contract")
+	parse_reason_catalog(contract, BACKEND_EXCEPTION_REASONS)
+	measured = parse_go_profile(profile)
+	missing_sources = sorted(PHASE08_GO_SOURCES - measured.keys())
+	if missing_sources:
+		raise SystemExit("Phase 08 Go coverage is missing runtime sources: " + ", ".join(missing_sources))
+	measured = {path: measured[path] for path in PHASE08_GO_SOURCES}
+	below = {path: row for path, row in measured.items() if row.covered != row.total}
+	documented = parse_backend_exceptions(contract)
+	if documented.keys() != below.keys():
+		missing = sorted(below.keys() - documented.keys())
+		over_broad = sorted(documented.keys() - below.keys())
+		raise SystemExit(f"Phase 08 Go exceptions do not match measured below-100 sources; missing={missing}, over-broad={over_broad}.")
+	for path, actual in below.items():
+		if documented[path][0] != actual:
+			raise SystemExit(f"Phase 08 Go exception is stale for {path}: documented={documented[path][0]}, measured={actual}.")
+	covered = sum(row.covered for row in measured.values())
+	total = sum(row.total for row in measured.values())
+	summary = f"Measured Phase 08 scope: `{covered}/{total}` statements (`{covered / total * 100:.1f}%`)."
+	if summary not in contract:
+		raise SystemExit(f"Phase 08 Go exception summary is stale or malformed; expected: {summary}")
+	print(f"Phase 08 Go coverage below 100% with exact measured exceptions: {covered}/{total} ({covered / total * 100:.1f}%).")
+
+
+def validate_frontend_exception_contract(coverage_output: str, document: str) -> None:
+	section = phase_section(document, "Phase 08")
+	contract = marked_contract(section, "frontend-coverage-contract")
+	parse_reason_catalog(contract, FRONTEND_EXCEPTION_REASONS)
+	measured = parse_frontend_coverage(coverage_output)
+	below = {path: row for path, row in measured.items() if row.functions != "100.00" or row.lines != "100.00"}
+	documented = parse_frontend_exceptions(contract)
+	if documented.keys() != below.keys():
+		missing = sorted(below.keys() - documented.keys())
+		over_broad = sorted(documented.keys() - below.keys())
+		raise SystemExit(f"Frontend exceptions do not match measured below-100 rows; missing={missing}, over-broad={over_broad}.")
+	for path, actual in below.items():
+		if documented[path][1] != actual:
+			raise SystemExit(f"Frontend exception is stale for {path}: documented={documented[path][1]}, measured={actual}.")
+
+
+def validate_phase08_frontend_coverage(coverage_output: str, document: str | None = None) -> None:
+	# Implements DESIGN-014 MetricsCollector Phase 08 semantic frontend exception gate.
+	section = phase_section(document if document is not None else OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+	contract = marked_contract(section, "frontend-coverage-contract")
+	measured = parse_frontend_coverage(coverage_output)
+	missing = sorted(PHASE08_FRONTEND_SOURCES - measured.keys())
+	if missing:
+		raise SystemExit("Phase 08 frontend coverage is missing source rows: " + ", ".join(missing))
+	documented = parse_frontend_exceptions(contract)
+	for path in PHASE08_FRONTEND_SOURCES:
+		actual = measured[path]
+		below = actual.functions != "100.00" or actual.lines != "100.00"
+		if below and (path not in documented or documented[path][0] != "Phase 08"):
+			raise SystemExit(f"Phase 08 frontend exception is missing or not phase-bound for {path}.")
+		if not below and path in documented:
+			raise SystemExit(f"Phase 08 frontend exception is over-broad for fully covered source {path}.")
+	print("Phase 08 frontend coverage has exact phase-bound measured exceptions.")
 
 
 PHASE07_GO_PACKAGES = {
@@ -197,35 +516,50 @@ PHASE07_FRONTEND_SOURCES = {
 }
 
 
-def validate_phase07_go_coverage(coverage_output: str) -> None:
+def validate_phase07_go_coverage(_coverage_output: str) -> None:
 	# Implements DESIGN-014 MetricsCollector Phase 07 coverage-deviation gate.
 	open_points = OPEN_POINTS.read_text(encoding="utf-8")
+	package_totals: dict[str, str] = {}
 	below_functions = []
-	for line in coverage_output.splitlines():
-		match = re.match(r"^.+?/backend/(internal/(?:dailydiet|optimization|queue|worker)/[^:]+):(\d+):\s+(\S+)\s+([0-9.]+%)$", line)
-		if match and match.group(4) != "100.0%":
-			path, declaration_line, function, coverage = match.groups()
-			marker = f"`{path}:{declaration_line} {function}` | `{coverage}`"
-			if marker not in open_points:
-				below_functions.append(marker)
+	with tempfile.TemporaryDirectory(prefix="mealswapp-phase07-coverage-", dir=BACKEND) as temp_dir:
+		for package in sorted(PHASE07_GO_PACKAGES):
+			extra_env = {}
+			if package.endswith("/queue"):
+				extra_env["MEALSWAPP_REDIS_URL"] = "redis://localhost:6379/12"
+			elif package.endswith("/worker"):
+				extra_env["MEALSWAPP_REDIS_URL"] = "redis://localhost:6379/13"
+			profile = Path(temp_dir) / f"{package.rsplit('/', 1)[-1]}.out"
+			result = run_env(
+				["go", "test", package, "-count=1", f"-coverprofile={profile}"],
+				BACKEND,
+				capture=True,
+				extra_env=extra_env,
+			)
+			test_output = f"{result.stdout}\n{result.stderr}"
+			total_match = re.search(r"coverage: ([0-9.]+)% of statements", test_output)
+			if total_match:
+				package_totals[package] = f"{total_match.group(1)}%"
+			print(test_output, end="")
+			functions = run_env(
+				["go", "tool", "cover", f"-func={profile}"],
+				BACKEND,
+				capture=True,
+			).stdout
+			for line in functions.splitlines():
+				match = re.match(r"^.+?/backend/(internal/(?:dailydiet|optimization|queue|worker)/[^:]+):(\d+):\s+(\S+)\s+([0-9.]+%)$", line)
+				if match and match.group(4) != "100.0%":
+					path, declaration_line, function, coverage = match.groups()
+					marker = f"`{path}:{declaration_line} {function}` | `{coverage}`"
+					documented_row = re.compile(
+						rf"`{re.escape(path)}:{re.escape(declaration_line)} {re.escape(function)}`\s*\|\s*`{re.escape(coverage)}`"
+					)
+					if documented_row.search(open_points) is None:
+						below_functions.append(marker)
 	if below_functions:
 		raise SystemExit(
 			"Phase 07 Go coverage has below-100% functions without exact file/line/function evidence: "
 			+ ", ".join(below_functions)
 		)
-	package_totals: dict[str, str] = {}
-	for package in sorted(PHASE07_GO_PACKAGES):
-		extra_env = {}
-		if package.endswith("/queue"):
-			extra_env["MEALSWAPP_REDIS_URL"] = "redis://localhost:6379/12"
-		elif package.endswith("/worker"):
-			extra_env["MEALSWAPP_REDIS_URL"] = "redis://localhost:6379/13"
-		result = run_env(["go", "test", package, "-count=1", "-cover"], BACKEND, capture=True, extra_env=extra_env)
-		output = f"{result.stdout}\n{result.stderr}"
-		match = re.search(r"coverage: ([0-9.]+)% of statements", output)
-		if match:
-			package_totals[package] = f"{match.group(1)}%"
-		print(output, end="")
 	missing = sorted(PHASE07_GO_PACKAGES - package_totals.keys())
 	if missing:
 		raise SystemExit("Phase 07 Go coverage is missing package totals: " + ", ".join(missing))
@@ -311,15 +645,6 @@ def validate_phase07_backend_workflows() -> None:
 	run_phase07_test(["go", "test", "./internal/app", "-run", "^(TestDailyDietProductionAPIWithLivePostgres|TestTask206)", "-count=1"], 14)
 
 
-def validate_phase07_frontend_workflows() -> None:
-	# Implements DESIGN-014 MetricsCollector Phase 07 Daily Diet and accessibility gate.
-	run([
-		"bun", "run", "test:e2e", "--",
-		"tests/daily-diet-workflow.spec.ts",
-		"tests/phase07-browser-acceptance.spec.ts",
-	], FRONTEND)
-
-
 def validate_phase07_capacity_tests() -> None:
 	# Implements DESIGN-014 MetricsCollector Phase 07 capacity regression gate.
 	run(["python3", "-m", "unittest", "scripts/test_verify_optimization_capacity.py"])
@@ -330,9 +655,33 @@ def validate_start_dev_process_tests() -> None:
 	run(["python3", "-m", "unittest", "scripts/test_start_dev.py"])
 
 
+def validate_coverage_contract_tests() -> None:
+	# Implements DESIGN-014 MetricsCollector deterministic coverage-contract regression gate.
+	run(["python3", "-m", "unittest", "scripts/test_check_coverage.py"])
+
+
 def validate_local_stack_database_isolation_tests() -> None:
 	# Implements DESIGN-005 RepositoryInterfaces isolated local-stack migration gate.
 	run(["python3", "-m", "unittest", "scripts/test_verify_local_stack.py"])
+
+
+def validate_real_stack_e2e_harness_tests() -> None:
+	# Implements DESIGN-005 RepositoryInterfaces isolated real-stack E2E lifecycle gate.
+	run(["python3", "-m", "unittest", "scripts/test_run_real_stack_e2e.py"])
+
+
+def validate_phase08_acceptance_contracts() -> None:
+	# Implements DESIGN-014 MetricsCollector and DESIGN-009 AdminController acceptance reporting gate.
+	run([
+		"python3", "-m", "unittest",
+		"scripts/test_phase08_acceptance.py",
+		"scripts/test_task281_acceptance.py",
+		"scripts/test_task282_acceptance.py",
+		"scripts/test_run_task283_acceptance.py",
+		"scripts/test_run_task284_acceptance.py",
+		"scripts/test_run_task285_acceptance.py",
+	])
+	run(["python3", "scripts/phase08_acceptance.py", "validate"])
 
 
 def validate_stripe_webhook_tests() -> None:
@@ -361,19 +710,19 @@ def validate_phase0601_backend_auth_billing_smoke_tests() -> None:
 	], BACKEND)
 
 
-def validate_phase0601_frontend_auth_workflows() -> None:
-	# Implements DESIGN-014 MetricsCollector focused DESIGN-018 browser workflow aggregate gate.
-		run([
-		"bun", "run", "test:e2e", "--",
-		"tests/auth-session.spec.ts",
-		"tests/subscription-billing.spec.ts",
-		"tests/search-workflow.spec.ts",
-	], FRONTEND)
-
-
-def validate_frontend_e2e() -> None:
+def validate_frontend_e2e(*, reuse_build: bool = False) -> None:
 	# Implements DESIGN-014 MetricsCollector complete Playwright and axe aggregate gate.
-	run(["bun", "run", "test:e2e"], FRONTEND)
+	command = ["bun", "run", "test:e2e"]
+	print(f"+ {' '.join(command)}")
+	run_env(
+		command,
+		FRONTEND,
+		extra_env={
+			"MEALSWAPP_PLAYWRIGHT_REUSE_BUILD": "1",
+			# Leave CPU and I/O capacity for the concurrent backend race lane.
+			"MEALSWAPP_PLAYWRIGHT_WORKERS": "4",
+		} if reuse_build else None,
+	)
 
 
 def validate_requirements() -> tuple[int, int]:
@@ -402,10 +751,18 @@ TRACEABLE_FILES = {
 	"scripts/generate-api-types.py",
 	"scripts/start-services.sh", "scripts/validate-traceability.py",
 	"scripts/validate-phase07-go-doc.py",
+	"scripts/validate-phase08-tsdoc.py",
 	"scripts/validate-task-list.py", "scripts/verify-frontend.py",
 	"scripts/verify-local-stack.py", "scripts/verify-phase02-uat.py", "scripts/verify-phase03-uat.py",
 	"scripts/test_verify_local_stack.py",
+	"scripts/run-real-stack-e2e.py", "scripts/test_run_real_stack_e2e.py",
+	"scripts/phase08_acceptance.py", "scripts/test_phase08_acceptance.py",
+	"scripts/run-task281-acceptance.py", "scripts/test_task281_acceptance.py",
+	"scripts/run-task282-acceptance.py", "scripts/task282_provider_fixture.py", "scripts/test_task282_acceptance.py",
 	"scripts/verify-optimization-capacity.py", "scripts/test_verify_optimization_capacity.py",
+	"scripts/global_catalog_session.py", "scripts/import-global-catalog.py", "scripts/test_import_global_catalog.py",
+	"scripts/export-global-catalog.py", "scripts/test_export_global_catalog.py",
+	"scripts/test_check_coverage.py",
 	"scripts/dev-processes.sh", "scripts/start-dev.sh", "scripts/test_start_dev.py",
 	"scripts/verify-clp-worker-image.sh",
 }
@@ -491,50 +848,223 @@ def validate_design_coverage() -> tuple[dict[str, list[str]], dict[str, list[str
 	return implemented_by_design, missing_by_design, checked, total_aspects
 
 
-def main() -> int:
-	parser = argparse.ArgumentParser(description="Mealswapp aggregate quality gate script.")
-	parser.add_argument("--output", help="Path to write the HTML coverage and quality gate report.")
-	args = parser.parse_args()
-	screenshot_stem = Path(args.output).stem if args.output else "frontend-verification"
+def validate_generator_tests() -> None:
+	# Implements DESIGN-017 ErrorMessageMapper generated-contract regression gate.
+	run(["python3", "-m", "unittest", "scripts/test_generate_api_types.py"])
 
-	checked_reqs, total_reqs = validate_requirements()
-	run(["python3", "scripts/validate-traceability.py"])
-	run(["python3", "scripts/validate-task-list.py"])
-	run(["python3", "scripts/validate-phase07-go-doc.py"])
-	# Implements DESIGN-010 RouteHandler contract and backend quality gates.
-	run(["npx", "--no-install", "redocly", "lint", "api/openapi.yaml"])
-	validate_phase07_capacity_tests()
-	validate_start_dev_process_tests()
-	validate_local_stack_database_isolation_tests()
-	run(["go", "vet", "./..."], BACKEND)
-	run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)
+
+def validate_global_catalog_operator_tests() -> None:
+	# Implements DESIGN-009 AdminController and ItemCurator operator regression gate.
+	run(["python3", "-m", "unittest", "scripts/test_import_global_catalog.py", "scripts/test_export_global_catalog.py"])
+
+
+def run_static_lane() -> tuple[int, int]:
+	# Implements DESIGN-014 MetricsCollector independent static quality-gate lane.
+	results = execute_steps([
+		CheckStep("requirements", validate_requirements),
+		CheckStep("traceability", lambda: run(["python3", "scripts/validate-traceability.py"])),
+		CheckStep("task list", lambda: run(["python3", "scripts/validate-task-list.py"])),
+		CheckStep("Go Doc", lambda: run(["python3", "scripts/validate-phase07-go-doc.py"])),
+		CheckStep("TSDoc", lambda: run(["python3", "scripts/validate-phase08-tsdoc.py"])),
+		CheckStep(
+			"OpenAPI",
+			lambda: run(
+				[
+					"npm",
+					"exec",
+					"--yes",
+					"--package=@redocly/cli@2.31.5",
+					"--",
+					"redocly",
+					"lint",
+					"api/openapi.yaml",
+				]
+			),
+		),
+		CheckStep("optimization capacity tests", validate_phase07_capacity_tests),
+		CheckStep("coverage contract tests", validate_coverage_contract_tests),
+		CheckStep("development process tests", validate_start_dev_process_tests),
+		CheckStep("local-stack isolation tests", validate_local_stack_database_isolation_tests),
+		CheckStep("real-stack E2E harness tests", validate_real_stack_e2e_harness_tests),
+		CheckStep("Phase 08 acceptance contracts", validate_phase08_acceptance_contracts),
+		CheckStep("API generator tests", validate_generator_tests),
+		CheckStep("global catalog operator tests", validate_global_catalog_operator_tests),
+		CheckStep("Go formatting", validate_go_format),
+		CheckStep("Go vet", lambda: run(["go", "vet", "./..."], BACKEND)),
+		CheckStep("Go vulnerability scan", lambda: run(["go", "run", "golang.org/x/vuln/cmd/govulncheck@v1.3.0", "./..."], BACKEND)),
+		CheckStep("generated API type drift", lambda: run(["bun", "run", "check:api-types"], FRONTEND)),
+	])
+	return results["requirements"]  # type: ignore[return-value]
+
+
+def run_backend_lane() -> str:
+	# Implements DESIGN-014 MetricsCollector stateful backend quality-gate lane.
 	validate_stripe_webhook_tests()
 	validate_phase0601_backend_auth_billing_smoke_tests()
 	initially_running_services = running_compose_services()
-	run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
-	run(["python3", "scripts/verify-phase02-uat.py", "--keep-services"])
-	run(["python3", "scripts/verify-phase03-uat.py", "--keep-services"])
-	validate_phase07_backend_workflows()
-	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
-	validate_go_format()
 	try:
-		# Keep package-parallel Redis integration tests isolated from the local stack and
-		# from the focused gates above; this is test isolation, not a product override.
-		run_env(["go", "test", "./...", "-p", "1", "-count=1"], BACKEND, extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/10"})
-		run_env(["go", "test", "-race", "./...", "-p", "1", "-count=1"], BACKEND, extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/11"})
-		go_coverage_stdout = validate_go_coverage()
+		# Migrations and PostgreSQL/Redis integration suites deliberately remain
+		# sequential because they share schemas and service state.
+		run(["python3", "scripts/verify-local-stack.py", "--keep-services"])
+		run(["python3", "scripts/verify-phase02-uat.py", "--keep-services"])
+		run(["python3", "scripts/verify-phase03-uat.py", "--keep-services"])
+		validate_phase07_backend_workflows()
+
+		# Race and coverage runs provide the full test executions. The former
+		# non-race `go test ./...` pass repeated the same suites without adding a gate.
+		run_env(
+			["go", "test", "-race", "./...", "-p", "1", "-count=1"],
+			BACKEND,
+			extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/11"},
+		)
+		return validate_go_coverage()
 	finally:
 		started_services = ({"postgres", "redis"} & running_compose_services()) - initially_running_services
 		if started_services:
 			run(["docker", "compose", "stop", *sorted(started_services)])
-	run(["bun", "run", "check:api-types"], FRONTEND)
-	run(["bun", "run", "typecheck"], FRONTEND)
-	run(["bun", "run", "build"], FRONTEND)
-	run(["bun", "test"], FRONTEND)
-	bun_coverage_stdout = validate_frontend_coverage()
-	validate_phase0601_frontend_auth_workflows()
-	validate_phase07_frontend_workflows()
-	validate_frontend_e2e()
+
+
+def run_frontend_lane(build_ready: threading.Event, build_failure: list[BaseException]) -> str:
+	# Implements DESIGN-014 MetricsCollector frontend build and unit quality-gate lane.
+	try:
+		run(["bun", "run", "typecheck"], FRONTEND)
+		run(["bun", "run", "build"], FRONTEND)
+	except BaseException as exc:
+		build_failure.append(exc)
+		raise
+	finally:
+		build_ready.set()
+	# `bun test --coverage` executes the complete unit suite, so a preceding plain
+	# `bun test` pass only duplicated work.
+	return validate_frontend_coverage()
+
+
+def run_browser_lane(
+	screenshot_stem: str,
+	build_ready: threading.Event,
+	build_failure: list[BaseException],
+) -> None:
+	# Implements DESIGN-014 MetricsCollector isolated browser and axe quality-gate lane.
+	run(["python3", "scripts/verify-frontend.py", "--screenshot-stem", screenshot_stem])
+	build_ready.wait()
+	if build_failure:
+		raise RuntimeError("Frontend build failed; browser suite cannot use a verified build.") from build_failure[0]
+	# The complete Playwright suite includes the former Phase 06.01 and Phase 07
+	# focused specs. Running those subsets first duplicated the same scenarios.
+	validate_frontend_e2e(reuse_build=True)
+
+
+def changed_paths() -> set[str]:
+	"""Return tracked and untracked workspace paths considered by quick mode."""
+	tracked = subprocess.run(
+		["git", "diff", "--name-only", "HEAD"],
+		cwd=ROOT,
+		check=True,
+		text=True,
+		capture_output=True,
+	).stdout.splitlines()
+	untracked = subprocess.run(
+		["git", "ls-files", "--others", "--exclude-standard"],
+		cwd=ROOT,
+		check=True,
+		text=True,
+		capture_output=True,
+	).stdout.splitlines()
+	return {path for path in (*tracked, *untracked) if path}
+
+
+def quick_backend_packages(paths: set[str]) -> list[str]:
+	"""Map changed backend files to the narrowest Go packages that own them."""
+	if {"backend/go.mod", "backend/go.sum"} & paths:
+		return ["./..."]
+	packages: set[str] = set()
+	for relative in paths:
+		if not relative.startswith("backend/"):
+			continue
+		path = ROOT / relative
+		candidate = path.parent
+		while candidate != BACKEND and not any(candidate.glob("*.go")):
+			candidate = candidate.parent
+		if candidate == BACKEND:
+			continue
+		packages.add("./" + candidate.relative_to(BACKEND).as_posix())
+	return sorted(packages)
+
+
+def run_quick_changed_area(paths: set[str]) -> None:
+	# Implements DESIGN-014 MetricsCollector changed-area developer feedback gate.
+	steps: list[CheckStep] = []
+	packages = quick_backend_packages(paths)
+	if packages:
+		steps.append(CheckStep(
+			"changed backend packages",
+			lambda: run_env(
+				["go", "test", *packages, "-p", "1", "-count=1"],
+				BACKEND,
+				extra_env={"MEALSWAPP_REDIS_URL": "redis://localhost:6379/10"},
+			),
+		))
+	frontend_changed = any(
+		path.startswith("frontend/src/")
+		or path in {"frontend/package.json", "frontend/bun.lock", "frontend/tsconfig.json", "frontend/tsconfig.typecheck.json"}
+		for path in paths
+	)
+	if frontend_changed:
+		steps.append(CheckStep(
+			"changed frontend unit/type checks",
+			lambda: (
+				run(["bun", "run", "typecheck"], FRONTEND),
+				run(["bun", "test"], FRONTEND),
+			),
+		))
+	changed_specs = sorted(
+		path.removeprefix("frontend/")
+		for path in paths
+		if path.startswith("frontend/tests/") and path.endswith(".spec.ts")
+	)
+	if changed_specs:
+		steps.append(CheckStep(
+			"changed Playwright specs",
+			lambda: run(["bun", "run", "test:e2e", "--", *changed_specs], FRONTEND),
+		))
+	execute_steps(steps)
+
+
+def run_quick() -> int:
+	paths = changed_paths()
+	execute_steps([
+		CheckStep("static checks", run_static_lane),
+		CheckStep("changed-area tests", lambda: run_quick_changed_area(paths)),
+	])
+	return 0
+
+
+def main() -> int:
+	parser = argparse.ArgumentParser(description="Mealswapp aggregate quality gate script.")
+	parser.add_argument("--output", help="Path to write the HTML coverage and quality gate report.")
+	parser.add_argument(
+		"--quick",
+		action="store_true",
+		help="Run parallel static checks plus tests mapped to changed backend/frontend files.",
+	)
+	args = parser.parse_args()
+	if args.quick:
+		if args.output:
+			parser.error("--output requires the full release gate and cannot be combined with --quick")
+		return run_quick()
+	screenshot_stem = Path(args.output).stem if args.output else "frontend-verification"
+
+	build_ready = threading.Event()
+	build_failure: list[BaseException] = []
+	lane_results = execute_steps([
+		CheckStep("static lane", run_static_lane),
+		CheckStep("backend lane", run_backend_lane),
+		CheckStep("frontend build/unit lane", lambda: run_frontend_lane(build_ready, build_failure)),
+		CheckStep("browser lane", lambda: run_browser_lane(screenshot_stem, build_ready, build_failure)),
+	], max_workers=4)
+	checked_reqs, total_reqs = lane_results["static lane"]  # type: ignore[misc]
+	go_coverage_stdout = lane_results["backend lane"]
+	bun_coverage_stdout = lane_results["frontend build/unit lane"]
 
 	design_implemented, design_missing, design_checked, design_total = validate_design_coverage()
 
@@ -544,8 +1074,8 @@ def main() -> int:
 		from generate_report import build_html_report
 		from check import parse_design_docs
 		build_html_report(
-			go_raw=go_coverage_stdout,
-			bun_raw=bun_coverage_stdout,
+			go_raw=str(go_coverage_stdout),
+			bun_raw=str(bun_coverage_stdout),
 			reqs_checked=checked_reqs,
 			reqs_total=total_reqs,
 			design_implemented=design_implemented,

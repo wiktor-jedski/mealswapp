@@ -104,6 +104,15 @@ func ValidateAutocompleteQueryParams(values map[string]string) error {
 	return nil
 }
 
+// ValidateFilterOptionQueryParams accepts only the currently supported substitution mode.
+// Implements DESIGN-009 TagManager filter-option HTTP boundary.
+func ValidateFilterOptionQueryParams(values map[string]string) error {
+	if len(values) != 1 || search.SearchMode(values["mode"]) != search.SearchModeSubstitution {
+		return errors.New("filter option mode is invalid")
+	}
+	return nil
+}
+
 // ParseValidatedSearchRequestBody converts a validated JSON body into the search contract.
 // Implements DESIGN-002 QueryParser and DESIGN-010 RequestValidator.
 func ParseValidatedSearchRequestBody(body map[string]any) (search.SearchRequest, error) {

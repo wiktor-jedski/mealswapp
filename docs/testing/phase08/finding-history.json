@@ -1,0 +1,23 @@
+{
+  "schema": "mealswapp.phase08-finding-history.v1",
+  "findingIds": [
+    "P08-FIND-281-001",
+    "P08-FIND-281-002",
+    "P08-FIND-281-003",
+    "P08-FIND-282-001",
+    "P08-FIND-282-002",
+    "P08-FIND-282-003",
+    "P08-FIND-282-004",
+    "P08-FIND-282-005",
+    "P08-FIND-283-001",
+    "P08-FIND-283-002",
+    "P08-FIND-283-003",
+    "P08-FIND-283-004",
+    "P08-FIND-283-005",
+    "P08-FIND-283-006",
+    "P08-FIND-284-001",
+    "P08-FIND-285-001",
+    "P08-FIND-285-002",
+    "P08-FIND-285-003"
+  ]
+}

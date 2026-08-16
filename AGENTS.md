@@ -18,6 +18,10 @@ This repository is currently organized around requirements, architecture, design
 
 When application code is added, follow the documented stack: Svelte frontend code under the `frontend/` package, Go/Fiber backend code under the `backend/` package, and tests colocated with code where the language ecosystem expects them.
 
+Task list: `docs/implementation/02_TASK_LIST.md`
+Phase plan: `docs/implementation/01_PLAN.md`
+Open points: `docs/implementation/04_OPEN.md`
+
 ## Build, Test, and Development Commands
 
 - `bash scripts/start-services.sh`: starts local PostgreSQL and Redis with Docker Compose when available, falling back to system `service` commands.
@@ -27,7 +31,7 @@ Planned app commands should use `docs/design/01_TECH_STACK.md`: Bun for Svelte f
 Installed development tooling:
 
 - `golang-security` agent skill: use for backend security-sensitive work, especially authentication, authorization, OAuth, cookies, PII handling, and dependency review.
-- Redocly CLI: lint the OpenAPI source of truth with `npx --no-install redocly lint api/openapi.yaml`.
+- Redocly CLI: lint the OpenAPI source of truth with `npm exec --yes --package=@redocly/cli@2.31.5 -- redocly lint api/openapi.yaml`.
 
 ## Coding Style & Naming Conventions
 
@@ -37,7 +41,7 @@ For frontend work, follow `docs/requirements/02_STYLE_GUIDE.md`: Svelte componen
 
 For backend, follow the official Go Doc comments guidelines.
 Keep backend repository persistence SQL under the colocated `backend/internal/repository/sql/` directory and embed it from Go. Do not place SQL statement strings inline in repository Go files.
-For frontend, follow the TSDoc comment specification.
+For frontend, every hand-written exported type, interface, class, function, and constant needs concise TSDoc that follows the TSDoc comment specification. Generated exports must receive their TSDoc from the source contract and generator; do not document generated output by hand.
 
 Additionally, code must include concise comments that identify the exact `docs/design` source being implemented, for example `// Implements DESIGN-010 RouteHandler` or `<!-- Implements DESIGN-001 SearchView -->`. Place the comment near the module, component, function, type, or generated block it applies to, and keep it specific to the relevant design file and static aspect.
 
@@ -52,6 +56,7 @@ For JSON files, do not add inline comments because they make the file invalid. I
 Testing commands for the current package layout:
 
 - Root aggregate check: `python3 scripts/check.py`
+- Fast changed-area check: `python3 scripts/check.py --quick`
 - Root aggregate check with HTML report: `python3 scripts/check.py --output logs/check-report.html`
 - Implementation task-list validation: `python3 scripts/validate-task-list.py`
 - Traceability validation: `python3 scripts/validate-traceability.py`
@@ -62,7 +67,7 @@ Testing commands for the current package layout:
 - Backend static analysis: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go vet ./...`
 - Backend vulnerability scan: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...`
 - Backend race detection: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go test -race ./...`
-- OpenAPI lint: `npx --no-install redocly lint api/openapi.yaml`
+- OpenAPI lint: `npm exec --yes --package=@redocly/cli@2.31.5 -- redocly lint api/openapi.yaml`
 - Frontend install: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun install`
 - Frontend build: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun run build`
 - Frontend unit tests: `cd frontend && BUN_TMPDIR=$PWD/.bun-tmp BUN_INSTALL=$PWD/.bun-install bun test`
@@ -71,7 +76,7 @@ Testing commands for the current package layout:
 - Backend migrations: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/migrate up`
 - Backend API smoke test: `cd backend && GOCACHE=$PWD/.go-cache GOMODCACHE=$PWD/.go-mod-cache go run ./cmd/api`, then check `/health` and `/ready`.
 
-`scripts/check.py` runs requirement traceability, design traceability, implementation task-list validation, local stack verification, frontend UAT/screenshot verification, backend formatting/tests/coverage, and frontend build/tests/coverage. The local stack verifier requires Docker Compose. The frontend verifier requires a local Chromium-compatible browser (`chromium`, `chromium-browser`, or `google-chrome`) and writes temporary screenshots under `/tmp/mealswapp-frontend-verifier/`. When `scripts/check.py --output <report>.html` is used, screenshots are copied next to the report under `screenshots/` using the report stem, for example `<report>-desktop.png` and `<report>-mobile.png`.
+`scripts/check.py --quick` runs parallel static checks plus unit tests mapped to changed backend/frontend packages and any directly changed Playwright specs. `scripts/check.py` remains the full release gate: it runs independent static, backend, frontend, and browser lanes concurrently while keeping migrations and shared PostgreSQL/Redis suites sequential inside the backend lane. The local stack verifier requires Docker Compose. The frontend verifier requires a local Chromium-compatible browser (`chromium`, `chromium-browser`, or `google-chrome`) and writes temporary screenshots under `/tmp/mealswapp-frontend-verifier/`. When `scripts/check.py --output <report>.html` is used, screenshots are copied next to the report under `screenshots/` using the report stem, for example `<report>-desktop.png` and `<report>-mobile.png`.
 
 Each completed phase needs to have user acceptance document in docs/implementation/implemented/{x:02d}_PHASE_UAT.md, where x is the number of the phase. The document is a recap of the changes implemented and suggests relevant acceptance tests.
 

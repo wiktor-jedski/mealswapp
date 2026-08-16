@@ -1,0 +1,25 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR090-STEP-02",
+    "P08-SWR090-ACCEPT-01"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 micro alias real-stack-desktop-chromium",
+  "idempotencyKey": "3c6e21af-3d9f-4863-99b8-4f13c3f2120e",
+  "requestIds": [
+    "1c4ac37a-d03e-4b65-8219-7860d030ff5d"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "idempotencyCount": 0,
+    "generationBefore": "28",
+    "generationAfter": "28",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "415ec044-9940-4fc6-9383-3ba62b1bfc2f",
+    "generationAfter": "ada8bd08-125e-4b3a-8e78-1835534b8cd3"
+  }
+}

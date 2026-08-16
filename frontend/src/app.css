@@ -36,6 +36,7 @@
   --color-on-primary: #ffffff;
   --color-on-accent: #111827;
   --color-on-muted: #ffffff;
+  --color-on-error: #ffffff;
   --color-error: #dc2626;
   --color-border: #e0e0e0;
   font-family: var(--font-ui);
@@ -54,6 +55,7 @@
   --color-on-primary: #0a0f0a;
   --color-on-accent: #111827;
   --color-on-muted: #0a0f0a;
+  --color-on-error: #111827;
   --color-error: #f87171;
   --color-border: #39423d;
 }

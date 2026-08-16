@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ type CoreAuthConfig struct {
 type EncryptedIdentityRepository interface {
 	GetUserByNormalizedEmailDigest(context.Context, repository.LookupDigest) (repository.EncryptedAuthUser, error)
 	GetEncryptedUserByID(context.Context, uuid.UUID) (repository.EncryptedAuthUser, error)
+	ReindexUserEmailDigest(context.Context, uuid.UUID, repository.LookupDigest) error
 }
 
 // CoreAuthService composes registration, login, refresh, and logout behavior.
@@ -116,11 +118,11 @@ func (s *CoreAuthService) Login(ctx context.Context, email string, password stri
 	if err != nil {
 		return AuthSession{}, ErrInvalidCredentials
 	}
-	digest, err := s.digests.DigestForWrite(ctx, []byte(normalizedEmail.Value))
+	canonicalDigest, legacyDigest, err := s.emailLookupDigests(ctx, email, normalizedEmail.Value)
 	if err != nil {
 		return AuthSession{}, err
 	}
-	user, err := s.identities.GetUserByNormalizedEmailDigest(ctx, toRepositoryLookupDigest(digest))
+	user, err := lookupAndReindexUserByEmail(ctx, s.identities, canonicalDigest, legacyDigest)
 	if err != nil {
 		return AuthSession{}, ErrInvalidCredentials
 	}
@@ -195,11 +197,11 @@ func (s *CoreAuthService) RequestPasswordReset(ctx context.Context, email string
 	if err != nil {
 		return "", nil
 	}
-	digest, err := s.digests.DigestForWrite(ctx, []byte(normalizedEmail.Value))
+	canonicalDigest, legacyDigest, err := s.emailLookupDigests(ctx, email, normalizedEmail.Value)
 	if err != nil {
 		return "", err
 	}
-	user, err := s.identities.GetUserByNormalizedEmailDigest(ctx, toRepositoryLookupDigest(digest))
+	user, err := lookupAndReindexUserByEmail(ctx, s.identities, canonicalDigest, legacyDigest)
 	if err != nil {
 		return "", nil
 	}
@@ -211,6 +213,50 @@ func (s *CoreAuthService) RequestPasswordReset(ctx context.Context, email string
 		return "", err
 	}
 	return reset.Plaintext, nil
+}
+
+// emailDigestIdentityRepository supports canonical lookup and bounded legacy digest reindexing.
+// Implements DESIGN-006 AuthController and DESIGN-013 InputNormalizer.
+type emailDigestIdentityRepository interface {
+	GetUserByNormalizedEmailDigest(context.Context, repository.LookupDigest) (repository.EncryptedAuthUser, error)
+	ReindexUserEmailDigest(context.Context, uuid.UUID, repository.LookupDigest) error
+}
+
+// emailLookupDigests derives canonical and optional exact legacy lookup material.
+// Implements DESIGN-006 AuthController and DESIGN-013 InputNormalizer.
+func (s *CoreAuthService) emailLookupDigests(ctx context.Context, original string, canonical string) (repository.LookupDigest, *repository.LookupDigest, error) {
+	canonicalDigest, err := s.digests.DigestForWrite(ctx, []byte(canonical))
+	if err != nil {
+		return repository.LookupDigest{}, nil, err
+	}
+	canonicalRepositoryDigest := toRepositoryLookupDigest(canonicalDigest)
+	legacyValue := strings.TrimSpace(original)
+	if legacyValue == canonical {
+		return canonicalRepositoryDigest, nil, nil
+	}
+	legacyDigest, err := s.digests.DigestForWrite(ctx, []byte(legacyValue))
+	if err != nil {
+		return repository.LookupDigest{}, nil, err
+	}
+	legacyRepositoryDigest := toRepositoryLookupDigest(legacyDigest)
+	return canonicalRepositoryDigest, &legacyRepositoryDigest, nil
+}
+
+// lookupAndReindexUserByEmail resolves canonical and exact legacy digests without silently merging collisions.
+// Implements DESIGN-006 AuthController and DESIGN-013 InputNormalizer.
+func lookupAndReindexUserByEmail(ctx context.Context, identities emailDigestIdentityRepository, canonicalDigest repository.LookupDigest, legacyDigest *repository.LookupDigest) (repository.EncryptedAuthUser, error) {
+	user, err := repository.ResolveCanonicalEmailIdentity(
+		ctx,
+		canonicalDigest,
+		legacyDigest,
+		identities.GetUserByNormalizedEmailDigest,
+		func(user repository.EncryptedAuthUser) uuid.UUID { return user.ID },
+		identities.ReindexUserEmailDigest,
+	)
+	if err == nil {
+		user.NormalizedEmailDigest = canonicalDigest
+	}
+	return user, err
 }
 
 // ConsumePasswordReset validates a reset token, updates password, and revokes sessions.

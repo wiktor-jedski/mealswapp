@@ -1,0 +1,446 @@
+{
+  "results": [
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-01",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-02",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-03",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-04",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "owner_state=owner_free"
+      ],
+      "criterionId": "P08-SWR043-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-01",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-02",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-03",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "owner_state=owner_free"
+      ],
+      "criterionId": "P08-SWR072-STEP-04",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-05",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-06",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-01",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-02",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-03",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-04",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-05",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "status": "PASS"
+    },
+    {
+      "backendEvidence": [
+        "cache_generation=owner_purged",
+        "owner_state=erased",
+        "rollback_state=survivors_unchanged",
+        "worker_state=completed"
+      ],
+      "criterionId": "P08-SWR073-STEP-06",
+      "evidence": [
+        {
+          "path": "backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "requestIds": [
+        "58ed8f00-380c-48e1-965f-99457a2c3c66",
+        "723bffa3-d715-4ed9-88e1-b7f7bde64cbe",
+        "bca8a7af-c046-4271-a1ba-99063060795e"
+      ],
+      "status": "PASS"
+    }
+  ]
+}

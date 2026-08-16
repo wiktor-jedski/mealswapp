@@ -5,6 +5,7 @@ import { AuthClientError } from "../api/auth-client";
 import type { AppError, AuthSessionData, EntitlementStatusData, ProfileData } from "../api/generated";
 import { entitlementErrorStore, entitlementStatusStore, resetEntitlementState } from "./entitlement";
 import { resetSearch, searchStore, setQuery, submitSearch } from "./search";
+import { preferencesStore, resetPreferences } from "./preferences";
 import {
 	authSessionStore,
 	clearAuthSession,
@@ -36,6 +37,7 @@ afterEach(() => {
 		});
 	}
 	resetAuthSessionStore();
+	resetPreferences();
 	resetEntitlementState();
 	resetSearch();
 });
@@ -93,6 +95,7 @@ test("probeAuthSession stores only frontend-safe projection fields when authenti
 	});
 	expect(JSON.stringify(session)).not.toContain("must-not-leak");
 	expect(storage.getItem("mealswapp.auth-session")).toBe(JSON.stringify(session));
+	expect(get(preferencesStore).unitSystem).toBe("metric");
 });
 
 test("probeAuthSession maps 401 to anonymous and session-expired semantics to expired", async () => {
@@ -171,6 +174,7 @@ test("probeAuthSession still clears authenticated projection on server auth fail
 
 test("loginWithEmail and registerWithEmail use CSRF, store authenticated state, and refresh entitlements", async () => {
 	const csrfTokens: string[] = [];
+	const profileUserIds = ["login-user", "registered-user"];
 	const entitlement = entitlementData();
 	setAuthSessionDependencies({
 		now: () => fixedNow,
@@ -184,6 +188,13 @@ test("loginWithEmail and registerWithEmail use CSRF, store authenticated state, 
 			csrfTokens.push(options.csrfToken ?? "");
 			return sessionData("registered-user");
 		},
+		probeProfileSession: async () => ({
+			userId: profileUserIds.shift() ?? "unexpected-user",
+			displayName: "Account",
+			unitSystem: "imperial",
+			themePreference: "system",
+			requiresUnitRecalculation: false
+		}),
 		refreshEntitlementAfterAuth: async () => entitlement
 	});
 
@@ -204,6 +215,7 @@ test("loginWithEmail and registerWithEmail use CSRF, store authenticated state, 
 
 	expect(csrfTokens).toEqual(["csrf-token", "csrf-token"]);
 	expect(get(entitlementStatusStore)).toEqual(entitlement);
+	expect(get(preferencesStore).unitSystem).toBe("imperial");
 });
 
 test("logout clears authenticated state while preserving anonymous Catalog Search state", async () => {

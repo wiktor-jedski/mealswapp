@@ -1,0 +1,313 @@
+{
+  "exitCode": 1,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR072-STEP-01",
+      "kind": "step",
+      "owner": "privacy-export",
+      "requestIds": [
+        "16524184-6153-4a9c-b4a5-23b96e0135e3",
+        "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
+        "61e3a78a-e286-4577-92fc-071de5556204",
+        "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
+        "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
+        "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
+        "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
+        "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
+        "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
+        "ee3364a2-136d-4635-9d0d-05906ff44339"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-072",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR072-DATA-PORTABILITY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 139
+      },
+      "status": "PASS",
+      "text": "Create a private custom item."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR072-STEP-02",
+      "kind": "step",
+      "owner": "privacy-export",
+      "requestIds": [
+        "16524184-6153-4a9c-b4a5-23b96e0135e3",
+        "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
+        "61e3a78a-e286-4577-92fc-071de5556204",
+        "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
+        "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
+        "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
+        "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
+        "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
+        "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
+        "ee3364a2-136d-4635-9d0d-05906ff44339"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-072",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR072-DATA-PORTABILITY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 140
+      },
+      "status": "PASS",
+      "text": "Create saved diet/history data."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR072-STEP-03",
+      "kind": "step",
+      "owner": "privacy-export",
+      "requestIds": [
+        "16524184-6153-4a9c-b4a5-23b96e0135e3",
+        "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
+        "61e3a78a-e286-4577-92fc-071de5556204",
+        "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
+        "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
+        "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
+        "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
+        "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
+        "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
+        "ee3364a2-136d-4635-9d0d-05906ff44339"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-072",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR072-DATA-PORTABILITY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 141
+      },
+      "status": "PASS",
+      "text": "Export JSON and CSV."
+    },
+    {
+      "backendEvidence": [
+        "owner_state=projection_leak"
+      ],
+      "criterionId": "P08-SWR072-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [
+        "P08-FIND-284-001"
+      ],
+      "id": "P08-SWR072-STEP-04",
+      "kind": "step",
+      "owner": "privacy-export",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-072",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T284-EXPORT-OWNER-PROJECTION",
+      "scenarioId": "P08-SWR072-DATA-PORTABILITY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 142
+      },
+      "status": "FAIL",
+      "text": "Confirm all owned data is present."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR072-STEP-05",
+      "kind": "step",
+      "owner": "privacy-export",
+      "requestIds": [
+        "16524184-6153-4a9c-b4a5-23b96e0135e3",
+        "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
+        "61e3a78a-e286-4577-92fc-071de5556204",
+        "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
+        "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
+        "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
+        "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
+        "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
+        "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
+        "ee3364a2-136d-4635-9d0d-05906ff44339"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-072",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR072-DATA-PORTABILITY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 143
+      },
+      "status": "PASS",
+      "text": "Confirm global and other-user data is absent."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR072-STEP-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR072-STEP-06",
+      "kind": "step",
+      "owner": "privacy-export",
+      "requestIds": [
+        "16524184-6153-4a9c-b4a5-23b96e0135e3",
+        "1ee1a6ec-4b21-4249-b29e-b90ef89b2afc",
+        "61e3a78a-e286-4577-92fc-071de5556204",
+        "8b6d79b2-c664-4fef-8ed6-d7a8598c6dbc",
+        "8df1b2cf-013d-4ef8-8cf5-ce8c566fabac",
+        "8f29800f-7a5d-4419-a0ae-26fd4e8377f3",
+        "b990fe61-ebc2-4f79-96c8-b3ad3aa04174",
+        "d647e3b7-4c72-4b18-85dd-e9d67ecc2a83",
+        "ebc3f8ed-84fb-4767-b2ff-86d98f065d1a",
+        "ee3364a2-136d-4635-9d0d-05906ff44339"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-072",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR072-DATA-PORTABILITY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 144
+      },
+      "status": "PASS",
+      "text": "Delete a private item and verify the chosen retention semantics are reflected correctly."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR072-STEP-04"
+      ],
+      "id": "ROOT-T284-EXPORT-OWNER-PROJECTION"
+    }
+  ],
+  "runId": "task284-00807a2ec1a53daf7b4d7161-sw-req-072",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "FAIL"
+}

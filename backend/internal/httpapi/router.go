@@ -16,7 +16,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/google/uuid"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/config"
 	"github.com/wiktor-jedski/mealswapp/backend/internal/observability"
@@ -27,6 +26,17 @@ import (
 // observabilityFallbackWriter reports sink failures without calling the failed sink again.
 // Implements DESIGN-014 LogAggregator.
 var observabilityFallbackWriter io.Writer = os.Stderr
+
+// observabilityFailureCategory closes fallback diagnostics to bounded categories.
+// Implements DESIGN-014 LogAggregator.
+type observabilityFailureCategory uint8
+
+// Implements DESIGN-014 LogAggregator bounded fallback categories.
+const (
+	observabilityLogFailure observabilityFailureCategory = iota
+	observabilityMetricFailure
+	observabilityAuditIdentityFailure
+)
 
 // requestIsTLS is replaceable in tests because Fiber's in-memory transport has no TLS connection state.
 // Implements DESIGN-013 TLSEnforcer.
@@ -60,13 +70,14 @@ type GatewayContext struct {
 // AppError is a user-safe classified server error.
 // Implements DESIGN-017 GlobalExceptionHandler.
 type AppError struct {
-	HTTPStatus int    `json:"-"`
-	Category   string `json:"category"`
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	Retryable  bool   `json:"retryable"`
-	RequestID  string `json:"requestId,omitempty"`
-	Cause      error  `json:"-"`
+	HTTPStatus int            `json:"-"`
+	Category   string         `json:"category"`
+	Code       string         `json:"code"`
+	Message    string         `json:"message"`
+	Retryable  bool           `json:"retryable"`
+	Data       map[string]any `json:"data,omitempty"`
+	RequestID  string         `json:"requestId,omitempty"`
+	Cause      error          `json:"-"`
 }
 
 // Error returns the safe application error code.
@@ -95,6 +106,7 @@ type RouteDefinition struct {
 	Path          string
 	Handler       fiber.Handler
 	RequiresAuth  bool
+	RequiresAdmin bool
 	OptionalAuth  bool
 	RequiresCSRF  bool
 	ExemptCSRF    bool
@@ -142,7 +154,7 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 		return nil, errors.New("at least one allowed origin is required")
 	}
 	app := fiber.New(fiber.Config{ErrorHandler: writeError})
-	app.Use(requestid.New())
+	app.Use(serverRequestID)
 	app.Use(gatewayContext(deps.Config.APITimeout))
 	app.Use(cors(deps.Config.AllowedOrigins))
 	app.Use(tlsEnforcer(deps.Config))
@@ -163,6 +175,15 @@ func NewRouter(deps Dependencies) (*fiber.App, error) {
 	v1.Get("/auth/csrf-token", csrfToken)
 	registerV1Routes(v1, deps)
 	return app, nil
+}
+
+// serverRequestID replaces untrusted correlation headers with an opaque server-generated identifier.
+// Implements DESIGN-009 AdminController and DESIGN-010 RouteHandler request correlation boundary.
+func serverRequestID(ctx *fiber.Ctx) error {
+	id := uuid.NewString()
+	ctx.Set(fiber.HeaderXRequestID, id)
+	ctx.Locals("requestid", id)
+	return ctx.Next()
 }
 
 // staticAssetRoot returns the backend-served asset directory.
@@ -187,6 +208,12 @@ func registerV1Routes(group fiber.Router, deps Dependencies) {
 			handlers = append(handlers, requireAuth(deps.Auth))
 		} else if route.OptionalAuth {
 			handlers = append(handlers, optionalAuth(deps.Auth))
+		}
+		if route.RequiresAdmin {
+			if !route.RequiresAuth {
+				panic("admin routes must require authentication")
+			}
+			handlers = append(handlers, requireAdminRole)
 		}
 		if route.RequiresCSRF {
 			handlers = append(handlers, deps.CSRF.Validate)
@@ -398,13 +425,13 @@ func instrument(deps Dependencies) fiber.Handler {
 			status = ClassifyServerError(err).HTTPStatus
 			userID, userIDErr := auditUserID(ctx)
 			if userIDErr != nil {
-				reportObservabilityFailure("audit user ID", userIDErr)
+				reportObservabilityFailure(observabilityAuditIdentityFailure)
 			}
 			security.RecordAuditBestEffort(ctx.UserContext(), deps.Audit, security.AuditLogEntry{RequestID: requestID(ctx), UserID: userID, Action: "api.error", Resource: routeTemplate(ctx), Outcome: "failure", IP: ctx.IP(), UserAgent: ctx.Get("User-Agent"), CreatedAt: time.Now()})
 		}
 		userID, userIDErr := auditUserID(ctx)
 		if userIDErr != nil {
-			reportObservabilityFailure("audit user ID", userIDErr)
+			reportObservabilityFailure(observabilityAuditIdentityFailure)
 		}
 		outcome := "success"
 		if status >= 400 {
@@ -425,7 +452,7 @@ func instrument(deps Dependencies) fiber.Handler {
 				fields["hasVerifiedLoginMethod"] = user.HasVerifiedLoginMethod
 			}
 			if err := deps.Logs.Log(ctx.UserContext(), observability.LogEvent{RequestID: requestID(ctx), Service: "api", Level: logLevel(status), Message: "http_request", Fields: fields, CreatedAt: time.Now()}); err != nil {
-				reportObservabilityFailure("log", err)
+				reportObservabilityFailure(observabilityLogFailure)
 			}
 		}
 		return err
@@ -459,15 +486,24 @@ func logLevel(status int) string {
 func recordMetric(ctx *fiber.Ctx, metrics observability.MetricsCollector, name string, value float64, unit string, labels map[string]string) {
 	if metrics != nil {
 		if err := metrics.RecordMetric(ctx.UserContext(), observability.MetricPoint{Name: name, Value: value, Unit: unit, Labels: labels, ObservedAt: time.Now()}); err != nil {
-			reportObservabilityFailure("metric", err)
+			reportObservabilityFailure(observabilityMetricFailure)
 		}
 	}
 }
 
-// reportObservabilityFailure writes a non-recursive fallback diagnostic.
+// reportObservabilityFailure writes a fixed, non-recursive fallback diagnostic.
 // Implements DESIGN-014 LogAggregator.
-func reportObservabilityFailure(kind string, err error) {
-	fmt.Fprintf(observabilityFallbackWriter, "observability %s sink failure: %v\n", kind, err)
+func reportObservabilityFailure(category observabilityFailureCategory) {
+	message := "observability failure\n"
+	switch category {
+	case observabilityLogFailure:
+		message = "observability log sink failure\n"
+	case observabilityMetricFailure:
+		message = "observability metric sink failure\n"
+	case observabilityAuditIdentityFailure:
+		message = "observability audit identity failure\n"
+	}
+	_, _ = io.WriteString(observabilityFallbackWriter, message)
 }
 
 // writeError serializes a safe classified error envelope.

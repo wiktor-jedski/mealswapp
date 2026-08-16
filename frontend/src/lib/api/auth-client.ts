@@ -12,6 +12,7 @@ import {
 	buildLogoutRequestInit,
 	buildOAuthStartUrl,
 	buildProfileRequestInit,
+	buildProfileUpdateRequestInit,
 	buildRefreshSessionRequestInit,
 	buildRegisterRequestInit,
 	type AppError,
@@ -25,6 +26,7 @@ import {
 	type OAuthProvider,
 	type ProfileData,
 	type ProfileEnvelope,
+	type ProfileUpdateRequest,
 	type RegisterRequest
 } from "./generated";
 
@@ -135,6 +137,27 @@ export async function probeProfileSession(signal?: AbortSignal): Promise<Profile
 		await decodeAuthData<ProfileEnvelope, ProfileData>(
 			response,
 			"Your profile is temporarily unavailable. Please try again."
+		)
+	);
+}
+
+/**
+ * Persists profile preferences and returns the server-confirmed authoritative profile.
+ *
+ * @remarks Implements DESIGN-008 PreferenceManager confirmed preference persistence.
+ */
+export async function updateProfileSession(
+	request: ProfileUpdateRequest,
+	options: { csrfToken: string; signal?: AbortSignal }
+): Promise<ProfileData> {
+	const response = await fetch(
+		PROFILE_ENDPOINT,
+		buildProfileUpdateRequestInit(request, options.csrfToken, { signal: options.signal })
+	);
+	return sanitizeProfileData(
+		await decodeAuthData<ProfileEnvelope, ProfileData>(
+			response,
+			"Your unit preference could not be saved. Please try again."
 		)
 	);
 }

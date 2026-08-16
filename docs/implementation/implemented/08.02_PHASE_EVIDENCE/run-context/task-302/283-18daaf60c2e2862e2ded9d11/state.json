@@ -1,0 +1,31 @@
+{
+  "run_id": "18daaf60c2e2862e2ded9d11",
+  "created_at": 1786184583,
+  "database": "mealswapp_e2e_18daaf60c2e2862e2ded9d11_test",
+  "ownership_comment": "mealswapp-e2e-owner run=18daaf60c2e2862e2ded9d11 created=1786184583",
+  "redis_container": "mealswapp-e2e-18daaf60c2e2862e2ded9d11",
+  "processes": [
+    {
+      "name": "task282-provider-fixture",
+      "pid": 1307943,
+      "start_token": "10016135"
+    },
+    {
+      "name": "api",
+      "pid": 1307945,
+      "start_token": "10016147"
+    },
+    {
+      "name": "frontend",
+      "pid": 1307957,
+      "start_token": "10016159"
+    },
+    {
+      "name": "api-2",
+      "pid": 1307989,
+      "start_token": "10016214"
+    }
+  ],
+  "raw_directory": "/tmp/mealswapp-e2e-18daaf60c2e2862e2ded9d11-9i_g3y9g",
+  "status": "cleaned"
+}

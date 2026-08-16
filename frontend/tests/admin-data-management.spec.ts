@@ -1,0 +1,529 @@
+import { expect, test, type Page, type Route } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+// Implements DESIGN-009 ItemCurator, TagManager, and UserAdminPanel task-256 browser verification.
+
+const itemId = "00000000-0000-4000-8000-000000000101";
+const categoryId = "00000000-0000-4000-8000-000000000102";
+const categoryParentId = "00000000-0000-4000-8000-000000000110";
+const conflictId = "00000000-0000-4000-8000-000000000103";
+const roleId = "00000000-0000-4000-8000-000000000104";
+const userId = "00000000-0000-4000-8000-000000000105";
+const deletionId = "00000000-0000-4000-8000-000000000106";
+const secondItemId = "00000000-0000-4000-8000-000000000108";
+const ok = (data: unknown) => ({ status: "ok", requestId: "task-256", data });
+const failure = (status: number, code: string) => ({ status: "error", requestId: "task-256-error", error: { category: status === 409 ? "validation" : "server", code, message: "Safe failure", retryable: true } });
+
+interface State {
+	item?: Record<string, unknown>;
+	categories: Array<{ id: string; name: string; kind: "food_category"; parentId?: string }>;
+	roles: Array<{ id: string; name: string; kind: "culinary_role" }>;
+	user: Record<string, unknown>;
+	conflictNextRetry?: boolean;
+	abortNextCreate?: boolean;
+	corruptNextCreate?: boolean;
+	corruptCreateWithoutCommit?: boolean;
+	createRequests: Array<Record<string, unknown>>;
+	corruptNextUpdate?: boolean;
+	updateRequests: Array<Record<string, unknown>>;
+	failNextItemRead?: boolean;
+	lastItemPut?: Record<string, unknown>;
+	lastClassificationPut?: Record<string, unknown>;
+	deletedItemIds: string[];
+	classificationReads: number;
+	authoritativeNameAfterPut?: string;
+	userLookupDelays?: Record<string, number>;
+	itemReadDelays?: Record<string, number>;
+	itemSearchDelays?: Record<string, number>;
+	itemSearchItems?: Array<Record<string, unknown>>;
+	staleNextItemSearch?: boolean;
+	failNextItemSearch?: boolean;
+	itemSearchReads: number;
+	classificationMutationWaits?: Record<string, Promise<void>>;
+	classificationMutationCompletions?: Record<string, () => void>;
+}
+
+async function json(route: Route, status: number, body?: unknown): Promise<void> {
+	await route.fulfill(body === undefined ? { status } : { status, contentType: "application/json", body: JSON.stringify(body) });
+}
+
+async function stubApp(page: Page): Promise<State> {
+	const state: State = {
+		categories: [{ id: categoryParentId, name: "Food", kind: "food_category" }, { id: categoryId, name: "Produce", kind: "food_category", parentId: categoryParentId }, { id: conflictId, name: "In use", kind: "food_category" }],
+		roles: [{ id: roleId, name: "Base", kind: "culinary_role" }],
+		user: { id: userId, email: "minimal@example.test", emailVerified: true, createdAt: "2026-07-21T00:00:00Z", deletion: { requestId: deletionId, status: "failed", failureCategory: "unknown", retryCount: 1, requestedAt: "2026-07-20T00:00:00Z" } },
+		deletedItemIds: [], classificationReads: 0, itemSearchReads: 0, createRequests: [], updateRequests: []
+	};
+	const session = ok({ userId: "admin-256", role: "admin", hasVerifiedLoginMethod: true, accessExpiresAt: "2026-07-21T22:00:00Z", refreshExpiresAt: "2026-07-28T22:00:00Z" });
+	await page.route(/\/api\/v1\/(profile|auth\/refresh|billing\/entitlement|search-history|saved-items|search\/autocomplete|auth\/csrf-token)(\?.*)?$/, async (route) => {
+		const url = route.request().url();
+		if (url.includes("/profile")) return json(route, 200, ok({ userId: "admin-256", displayName: "Admin", unitSystem: "metric", themePreference: "system", requiresUnitRecalculation: false }));
+		if (url.includes("/auth/refresh")) return json(route, 200, session);
+		if (url.includes("/billing/entitlement")) return json(route, 200, ok({ userId: "admin-256", tier: "paid", status: "active", allowedModes: ["catalog", "substitution", "daily_diet", "daily_diet_alternative"], searchLimitPer24h: null, usageUsed: 0, usageRemaining: null, usageWindowStartedAt: "2026-07-21T00:00:00Z", trialExpiresAt: null, billingRecoveryState: "none" }));
+		if (url.includes("csrf-token")) return json(route, 200, ok({ csrfToken: "csrf-task-256" }));
+		if (url.includes("search-history")) return json(route, 200, ok({ history: [] }));
+		if (url.includes("saved-items")) return json(route, 200, ok({ items: [] }));
+		return json(route, 200, ok({ items: [] }));
+	});
+	await page.route(/\/api\/v1\/admin\//, async (route) => {
+		const request = route.request(); const url = new URL(request.url()); const method = request.method(); const path = url.pathname;
+		if (path === "/api/v1/admin/classifications" && method === "GET") { state.classificationReads++; return json(route, 200, ok({ classifications: url.searchParams.get("kind") === "food_category" ? state.categories : state.roles })); }
+		if (path === "/api/v1/admin/classifications/food_category" && method === "POST") { const body = request.postDataJSON(); await state.classificationMutationWaits?.[body.name]; const classification = { id: body.name === "Slow category" ? "00000000-0000-4000-8000-000000000109" : "00000000-0000-4000-8000-000000000107", name: body.name, kind: "food_category" as const }; state.categories.push(classification); await json(route, 201, ok({ classification })); state.classificationMutationCompletions?.[body.name]?.(); return; }
+		if (path === `/api/v1/admin/classifications/${categoryId}` && method === "PUT") { const body = request.postDataJSON() as Record<string, unknown>; state.lastClassificationPut = body; state.categories[1] = { ...state.categories[1]!, name: String(body.name), ...(typeof body.parentId === "string" ? { parentId: body.parentId } : { parentId: undefined }) }; return json(route, 200, ok({ classification: state.categories[1] })); }
+		if (path === `/api/v1/admin/classifications/${conflictId}` && method === "DELETE") return json(route, 409, failure(409, "classification_in_use"));
+		if (path.startsWith("/api/v1/admin/classifications/") && method === "DELETE") { const id = path.split("/").at(-1); state.categories = state.categories.filter((value) => value.id !== id); state.roles = state.roles.filter((value) => value.id !== id); return json(route, 204); }
+		if (path === "/api/v1/admin/items" && method === "GET") {
+			state.itemSearchReads++;
+			const query = url.searchParams.get("query") ?? "";
+			const delay = state.itemSearchDelays?.[query] ?? 0;
+			if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+			if (state.failNextItemSearch) { state.failNextItemSearch = false; return json(route, 503, failure(503, "dependency_unavailable")); }
+			const values = state.itemSearchItems ?? (state.item ? [{
+				itemId: state.item.id, name: state.item.name, physicalState: state.item.physicalState, macrosPer100: state.item.macrosPer100,
+				foodCategories: state.item.foodCategories, culinaryRoles: state.item.culinaryRoles
+			}] : []);
+			const matching = values.filter(({ name }) => String(name).toLowerCase().includes(query.trim().toLowerCase()));
+			const pageNumber = Number(url.searchParams.get("page") ?? 1); const pageSize = Number(url.searchParams.get("pageSize") ?? 10); const offset = (pageNumber - 1) * pageSize;
+			const responseItems = state.staleNextItemSearch ? matching.map((value) => ({ ...value, name: "Tofu" })) : matching;
+			state.staleNextItemSearch = false;
+			return json(route, 200, ok({ items: responseItems.slice(offset, offset + pageSize), page: pageNumber, pageSize, total: matching.length }));
+		}
+		if (path === "/api/v1/admin/items" && method === "POST") {
+			const body = request.postDataJSON() as Record<string, unknown>;
+			state.createRequests.push(structuredClone(body));
+			if (state.abortNextCreate) { state.abortNextCreate = false; return route.abort("connectionreset"); }
+			const created = { ...body, id: itemId, prepTimeMinutes: 0, foodCategories: [], culinaryRoles: [] };
+			if (!state.corruptCreateWithoutCommit) state.item = created;
+			const corrupt = state.corruptNextCreate;
+			state.corruptNextCreate = false; state.corruptCreateWithoutCommit = false;
+			if (corrupt) return json(route, 201, { status: "ok", requestId: "req-create-294", data: { id: itemId } });
+			return json(route, 201, ok(created));
+		}
+		if (path === `/api/v1/admin/items/${itemId}` && method === "GET") {
+			const delay = state.itemReadDelays?.[itemId] ?? 0;
+			if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+			if (state.failNextItemRead) { state.failNextItemRead = false; return json(route, 503, failure(503, "dependency_unavailable")); }
+			return state.item ? json(route, 200, ok(state.item)) : json(route, 404, failure(404, "not_found"));
+		}
+		if (path === `/api/v1/admin/items/${secondItemId}` && method === "GET") return json(route, 200, ok({ ...state.item, id: secondItemId, name: "Second item" }));
+		if (path === `/api/v1/admin/items/${itemId}` && method === "PUT") {
+			const body = request.postDataJSON() as Record<string, unknown>;
+			state.lastItemPut = body; state.updateRequests.push(structuredClone(body));
+			if (body.name === "Audit fail") return json(route, 500, failure(500, "audit_write_failed"));
+			const { densitySourceProvider: _densitySourceProvider, densitySourceFoodId: _densitySourceFoodId, ...withoutImportedDensity } = state.item ?? {};
+			const mutationProjection = { ...(body.densitySourceKind ? withoutImportedDensity : state.item), ...body };
+			state.item = { ...mutationProjection, ...(state.authoritativeNameAfterPut ? { name: state.authoritativeNameAfterPut } : {}) };
+			const corrupt = state.corruptNextUpdate;
+			state.corruptNextUpdate = false;
+			if (corrupt) return json(route, 200, { status: "ok", requestId: "req-update-294", data: { id: itemId } });
+			return json(route, 200, ok(state.item));
+		}
+		if (path.startsWith("/api/v1/admin/items/") && method === "DELETE") { const id = path.split("/").at(-1)!; state.deletedItemIds.push(id); if (id === itemId) state.item = undefined; state.itemSearchItems = state.itemSearchItems?.filter(({ itemId: candidate }) => candidate !== id); return json(route, 204); }
+		if (path === "/api/v1/admin/users" && method === "GET") { const query = url.searchParams.get("email") ?? url.searchParams.get("userId") ?? ""; const delay = state.userLookupDelays?.[query] ?? 0; if (delay) await new Promise((resolve) => setTimeout(resolve, delay)); return json(route, 200, ok({ users: [{ ...state.user, email: query.includes("@") ? query : state.user.email }] })); }
+		if (path === `/api/v1/admin/users/${userId}/deletion-requests/${deletionId}/retry` && method === "POST") {
+			state.user = { ...state.user, deletion: { requestId: deletionId, status: "pending", retryCount: 0, requestedAt: "2026-07-20T00:00:00Z" } };
+			if (state.conflictNextRetry) { state.conflictNextRetry = false; return json(route, 409, failure(409, "conflict")); }
+			return json(route, 200, ok({ requestId: deletionId, status: "pending" }));
+		}
+		return json(route, 404, failure(404, "not_found"));
+	});
+	return state;
+}
+
+async function openAdmin(page: Page): Promise<void> { await page.goto("/admin"); await expect(page.locator("[data-admin-data-management]")).toBeVisible(); }
+
+async function loadByID(page: Page, id: string): Promise<void> {
+	await page.getByText("Advanced: load by item ID").click();
+	await page.getByLabel("Item ID").fill(id);
+	await page.getByRole("button", { name: "Load by ID" }).click();
+}
+
+async function assertConfirmationContainment(page: Page): Promise<void> {
+	const confirm = page.getByRole("button", { name: "Confirm" });
+	const cancel = page.getByRole("button", { name: "Cancel" });
+	const desktopOutside = page.locator("[data-sidebar-nav-search]");
+	const mobileOutside = page.locator("[data-sidebar-mobile-toggle]");
+	const outside = await desktopOutside.isVisible() ? desktopOutside : mobileOutside;
+
+	await expect(confirm).toBeFocused();
+	await page.keyboard.press("Tab");
+	await expect(cancel).toBeFocused();
+	await page.keyboard.press("Tab");
+	await expect(confirm).toBeFocused();
+	await page.keyboard.press("Shift+Tab");
+	await expect(cancel).toBeFocused();
+	await page.keyboard.press("Shift+Tab");
+	await expect(confirm).toBeFocused();
+
+	await outside.focus();
+	await expect(confirm).toBeFocused();
+	const box = await outside.boundingBox();
+	expect(box).not.toBeNull();
+	await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+	await expect(page.locator("[data-admin-confirmation]")).toBeVisible();
+	await expect(confirm).toBeFocused();
+	await expect(page.locator("[data-admin-data-management]")).toBeVisible();
+	await expect(page.locator("[data-sidebar]")).toHaveAttribute("data-mobile-open", "false");
+}
+
+async function cancelWithKeyboard(page: Page): Promise<void> {
+	await assertConfirmationContainment(page);
+	await page.keyboard.press("Tab");
+	await expect(page.getByRole("button", { name: "Cancel" })).toBeFocused();
+	await page.keyboard.press("Enter");
+	await expect(page.locator("[data-admin-confirmation]")).toHaveCount(0);
+	expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("BODY");
+}
+
+test("keyboard cancellation restores focus for every destructive confirmation and uses a safe fallback", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Focus item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	await openAdmin(page);
+	await loadByID(page, itemId);
+
+	const itemDelete = page.getByRole("button", { name: "Delete item" });
+	await itemDelete.focus();
+	await itemDelete.press("Enter");
+	await cancelWithKeyboard(page);
+	await expect(itemDelete).toBeFocused();
+
+	const classificationDelete = page.getByRole("treeitem").filter({ hasText: "Produce" }).getByRole("button", { name: "Delete" });
+	await classificationDelete.focus();
+	await classificationDelete.press("Enter");
+	await cancelWithKeyboard(page);
+	await expect(classificationDelete).toBeFocused();
+	await classificationDelete.press("Enter");
+	await classificationDelete.evaluate((button) => button.remove());
+	await cancelWithKeyboard(page);
+	expect(await page.evaluate(() => document.activeElement?.closest('section[aria-labelledby="classifications-title"]') !== null)).toBe(true);
+
+	await page.getByLabel("Email or user ID").fill("minimal@example.test");
+	await page.getByRole("button", { name: "Look up" }).click();
+	const retry = page.getByRole("button", { name: "Retry legal deletion" });
+	await retry.focus();
+	await retry.press("Enter");
+	await cancelWithKeyboard(page);
+	await expect(retry).toBeFocused();
+
+	await retry.press("Enter");
+	await retry.evaluate((button: HTMLButtonElement) => { button.disabled = true; });
+	await cancelWithKeyboard(page);
+	await expect(page.locator("[data-admin-user]")).toContainText("minimal@example.test");
+	expect(await page.evaluate(() => document.activeElement?.closest('section[aria-labelledby="user-admin-title"]') !== null)).toBe(true);
+});
+
+// Verifies IT-ARCH-009-006, ARCH-009, DESIGN-009 ItemCurator, and SW-REQ-056.
+test("manual global item CRUD validates, confirms, refreshes, and never shows audit false success", async ({ page }) => {
+	await stubApp(page); await openAdmin(page);
+	await page.getByLabel("Physical state").selectOption("liquid");
+	await page.getByLabel("Name", { exact: true }).first().fill("Broth");
+	await page.getByLabel("Protein per 100").fill("2"); await page.getByLabel("Carbohydrates per 100").fill("3"); await page.getByLabel("Fat per 100").fill("1");
+	await page.getByRole("button", { name: "Create item" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("positive density");
+	await expect(page.locator("[data-admin-item-error]")).toBeFocused();
+	await page.getByLabel("Density (g/ml)").fill("1.01"); await page.getByRole("button", { name: "Create item" }).click();
+	await expect(page.getByText("Item created and refreshed.")).toBeVisible();
+	await page.getByLabel("Name", { exact: true }).first().fill("Stock"); await page.getByRole("button", { name: "Save item" }).click();
+	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
+	await page.getByLabel("Name", { exact: true }).first().fill("Audit fail"); await page.getByRole("button", { name: "Save item" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("did not complete"); await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Stock");
+	await expect(page.locator("[data-admin-item-recovery]")).toHaveCount(0); await expect(page.getByRole("button", { name: "Save item" })).toBeEnabled();
+	await page.getByRole("button", { name: "Delete item" }).click(); await expect(page.getByRole("button", { name: "Confirm" })).toBeFocused(); await page.getByRole("button", { name: "Cancel" }).click();
+	await expect(page.getByRole("button", { name: "Save item" })).toBeVisible(); await page.getByRole("button", { name: "Delete item" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Item deleted after server confirmation.")).toBeVisible();
+});
+
+test("malformed successful create is locked and recovered without a duplicate mutation", async ({ page }) => {
+	const state = await stubApp(page); state.corruptNextCreate = true;
+	await openAdmin(page);
+	await page.getByLabel("Name", { exact: true }).first().fill("Recovery tofu");
+	await page.getByLabel("Protein per 100").fill("18"); await page.getByLabel("Carbohydrates per 100").fill("3"); await page.getByLabel("Fat per 100").fill("9");
+	await page.getByRole("button", { name: "Create item" }).click();
+
+	const recovery = page.locator("[data-admin-item-recovery]");
+	await expect(recovery).toBeFocused();
+	await expect(recovery).toContainText("Request ID: req-create-294");
+	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Recovery tofu");
+	await expect(page.getByRole("button", { name: "Create item" })).toBeDisabled();
+	await expect(page.getByRole("button", { name: "New item" })).toBeDisabled();
+	expect(state.createRequests).toHaveLength(1);
+
+	await page.getByRole("button", { name: "Check authoritative items" }).click();
+	await expect(page.getByText("Create recovered from authoritative state.")).toBeVisible();
+	await expect(recovery).toHaveCount(0);
+	expect(state.createRequests).toHaveLength(1);
+});
+
+test("failure before a response preserves the create intent without entering committed-outcome recovery", async ({ page }) => {
+	const state = await stubApp(page); state.abortNextCreate = true;
+	await openAdmin(page);
+	await page.getByLabel("Name", { exact: true }).first().fill("Network tofu");
+	await page.getByLabel("Protein per 100").fill("18"); await page.getByLabel("Carbohydrates per 100").fill("3"); await page.getByLabel("Fat per 100").fill("9");
+	await page.getByRole("button", { name: "Create item" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("could not be reached");
+	await expect(page.locator("[data-admin-item-recovery]")).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Create item" })).toBeEnabled();
+	const original = structuredClone(state.createRequests[0]!);
+
+	await page.getByRole("button", { name: "Create item" }).click();
+	await expect(page.getByText("Item created and refreshed.")).toBeVisible();
+	expect(state.createRequests).toHaveLength(2);
+	expect(state.createRequests[1]).toEqual(original);
+});
+
+test("missing create recovery retries only the immutable body and original idempotency key", async ({ page }) => {
+	const state = await stubApp(page); state.corruptNextCreate = true; state.corruptCreateWithoutCommit = true;
+	await openAdmin(page);
+	await page.getByLabel("Name", { exact: true }).first().fill("Retry tofu");
+	await page.getByLabel("Protein per 100").fill("18"); await page.getByLabel("Carbohydrates per 100").fill("3"); await page.getByLabel("Fat per 100").fill("9");
+	await page.getByRole("button", { name: "Create item" }).click();
+	await page.getByRole("button", { name: "Check authoritative items" }).click();
+	await expect(page.getByText("No matching authoritative item was found.")).toBeVisible();
+	const original = structuredClone(state.createRequests[0]!);
+
+	await page.getByRole("button", { name: "Retry original create safely" }).click();
+	await expect(page.getByText("Create safely recovered with the original idempotency key.")).toBeVisible();
+	expect(state.createRequests).toHaveLength(2);
+	expect(state.createRequests[1]).toEqual(original);
+	await expect(page.getByRole("button", { name: "Retry original create safely" })).toHaveCount(0);
+});
+
+test("ambiguous update recovery detects conflicts and keeps failed or missing reads blocked", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Original tofu", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	state.authoritativeNameAfterPut = "Conflicting tofu"; state.corruptNextUpdate = true;
+	await openAdmin(page); await loadByID(page, itemId);
+	await page.getByLabel("Name", { exact: true }).first().fill("Submitted tofu");
+	await page.getByRole("button", { name: "Save item" }).click();
+	await expect(page.locator("[data-admin-item-recovery]")).toContainText("req-update-294");
+	await page.getByRole("button", { name: "Verify saved update" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("differ from the submitted update");
+	expect(state.updateRequests).toHaveLength(1);
+
+	state.item = undefined;
+	await page.getByRole("button", { name: "Verify saved update" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("could not be found");
+	state.item = { id: itemId, name: "Submitted tofu", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	state.failNextItemRead = true;
+	await page.getByRole("button", { name: "Verify saved update" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("Authoritative verification failed");
+	expect(state.updateRequests).toHaveLength(1);
+	await expect(page.getByRole("button", { name: "Save item" })).toBeDisabled();
+});
+
+// Verifies IT-ARCH-009-005 and IT-ARCH-009-007, ARCH-009,
+// DESIGN-009 TagManager/UserAdminPanel, and SW-REQ-054/SW-REQ-057/SW-REQ-073.
+test("classification conflicts and legal deletion retries preserve authoritative state", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	await page.getByLabel("Name", { exact: true }).last().fill("Vegetable"); await page.getByRole("button", { name: "Create", exact: true }).click(); await expect(page.getByRole("treeitem").filter({ hasText: "Vegetable" })).toBeVisible();
+	const produce = page.getByRole("treeitem").filter({ hasText: "Produce" }); await produce.getByRole("button", { name: "Edit" }).click(); await page.getByLabel("Name", { exact: true }).last().fill("Fresh produce"); await page.getByRole("button", { name: "Save classification" }).click(); await expect(page.getByRole("treeitem").filter({ hasText: "Fresh produce" })).toBeVisible();
+	expect(state.lastClassificationPut).toEqual({ name: "Fresh produce", parentId: categoryParentId });
+	expect(state.categories.find(({ id }) => id === categoryId)?.parentId).toBe(categoryParentId);
+	const inUse = page.getByRole("treeitem").filter({ hasText: "In use" }); await inUse.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click(); await expect(page.locator("[data-admin-classification-error]")).toContainText("authoritative data"); await expect(page.getByRole("treeitem").filter({ hasText: "In use" })).toBeVisible();
+	await page.getByLabel("Email or user ID").fill("minimal@example.test"); await page.getByRole("button", { name: "Look up" }).click();
+	await expect(page.locator("[data-admin-user]")).toContainText("unknown · retries 1"); state.conflictNextRetry = true; await page.getByRole("button", { name: "Retry legal deletion" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.locator("[data-admin-user-error]")).toContainText("authoritative data"); await expect(page.locator("[data-admin-user]")).toContainText("pending"); await expect(page.getByText("Deletion retry accepted and authoritative state refreshed.")).toHaveCount(0);
+	state.user = { ...state.user, deletion: { requestId: deletionId, status: "failed", failureCategory: "permanent", retryCount: 0, requestedAt: "2026-07-20T00:00:00Z" } }; await page.getByRole("button", { name: "Look up" }).click(); await page.getByRole("button", { name: "Retry legal deletion" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Deletion retry accepted and authoritative state refreshed.")).toBeVisible(); await expect(page.locator("[data-admin-user]")).toContainText("pending"); await expect(page.getByRole("button", { name: "Retry legal deletion" })).toHaveCount(0);
+});
+
+test("unused classification delete reloads the authoritative hierarchy", async ({ page }) => {
+	const state = await stubApp(page); await openAdmin(page);
+	const readsBeforeDelete = state.classificationReads;
+	const produce = page.getByRole("treeitem").filter({ hasText: "Produce" });
+	await produce.getByRole("button", { name: "Delete" }).click(); await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Classification deleted and refreshed.")).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Produce" })).toHaveCount(0);
+	expect(state.classificationReads).toBeGreaterThanOrEqual(readsBeforeDelete + 2);
+});
+
+test("item replacement preserves all fields and renders the differing authoritative follow-up", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = {
+		id: itemId, name: "Imported milk", physicalState: "liquid", prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240,
+		densityGramsPerMilliliter: 1.2, densitySourceProvider: "usda", densitySourceFoodId: "171265", densitySourceKind: "imported",
+		macrosPer100: { protein: 10, carbohydrates: 110, fat: 5 }, micros: { sodium: 42 }, foodCategoryIds: [categoryId], culinaryRoleIds: [roleId],
+		foodCategories: [{ id: categoryId, name: "Produce", kind: "food_category" }], culinaryRoles: [{ id: roleId, name: "Base", kind: "culinary_role" }], allergenKeys: ["dairy"], imageUrl: "https://images.example.test/milk.png"
+	};
+	state.authoritativeNameAfterPut = "Authoritative milk";
+	await openAdmin(page); await loadByID(page, itemId);
+	await expect(page.getByLabel("Image URL")).toHaveValue("https://images.example.test/milk.png");
+	await page.getByLabel("Name", { exact: true }).first().fill("Submitted milk"); await page.getByRole("button", { name: "Save item" }).click();
+	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Authoritative milk");
+	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
+	expect(state.lastItemPut).toMatchObject({
+		name: "Submitted milk", prepTimeMinutes: 12, averageUnitWeightGrams: 250, averageServingVolumeMilliliters: 240,
+		densityGramsPerMilliliter: 1.2, densitySourceKind: "manual",
+		macrosPer100: { protein: 10, carbohydrates: 110, fat: 5 }, micros: { sodium: 42 }, foodCategoryIds: [categoryId], culinaryRoleIds: [roleId], allergenKeys: ["dairy"], imageUrl: "https://images.example.test/milk.png"
+	});
+});
+
+test("confirmation target cannot race mutable item state", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "First item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	await openAdmin(page); await loadByID(page, itemId); await page.getByRole("button", { name: "Delete item" }).click();
+	await expect(page.locator("[data-admin-background]")).toHaveAttribute("inert", "");
+	await page.locator("[data-admin-confirmation]").evaluate((dialog: HTMLDialogElement) => dialog.close());
+	await page.locator("[data-admin-background]").evaluate((element) => element.removeAttribute("inert"));
+	await page.getByRole("button", { name: "New item" }).click();
+	await page.locator("[data-admin-confirmation]").evaluate((dialog: HTMLDialogElement) => dialog.showModal());
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.locator("[data-admin-item-error]")).toContainText("no longer current");
+	expect(state.deletedItemIds).toEqual([]);
+});
+
+test("older item reads and user lookups cannot overwrite newer state", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Slow item", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 1, carbohydrates: 2, fat: 3 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	state.itemReadDelays = { [itemId]: 200 };
+	state.userLookupDelays = { "slow@example.test": 200, "latest@example.test": 5 };
+	await openAdmin(page);
+	await page.getByText("Advanced: load by item ID").click();
+	await page.getByLabel("Item ID").fill(itemId); await page.locator('form[aria-label="Load global item"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
+	await page.getByLabel("Item ID").fill(secondItemId); await page.locator('form[aria-label="Load global item"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
+	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Second item"); await page.waitForTimeout(250); await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Second item");
+	await page.getByLabel("Email or user ID").fill("slow@example.test"); await page.locator('form[aria-label="User lookup"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
+	await page.getByLabel("Email or user ID").fill("latest@example.test"); await page.locator('form[aria-label="User lookup"]').evaluate((form: HTMLFormElement) => form.requestSubmit());
+	await expect(page.locator("[data-admin-user]")).toContainText("latest@example.test"); await page.waitForTimeout(250); await expect(page.locator("[data-admin-user]")).toContainText("latest@example.test");
+});
+
+test("global item picker cancels stale searches, disambiguates duplicate names, and loads authoritative edits", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Tofu", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	state.itemSearchItems = [
+		{ itemId, name: "Tofu", physicalState: "solid", macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, foodCategories: [], culinaryRoles: [] },
+		{ itemId: secondItemId, name: "Tofu", physicalState: "liquid", macrosPer100: { protein: 7, carbohydrates: 4, fat: 2 }, foodCategories: [], culinaryRoles: [] }
+	];
+	state.itemSearchDelays = { "slow tofu": 200, tofu: 5 };
+	await openAdmin(page);
+	const query = page.getByLabel("Item name");
+	const form = page.locator('form[aria-label="Search global items"]');
+	await query.fill("slow tofu"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.getByText("Loading matching global items…")).toBeVisible();
+	await query.fill("tofu"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(2);
+	await expect(page.locator("[data-admin-item-search-results]")).toContainText(itemId);
+	await expect(page.locator("[data-admin-item-search-results]")).toContainText(secondItemId);
+	await page.waitForTimeout(250);
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(2);
+	const secondResult = page.getByRole("button", { name: "Edit Tofu" }).nth(1);
+	await secondResult.focus();
+	await secondResult.press("Enter");
+	await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Second item");
+	await expect(page.getByText("Authoritative item loaded.")).toBeVisible();
+	await query.fill("slow tofu"); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.getByText("Loading matching global items…")).toBeVisible();
+	await query.fill(""); await form.evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.getByText("Enter an item name.")).toBeVisible();
+	await page.waitForTimeout(250);
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(0);
+});
+
+test("global item picker exposes deterministic bounded pagination", async ({ page }) => {
+	const state = await stubApp(page);
+	state.itemSearchItems = Array.from({ length: 11 }, (_, index) => ({
+		itemId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+		name: `Paged tofu ${String(index + 1).padStart(2, "0")}`,
+		physicalState: "solid",
+		macrosPer100: { protein: index, carbohydrates: 3, fat: 2 },
+		foodCategories: [],
+		culinaryRoles: []
+	}));
+	await openAdmin(page);
+	await page.getByLabel("Item name").fill("paged tofu");
+	await page.locator('form[aria-label="Search global items"]').evaluate((element: HTMLFormElement) => element.requestSubmit());
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(10);
+	await expect(page.getByText("Page 1 of 2")).toBeVisible();
+	await page.getByRole("button", { name: "Next" }).click();
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(1);
+	await expect(page.getByRole("heading", { name: "Paged tofu 11", exact: true })).toBeVisible();
+	await expect(page.getByText("Page 2 of 2")).toBeVisible();
+	await page.getByRole("button", { name: "Previous" }).click();
+	await expect(page.getByText("Page 1 of 2")).toBeVisible();
+});
+
+test("picker refreshes after committed mutations and recovers a failed read without resubmitting", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Tofu", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	await openAdmin(page);
+	await page.getByLabel("Item name").fill("tofu");
+	await page.locator('form[aria-label="Search global items"]').getByRole("button", { name: "Search", exact: true }).click();
+	await page.getByRole("button", { name: "Edit Tofu" }).click();
+	const readsBeforeUpdate = state.itemSearchReads;
+	const nameInput = page.getByLabel("Name", { exact: true }).first();
+	await expect(nameInput).toHaveValue("Tofu");
+	await nameInput.fill("Tofu refreshed");
+	await expect(nameInput).toHaveValue("Tofu refreshed");
+	state.staleNextItemSearch = true;
+	await page.getByRole("button", { name: "Save item" }).click();
+	await expect(page.getByText("Item saved and refreshed.")).toBeVisible();
+	expect(state.lastItemPut?.name).toBe("Tofu refreshed");
+	expect(state.itemSearchReads).toBeGreaterThan(readsBeforeUpdate);
+	await expect(page.locator("[data-admin-item-search-results]")).toContainText("Tofu refreshed");
+
+	state.failNextItemSearch = true;
+	await page.getByLabel("Name", { exact: true }).first().fill("Tofu final");
+	await page.getByRole("button", { name: "Save item" }).click();
+	await expect(page.getByText("Item saved, but search results could not be refreshed.")).toBeVisible();
+	await expect(page.getByRole("button", { name: "Retry search" })).toBeVisible();
+	await page.getByRole("button", { name: "Retry search" }).click();
+	await expect(page.locator("[data-admin-item-search-results]")).toContainText("Tofu final");
+
+	await page.getByRole("button", { name: "Delete item" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Item deleted and search results refreshed.")).toBeVisible();
+	await expect(page.getByText("No active global items matched this name.")).toBeVisible();
+	expect(state.deletedItemIds).toEqual([itemId]);
+});
+
+test("picker recovers to the previous page when deleting its last later-page item", async ({ page }) => {
+	const state = await stubApp(page);
+	state.item = { id: itemId, name: "Paged tofu 11", physicalState: "solid", prepTimeMinutes: 0, macrosPer100: { protein: 18, carbohydrates: 3, fat: 9 }, micros: {}, foodCategories: [], culinaryRoles: [], allergenKeys: [] };
+	state.itemSearchItems = Array.from({ length: 11 }, (_, index) => ({
+		itemId: index === 10 ? itemId : `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+		name: `Paged tofu ${String(index + 1).padStart(2, "0")}`,
+		physicalState: "solid",
+		macrosPer100: { protein: index, carbohydrates: 3, fat: 2 },
+		foodCategories: [],
+		culinaryRoles: []
+	}));
+	await openAdmin(page);
+	await page.getByLabel("Item name").fill("paged tofu");
+	await page.locator('form[aria-label="Search global items"]').getByRole("button", { name: "Search", exact: true }).click();
+	await page.getByRole("button", { name: "Next" }).click();
+	await expect(page.getByText("Page 2 of 2")).toBeVisible();
+	await page.getByRole("button", { name: "Edit Paged tofu 11" }).click();
+	await page.getByRole("button", { name: "Delete item" }).click();
+	await page.getByRole("button", { name: "Confirm" }).click();
+	await expect(page.getByText("Item deleted and search results refreshed.")).toBeVisible();
+	await expect(page.getByText("Page 1 of 1")).toBeVisible();
+	await expect(page.locator("[data-admin-item-search-result]")).toHaveCount(10);
+});
+
+test("in-flight classification mutations keep the editor locked until authoritative refresh", async ({ page }) => {
+	let releaseSlowMutation = () => {};
+	let completeSlowMutation = () => {};
+	const slowMutationCompleted = new Promise<void>((resolve) => { completeSlowMutation = resolve; });
+	const state = await stubApp(page); state.classificationMutationWaits = { "Slow category": new Promise((resolve) => { releaseSlowMutation = resolve; }) }; state.classificationMutationCompletions = { "Slow category": completeSlowMutation }; await openAdmin(page);
+	const name = page.getByLabel("Name", { exact: true }).last(); const form = page.locator('form[aria-label="Classification form"]');
+	await name.fill("Slow category");
+	const slowRequest = page.waitForRequest((request) => request.url().endsWith("/api/v1/admin/classifications/food_category") && request.method() === "POST" && request.postDataJSON().name === "Slow category");
+	await form.evaluate((element: HTMLFormElement) => element.requestSubmit()); await slowRequest;
+	await expect(name).toBeDisabled();
+	releaseSlowMutation();
+	await slowMutationCompleted;
+	await expect(page.getByRole("treeitem").filter({ hasText: "Slow category" })).toBeVisible();
+	await expect(page.getByRole("treeitem").filter({ hasText: "Latest category" })).toHaveCount(0);
+});
+
+test("admin views remain keyboard-accessible, responsive, and theme-safe", async ({ page }, testInfo) => {
+	await stubApp(page); await openAdmin(page); await page.emulateMedia({ reducedMotion: "reduce" });
+	const columns = await page.locator("[data-admin-classification-grid]").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
+	expect(columns).toBe(testInfo.project.name === "mobile-chromium" ? 1 : 2);
+	for (const theme of ["light", "dark"] as const) {
+		if ((await page.locator("html").getAttribute("data-theme")) !== theme) { const toggle = page.getByLabel("Theme preference"); if (!(await toggle.isVisible())) await page.getByLabel("Open activity sidebar").click(); await toggle.click(); }
+		await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+		const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+		expect(axe.violations.filter(({ impact }) => impact === "serious" || impact === "critical")).toEqual([]);
+	}
+});

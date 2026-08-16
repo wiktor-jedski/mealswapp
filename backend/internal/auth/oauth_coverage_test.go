@@ -30,7 +30,7 @@ func TestNormalizeOAuthProfileRejectsInvalidClaims(t *testing.T) {
 		}
 	}
 	profile, err := normalizeOAuthProfile("google", OAuthProfile{Provider: " GOOGLE ", ProviderUserID: " id ", Email: " USER@example.test ", DisplayName: " Ada "})
-	if err != nil || profile.Provider != "google" || profile.ProviderUserID != "id" || profile.Email != "USER@example.test" || profile.DisplayName != "Ada" {
+	if err != nil || profile.Provider != "google" || profile.ProviderUserID != "id" || profile.Email != "user@example.test" || profile.DisplayName != "Ada" {
 		t.Fatalf("normalized profile=%+v err=%v", profile, err)
 	}
 }
@@ -202,4 +202,8 @@ func (*oauthUnsupportedIdentityRepository) GetUserByNormalizedEmailDigest(contex
 
 func (*oauthUnsupportedIdentityRepository) GetEncryptedUserByID(context.Context, uuid.UUID) (repository.EncryptedAuthUser, error) {
 	return repository.EncryptedAuthUser{}, errors.New("unused")
+}
+
+func (*oauthUnsupportedIdentityRepository) ReindexUserEmailDigest(context.Context, uuid.UUID, repository.LookupDigest) error {
+	return errors.New("unused")
 }

@@ -17,8 +17,14 @@ type FoodCatalogRepository interface {
 // SearchResponseCache stores successful Catalog Search responses by deterministic request key.
 // Implements DESIGN-002 SearchController and DESIGN-011 RedisCache.
 type SearchResponseCache interface {
-	GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, error)
-	SetSearchResponse(context.Context, SearchRequest, SearchResponse) error
+	GetSearchResponse(context.Context, SearchRequest) (SearchResponse, bool, SearchResponseCacheToken, error)
+	SetSearchResponse(context.Context, SearchRequest, SearchResponse, SearchResponseCacheToken) (bool, error)
+}
+
+// SearchResponseCacheToken preserves the shared generation observed before a cache miss.
+// Implements DESIGN-011 RedisCache guarded cache writes.
+type SearchResponseCacheToken struct {
+	ClassificationGeneration uint64
 }
 
 // SearchResponseCacheMetadataProvider reports response-safe cache metadata without exposing cache keys.
@@ -37,9 +43,13 @@ type SimilarityCalculation struct {
 // SimilarityCalculationCache stores successful Substitution Search macro comparison payloads.
 // Implements DESIGN-002 SearchController and DESIGN-011 RedisCache.
 type SimilarityCalculationCache interface {
-	GetSimilarityCalculation(context.Context, []SubstitutionInput) (SimilarityCalculation, bool, error)
-	SetSimilarityCalculation(context.Context, []SubstitutionInput, SimilarityCalculation) error
+	GetSimilarityCalculation(context.Context, []SubstitutionInput) (SimilarityCalculation, bool, SimilarityCalculationCacheToken, error)
+	SetSimilarityCalculation(context.Context, []SubstitutionInput, SimilarityCalculation, SimilarityCalculationCacheToken) (bool, error)
 }
+
+// SimilarityCalculationCacheToken guards writes against catalog mutations during calculation.
+// Implements DESIGN-011 RedisCache shared food-data generation.
+type SimilarityCalculationCacheToken struct{ FoodDataGeneration uint64 }
 
 // SimilarityCalculationCacheMetadataProvider reports response-safe similarity cache metadata.
 // Implements DESIGN-011 RedisCache response metadata.
@@ -78,11 +88,14 @@ func (s *CatalogService) Search(ctx context.Context, req SearchRequest) (SearchR
 	normalizedReq.Page = normalizedPage(req.Page)
 
 	cacheWarnings := []string{}
+	var cacheToken SearchResponseCacheToken
 	if s.cache != nil {
-		if cached, hit, err := s.cache.GetSearchResponse(ctx, normalizedReq); err == nil && hit {
+		if cached, hit, token, err := s.cache.GetSearchResponse(ctx, normalizedReq); err == nil && hit {
 			return cached, nil
 		} else if err != nil {
 			cacheWarnings = append(cacheWarnings, WarningCacheUnavailable)
+		} else {
+			cacheToken = token
 		}
 	}
 
@@ -92,9 +105,9 @@ func (s *CatalogService) Search(ctx context.Context, req SearchRequest) (SearchR
 	}
 	response.Warnings = append(response.Warnings, cacheWarnings...)
 	if response.Rejection == nil && s.cache != nil {
-		if err := s.cache.SetSearchResponse(ctx, normalizedReq, responseWithoutCache(response)); err != nil {
+		if stored, err := s.cache.SetSearchResponse(ctx, normalizedReq, responseWithoutCache(response), cacheToken); err != nil {
 			response.Warnings = appendWarningOnce(response.Warnings, WarningCacheUnavailable)
-		} else {
+		} else if stored {
 			response.Cache = searchResponseCacheMetadata(s.cache, normalizedReq, CacheStatusMiss)
 		}
 	}

@@ -1,0 +1,25 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-ACCEPT-03"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 Task 304 invalid allergen real-stack-mobile-chromium",
+  "idempotencyKey": "0adcdb17-0969-4f61-838e-c3706b9ae89c",
+  "requestIds": [
+    "83b55ffd-e845-4ffb-ab6b-13533c1100f9"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "requestAuditActions": {},
+    "idempotencyCount": 0,
+    "generationBefore": "62",
+    "generationAfter": "62",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "6f6a4665-7da5-48e3-a196-09edd8913c62",
+    "generationAfter": "f9b3aabf-1324-411d-b763-cb996ec23334"
+  }
+}

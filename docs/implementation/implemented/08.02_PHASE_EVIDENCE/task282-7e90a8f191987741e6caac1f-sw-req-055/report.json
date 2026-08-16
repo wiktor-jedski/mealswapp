@@ -1,0 +1,694 @@
+{
+  "exitCode": 1,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 30
+      },
+      "status": "PASS",
+      "text": "External search alone does not modify the local database."
+    },
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR055-ACCEPT-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-282-005"
+      ],
+      "id": "P08-SWR055-ACCEPT-02",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T282-ACCEPTANCE-INFRASTRUCTURE",
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 31
+      },
+      "status": "FAIL",
+      "text": "Provider warnings appear without exposing raw payloads."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-ACCEPT-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-ACCEPT-03",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 32
+      },
+      "status": "PASS",
+      "text": "Edited values are used."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-ACCEPT-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-ACCEPT-04",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 33
+      },
+      "status": "PASS",
+      "text": "Exactly one global item is imported."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-ACCEPT-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-ACCEPT-05",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 34
+      },
+      "status": "PASS",
+      "text": "The imported item becomes locally searchable."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-ACCEPT-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-ACCEPT-06",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 35
+      },
+      "status": "PASS",
+      "text": "Retrying a lost/ambiguous response does not duplicate it."
+    },
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR055-ACCEPT-07",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-282-005"
+      ],
+      "id": "P08-SWR055-ACCEPT-07",
+      "kind": "criterion",
+      "owner": "external-data-curation",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T282-ACCEPTANCE-INFRASTRUCTURE",
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 36
+      },
+      "status": "FAIL",
+      "text": "One provider failing still allows results from the other."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-STEP-01",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 20
+      },
+      "status": "PASS",
+      "text": "Search USDA."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global",
+        "provider_state=rejected_candidate"
+      ],
+      "criterionId": "P08-SWR055-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-282-001"
+      ],
+      "id": "P08-SWR055-STEP-02",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "6804cdbe-870f-4b4e-8707-16c00b4fadf8",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T282-OFF-METADATA",
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 21
+      },
+      "status": "FAIL",
+      "text": "Search OpenFoodFacts."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-STEP-03",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 22
+      },
+      "status": "PASS",
+      "text": "Search both simultaneously."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-STEP-04",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 23
+      },
+      "status": "PASS",
+      "text": "Select a result."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-STEP-05",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 24
+      },
+      "status": "PASS",
+      "text": "Edit its name, nutrition, physical state and classifications."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-STEP-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-STEP-06",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 25
+      },
+      "status": "PASS",
+      "text": "Confirm import."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=advanced",
+        "http_status=201",
+        "metric_basis=100g",
+        "mutation_count=1",
+        "owner_state=global"
+      ],
+      "criterionId": "P08-SWR055-STEP-07",
+      "evidence": [
+        {
+          "path": "evidence/backend/curation.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-curated-catalog.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR055-STEP-07",
+      "kind": "step",
+      "owner": "external-data-curation",
+      "requestIds": [
+        "0ebaf5e8-f3d7-4cd9-b283-c6d5aed02edb",
+        "36a90431-2b97-4bb8-a726-6872c2883659",
+        "88a70fb5-56d1-4668-b1bb-03e6f0b23a73",
+        "8c2655e9-b3c5-416e-8cb3-5bfd2286b404",
+        "9ac1e9a2-767e-4130-980b-6a936f88ee28",
+        "b02e5afd-b9b5-49a9-a93d-e684b185faba",
+        "be070809-8b11-40d1-9bcf-b76ab8faecdb"
+      ],
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "requirement": "SW-REQ-055",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR055-EXTERNAL-CURATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 26
+      },
+      "status": "PASS",
+      "text": "Search for the new item in the local catalog."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR055-ACCEPT-02",
+        "P08-SWR055-ACCEPT-07"
+      ],
+      "id": "ROOT-T282-ACCEPTANCE-INFRASTRUCTURE"
+    },
+    {
+      "criteria": [
+        "P08-SWR055-STEP-02"
+      ],
+      "id": "ROOT-T282-OFF-METADATA"
+    }
+  ],
+  "runId": "task282-7e90a8f191987741e6caac1f-sw-req-055",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "FAIL"
+}

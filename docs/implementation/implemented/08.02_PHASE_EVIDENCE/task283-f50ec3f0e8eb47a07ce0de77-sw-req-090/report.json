@@ -1,0 +1,353 @@
+{
+  "exitCode": 2,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-canonical-sodium-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-micro-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-micro-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-canonical-sodium-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-micro-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-micro-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-unknown.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
+        "29067bc9-3413-4f71-a7b0-0c41bde8a422",
+        "32fb15e4-3c0d-4386-a911-23a7705225ee",
+        "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
+        "bdc87907-60c1-4a5f-843e-f4bbd675030a",
+        "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 192
+      },
+      "status": "PASS",
+      "text": "Accept when only active canonical keys are persisted."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-canonical-sodium-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-canonical-sodium-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-unknown.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-01",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
+        "29067bc9-3413-4f71-a7b0-0c41bde8a422",
+        "32fb15e4-3c0d-4386-a911-23a7705225ee",
+        "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
+        "bdc87907-60c1-4a5f-843e-f4bbd675030a",
+        "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 187
+      },
+      "status": "PASS",
+      "text": "Create/import an item using Sodium."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-micro-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-micro-alias-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-unknown.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-02",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
+        "29067bc9-3413-4f71-a7b0-0c41bde8a422",
+        "32fb15e4-3c0d-4386-a911-23a7705225ee",
+        "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
+        "bdc87907-60c1-4a5f-843e-f4bbd675030a",
+        "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 188
+      },
+      "status": "PASS",
+      "text": "Try the same using Na."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=1",
+        "cache_generation=unchanged",
+        "http_status=400",
+        "mutation_count=1",
+        "rollback_state=complete",
+        "row_count=1"
+      ],
+      "criterionId": "P08-SWR090-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-micro-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-micro-unknown-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-micro-unknown.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-canonical-sodium.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-alias.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-micro-unknown.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR090-STEP-03",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [
+        "1c4ac37a-d03e-4b65-8219-7860d030ff5d",
+        "29067bc9-3413-4f71-a7b0-0c41bde8a422",
+        "32fb15e4-3c0d-4386-a911-23a7705225ee",
+        "9a4e0e1e-c6d0-4e60-8f5e-6a5b618c79a1",
+        "bdc87907-60c1-4a5f-843e-f4bbd675030a",
+        "c7ed12da-7fa4-4a20-a551-a05f4a162323"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 189
+      },
+      "status": "PASS",
+      "text": "Try an unknown micronutrient."
+    },
+    {
+      "backendEvidence": [],
+      "criterionId": "P08-SWR090-STEP-04",
+      "evidence": [],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database"
+      ],
+      "findingIds": [
+        "P08-FIND-283-006"
+      ],
+      "id": "P08-SWR090-STEP-04",
+      "kind": "step",
+      "owner": "nutrition-domain",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-090",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-MICRONUTRIENT-VALIDATION",
+      "scenarioId": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "source": {
+        "file": "req_tests.md",
+        "line": 190
+      },
+      "status": "BLOCKED",
+      "text": "Disable a vocabulary entry and retry."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR090-STEP-04"
+      ],
+      "id": "ROOT-T283-MICRONUTRIENT-VALIDATION"
+    }
+  ],
+  "runId": "task283-f50ec3f0e8eb47a07ce0de77-sw-req-090",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "BLOCKED"
+}

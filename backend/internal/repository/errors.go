@@ -5,6 +5,19 @@ import (
 	"fmt"
 )
 
+// Implements DESIGN-009 AdminController closed administrator-bootstrap outcomes.
+var (
+	ErrAdministratorBootstrapTargetNotFound = errors.New("administrator bootstrap target not found")
+	ErrAdministratorBootstrapUnverified     = errors.New("administrator bootstrap target is unverified")
+	ErrAdministratorBootstrapNoCredential   = errors.New("administrator bootstrap target has no usable credential")
+	ErrAdministratorAlreadyExists           = errors.New("a different administrator already exists")
+	ErrCanonicalEmailCollision              = errors.New("canonical email identity conflicts with another account")
+)
+
+// ErrAdminAuditPersistence identifies an audit write that must roll back its admin mutation.
+// Implements DESIGN-009 AdminController fail-closed transactional audit boundary.
+var ErrAdminAuditPersistence = errors.New("admin audit persistence failed")
+
 // ErrorKind classifies repository failures for service and API mapping.
 // Implements DESIGN-005 RepositoryInterfaces.
 type ErrorKind string
@@ -17,6 +30,8 @@ const (
 	ErrorKindValidation ErrorKind = "validation_error"
 	// ErrorKindConflict indicates that a persistence constraint rejected the operation.
 	ErrorKindConflict ErrorKind = "constraint_violation"
+	// ErrorKindIdempotencyConflict indicates key reuse with a different normalized request body.
+	ErrorKindIdempotencyConflict ErrorKind = "idempotency_conflict"
 	// ErrorKindInvalidMicronutrientKey indicates an unsupported micronutrient vocabulary key.
 	ErrorKindInvalidMicronutrientKey ErrorKind = "invalid_micronutrient_key"
 	// ErrorKindUnitConversion indicates that a quantity cannot be converted as requested.

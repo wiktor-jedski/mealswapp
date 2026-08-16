@@ -46,18 +46,29 @@ func (s *AccountDeletionService) RequestDeletion(ctx context.Context, userID uui
 // ExecuteDeletion deletes production account data and records a pseudonymous receipt.
 // Implements DESIGN-008 AccountDeleter.
 func (s *AccountDeletionService) ExecuteDeletion(ctx context.Context, request repository.DataDeletionRequest, receiptID uuid.UUID, completedAt time.Time) error {
-	if err := s.sessions.RevokeUserSessions(ctx, request.UserID); err != nil {
+	if request.NextAttemptAt == nil || request.NextAttemptAt.IsZero() {
+		return repository.NewError(repository.ErrorKindValidation, "processing lease is required", nil)
+	}
+	attemptCtx, cancel := context.WithDeadline(ctx, *request.NextAttemptAt)
+	defer cancel()
+	if err := attemptCtx.Err(); err != nil {
 		return err
 	}
-	if err := s.accounts.DeleteUserAccount(ctx, request.UserID); err != nil {
+	if err := s.sessions.RevokeUserSessions(attemptCtx, request.UserID); err != nil {
+		return err
+	}
+	if err := s.accounts.DeleteUserAccount(attemptCtx, request.UserID); err != nil {
 		return err
 	}
 	if s.cache != nil {
-		if err := s.cache.PurgeUser(ctx, request.UserID); err != nil {
-			return s.requests.RecordDeletionFailure(ctx, request.ID, "transient", "cache_purge_failed", nil)
+		if err := s.cache.PurgeUser(attemptCtx, request.UserID); err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+			return repository.NewError(repository.ErrorKindRetryable, "purge user cache", err)
 		}
 	}
-	return s.requests.CompleteDeletionRequest(ctx, request.ID, receiptID, completedAt)
+	return s.requests.CompleteDeletionRequest(attemptCtx, request.ID, *request.NextAttemptAt, receiptID, completedAt)
 }
 
 // ProcessDueDeletionRequests claims and executes due deletion work.
@@ -71,16 +82,21 @@ func (s *AccountDeletionService) ProcessDueDeletionRequests(ctx context.Context,
 		return nil, err
 	}
 	for _, request := range claimed {
+		if request.NextAttemptAt == nil || request.NextAttemptAt.IsZero() {
+			return claimed, repository.NewError(repository.ErrorKindValidation, "claimed deletion request has no processing lease", nil)
+		}
+		leaseExpiresAt := *request.NextAttemptAt
 		if request.UserID == uuid.Nil {
-			if err := s.requests.RecordDeletionFailure(ctx, request.ID, "permanent", "missing_user_id", nil); err != nil {
+			if err := s.requests.RecordDeletionFailure(ctx, request.ID, leaseExpiresAt, "permanent", "missing_user_id", nil); err != nil {
 				return claimed, err
 			}
 			continue
 		}
-		if err := s.ExecuteDeletion(ctx, request, uuid.New(), now); err != nil {
+		err := s.ExecuteDeletion(ctx, request, uuid.New(), now)
+		if err != nil {
 			category, note := classifyDeletionFailure(err)
 			nextAttemptAt := nextDeletionAttempt(now, request.RetryCount, category)
-			if err := s.requests.RecordDeletionFailure(ctx, request.ID, category, note, nextAttemptAt); err != nil {
+			if err := s.requests.RecordDeletionFailure(ctx, request.ID, leaseExpiresAt, category, note, nextAttemptAt); err != nil {
 				return claimed, err
 			}
 		}

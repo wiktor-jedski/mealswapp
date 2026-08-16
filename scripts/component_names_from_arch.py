@@ -33,10 +33,10 @@ def extract_static_aspects(file_path):
 
     for match in matches:
         # 'match' is now a string like: "SearchController, AutocompleteRanker, ..."
-        
+
         # Split by comma
         items = match.split(',')
-        
+
         # Clean whitespace and add to list
         for item in items:
             clean_item = item.strip()
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     else:
         input_file = sys.argv[1]
         results = extract_static_aspects(input_file)
-        
+
         if results is not None:
             print(f"Found {len(results)} components:")
             print(results)

@@ -116,7 +116,7 @@ func (c *AuthController) Refresh(ctx *fiber.Ctx) error {
 	session, err := c.service.Refresh(ctx.UserContext(), ctx.Cookies(c.sessions.cfg.Account.RefreshCookieName))
 	if err != nil {
 		if clearErr := c.sessions.ClearAuthenticatedCookies(ctx); clearErr != nil {
-			c.warn(ctx, "auth_refresh_cookie_clear_failed", map[string]any{"error": clearErr.Error()})
+			c.warn(ctx)
 		}
 		return mapAuthError(ctx, err)
 	}
@@ -229,12 +229,12 @@ func mapAuthError(ctx *fiber.Ctx, err error) error {
 
 // warn emits optional structured controller warnings.
 // Implements DESIGN-014 LogAggregator.
-func (c *AuthController) warn(ctx *fiber.Ctx, message string, fields map[string]any) {
+func (c *AuthController) warn(ctx *fiber.Ctx) {
 	if c.logs == nil {
 		return
 	}
-	if err := c.logs.Log(ctx.UserContext(), observability.LogEvent{RequestID: requestID(ctx), Service: "api", Level: "warning", Message: message, Fields: fields, CreatedAt: time.Now()}); err != nil {
-		_, _ = observabilityFallbackWriter.Write([]byte(err.Error() + "\n"))
+	if err := c.logs.Log(ctx.UserContext(), observability.LogEvent{RequestID: requestID(ctx), Service: "api", Level: "warning", Message: "auth_refresh_cookie_clear_failed", CreatedAt: time.Now()}); err != nil {
+		reportObservabilityFailure(observabilityLogFailure)
 	}
 }
 

@@ -213,7 +213,7 @@ func (h *optimizationTransitionHook) ProcessPipelineHook(next redis.ProcessPipel
 func (h *optimizationTransitionHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		name := strings.ToLower(cmd.Name())
-		transitionCommand := name == "set" || name == "eval"
+		transitionCommand := name == "set" || name == "eval" || name == "evalsha"
 		if name == "get" && commandContains(cmd, h.state.jobKey) {
 			h.state.mu.Lock()
 			h.state.getCount++

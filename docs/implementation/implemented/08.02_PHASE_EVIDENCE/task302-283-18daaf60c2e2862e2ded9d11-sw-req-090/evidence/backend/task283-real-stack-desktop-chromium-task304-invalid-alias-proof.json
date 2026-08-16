@@ -1,0 +1,40 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "32",
+    "generationBefore": "32",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "requestAuditActions": {},
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR090-STEP-02",
+      "P08-SWR090-ACCEPT-01"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "32",
+      "generationBefore": "32",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "requestAuditActions": {},
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "7fd7c52c-de54-4fd5-93f4-41f09507879d",
+      "generationBefore": "928a575e-69ff-4eca-8c16-deb97fe0c071"
+    },
+    "idempotencyKey": "d1ba88dc-4d4d-4f09-8515-367de83a9cfc",
+    "kind": "rejected_item",
+    "name": "Task 283 Task 304 invalid alias real-stack-desktop-chromium",
+    "requestIds": [
+      "c7801a75-a958-4a75-949b-45d8a7c6263b"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

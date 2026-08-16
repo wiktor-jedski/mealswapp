@@ -1,0 +1,18 @@
+{
+  "run_id": "00807a2ec1a53daf7b4d7161",
+  "request_ids": [
+    "02d49916-9670-4a55-bed5-ef55aba724dc",
+    "20ee603f-a377-4dc9-98f7-3961f69f661e",
+    "4031d679-40ae-4c14-bb11-1b2d44c8638f",
+    "488f861c-6af4-42b1-afd7-9f5f689e2f1a",
+    "ad85a3de-cb7d-41d0-ab87-af4728331e5f",
+    "eab64aef-951d-499c-8cc0-656d7e195fa9"
+  ],
+  "events": [
+    "database_created",
+    "redis_ready",
+    "browser_product_nonpass",
+    "task284_results_finalized"
+  ],
+  "result": "passed"
+}

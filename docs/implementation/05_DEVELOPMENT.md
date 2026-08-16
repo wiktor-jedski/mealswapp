@@ -97,10 +97,14 @@ The Phase 00 worker starts, checks Redis connectivity, and waits for shutdown. J
 ## Aggregate Checks
 
 ```sh
+python3 scripts/check.py --quick
 python3 scripts/check.py
 ```
 
-The aggregate check validates requirement and design traceability, checks generated API types, formats and tests Go code, builds the frontend package, and runs Bun tests from `frontend/`.
+Use `--quick` during development for parallel static checks and tests mapped to
+changed backend/frontend files. The full command is the release gate: it runs
+independent static, backend, frontend, and browser lanes concurrently, while
+keeping migrations and shared PostgreSQL/Redis suites sequential.
 
 ## API Contract
 

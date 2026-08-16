@@ -1,0 +1,17 @@
+{
+  "run_id": "303bd5578242f68218a0c939",
+  "request_ids": [
+    "58380280-cad8-498b-88db-1b2dd6cd01fd",
+    "7c655b6d-2063-4df3-81b7-c26e79d0e3a2",
+    "af0b7ac6-9cee-4b6f-9401-2d5d4ba9695f"
+  ],
+  "events": [
+    "database_created",
+    "redis_ready",
+    "migrations_applied",
+    "provider_fixture_ready",
+    "application_ready",
+    "task282_results_finalized"
+  ],
+  "result": "passed"
+}

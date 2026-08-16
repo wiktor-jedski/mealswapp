@@ -5,6 +5,9 @@ package app
 import (
 	"context"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"net/http/httptest"
 	"strings"
@@ -97,6 +100,9 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 		{fiber.MethodDelete, "/api/v1/account", ""},
 		{fiber.MethodPost, "/api/v1/search", `{"query":"milk","mode":"catalog","page":1,"filters":[]}`},
 		{fiber.MethodGet, "/api/v1/search/autocomplete?query=milk", ""},
+		{fiber.MethodGet, "/api/v1/search/filter-options?mode=substitution", ""},
+		{fiber.MethodGet, "/api/v1/admin/external-search?query=apple&provider=all&page=1", ""},
+		{fiber.MethodPost, "/api/v1/admin/imports", `{}`},
 		{fiber.MethodGet, "/api/v1/food-objects/71000000-0000-4000-8000-000000000001", ""},
 		{fiber.MethodPost, "/api/v1/billing/stripe/webhook", `{"bad":true}`},
 	}
@@ -114,6 +120,39 @@ func TestNewProductionExposesProductionRoutes(t *testing.T) {
 			t.Fatalf("%s %s returned 404; route is not composed", check.method, check.path)
 		}
 	}
+}
+
+// TestNewProductionComposesManualItemSharedGenerationInvalidation verifies
+// DESIGN-009 ItemCurator production wiring to the Redis-backed food-data generation.
+func TestNewProductionComposesManualItemSharedGenerationInvalidation(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "app.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	composed := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) != 3 || selectorName(call.Fun) != "NewManualItemAdminController" {
+			return true
+		}
+		invalidator, ok := call.Args[2].(*ast.CallExpr)
+		if ok && selectorName(invalidator.Fun) == "NewClassificationInvalidator" && len(invalidator.Args) == 2 {
+			redisClient, ok := invalidator.Args[1].(*ast.Ident)
+			composed = ok && redisClient.Name == "redisClient"
+		}
+		return true
+	})
+	if !composed {
+		t.Fatal("NewProduction does not compose manual item administration with the shared Redis generation invalidator")
+	}
+}
+
+func selectorName(expr ast.Expr) string {
+	selector, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	return selector.Sel.Name
 }
 
 // TestNewProductionSearchRouteBlocksAnonymousSubstitutionBeforeCatalog verifies DESIGN-002 and DESIGN-007 production search composition.

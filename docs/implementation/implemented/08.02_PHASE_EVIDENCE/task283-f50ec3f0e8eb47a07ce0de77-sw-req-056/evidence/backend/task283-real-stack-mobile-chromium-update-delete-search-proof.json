@@ -1,0 +1,74 @@
+{
+  "actual": {
+    "active": false,
+    "auditActions": {
+      "manual_create": 1,
+      "manual_delete": 1,
+      "manual_update": 1
+    },
+    "autocompleteContainsDeleted": true,
+    "deleted": true,
+    "density": null,
+    "densitySourceKind": null,
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 12.5,
+      "fat": 2.75,
+      "protein": 21.25
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 update real-stack-mobile-chromium canonical",
+    "ownerless": true,
+    "physicalState": "solid",
+    "rowCount": 1
+  },
+  "assertionFailures": [
+    "autocompleteContainsDeleted:value"
+  ],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-05",
+      "P08-SWR056-STEP-06",
+      "P08-SWR056-ACCEPT-06"
+    ],
+    "entityId": "579eca0c-8599-4531-b78d-94b6c81fad64",
+    "expected": {
+      "active": false,
+      "auditActions": {
+        "manual_create": 1,
+        "manual_delete": 1,
+        "manual_update": 1
+      },
+      "autocompleteContainsDeleted": false,
+      "deleted": true,
+      "idempotencyCount": 1,
+      "macros": {
+        "carbohydrates": 12.5,
+        "fat": 2.75,
+        "protein": 21.25
+      },
+      "name": "Task 283 update real-stack-mobile-chromium canonical"
+    },
+    "idempotencyKey": "fa4f28fc-3748-4229-aecb-a14cd4c4f98b",
+    "kind": "item",
+    "name": "Task 283 update real-stack-mobile-chromium canonical",
+    "observed": {
+      "autocompleteContainsDeleted": true
+    },
+    "requestIds": [
+      "ca896ccf-6e31-4dcc-aa00-847d15f54232",
+      "19d41b1d-6421-434c-8263-b3254f95853f",
+      "dffa8fae-551d-48b5-bfca-5a499cc64566",
+      "1e9b152e-1a9c-4a0f-9acd-c0ad4c490263",
+      "85d25b9a-cf82-4f62-8df4-5885456bde1d",
+      "3b4e5652-609b-46c5-b120-2f3c96523841",
+      "f3eeacad-ebc6-4dd7-8553-1ca3acbd490e",
+      "63705e37-30e6-4634-8b84-2ba36ed5638a",
+      "458caace-9f00-49a1-ad6d-3f9f814209b2"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

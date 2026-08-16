@@ -42,6 +42,24 @@ REQUIRED_MARKERS = (
 	"name: Idempotency-Key",
 	"SearchHistoryEnvelope:",
 	"ExportBundle:",
+	"CustomItemFields:",
+	"CustomItemRequest:",
+	"CustomItem:",
+	"CustomItemEnvelope:",
+	"ClassificationSummary:",
+	"FilterOptionsEnvelope:",
+	"ExternalSearchEnvelope:",
+	"CuratedImportRequest:",
+	"CuratedImportEnvelope:",
+	"AdminItemRequest:",
+	"AdminItemEnvelope:",
+	"AdminItemSearchEnvelope:",
+	"AdminClassificationRequest:",
+	"AdminClassificationEnvelope:",
+	"AdminClassificationCollectionEnvelope:",
+	"AdminUserPageEnvelope:",
+	"AdminDeletionRetryEnvelope:",
+	"ErrorEnvelope:",
 	"DeletionRequestEnvelope:",
 	"DisclaimerEnvelope:",
 	"CheckoutCreateRequest:",
@@ -98,6 +116,59 @@ REQUIRED_OPERATION_RESPONSES = {
 	("/api/v1/optimization/jobs/{jobId}", "get"): {"200", "400", "401", "403", "404", "410", "500", "503", "504"},
 }
 
+# Implements DESIGN-009 AdminController route/status drift enforcement.
+PHASE08_OPERATION_RESPONSES = {
+	("/api/v1/custom-items", "post"): {"201", "400", "401", "403", "409", "500", "503", "504"},
+	("/api/v1/custom-items/{itemId}", "get"): {"200", "400", "401", "404", "500", "503", "504"},
+	("/api/v1/custom-items/{itemId}", "put"): {"200", "400", "401", "403", "404", "409", "500", "503", "504"},
+	("/api/v1/custom-items/{itemId}", "delete"): {"204", "400", "401", "403", "404", "409", "500", "503", "504"},
+	("/api/v1/search/filter-options", "get"): {"200", "400", "429", "500", "503", "504"},
+	("/api/v1/admin/external-search", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
+	("/api/v1/admin/imports", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/items", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
+	("/api/v1/admin/items", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/items/{itemId}", "get"): {"200", "400", "401", "403", "404", "429", "500", "503", "504"},
+	("/api/v1/admin/items/{itemId}", "put"): {"200", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/items/{itemId}", "delete"): {"204", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/classifications", "get"): {"200", "400", "401", "403", "429", "500", "503", "504"},
+	("/api/v1/admin/classifications/{classification}", "post"): {"201", "400", "401", "403", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/classifications/{classification}", "put"): {"200", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/classifications/{classification}", "delete"): {"204", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
+	("/api/v1/admin/users", "get"): {"200", "400", "401", "403", "404", "429", "500", "503", "504"},
+	("/api/v1/admin/users/{userId}/deletion-requests/{requestId}/retry", "post"): {"200", "400", "401", "403", "404", "409", "429", "500", "503", "504"},
+}
+
+PHASE08_SUCCESS_ENVELOPES = (
+	"CustomItemEnvelope",
+	"FilterOptionsEnvelope",
+	"ExternalSearchEnvelope",
+	"CuratedImportEnvelope",
+	"AdminItemEnvelope",
+	"AdminItemSearchEnvelope",
+	"AdminClassificationEnvelope",
+	"AdminClassificationCollectionEnvelope",
+	"AdminUserPageEnvelope",
+	"AdminDeletionRetryEnvelope",
+)
+
+ADMINISTRATION_DESCRIPTION_SCHEMAS = (
+	"AdminItemRequest",
+	"AdminItem",
+	"AdminItemSearchSummary",
+	"AdminItemSearchPageData",
+	"AdminClassificationRequest",
+	"AdminClassification",
+	"AdminUser",
+)
+
+ADMIN_CLASSIFICATION_NAME_RULE = (
+	"        name:\n"
+	"          type: string\n"
+	"          minLength: 1\n"
+	"          maxLength: 120\n"
+	"          description: Runtime trims and collapses whitespace, normalizes to NFC, and accepts only Unicode letters, marks, digits, spaces, and punctuation; maximum length is 120 Unicode code points after normalization.\n"
+)
+
 AUDITED_OPERATION_PREFIXES = ("/api/v1/daily-diets", "/api/v1/optimization/jobs")
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 APP_ERROR_CATEGORIES = (
@@ -113,7 +184,7 @@ DAILY_DIET_SCHEMA_RULES = {
 		"      schema:\n        type: string\n        minLength: 8\n        maxLength: 255\n",
 	),
 	"CanonicalQuantityUnit": ("      type: string\n      enum: [g, ml, oz, fl_oz]\n",),
-	"FoodObjectType": ("      type: string\n      enum: [food_item, meal]\n",),
+	"FoodObjectType": ("      type: string\n      enum: [food_item, meal, custom_food_item]\n",),
 	"FoodObjectQuantity": (
 		"      type: object\n",
 		"      additionalProperties: false\n",
@@ -316,6 +387,34 @@ def schema_block(source: str, name: str) -> str | None:
 	return matches[-1].group(1) if matches else None
 
 
+CUSTOM_ITEM_NAME_RULE = (
+	"        name:\n"
+	"          type: string\n"
+	"          minLength: 1\n"
+	"          maxLength: 200\n"
+	+ r"          pattern: '^[^\x00]*[^\s\x00][^\x00]*$'"
+	+ "\n"
+)
+
+
+def custom_item_contract_mismatches(source: str) -> list[str]:
+	"""Describe drift from strict custom-item name and classification projections."""
+	mismatches = []
+	fields = schema_block(source, "CustomItemFields") or ""
+	if CUSTOM_ITEM_NAME_RULE not in fields:
+		mismatches.append("CustomItemFields name canonical/NUL pattern drifted")
+	classification = schema_block(source, "ClassificationSummary") or ""
+	if "      additionalProperties: false\n" not in classification:
+		mismatches.append("ClassificationSummary must forbid additional properties")
+	properties = set(re.findall(r"(?m)^        ([A-Za-z][A-Za-z0-9]*):$", classification))
+	if properties != {"id", "name", "kind"}:
+		mismatches.append(f"ClassificationSummary properties drifted: {sorted(properties)}")
+	custom_item = schema_block(source, "CustomItem") or ""
+	if custom_item.count('$ref: "#/components/schemas/ClassificationSummary"') != 2:
+		mismatches.append("CustomItem classification projections drifted")
+	return mismatches
+
+
 def daily_diet_contract_mismatches(source: str) -> list[str]:
 	"""Describe OpenAPI drift from assumptions enforced by the strict Daily Diet decoder."""
 	mismatches = []
@@ -398,10 +497,9 @@ def operation_block(source: str, path: str, method: str) -> str | None:
 
 def app_error_contract_mismatches(source: str) -> list[str]:
 	"""Describe OpenAPI AppError drift that would weaken runtime-safe mapping."""
-	match = re.search(r"(?ms)^    AppError:\n(.*?)(?=^    Envelope:)", source)
-	if match is None:
+	block = schema_block(source, "AppError")
+	if block is None:
 		return ["AppError schema is missing"]
-	block = match.group(1)
 	mismatches = []
 	if "      required: [category, code, message, retryable]\n" not in block:
 		mismatches.append("AppError required fields drifted")
@@ -411,8 +509,78 @@ def app_error_contract_mismatches(source: str) -> list[str]:
 		mismatches.append(f"AppError category enum drifted: {categories}")
 	if not re.search(r"(?m)^        retryable:\n          type: boolean$", block):
 		mismatches.append("AppError retryable must remain boolean")
-	if not re.search(r"(?m)^        requestId:\n          type: string$", block):
+	if "        requestId:\n          type: string\n" not in block:
 		mismatches.append("AppError requestId must remain string")
+	if "        data:\n          type: object\n" not in block:
+		mismatches.append("AppError data must remain an object")
+	return mismatches
+
+
+def phase08_contract_mismatches(source: str) -> list[str]:
+	"""Describe drift in Phase 08 route, security, retry, and privacy boundaries."""
+	mismatches = []
+	for name in PHASE08_SUCCESS_ENVELOPES:
+		block = schema_block(source, name)
+		if block is None:
+			mismatches.append(f"{name} is missing")
+			continue
+		if not block.startswith("      type: object\n"):
+			mismatches.append(f"{name} must remain an object")
+		if not re.search(r"(?m)^      additionalProperties: false$", block):
+			mismatches.append(f"{name} must forbid additional properties")
+		if not re.search(r"(?m)^      required: \[status, requestId, data]$", block):
+			mismatches.append(f"{name} required fields drifted")
+		properties = set(re.findall(r"(?m)^        ([A-Za-z][A-Za-z0-9]*):$", block))
+		if properties != {"status", "requestId", "data"}:
+			mismatches.append(f"{name} properties drifted: {sorted(properties)}")
+		if not re.search(r"(?m)^        status:\n^          type: string\n^          const: ok$", block):
+			mismatches.append(f"{name} status must remain const ok")
+	for (path, method), expected in PHASE08_OPERATION_RESPONSES.items():
+		block = operation_block(source, path, method)
+		if block is None:
+			mismatches.append(f"missing Phase 08 operation: {method.upper()} {path}")
+			continue
+		actual = operation_response_statuses(source, path, method)
+		if actual != expected:
+			mismatches.append(f"{method.upper()} {path}: expected {sorted(expected)}, found {sorted(actual)}")
+		if path.startswith("/api/v1/admin/") or path.startswith("/api/v1/custom-items"):
+			if "        - cookieAuth: []\n" not in block:
+				mismatches.append(f"{method.upper()} {path}: cookieAuth is missing")
+			if method in {"post", "put", "delete"} and "          csrfHeader: []\n" not in block:
+				mismatches.append(f"{method.upper()} {path}: csrfHeader is missing")
+		if "429" in expected and '$ref: "#/components/responses/TooManyRequests"' not in block:
+			mismatches.append(f"{method.upper()} {path}: retry metadata response is missing")
+	for path in ("/api/v1/custom-items", "/api/v1/admin/items"):
+		block = operation_block(source, path, "post") or ""
+		if block.count('$ref: "#/components/parameters/IdempotencyKey"') != 1:
+			mismatches.append(f"POST {path}: required Idempotency-Key drifted")
+	import_block = operation_block(source, "/api/v1/admin/imports", "post") or ""
+	if import_block.count('$ref: "#/components/parameters/OptionalIdempotencyKey"') != 1:
+		mismatches.append("POST /api/v1/admin/imports: conditional Idempotency-Key drifted")
+	external_envelope = schema_block(source, "ExternalSearchEnvelope") or ""
+	external_candidate = schema_block(source, "ExternalCandidate") or ""
+	external_warning = schema_block(source, "ExternalDataWarning") or ""
+	if "              maxItems: 4\n" not in external_envelope or "          maxItems: 8\n" not in external_candidate:
+		mismatches.append("external warning cardinality bounds drifted")
+	for value in ("provider_rate_limited", "provider_unavailable", "timeout", "retry_exhausted", "invalid_external_payload"):
+		if external_warning.count(value) != 2:
+			mismatches.append(f"external warning enum drifted: {value}")
+	all_statuses = set(re.findall(r'(?m)^        ["\']?([1-5][0-9]{2})["\']?:$', source))
+	required_statuses = {"200", "201", "202", "204", "400", "401", "403", "404", "409", "422", "429", "500", "503", "504"}
+	if missing := required_statuses - all_statuses:
+		mismatches.append(f"required status coverage is missing: {sorted(missing)}")
+	for name in ("ExternalCandidate", "CuratedImportRequest", "AdminItem", "AdminUser", "ErrorEnvelope"):
+		block = schema_block(source, name) or ""
+		for forbidden in ("raw:", "rawPayload:", "auditSnapshot:", "before:", "after:", "ownerId:", "password:", "token:"):
+			if forbidden in block:
+				mismatches.append(f"{name} exposes forbidden field {forbidden[:-1]}")
+	for name in ("AdminClassificationRequest", "AdminClassification"):
+		if ADMIN_CLASSIFICATION_NAME_RULE not in (schema_block(source, name) or ""):
+			mismatches.append(f"{name} name must match the 120-code-point runtime normalization rule")
+	for name in ("AdminItemRequest", "AdminItem"):
+		block = schema_block(source, name) or ""
+		if "allergenKeys:" not in block or "uniqueItems: true" not in block or 'pattern: "^[a-z][a-z0-9_]*$"' not in block:
+			mismatches.append(f"{name} canonical allergen contract drifted")
 	return mismatches
 
 
@@ -498,6 +666,37 @@ export interface AppError {
 \tmessage: string;
 \tretryable: boolean;
 \trequestId?: string;
+\tdata?: Record<string, unknown>;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Bounded owner-scoped saved-diet reference that blocks permanent deletion. */
+export interface SavedDietDeletionReference {
+\tid: string;
+\tname: string;
+}
+
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion contract.
+/** Structured conflict details returned when a private item is still referenced. */
+export interface CustomItemInUseError extends AppError {
+\tcode: "custom_item_in_use";
+\tdata: { affectedDiets: SavedDietDeletionReference[] };
+}
+
+// Implements DESIGN-009 AdminController audit-safe frontend error boundary.
+/** Strict error envelope; response data and audit/provider payloads are structurally absent. */
+export interface ErrorEnvelope {
+\tstatus: "error";
+\trequestId: string;
+\terror: AppError;
+}
+
+// Implements DESIGN-009 AdminController strict frontend success boundary.
+/** Successful API response with required payload and request correlation metadata. */
+export interface OkEnvelope<TData> {
+\tstatus: "ok";
+\trequestId: string;
+\tdata: TData;
 }
 
 // Implements DESIGN-017 GlobalExceptionHandler response envelope.
@@ -802,6 +1001,35 @@ export interface ProfileUpdateRequest {
 \tthemePreference: "system" | "light" | "dark";
 }
 
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Credentialed profile update request with CSRF protection. */
+export interface ProfileUpdateRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+\tmethod: "PUT";
+\tcredentials: "include";
+\theaders: AuthJsonMutationHeaders;
+\tbody: string;
+}
+
+// Implements DESIGN-008 PreferenceManager generated mutation contract.
+/** Builds the authoritative profile preference update request. */
+export function buildProfileUpdateRequestInit(
+\trequest: ProfileUpdateRequest,
+\tcsrfToken: string,
+\toptions: { signal?: AbortSignal } = {}
+): ProfileUpdateRequestInit {
+\treturn {
+\t\tmethod: "PUT",
+\t\tcredentials: "include",
+\t\theaders: {
+\t\t\tAccept: "application/json",
+\t\t\t"Content-Type": "application/json",
+\t\t\t"X-CSRF-Token": csrfToken
+\t\t},
+\t\tbody: JSON.stringify(request),
+\t\tsignal: options.signal
+\t};
+}
+
 // Implements DESIGN-008 SavedDataRepository frontend saved-data contract.
 /** One saved favorite, meal, or reserved diet reference. */
 export interface SavedItem {
@@ -825,11 +1053,14 @@ export interface SavedItemsData {
 export type SavedItemsEnvelope = Envelope<SavedItemsData>;
 
 // Implements DESIGN-008 SavedDataRepository frontend daily-diet contract.
-/** Canonical quantity units accepted by saved daily-diet entries. */
+/** Explicit quantity units normalized by the server exactly once after basis validation. */
 export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";
 
 /** Distinguishes Food Items from Meals in Daily Diet entries. */
-export type FoodObjectType = "food_item" | "meal";
+export type FoodObjectType = "food_item" | "meal" | "custom_food_item";
+
+/** Distinguishes global Food Items from Meals at public search boundaries. */
+export type GlobalFoodObjectType = Exclude<FoodObjectType, "custom_food_item">;
 
 /** One ordered Food Object quantity supplied to a saved Daily Diet. */
 export interface FoodObjectQuantity {
@@ -1211,16 +1442,166 @@ export type SearchHistoryEnvelope = Envelope<SearchHistoryData>;
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** JSON account export bundle. */
 export interface ExportBundle {
-\tuser: Record<string, unknown>;
-\tconsent: Array<Record<string, unknown>>;
-\tsavedItems: SavedItem[];
-\thistory: SearchHistoryEntry[];
-\tcustomItems: Array<Record<string, unknown>>;
+\tuser: ExportUser;
+\tconsent: ExportConsent[];
+\tsavedItems: ExportSavedItem[];
+\tsavedDiets: ExportSavedDiet[];
+\thistory: ExportSearchHistoryEntry[];
+\tcustomItems: ExportCustomItem[];
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** Top-level authenticated account identity. */
+export interface ExportUser {
+\tuserId: string;
+\temail: string;
+\trole: "user" | "admin";
+\tdisplayName: string;
+\tunitSystem: "metric" | "imperial";
+\tthemePreference: "system" | "light" | "dark";
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One accepted legal-version pair. */
+export interface ExportConsent {
+\tprivacyPolicyVersion: string;
+\ttermsVersion: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free saved-item reference. */
+export interface ExportSavedItem {
+\tid: string;
+\titemId: string;
+\tkind: "favorite" | "saved_meal" | "saved_diet";
+\tcreatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One exported saved diet without owner identity or derived UI-only fields. */
+export interface ExportSavedDiet {
+\tid: string;
+\tname: string;
+\tentries: ExportSavedDietEntry[];
+\tcreatedAt: string;
+\tupdatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One ordered owner-free saved-diet entry. */
+export interface ExportSavedDietEntry {
+\tid: string;
+\tfoodObjectId: string;
+\tfoodObjectType: FoodObjectType;
+\tquantity: number;
+\tunit: CanonicalQuantityUnit;
+\tposition: number;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free decrypted search-history entry. */
+export interface ExportSearchHistoryEntry {
+\tid: string;
+\tquery: string;
+\tmode: string;
+\tfiltersHash: string;
+\tcreatedAt: string;
+}
+
+// Implements DESIGN-008 DataExporter frontend export contract.
+/** One owner-free private custom-item projection. */
+export interface ExportCustomItem {
+\tid: string;
+\tname: string;
+\tphysicalState: "solid" | "liquid";
+\tprepTimeMinutes: number;
+\taverageUnitWeightGrams?: number;
+\taverageServingVolumeMilliliters?: number;
+\tdensityGramsPerMilliliter?: number;
+\tdensitySourceProvider?: string;
+\tdensitySourceFoodId?: string;
+\tdensitySourceKind?: "imported" | "manual" | "estimated";
+\tmacrosPer100: MacroProfile;
+\tmicros: Record<string, number>;
+\tfoodCategories: ClassificationSummary[];
+\tculinaryRoles: ClassificationSummary[];
+\timageUrl?: string;
 }
 
 // Implements DESIGN-008 DataExporter frontend export contract.
 /** Supported account export formats. */
 export type ExportFormat = "json" | "csv";
+
+// Implements DESIGN-008 DataExporter generated request boundary.
+export const ACCOUNT_EXPORT_ENDPOINT = "/api/v1/account/export" as const;
+
+/** Builds the authenticated account-export URL from the closed generated format contract. */
+export function buildAccountExportUrl(format: ExportFormat = "json"): `/api/v1/account/export?format=${ExportFormat}` {
+	return `${ACCOUNT_EXPORT_ENDPOINT}?format=${format}`;
+}
+
+export interface AccountExportRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" | "text/csv" };
+}
+
+/** Builds the authenticated account-export request without exposing cookie values to JavaScript. */
+export function buildAccountExportRequestInit(format: ExportFormat = "json", options: { signal?: AbortSignal } = {}): AccountExportRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: format === "csv" ? "text/csv" : "application/json" }, signal: options.signal };
+}
+
+// Implements DESIGN-008 ProfileController generated private-item lifecycle boundary.
+export const CUSTOM_ITEMS_ENDPOINT = "/api/v1/custom-items" as const;
+
+export function buildCustomItemUrl(itemId: string): string {
+	return `${CUSTOM_ITEMS_ENDPOINT}/${encodeURIComponent(itemId)}`;
+}
+
+export interface CustomItemListRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "GET";
+	credentials: "include";
+	headers: { Accept: "application/json" };
+}
+
+/** Builds an owner-scoped active private-item list request. */
+export function buildCustomItemListRequestInit(options: { signal?: AbortSignal } = {}): CustomItemListRequestInit {
+	return { method: "GET", credentials: "include", headers: { Accept: "application/json" }, signal: options.signal };
+}
+
+export interface CustomItemMutationRequestInit extends Omit<RequestInit, "body" | "credentials" | "headers" | "method"> {
+	method: "POST" | "PUT";
+	credentials: "include";
+	headers: Record<string, string> & { Accept: "application/json"; "Content-Type": "application/json"; "X-CSRF-Token": string };
+	body: string;
+}
+
+/** Builds an owner-scoped private-item create or replacement request. */
+export function buildCustomItemMutationRequestInit(
+	method: "POST" | "PUT",
+	request: CustomItemRequest,
+	csrfToken: string,
+	options: { idempotencyKey?: IdempotencyKey; signal?: AbortSignal } = {}
+): CustomItemMutationRequestInit {
+	const headers: CustomItemMutationRequestInit["headers"] = {
+		Accept: "application/json",
+		"Content-Type": "application/json",
+		"X-CSRF-Token": csrfToken
+	};
+	if (method === "POST" && options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+	return { method, credentials: "include", headers, body: JSON.stringify(request), signal: options.signal };
+}
+
+export interface CustomItemDeleteRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "DELETE";
+	credentials: "include";
+	headers: Record<string, string> & { Accept: "application/json"; "X-CSRF-Token": string };
+}
+
+/** Builds an owner-scoped private-item deletion request with the generated CSRF contract. */
+export function buildCustomItemDeleteRequestInit(csrfToken: string, options: { signal?: AbortSignal } = {}): CustomItemDeleteRequestInit {
+	return { method: "DELETE", credentials: "include", headers: { Accept: "application/json", "X-CSRF-Token": csrfToken }, signal: options.signal };
+}
 
 // Implements DESIGN-008 AccountDeleter frontend deletion contract.
 /** Account deletion request response data. */
@@ -1232,6 +1613,20 @@ export interface DeletionRequestData {
 // Implements DESIGN-008 AccountDeleter frontend deletion contract.
 /** Account deletion response envelope. */
 export type DeletionRequestEnvelope = Envelope<DeletionRequestData>;
+
+// Implements DESIGN-008 AccountDeleter generated request boundary.
+export const ACCOUNT_ENDPOINT = "/api/v1/account" as const;
+
+export interface AccountDeletionRequestInit extends Omit<RequestInit, "credentials" | "headers" | "method"> {
+	method: "DELETE";
+	credentials: "include";
+	headers: Record<string, string> & { Accept: "application/json"; "X-CSRF-Token": string };
+}
+
+/** Builds the authenticated, CSRF-protected account-deletion request. */
+export function buildAccountDeletionRequestInit(csrfToken: string, options: { signal?: AbortSignal } = {}): AccountDeletionRequestInit {
+	return { method: "DELETE", credentials: "include", headers: { Accept: "application/json", "X-CSRF-Token": csrfToken }, signal: options.signal };
+}
 
 // Implements DESIGN-015 DisclaimerRenderer frontend disclaimer contract.
 /** Stable Markdown disclaimer content for login and account surfaces. */
@@ -1527,7 +1922,7 @@ export type SubstitutionUnit = CanonicalQuantityUnit;
 /** Quantity-bearing food input for substitution searches. */
 export interface SubstitutionInput {
 \tfoodObjectId: string;
-\tfoodObjectType?: FoodObjectType;
+\tfoodObjectType?: GlobalFoodObjectType;
 \tquantity: number;
 \tunit: SubstitutionUnit;
 }
@@ -1551,6 +1946,245 @@ export interface ClassificationSummary {
 	kind: "food_category" | "culinary_role";
 }
 
+// Implements DESIGN-008 ProfileController frontend custom-item mutation contract.
+/** Client-editable private custom-item fields whose metric-named values always use metric units. */
+export interface CustomItemRequest {
+	name: string;
+	physicalState: "solid" | "liquid";
+	prepTimeMinutes?: number;
+	averageUnitWeightGrams?: number;
+	averageServingVolumeMilliliters?: number;
+	densityGramsPerMilliliter?: number;
+	densitySourceKind?: "manual" | "estimated";
+	macrosPer100: MacroProfile;
+	micros: Record<string, number>;
+	foodCategoryIds?: string[];
+	culinaryRoleIds?: string[];
+	imageUrl?: string;
+}
+
+// Implements DESIGN-008 ProfileController and DataExporter frontend custom-item contract.
+/** Owner-free custom-item projection with hierarchy-free classification summaries. */
+export interface CustomItem extends CustomItemRequest {
+	id: string;
+	prepTimeMinutes: number;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+/** Successful custom-item response envelope. */
+export type CustomItemEnvelope = OkEnvelope<CustomItem>;
+
+/** Successful active owner-scoped custom-item collection response. */
+export type CustomItemCollectionEnvelope = OkEnvelope<{ items: CustomItem[] }>;
+
+// Implements DESIGN-009 AdminController retry metadata contract.
+/** Positive whole seconds from a Retry-After response header. */
+export type RetryAfterSeconds = number;
+
+// Implements DESIGN-009 TagManager backend-owned filter-option contract.
+export interface FilterOptionReference {
+	filterId: string;
+	kind: SearchFilterKind;
+}
+
+// Implements DESIGN-009 TagManager backend-owned filter-option contract.
+export interface FilterOption {
+	filterId: string;
+	kind: SearchFilterKind;
+	label: string;
+	labelKey?: string;
+	includeAllowed: boolean;
+	excludeAllowed: boolean;
+	excludes: FilterOptionReference[];
+}
+
+// Implements DESIGN-009 TagManager backend-owned filter-option contract.
+export interface FilterOptionsData {
+	mode: "substitution";
+	options: FilterOption[];
+}
+
+export type FilterOptionsEnvelope = OkEnvelope<FilterOptionsData>;
+
+// Implements DESIGN-009 ExternalSearchProxy closed warning contracts.
+export type ExternalCandidateWarning =
+	| "missing_image"
+	| "missing_macros"
+	| "missing_micronutrients"
+	| "missing_liquid_density"
+	| "uncertain_unit_conversion"
+	| "suspicious_liquid_macros"
+	| "partial_normalization";
+
+export type ExternalProviderWarningCode =
+	| "provider_rate_limited"
+	| "provider_unavailable"
+	| "timeout"
+	| "retry_exhausted"
+	| "invalid_external_payload";
+
+// Implements DESIGN-009 ExternalSearchProxy safe normalized candidate projection.
+export interface ExternalCandidate {
+	provider: string;
+	externalId: string;
+	recordToken: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	densityGramsPerMilliliter?: number;
+	densitySourceKind?: "imported";
+	macrosPer100: MacroProfile;
+	micronutrients: Record<string, number>;
+	imageUrl?: string;
+	warnings: ExternalCandidateWarning[];
+}
+
+export interface ExternalDataWarning {
+	provider: string;
+	code: ExternalProviderWarningCode;
+	message: ExternalProviderWarningCode;
+}
+
+export interface ExternalSearchData {
+	candidates: ExternalCandidate[];
+	warnings: ExternalDataWarning[];
+	page: number;
+}
+
+export type ExternalSearchEnvelope = OkEnvelope<ExternalSearchData>;
+
+// Implements DESIGN-009 DataImporter editable normalized request boundary.
+export interface CuratedImportRequest extends Omit<CustomItemRequest, "densitySourceKind"> {
+	externalRecordToken?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
+	confirmNameConflict?: boolean;
+	foodCategoryIds: string[];
+	culinaryRoleIds: string[];
+}
+
+export interface CuratedImportResult {
+	importId: string;
+	foodItemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	merged: boolean;
+	replayed: boolean;
+}
+
+export type CuratedImportEnvelope = OkEnvelope<CuratedImportResult>;
+
+// Implements DESIGN-009 ItemCurator ownerless global item boundaries.
+/** @openapi-description AdminItemRequest */
+export interface AdminItemRequest extends CustomItemRequest {
+	allergenKeys: string[];
+}
+
+/** @openapi-description AdminItem */
+export interface AdminItem extends Omit<AdminItemRequest, "densitySourceKind"> {
+	id: string;
+	prepTimeMinutes: number;
+	densitySourceProvider?: string;
+	densitySourceFoodId?: string;
+	densitySourceKind?: "imported" | "manual" | "estimated";
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+export type AdminItemEnvelope = OkEnvelope<AdminItem>;
+
+/** @openapi-description AdminItemSearchSummary */
+export interface AdminItemSearchSummary {
+	itemId: string;
+	name: string;
+	physicalState: "solid" | "liquid";
+	macrosPer100: MacroProfile;
+	foodCategories: ClassificationSummary[];
+	culinaryRoles: ClassificationSummary[];
+}
+
+/** @openapi-description AdminItemSearchPageData */
+export interface AdminItemSearchPageData {
+	items: AdminItemSearchSummary[];
+	page: number;
+	pageSize: number;
+	total: number;
+}
+
+export type AdminItemSearchEnvelope = OkEnvelope<AdminItemSearchPageData>;
+
+// Implements DESIGN-009 TagManager administration hierarchy boundary.
+/** @openapi-description AdminClassificationRequest */
+export interface AdminClassificationRequest {
+	name: string;
+	parentId?: string | null;
+}
+
+/** @openapi-description AdminClassification */
+export interface AdminClassification {
+	id: string;
+	name: string;
+	kind: "food_category" | "culinary_role";
+	parentId?: string;
+}
+
+export type AdminClassificationEnvelope = OkEnvelope<{ classification: AdminClassification }>;
+export type AdminClassificationCollectionEnvelope = OkEnvelope<{ classifications: AdminClassification[] }>;
+
+// Implements DESIGN-005 MicronutrientVocabulary administration boundary.
+/** @openapi-description AdminMicronutrient */
+export interface AdminMicronutrient {
+	key: string;
+	displayName: string;
+	unit: "g" | "mg" | "mcg";
+	active: boolean;
+}
+
+/** @openapi-description AdminMicronutrientCreateRequest */
+export interface AdminMicronutrientCreateRequest {
+	key: string;
+	displayName: string;
+	unit: AdminMicronutrient["unit"];
+}
+
+/** @openapi-description AdminMicronutrientDisplayNameRequest */
+export interface AdminMicronutrientDisplayNameRequest {
+	displayName: string;
+}
+
+/** @openapi-description AdminMicronutrientUnitRequest */
+export interface AdminMicronutrientUnitRequest {
+	unit: AdminMicronutrient["unit"];
+}
+
+export type AdminMicronutrientEnvelope = OkEnvelope<{ micronutrient: AdminMicronutrient }>;
+export type AdminMicronutrientCollectionEnvelope = OkEnvelope<{ micronutrients: AdminMicronutrient[] }>;
+
+// Implements DESIGN-009 UserAdminPanel privacy-minimized projection.
+export interface AdminDeletionSummary {
+	requestId: string;
+	status: "pending" | "processing" | "completed" | "failed";
+	failureCategory?: "transient" | "permanent" | "unknown";
+	retryCount: number;
+	requestedAt: string;
+}
+
+/** @openapi-description AdminUser */
+export interface AdminUser {
+	id: string;
+	email: string;
+	emailVerified: boolean;
+	createdAt: string;
+	deletion?: AdminDeletionSummary;
+}
+
+export interface AdminUserPageData {
+	users: AdminUser[];
+	nextCursor?: string;
+}
+
+export type AdminUserPageEnvelope = OkEnvelope<AdminUserPageData>;
+export type AdminDeletionRetryEnvelope = OkEnvelope<{ requestId: string; status: "pending" }>;
+
 // Implements DESIGN-002 SearchController frontend macro profile contract.
 /** Protein, carbohydrate, and fat macro values on a 100g or 100ml basis. */
 export interface MacroProfile {
@@ -1560,7 +2194,7 @@ export interface MacroProfile {
 }
 
 // Implements DESIGN-002 SearchController frontend substitution source summary contract.
-/** Macro and amount totals for the user's selected substitution input list. */
+/** Macro totals plus metric gram and milliliter totals after one request-unit normalization. */
 export interface SourceSummary {
 \tmacros: MacroProfile;
 \tcalories: number;
@@ -1572,7 +2206,7 @@ export interface SourceSummary {
 /** Food object returned by search and autocomplete-related result flows. */
 export interface FoodObject {
 	id: string;
-	objectType: FoodObjectType;
+	objectType: GlobalFoodObjectType;
 	name: string;
 	physicalState: "solid" | "liquid";
 	imageUrl?: string | null;
@@ -1647,7 +2281,7 @@ export interface SearchRejectionEnvelope extends Envelope<{ rejection: SearchRej
 /** Ranked autocomplete suggestion. */
 export interface RankedAutocomplete {
 \titemId: string;
-\tobjectType: FoodObjectType;
+\tobjectType: GlobalFoodObjectType;
 \tlabel: string;
 \texactMatch: boolean;
 \tlevenshteinDistance: number;
@@ -1669,8 +2303,8 @@ export type AutocompleteEnvelope = Envelope<AutocompleteResponse>;
 
 
 def generated_contract(source: str) -> str:
-	"""Render shared quantity enums from the OpenAPI source of truth."""
-	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 4:
+	"""Render shared quantity enums and administration TSDoc from OpenAPI."""
+	if source.count('$ref: "#/components/schemas/CanonicalQuantityUnit"') != 5:
 		raise ValueError("all saved-diet and substitution units must reference CanonicalQuantityUnit")
 	match = re.search(r"(?m)^    CanonicalQuantityUnit:\n(?:      .*\n)*?      enum: \[([^]]+)]$", source)
 	if match is None:
@@ -1679,7 +2313,35 @@ def generated_contract(source: str) -> str:
 	if units != ["g", "ml", "oz", "fl_oz"]:
 		raise ValueError(f"unexpected canonical quantity units: {units}")
 	quantity_type = " | ".join(json.dumps(unit) for unit in units)
-	return GENERATED.replace('export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";', f"export type CanonicalQuantityUnit = {quantity_type};")
+	generated = GENERATED.replace('export type CanonicalQuantityUnit = "g" | "ml" | "oz" | "fl_oz";', f"export type CanonicalQuantityUnit = {quantity_type};")
+	for schema in ADMINISTRATION_DESCRIPTION_SCHEMAS:
+		description = administration_schema_description(source, schema)
+		generated = generated.replace(f"/** @openapi-description {schema} */", f"/** {description} */")
+	return generated
+
+
+def administration_schema_description(source: str, schema: str) -> str:
+	"""Return one concise administration schema description from OpenAPI."""
+	block = schema_block(source, schema) or ""
+	match = re.search(r"(?m)^      description: (.+)$", block)
+	if match is None or "*/" in match.group(1):
+		raise ValueError(f"OpenAPI {schema} requires a valid single-line description")
+	return match.group(1)
+
+
+def administration_description_mismatches(source: str, generated: str) -> list[str]:
+	"""Ensure generated administration TSDoc remains sourced from OpenAPI descriptions."""
+	mismatches = []
+	for schema in ADMINISTRATION_DESCRIPTION_SCHEMAS:
+		try:
+			description = administration_schema_description(source, schema)
+		except ValueError as error:
+			mismatches.append(str(error))
+			continue
+		declaration = rf"/\*\* {re.escape(description)} \*/\nexport (?:interface|type) {re.escape(schema)}\b"
+		if re.search(declaration, generated) is None:
+			mismatches.append(f"{schema} generated TSDoc is missing or drifted")
+	return mismatches
 
 
 def main() -> int:
@@ -1699,6 +2361,10 @@ def main() -> int:
 	if error_contract_mismatches:
 		print("OpenAPI AppError contract drift:\n" + "\n".join(error_contract_mismatches))
 		return 1
+	phase08_mismatches = phase08_contract_mismatches(source)
+	if phase08_mismatches:
+		print("OpenAPI Phase 08 contract drift:\n" + "\n".join(phase08_mismatches))
+		return 1
 	daily_diet_mismatches = daily_diet_contract_mismatches(source)
 	if daily_diet_mismatches:
 		print("OpenAPI Daily Diet decoder contract drift:\n" + "\n".join(daily_diet_mismatches))
@@ -1707,10 +2373,18 @@ def main() -> int:
 	if optimization_mismatches:
 		print("OpenAPI optimization decoder contract drift:\n" + "\n".join(optimization_mismatches))
 		return 1
+	custom_item_mismatches = custom_item_contract_mismatches(source)
+	if custom_item_mismatches:
+		print("OpenAPI custom-item contract drift:\n" + "\n".join(custom_item_mismatches))
+		return 1
 	try:
 		generated = generated_contract(source)
 	except ValueError as error:
 		print(error)
+		return 1
+	description_mismatches = administration_description_mismatches(source, generated)
+	if description_mismatches:
+		print("OpenAPI administration TSDoc drift:\n" + "\n".join(description_mismatches))
 		return 1
 	if args.check:
 		if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != generated:

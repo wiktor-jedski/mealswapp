@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+
+# Implements DESIGN-014 MetricsCollector coverage-exception contract tests.
+
+import threading
+import unittest
+import errno
+import io
+from types import SimpleNamespace
+from unittest import mock
+
+import scripts.check as check
+import scripts.generate_report as generate_report
+
+
+BACKEND_PATH = "internal/example/service.go"
+FRONTEND_PATH = "src/lib/example.ts"
+
+
+def reason_catalog(reasons: dict[str, str]) -> str:
+	return "\n".join(f"- `{reason_id}` — {reason}" for reason_id, reason in reasons.items())
+
+
+def document(backend_rows: str = "", frontend_rows: str = "", *, backend_reasons: str | None = None, frontend_reasons: str | None = None) -> str:
+	return f"""## Phase 08
+
+### Testing coverage deviations
+
+<!-- phase08-backend-coverage-contract:start -->
+Measured Phase 08 scope: `0/1` statements (`0.0%`).
+{backend_rows}
+{backend_reasons if backend_reasons is not None else reason_catalog(check.BACKEND_EXCEPTION_REASONS)}
+<!-- phase08-backend-coverage-contract:end -->
+
+<!-- frontend-coverage-contract:start -->
+{frontend_rows}
+{frontend_reasons if frontend_reasons is not None else reason_catalog(check.FRONTEND_EXCEPTION_REASONS)}
+<!-- frontend-coverage-contract:end -->
+"""
+
+
+def profile(count: int = 0) -> str:
+	return f"mode: set\nexample/backend/{BACKEND_PATH}:1.1,2.1 1 {count}\n"
+
+
+def backend_row() -> str:
+	return f"| `{BACKEND_PATH}` | `0/1` | `0.0%` | `1.1-2.1` | `B1` |"
+
+
+def frontend_output(functions: str = "50.00", lines: str = "75.00") -> str:
+	return f"{FRONTEND_PATH} | {functions} | {lines} | 2\n"
+
+
+def frontend_row(phase: str = "Phase 08", functions: str = "50.00", lines: str = "75.00", reason: str = "F4") -> str:
+	return f"| `{FRONTEND_PATH}` | {phase} | {functions}% | {lines}% | `2` | `{reason}` |"
+
+
+class Phase08BackendCoverageContractTests(unittest.TestCase):
+	def validate(self, doc: str, measured_profile: str = profile()) -> None:
+		with mock.patch.object(check, "PHASE08_GO_SOURCES", {BACKEND_PATH}):
+			check.validate_phase08_go_coverage(measured_profile, doc)
+
+	def test_accepts_exact_measured_exception(self) -> None:
+		self.validate(document(backend_rows=backend_row()))
+
+	def test_rejects_missing_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "missing=.*service.go"):
+			self.validate(document())
+
+	def test_rejects_malformed_exception(self) -> None:
+		row = backend_row().replace("`0/1`", "`zero/one`")
+		with self.assertRaisesRegex(SystemExit, "Malformed Phase 08 backend"):
+			self.validate(document(backend_rows=row))
+
+	def test_rejects_over_broad_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "over-broad=.*service.go"):
+			self.validate(document(backend_rows=backend_row()).replace("`0/1` statements (`0.0%`)", "`1/1` statements (`100.0%`)"), profile(1))
+
+	def test_rejects_unjustified_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "unjustified reason B1"):
+			self.validate(document(backend_rows=backend_row(), backend_reasons=""))
+
+	def test_task297_backend_metrics_are_current(self) -> None:
+		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+		contract = check.marked_contract(section, "phase08-backend-coverage-contract")
+		rows = check.parse_backend_exceptions(contract)
+		self.assertIn("Measured Phase 08 scope: `4936/5335` statements (`92.5%`).", contract)
+		self.assertEqual(rows["internal/app/app.go"][0], check.GoCoverage(113, 120, "100.86-102.4,109.95-111.4,127.69-132.18,132.18-134.5,140.17-142.4,176.4-180.10"))
+		self.assertEqual(rows["internal/httpapi/manual_item_controller.go"][0].covered, 121)
+		self.assertEqual(rows["internal/httpapi/custom_item_controller.go"][0].covered, 117)
+		self.assertEqual(rows["internal/itemcurator/service.go"][0].total, 115)
+		self.assertEqual(rows["internal/repository/compliance_repository.go"][0], check.GoCoverage(279, 281, "547.31-549.4,550.10-551.56"))
+		self.assertEqual(rows["internal/repository/manual_food_repository.go"][0].total, 163)
+
+
+class FrontendCoverageContractTests(unittest.TestCase):
+	def validate(self, doc: str, measured_output: str = frontend_output()) -> None:
+		check.validate_frontend_exception_contract(measured_output, doc)
+
+	def test_accepts_exact_semantic_exception(self) -> None:
+		self.validate(document(frontend_rows=frontend_row()))
+
+	def test_rejects_missing_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "missing=.*example.ts"):
+			self.validate(document())
+
+	def test_rejects_malformed_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "Malformed frontend"):
+			self.validate(document(frontend_rows=frontend_row(functions="fifty")))
+
+	def test_rejects_over_broad_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "over-broad=.*example.ts"):
+			self.validate(document(frontend_rows=frontend_row()), frontend_output("100.00", "100.00"))
+
+	def test_rejects_unjustified_exception(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "unjustified reason F1"):
+			self.validate(document(frontend_rows=frontend_row(), frontend_reasons=""))
+
+	def test_rejects_stale_metrics_and_wrong_phase_owner(self) -> None:
+		with self.assertRaisesRegex(SystemExit, "stale"):
+			self.validate(document(frontend_rows=frontend_row(lines="74.00")))
+		with mock.patch.object(check, "PHASE08_FRONTEND_SOURCES", {FRONTEND_PATH}):
+			with self.assertRaisesRegex(SystemExit, "not phase-bound"):
+				check.validate_phase08_frontend_coverage(frontend_output(), document(frontend_rows=frontend_row(phase="Phase 07")))
+
+	def test_task297_frontend_metrics_are_current(self) -> None:
+		section = check.phase_section(check.OPEN_POINTS.read_text(encoding="utf-8"), "Phase 08")
+		rows = check.parse_frontend_exceptions(check.marked_contract(section, "frontend-coverage-contract"))
+		self.assertEqual(rows["src/lib/api/custom-item-client.ts"][1], check.FrontendCoverage("92.31", "91.76", "74-76,95-96,110-111"))
+		self.assertEqual(rows["src/lib/admin-workflows.ts"][1], check.FrontendCoverage("94.44", "98.84", "-"))
+		self.assertEqual(rows["src/lib/api/admin-client.ts"][1], check.FrontendCoverage("95.83", "100.00", "-"))
+
+
+class CoverageReportTests(unittest.TestCase):
+	def test_phase08_summary_is_derived_from_the_machine_checked_contract(self) -> None:
+		html = generate_report.phase08_exception_html(
+			generate_report.parse_bun_coverage("All files | 95.46 | 96.06 |\n"),
+			document(backend_rows=backend_row(), frontend_rows=frontend_row()).replace(
+				"Measured Phase 08 scope: `0/1` statements (`0.0%`).",
+				"Measured Phase 08 scope: `4936/5335` statements (`92.5%`).",
+			),
+		)
+
+		self.assertIn("4,936/5,335 statements (92.5%)", html)
+		self.assertNotIn("4,537/4,849", html)
+
+	def test_frontend_summary_uses_current_aggregate_measurements(self) -> None:
+		html = generate_report.phase08_exception_html(
+			generate_report.parse_bun_coverage("All files | 80.00 | 70.00 |\n"),
+			document(backend_rows=backend_row(), frontend_rows=frontend_row()),
+		)
+
+		self.assertIn("80.00% functions and 70.00% lines", html)
+		self.assertNotIn("95.46% functions and 96.06% lines", html)
+
+
+class CheckOrchestrationTests(unittest.TestCase):
+	def test_gate_output_retries_nonblocking_descriptors_without_losing_bytes(self) -> None:
+		stream = mock.Mock()
+		stream.fileno.return_value = 9
+		writes = [
+			BlockingIOError(errno.EAGAIN, "busy"),
+			2,
+			3,
+		]
+		with (
+			mock.patch.object(check.os, "write", side_effect=writes) as write,
+			mock.patch.object(check.select, "select", return_value=([], [9], [])) as wait,
+		):
+			check._write_text(stream, "hello")
+
+		self.assertEqual([call.args[1] for call in write.call_args_list], [b"hello", b"hello", b"llo"])
+		wait.assert_called_once_with([], [9], [], 1)
+
+	def test_gate_output_supports_redirected_streams_without_fileno(self) -> None:
+		stream = io.StringIO()
+		check._write_text(stream, "complete")
+		self.assertEqual(stream.getvalue(), "complete")
+
+	def test_independent_steps_overlap(self) -> None:
+		barrier = threading.Barrier(2)
+
+		def rendezvous(value: str) -> str:
+			barrier.wait(timeout=1)
+			return value
+
+		results = check.execute_steps([
+			check.CheckStep("one", lambda: rendezvous("first")),
+			check.CheckStep("two", lambda: rendezvous("second")),
+		])
+
+		self.assertEqual(results, {"one": "first", "two": "second"})
+
+	def test_quick_backend_packages_map_go_and_embedded_sql(self) -> None:
+		self.assertEqual(
+			check.quick_backend_packages({
+				"backend/internal/auth/password.go",
+				"backend/internal/repository/sql/compliance.sql",
+				"docs/implementation/04_OPEN.md",
+			}),
+			["./internal/auth", "./internal/repository"],
+		)
+
+	def test_frontend_lane_uses_coverage_as_the_unit_test_pass(self) -> None:
+		ready = threading.Event()
+		failures: list[BaseException] = []
+		with (
+			mock.patch.object(check, "run") as run,
+			mock.patch.object(check, "validate_frontend_coverage", return_value="coverage") as coverage,
+		):
+			result = check.run_frontend_lane(ready, failures)
+
+		self.assertEqual(result, "coverage")
+		self.assertTrue(ready.is_set())
+		self.assertEqual(failures, [])
+		self.assertEqual(
+			[call.args[0] for call in run.call_args_list],
+			[["bun", "run", "typecheck"], ["bun", "run", "build"]],
+		)
+		coverage.assert_called_once_with()
+
+	def test_browser_lane_runs_only_the_complete_playwright_suite(self) -> None:
+		ready = threading.Event()
+		ready.set()
+		with (
+			mock.patch.object(check, "run") as run,
+			mock.patch.object(check, "validate_frontend_e2e") as e2e,
+		):
+			check.run_browser_lane("check", ready, [])
+
+		run.assert_called_once_with([
+			"python3", "scripts/verify-frontend.py", "--screenshot-stem", "check",
+		])
+		e2e.assert_called_once_with(reuse_build=True)
+
+	def test_backend_lane_omits_redundant_plain_full_test_pass(self) -> None:
+		with (
+			mock.patch.object(check, "validate_stripe_webhook_tests"),
+			mock.patch.object(check, "validate_phase0601_backend_auth_billing_smoke_tests"),
+			mock.patch.object(check, "running_compose_services", side_effect=[set(), set()]),
+			mock.patch.object(check, "run"),
+			mock.patch.object(check, "run_env") as run_env,
+			mock.patch.object(check, "validate_phase07_backend_workflows"),
+			mock.patch.object(check, "validate_go_coverage", return_value="coverage"),
+		):
+			result = check.run_backend_lane()
+
+		self.assertEqual(result, "coverage")
+		go_test_commands = [
+			call.args[0]
+			for call in run_env.call_args_list
+			if call.args and call.args[0][:2] == ["go", "test"]
+		]
+		self.assertEqual(
+			go_test_commands,
+			[["go", "test", "-race", "./...", "-p", "1", "-count=1"]],
+		)
+
+	def test_phase07_exact_functions_come_from_isolated_package_profiles(self) -> None:
+		documented = (
+			"`internal/queue/job_queue.go:276 Reserve`       |  `60.0%`\n"
+			"queue 60.0%\n"
+		)
+
+		def fake_run_env(command: list[str], *_args: object, **_kwargs: object) -> SimpleNamespace:
+			if command[:2] == ["go", "test"]:
+				return SimpleNamespace(stdout="coverage: 60.0% of statements\n", stderr="")
+			return SimpleNamespace(
+				stdout=(
+					"example/backend/internal/queue/job_queue.go:276:\tReserve\t60.0%\n"
+					"total:\t(statements)\t60.0%\n"
+				),
+				stderr="",
+			)
+
+		with (
+			mock.patch.object(check, "PHASE07_GO_PACKAGES", {"example/queue"}),
+			mock.patch.object(check, "OPEN_POINTS", mock.Mock(read_text=mock.Mock(return_value=documented))),
+			mock.patch.object(check, "run_env", side_effect=fake_run_env),
+		):
+			check.validate_phase07_go_coverage(
+				"example/backend/internal/queue/job_queue.go:276:\tReserve\t68.0%\n",
+			)
+
+
+if __name__ == "__main__":
+	unittest.main()

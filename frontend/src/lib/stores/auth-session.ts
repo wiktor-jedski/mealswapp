@@ -9,6 +9,10 @@ import type {
 	RegisterRequest
 } from "../api/generated";
 import { setEntitlementError, setEntitlementStatus } from "./entitlement";
+import {
+	loadAuthenticatedUnitPreference,
+	restoreAnonymousUnitPreference
+} from "./preferences";
 
 // Implements DESIGN-018 AuthSessionStore frontend-safe session projection and lifecycle orchestration.
 
@@ -90,9 +94,14 @@ export async function probeAuthSession(signal?: AbortSignal): Promise<AuthSessio
 	try {
 		const profile = await dependencies.probeProfileSession(signal);
 		const session = await dependencies.refreshAuthSession(signal);
-		return setAuthSession(sessionToProjection(session, profile.displayName));
+		const confirmed = await loadAuthenticatedUnitPreference(session.userId, async () => profile);
+		return setAuthSession(sessionToProjection(session, confirmed?.displayName));
 	} catch (error) {
-		return setAuthSession(probeFailureProjection(previous, errorToProjection(error)));
+		const projection = setAuthSession(probeFailureProjection(previous, errorToProjection(error)));
+		if (projection.status !== "authenticated") {
+			restoreAnonymousUnitPreference();
+		}
+		return projection;
 	}
 }
 
@@ -118,6 +127,7 @@ export function clearAuthSession(reason: "logout" | "expired" | "anonymous"): Au
 	const projection = sanitizeProjection({ status, lastCheckedAt: dependencies.now() });
 	authSessionStore.set(projection);
 	writeStoredProjection(projection);
+	restoreAnonymousUnitPreference();
 	return projection;
 }
 
@@ -173,11 +183,13 @@ export async function refreshAuthSessionAfterOAuthReturn(
 	authSessionStore.set({ ...get(authSessionStore), status: "authenticating" });
 	try {
 		const session = await dependencies.refreshAuthSession(signal);
-		const projection = setAuthSession(sessionToProjection(session));
+		const profile = await loadAuthenticatedUnitPreference(session.userId, dependencies.probeProfileSession);
+		const projection = setAuthSession(sessionToProjection(session, profile?.displayName));
 		await refreshEntitlement();
 		return projection;
 	} catch (error) {
 		const projection = setAuthSession(errorToProjection(error));
+		restoreAnonymousUnitPreference();
 		throw Object.assign(error instanceof Error ? error : new Error("OAuth session refresh failed"), { projection });
 	}
 }
@@ -204,7 +216,8 @@ async function authenticateWithMutation(
 	try {
 		const { csrfToken } = await dependencies.fetchCsrfToken();
 		const session = await mutate(csrfToken);
-		const projection = setAuthSession(sessionToProjection(session));
+		const profile = await loadAuthenticatedUnitPreference(session.userId, dependencies.probeProfileSession);
+		const projection = setAuthSession(sessionToProjection(session, profile?.displayName));
 		await refreshEntitlement();
 		return projection;
 	} catch (error) {

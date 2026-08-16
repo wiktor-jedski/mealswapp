@@ -1,0 +1,43 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR057-STEP-01",
+    "P08-SWR057-STEP-02",
+    "P08-SWR057-STEP-03",
+    "P08-SWR057-STEP-04",
+    "P08-SWR057-STEP-05",
+    "P08-SWR057-STEP-06",
+    "P08-SWR057-STEP-07",
+    "P08-SWR057-ACCEPT-01",
+    "P08-SWR057-ACCEPT-02",
+    "P08-SWR057-ACCEPT-04",
+    "P08-SWR057-ACCEPT-06"
+  ],
+  "kind": "classification",
+  "entityId": "18cd6474-ef5d-41fc-a81b-aefc04d44290",
+  "name": "Task 283 lifecycle real-stack-mobile-chromium",
+  "requestIds": [
+    "60d7993b-c83b-487d-ab5b-0b7a79b2e54e",
+    "65379a59-bf8a-4ccf-b494-b7ead89b8123",
+    "7d67bd14-bfa3-4b10-a04a-c6ba1b80e6bc",
+    "d132a29b-db59-43e6-8e73-4e6b58638b99",
+    "7c6d1fc6-c6b6-4a7b-84a4-d4642731f660",
+    "141a90d2-2cae-433c-8885-5d7e16422cbf"
+  ],
+  "expected": {
+    "active": false,
+    "deleted": true,
+    "kind": "food_category",
+    "auditActions": {
+      "classification.create": 1,
+      "classification.delete": 1
+    },
+    "failedGenerationBefore": "50",
+    "failedGenerationAfter": "50",
+    "failedGenerationDelta": 0
+  },
+  "generationSnapshots": {
+    "failedGenerationBefore": "cdcbf48a-97a8-4be9-ac74-74b3e068f502",
+    "failedGenerationAfter": "744fec6e-cf36-4015-ab00-426b084f1951"
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "exitCode": 0,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "owner_state=owner_free"
+      ],
+      "criterionId": "P08-SWR043-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR043-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "backend-privacy",
+      "requestIds": [],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-043",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 130
+      },
+      "status": "PASS",
+      "text": "Accept when B cannot discover whether A\u2019s item exists and each export includes only its owner\u2019s data."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR043-STEP-01",
+      "kind": "step",
+      "owner": "backend-privacy",
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-043",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 125
+      },
+      "status": "PASS",
+      "text": "Create private items for users A and B."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR043-STEP-02",
+      "kind": "step",
+      "owner": "backend-privacy",
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-043",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 126
+      },
+      "status": "PASS",
+      "text": "Attempt to read, update and delete A\u2019s item as B."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR043-STEP-03",
+      "kind": "step",
+      "owner": "backend-privacy",
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-043",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 127
+      },
+      "status": "PASS",
+      "text": "Attempt to guess A\u2019s item ID."
+    },
+    {
+      "backendEvidence": [
+        "export_record_count=owner_only",
+        "http_status=404",
+        "owner_state=isolated",
+        "request_correlation=verified"
+      ],
+      "criterionId": "P08-SWR043-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task284-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/screenshots/real-stack-desktop-chromium-private-data-heading.png",
+          "type": "playwright"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "download"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR043-STEP-04",
+      "kind": "step",
+      "owner": "backend-privacy",
+      "requestIds": [
+        "10016091-c0fe-40c7-beda-5eab2ecee0c7",
+        "29caaea6-fd54-4de1-ae97-0cc8186bdcd1",
+        "4722cb21-254c-41d0-97d3-a9c2b82bb613",
+        "8a447566-57b7-40a5-84ee-7d468984eced",
+        "8f209ebd-e0f8-4ffe-b3b4-7015ca75f392",
+        "90aca9ab-48de-4e26-b52d-a6c9e57f8da4",
+        "9710f113-84cb-48db-8c89-a0d40b5f12d3",
+        "c5776a3c-e3b1-4ee6-ba64-fd4d716235b1",
+        "ef7fdcd4-9ae1-489c-bf06-efe393e360e3",
+        "ff0209d4-f3c7-4d38-a46b-b6c1762f8568"
+      ],
+      "requiredEnvironment": "isolated-real-stack",
+      "requirement": "SW-REQ-043",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
+      "source": {
+        "file": "req_tests.md",
+        "line": 128
+      },
+      "status": "PASS",
+      "text": "Export both accounts."
+    }
+  ],
+  "rootCauses": [],
+  "runId": "task302-284-d4f3484fbd165ca61f962a04-sw-req-043",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "PASS"
+}

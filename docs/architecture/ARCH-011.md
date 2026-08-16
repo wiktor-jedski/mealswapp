@@ -30,5 +30,5 @@
 - *Alternative Considered:* localStorage-only client caching without Service Worker
 - *Trade-off:* localStorage has a 5MB limit and cannot cache binary assets (images). SW-REQ-088 requires displaying "cached search results" offline, and SW-REQ-011 mandates images in results. Without Service Worker, offline mode would show broken image links, degrading UX. Service Worker enables full offline visual experience while localStorage handles structured query data within its size constraints.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

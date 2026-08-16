@@ -1,0 +1,29 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR057-STEP-08",
+    "P08-SWR057-ACCEPT-05"
+  ],
+  "kind": "item",
+  "entityId": "87ff2608-9a18-4cd7-927f-3b8eaf9a7ed1",
+  "name": "Task 283 stale real-stack-desktop-chromium",
+  "idempotencyKey": "b746582c-1333-4680-b0ab-e17c5323c79f",
+  "requestIds": [
+    "13a83224-6adf-41b6-a5ea-8714afc582e4",
+    "97bf3308-49b3-4e63-8ffa-effc6c59468c",
+    "762d74a3-d301-4496-9e33-e05220980da0",
+    "466dedfd-9a1d-46c2-b53c-b84659f7cc07"
+  ],
+  "expected": {
+    "active": true,
+    "staleWriteStatus": 409,
+    "auditActions": {
+      "manual_create": 1,
+      "manual_update": 1
+    },
+    "idempotencyCount": 1
+  },
+  "observed": {
+    "staleWriteStatus": 409
+  }
+}

@@ -1,0 +1,897 @@
+{
+  "exitCode": 1,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 72
+      },
+      "status": "PASS",
+      "text": "Duplicate and cycle attempts fail without mutation."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-ACCEPT-02",
+      "kind": "criterion",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 73
+      },
+      "status": "PASS",
+      "text": "In-use deletion returns a conflict."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-ACCEPT-03",
+      "kind": "criterion",
+      "owner": "classification-administration",
+      "requestIds": [
+        "03003fdb-29d3-407e-8686-810867d9ac09",
+        "05258f78-abfe-4cee-879f-1064dc7e3f03",
+        "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
+        "3d1dc3a0-cd65-4574-ba93-068caca58390",
+        "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
+        "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
+        "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
+        "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
+        "9b007de7-c99e-459c-a8d6-3d6433a480e4",
+        "a6776740-230e-4298-8f5f-dd6bd1b84581",
+        "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
+        "c72a6953-0437-47a5-b5eb-c28e3ae1860b"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 74
+      },
+      "status": "PASS",
+      "text": "Successful rename appears in filter options."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-ACCEPT-04",
+      "kind": "criterion",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 75
+      },
+      "status": "PASS",
+      "text": "Successful deletion removes the option."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=advanced",
+        "http_status=200",
+        "mutation_count=2",
+        "request_correlation=cross_instance"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-stable-id-filter-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-stable-id-filter.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-stable-id-filter.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [
+        "P08-FIND-283-002"
+      ],
+      "id": "P08-SWR057-ACCEPT-05",
+      "kind": "criterion",
+      "owner": "classification-administration",
+      "requestIds": [
+        "03003fdb-29d3-407e-8686-810867d9ac09",
+        "05258f78-abfe-4cee-879f-1064dc7e3f03",
+        "285ba22d-f0e7-4d22-b3d5-da35999c3c19",
+        "33748522-a448-4d86-9961-7549197238a2",
+        "3d1dc3a0-cd65-4574-ba93-068caca58390",
+        "3f0bee1e-c39d-42cf-a551-158d5c2cfaec",
+        "54d3a556-d9b9-4383-b2e7-fa5a7d7d784b",
+        "5821a0ab-0e2e-4b35-9f2f-439578fd1d55",
+        "61179bce-f6d7-4920-bca4-938ab9a78646",
+        "6776ac14-1f6e-40f3-becc-ba5368e9e603",
+        "75e06c0a-7256-4212-b851-d1e9b41e9b9b",
+        "7e41d908-2f87-4d41-a3e2-957696ac0eeb",
+        "8c4e07a7-a6ad-490a-b3d2-fd6e32dc68c7",
+        "921e0cbb-62e9-4a44-af78-c3cd01c63d1f",
+        "9b007de7-c99e-459c-a8d6-3d6433a480e4",
+        "a6776740-230e-4298-8f5f-dd6bd1b84581",
+        "a8caf607-c9dc-47a5-9f1a-d5ee07a727f9",
+        "c72a6953-0437-47a5-b5eb-c28e3ae1860b",
+        "e5acd1ec-b3fd-4563-8154-1c98a766e594",
+        "f5666077-5cfe-4054-8f24-5889999c4306"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE",
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 76
+      },
+      "status": "FAIL",
+      "text": "Changes appear across application instances without a restart."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-ACCEPT-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-ACCEPT-06",
+      "kind": "criterion",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 77
+      },
+      "status": "PASS",
+      "text": "Failed mutations do not invalidate the cache."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-01",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 61
+      },
+      "status": "PASS",
+      "text": "Create a Food Category."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-02",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 62
+      },
+      "status": "PASS",
+      "text": "Create a Culinary Role."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-03",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 63
+      },
+      "status": "PASS",
+      "text": "Rename/reparent them."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-04",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-04",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 64
+      },
+      "status": "PASS",
+      "text": "Attach one to an item."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-05",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-05",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 65
+      },
+      "status": "PASS",
+      "text": "Attempt to create a duplicate or hierarchy cycle."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-06",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-06",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 66
+      },
+      "status": "PASS",
+      "text": "Attempt to delete an in-use classification."
+    },
+    {
+      "backendEvidence": [
+        "audit_count=2",
+        "cache_generation=unchanged",
+        "mutation_count=2"
+      ],
+      "criterionId": "P08-SWR057-STEP-07",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-classification-lifecycle-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-classification-lifecycle.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-classification-lifecycle.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [],
+      "id": "P08-SWR057-STEP-07",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "06c13b91-f12d-4b58-a8ea-1ed3bf90ee83",
+        "0908b3d0-d620-427c-83af-a1bd44fca2ce",
+        "190a3eef-1389-4749-96f6-91801d9f1458",
+        "230a0e6b-2188-4ed9-9d4a-f24a86cf5746",
+        "28b0ccb4-2eb0-4eb1-887c-ee405bf6b606",
+        "2d76cba5-6fb2-4160-89cb-7384901f08cd",
+        "4b36224c-6e99-4766-a6bb-7961649b0333",
+        "5bf693e8-b104-40a7-a59f-e0f4bca76fb7",
+        "98d53bcb-f832-45ac-abbe-fd13064ccedf",
+        "a39a8c37-e591-4795-83e1-9a03d6bb1f2c",
+        "b00e1b70-275c-4045-b4c1-0bc87fe54f85",
+        "c57dd2f1-8ae3-449e-8c20-37ab5557a2f8"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": null,
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 67
+      },
+      "status": "PASS",
+      "text": "Remove its use and delete it."
+    },
+    {
+      "backendEvidence": [
+        "http_status=200",
+        "request_correlation=cross_instance"
+      ],
+      "criterionId": "P08-SWR057-STEP-08",
+      "evidence": [
+        {
+          "path": "evidence/backend/task283-real-stack-desktop-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/backend/task283-real-stack-mobile-chromium-cross-instance-stale-write-proof.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-desktop-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        },
+        {
+          "path": "evidence/operations/real-stack-mobile-chromium-cross-instance-stale-write.json",
+          "type": "backend"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "database",
+        "redis"
+      ],
+      "findingIds": [
+        "P08-FIND-283-002"
+      ],
+      "id": "P08-SWR057-STEP-08",
+      "kind": "step",
+      "owner": "classification-administration",
+      "requestIds": [
+        "33748522-a448-4d86-9961-7549197238a2",
+        "61179bce-f6d7-4920-bca4-938ab9a78646",
+        "6776ac14-1f6e-40f3-becc-ba5368e9e603",
+        "75e06c0a-7256-4212-b851-d1e9b41e9b9b",
+        "8c4e07a7-a6ad-490a-b3d2-fd6e32dc68c7",
+        "921e0cbb-62e9-4a44-af78-c3cd01c63d1f",
+        "e5acd1ec-b3fd-4563-8154-1c98a766e594",
+        "f5666077-5cfe-4054-8f24-5889999c4306"
+      ],
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "requirement": "SW-REQ-057",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T283-CLASSIFICATION-LIFECYCLE",
+      "scenarioId": "P08-SWR057-CLASSIFICATIONS",
+      "source": {
+        "file": "req_tests.md",
+        "line": 68
+      },
+      "status": "FAIL",
+      "text": "Open Substitution Search in another browser/application instance."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR057-ACCEPT-05",
+        "P08-SWR057-STEP-08"
+      ],
+      "id": "ROOT-T283-CLASSIFICATION-LIFECYCLE"
+    }
+  ],
+  "runId": "task283-f50ec3f0e8eb47a07ce0de77-sw-req-057",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "FAIL"
+}

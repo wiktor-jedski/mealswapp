@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/google/uuid"
+	"github.com/wiktor-jedski/mealswapp/backend/internal/providerregistry"
 )
 
 // Implements DESIGN-005 FoodItemEntity search query.
@@ -83,7 +84,6 @@ func (r *PostgresFoodItemRepository) GetByID(ctx context.Context, id uuid.UUID, 
 	if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 		return FoodItemEntity{}, err
 	}
-	convertFoodItemForUnitSystem(&item, rc.UnitSystem)
 	return item, nil
 }
 
@@ -124,7 +124,6 @@ func (r *PostgresFoodItemRepository) Search(ctx context.Context, q RepositoryQue
 		if err := r.hydrateFoodClassifications(ctx, &item); err != nil {
 			return nil, 0, err
 		}
-		convertFoodItemForUnitSystem(&item, q.UnitSystem)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -156,6 +155,12 @@ func (r *PostgresFoodItemRepository) Create(ctx context.Context, item FoodItemEn
 
 	var id uuid.UUID
 	err := withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
 		err := db.QueryRow(ctx, foodCreateSQL, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL)).Scan(&id)
 		if err != nil {
@@ -178,8 +183,14 @@ func (r *PostgresFoodItemRepository) Update(ctx context.Context, item FoodItemEn
 	micros := marshalMicros(item.Micros)
 
 	return withTransaction(ctx, r.db, func(db transactionalExecutor) error {
+		if err := lockMicronutrientItemWriteTables(ctx, db); err != nil {
+			return err
+		}
+		if err := validateFoodItemWithExecutor(ctx, db, item); err != nil {
+			return err
+		}
 		txRepo := NewPostgresFoodItemRepository(db)
-		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL))
+		result, err := db.Exec(ctx, foodUpdateSQL, item.ID, item.Name, string(item.PhysicalState), item.PrepTimeMinutes, nullablePositiveFloat(item.AverageUnitWeightGrams), nullablePositiveFloat(item.AverageServingVolumeMilliliters), nullablePositiveFloat(item.DensityGramsPerMilliliter), nullableString(item.DensitySourceProvider), nullableString(item.DensitySourceFoodID), nullableString(item.DensitySourceKind), item.MacrosPer100.Protein, item.MacrosPer100.Carbohydrates, item.MacrosPer100.Fat, micros, nullableString(item.ImageURL), nil)
 		if err != nil {
 			return mapPostgresError(err, "update food item")
 		}
@@ -206,6 +217,12 @@ func (r *PostgresFoodItemRepository) Delete(ctx context.Context, id uuid.UUID) e
 // validateFoodItem checks food item fields before persistence.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) validateFoodItem(ctx context.Context, item FoodItemEntity) error {
+	return validateFoodItemWithExecutor(ctx, r.db, item)
+}
+
+// validateFoodItemWithExecutor applies global-item invariants inside an existing transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func validateFoodItemWithExecutor(ctx context.Context, db sqlExecutor, item FoodItemEntity) error {
 	if item.Name == "" {
 		return validationError("food item name is required")
 	}
@@ -221,24 +238,30 @@ func (r *PostgresFoodItemRepository) validateFoodItem(ctx context.Context, item 
 	if err := validateFoodDensity(item); err != nil {
 		return err
 	}
-	if err := r.validateFoodClassifications(ctx, item.FoodCategories, ClassificationKindFoodCategory); err != nil {
+	if err := validateFoodClassificationsWithExecutor(ctx, db, item.FoodCategories, ClassificationKindFoodCategory); err != nil {
 		return err
 	}
-	if err := r.validateFoodClassifications(ctx, item.CulinaryRoles, ClassificationKindCulinaryRole); err != nil {
+	if err := validateFoodClassificationsWithExecutor(ctx, db, item.CulinaryRoles, ClassificationKindCulinaryRole); err != nil {
 		return err
 	}
-	return r.validateMicronutrients(ctx, item.Micros)
+	return validateMicronutrientsWithExecutor(ctx, db, item.Micros)
 }
 
 // validateFoodClassifications verifies that food item classifications exist with the required kinds.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) validateFoodClassifications(ctx context.Context, classifications []ClassificationEntity, kind ClassificationKind) error {
+	return validateFoodClassificationsWithExecutor(ctx, r.db, classifications, kind)
+}
+
+// validateFoodClassificationsWithExecutor validates global classification identity in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 ClassificationEntity.
+func validateFoodClassificationsWithExecutor(ctx context.Context, db sqlExecutor, classifications []ClassificationEntity, kind ClassificationKind) error {
 	for _, classification := range classifications {
 		if classification.ID == uuid.Nil {
 			return validationError("classification id is required")
 		}
 		var exists bool
-		err := r.db.QueryRow(ctx, foodValidateClassificationSQL, classification.ID, string(kind)).Scan(&exists)
+		err := db.QueryRow(ctx, foodValidateClassificationSQL, classification.ID, string(kind)).Scan(&exists)
 		if err != nil {
 			return mapPostgresError(err, "validate food classification")
 		}
@@ -252,7 +275,13 @@ func (r *PostgresFoodItemRepository) validateFoodClassifications(ctx context.Con
 // validateMicronutrients verifies that micronutrient keys are active vocabulary entries.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context, micros MicroValues) error {
-	repo := NewPostgresMicronutrientVocabularyRepository(r.db)
+	return validateMicronutrientsWithExecutor(ctx, r.db, micros)
+}
+
+// validateMicronutrientsWithExecutor validates active keys in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 MicronutrientVocabulary.
+func validateMicronutrientsWithExecutor(ctx context.Context, db sqlExecutor, micros MicroValues) error {
+	repo := NewPostgresMicronutrientVocabularyRepository(db)
 	entries, err := repo.ListActive(ctx)
 	if err != nil {
 		return err
@@ -263,11 +292,17 @@ func (r *PostgresFoodItemRepository) validateMicronutrients(ctx context.Context,
 // replaceFoodClassifications replaces persisted classification associations for a food item.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) replaceFoodClassifications(ctx context.Context, foodID uuid.UUID, foodCategories []ClassificationEntity, culinaryRoles []ClassificationEntity) error {
-	if _, err := r.db.Exec(ctx, foodClearClassificationsSQL, foodID); err != nil {
+	return replaceFoodClassificationsWithExecutor(ctx, r.db, foodID, foodCategories, culinaryRoles)
+}
+
+// replaceFoodClassificationsWithExecutor replaces global assignments in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func replaceFoodClassificationsWithExecutor(ctx context.Context, db sqlExecutor, foodID uuid.UUID, foodCategories []ClassificationEntity, culinaryRoles []ClassificationEntity) error {
+	if _, err := db.Exec(ctx, foodClearClassificationsSQL, foodID); err != nil {
 		return mapPostgresError(err, "clear food classifications")
 	}
 	for _, classification := range append(foodCategories, culinaryRoles...) {
-		if _, err := r.db.Exec(ctx, foodAttachClassificationSQL, foodID, classification.ID); err != nil {
+		if _, err := db.Exec(ctx, foodAttachClassificationSQL, foodID, classification.ID); err != nil {
 			return mapPostgresError(err, "replace food classifications")
 		}
 	}
@@ -277,7 +312,13 @@ func (r *PostgresFoodItemRepository) replaceFoodClassifications(ctx context.Cont
 // getFoodByID loads one food item using the provided SQL executor.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) getFoodByID(ctx context.Context, id uuid.UUID, includeDeleted bool) (FoodItemEntity, error) {
-	row := r.db.QueryRow(ctx, foodGetByIDSQL, id, includeDeleted)
+	return getFoodByIDWithExecutor(ctx, r.db, id, includeDeleted)
+}
+
+// getFoodByIDWithExecutor loads one global item in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func getFoodByIDWithExecutor(ctx context.Context, db sqlExecutor, id uuid.UUID, includeDeleted bool) (FoodItemEntity, error) {
+	row := db.QueryRow(ctx, foodGetByIDSQL, id, includeDeleted)
 	item, err := scanFoodItem(row)
 	if err != nil {
 		if IsKind(err, ErrorKindValidation) {
@@ -291,7 +332,13 @@ func (r *PostgresFoodItemRepository) getFoodByID(ctx context.Context, id uuid.UU
 // hydrateFoodClassifications loads classification IDs onto food item entities.
 // Implements DESIGN-005 FoodItemEntity.
 func (r *PostgresFoodItemRepository) hydrateFoodClassifications(ctx context.Context, item *FoodItemEntity) error {
-	rows, err := r.db.Query(ctx, foodListClassificationsSQL, item.ID)
+	return hydrateFoodClassificationsWithExecutor(ctx, r.db, item)
+}
+
+// hydrateFoodClassificationsWithExecutor loads global assignments in a caller transaction.
+// Implements DESIGN-009 ItemCurator and DESIGN-005 FoodItemEntity.
+func hydrateFoodClassificationsWithExecutor(ctx context.Context, db sqlExecutor, item *FoodItemEntity) error {
+	rows, err := db.Query(ctx, foodListClassificationsSQL, item.ID)
 	if err != nil {
 		return mapPostgresError(err, "load food classifications")
 	}
@@ -375,20 +422,6 @@ func scanFoodItem(row foodRowScanner) (FoodItemEntity, error) {
 	return item, nil
 }
 
-// convertFoodItemForUnitSystem converts display values to the requested unit system.
-// Implements DESIGN-005 FoodItemEntity.
-func convertFoodItemForUnitSystem(item *FoodItemEntity, unitSystem UnitSystem) {
-	if unitSystem != UnitSystemImperial {
-		return
-	}
-	switch item.PhysicalState {
-	case PhysicalStateSolid:
-		item.AverageUnitWeightGrams, _ = ConvertUnit(item.AverageUnitWeightGrams, "g", "oz")
-	case PhysicalStateLiquid:
-		item.AverageServingVolumeMilliliters, _ = ConvertUnit(item.AverageServingVolumeMilliliters, "ml", "fl_oz")
-	}
-}
-
 // validateFoodDensity checks required liquid density metadata.
 // Implements DESIGN-005 FoodItemEntity.
 func validateFoodDensity(item FoodItemEntity) error {
@@ -409,6 +442,14 @@ func validateFoodDensity(item FoodItemEntity) error {
 	}
 	if item.DensitySourceKind != "imported" && item.DensitySourceKind != "manual" && item.DensitySourceKind != "estimated" {
 		return validationError("density source kind is invalid")
+	}
+	if item.DensitySourceKind == "imported" {
+		identity, err := providerregistry.Default().Normalize(item.DensitySourceProvider, item.DensitySourceFoodID)
+		if err != nil || identity.Provider != item.DensitySourceProvider || identity.ExternalID != item.DensitySourceFoodID {
+			return validationError("imported density requires canonical provider evidence")
+		}
+	} else if item.DensitySourceProvider != "" || item.DensitySourceFoodID != "" {
+		return validationError("manual density cannot contain external provider evidence")
 	}
 	return nil
 }

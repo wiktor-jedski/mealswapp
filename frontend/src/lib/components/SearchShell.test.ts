@@ -42,6 +42,28 @@ test("renders billing controls only in the authenticated Subscription view branc
 	expect(source).toContain('kind: "account"');
 });
 
+// Implements DESIGN-009 UserAdminPanel access-shell composition verification.
+test("composes fail-closed administration routing without resetting Search state", () => {
+	expect(source).toContain('import AdministrationPanel from "./AdministrationPanel.svelte"');
+	expect(source).toContain("resolveAdminAccess($authSessionStore)");
+	expect(source).toContain("verifiedAdminIdentity($authSessionStore)");
+	expect(source).toContain('activeView === "administration"');
+	expect(source).toContain("<AdministrationPanel access=");
+	expect(source).toContain("function denyAdministrationRoute(): void");
+	expect(source).toContain("data-admin-access-denied");
+	expect(source).toContain("replaceBrowserRoute(searchRoute($searchStore.mode))");
+	expect(source).not.toContain("resetSearch");
+});
+
+// Implements DESIGN-009 DataImporter successful local-catalog visibility handoff.
+test("hands a completed import to an ordinary committed catalog search", () => {
+	expect(source).toContain("function viewImportedItemInLocalSearch(name: string): void");
+	expect(source).toContain('setMode("catalog")');
+	expect(source).toContain("setQuery(name)");
+	expect(source).toContain("submitSearch(name)");
+	expect(source).toContain("onViewLocalItem={viewImportedItemInLocalSearch}");
+});
+
 // Implements DESIGN-018 OAuthEntryPoint auth-modal composition verification.
 test("renders Google OAuth entry inside the protected-action auth modal", () => {
 	expect(source).toContain('import OAuthEntryPoint from "./OAuthEntryPoint.svelte"');

@@ -5,11 +5,11 @@
     CanonicalQuantityUnit,
     ClassificationSummary,
     DailyDiet,
-    FoodObject,
     MacroProjection,
     RankedAutocomplete
   } from "../api/generated";
   import { DailyDietClientError } from "../api/daily-diet-client";
+  import { fetchCustomFoodObject, listCustomFoodObjects, type DailyDietFoodObject } from "../api/custom-item-client";
   import { fetchFoodObject } from "../api/search-client";
   import {
     convertQuantity,
@@ -43,7 +43,7 @@
 
   interface DraftFoodObject {
     key: number;
-    item: FoodObject;
+    item: DailyDietFoodObject;
     quantity: number;
     unit: CanonicalQuantityUnit;
   }
@@ -71,6 +71,8 @@
   let draftName = $state("My Daily Diet");
   let draftFoodObjects = $state<DraftFoodObject[]>([]);
   let foodSearchQuery = $state("");
+  let customFoods = $state<DailyDietFoodObject[]>([]);
+  let customFoodStatus = $state<"idle" | "loading" | "success" | "error">("idle");
   let loadedUserId = $state<string | null>(null);
   let draftError = $state<string | null>(null);
   let serverAggregate = $state<MacroProjection | null>(null);
@@ -81,6 +83,7 @@
   let lastEditSelectionKey = $state<number | null>(null);
   let nextDraftKey = 0;
   let hydrationGeneration = 0;
+  let customFoodController: AbortController | null = null;
   const hydrationControllers = new Set<AbortController>();
 
   let canEdit = $derived(authenticated && executionAllowed);
@@ -90,7 +93,10 @@
   );
   let aggregate = $derived(serverAggregate ?? calculateAggregate(draftFoodObjects));
 
-  onDestroy(cancelHydration);
+  onDestroy(() => {
+    cancelHydration();
+    cancelCustomFoodLoad();
+  });
 
   $effect(() => {
     if (authStatus === "authenticated" && authenticated && userId && loadedUserId !== userId) {
@@ -100,6 +106,7 @@
       }
       loadedUserId = userId;
       void loadDailyDiets().catch(() => undefined);
+      void loadCustomFoods();
       return;
     }
     if (!authenticated && loadedUserId !== null) {
@@ -130,6 +137,43 @@
       },
       { protein: 0, carbohydrates: 0, fat: 0, calories: 0 }
     );
+  }
+
+  /** Loads the authenticated owner's active private foods for the Daily Diet picker. */
+  async function loadCustomFoods(): Promise<void> {
+    cancelCustomFoodLoad();
+    const controller = new AbortController();
+    customFoodController = controller;
+    customFoodStatus = "loading";
+    try {
+      const items = await listCustomFoodObjects(controller.signal);
+      if (customFoodController !== controller || controller.signal.aborted) return;
+      customFoods = items;
+      customFoodStatus = "success";
+    } catch {
+      if (customFoodController !== controller || controller.signal.aborted) return;
+      customFoodStatus = "error";
+    } finally {
+      if (customFoodController === controller) customFoodController = null;
+    }
+  }
+
+  function cancelCustomFoodLoad(): void {
+    customFoodController?.abort();
+    customFoodController = null;
+  }
+
+  /** Adds one already owner-scoped custom food to the editable collection. */
+  function addCustomFood(itemId: string): void {
+    const item = customFoods.find((candidate) => candidate.id === itemId);
+    if (!item || !canEdit) return;
+    draftFoodObjects = [...draftFoodObjects, {
+      key: ++nextDraftKey,
+      item,
+      quantity: defaultDisplayQuantity(item.macroBasis, $preferencesStore.unitSystem),
+      unit: displayUnitForBasis(item.macroBasis, $preferencesStore.unitSystem)
+    }];
+    markDraftChanged();
   }
 
   /** Hydrates a selected autocomplete result into the editable Food Object card list. */
@@ -177,7 +221,9 @@
     foodSearchQuery = "";
     try {
       const entries = [...diet.entries].sort((left, right) => left.position - right.position);
-      const items = await Promise.all(entries.map((entry) => fetchFoodObject(entry.foodObjectId, controller.signal, entry.foodObjectType)));
+      const items = await Promise.all(entries.map((entry) => entry.foodObjectType === "custom_food_item"
+        ? fetchCustomFoodObject(entry.foodObjectId, controller.signal)
+        : fetchFoodObject(entry.foodObjectId, controller.signal, entry.foodObjectType)));
       if (controller.signal.aborted || generation !== hydrationGeneration) return;
       draftFoodObjects = entries.map((entry, index) => ({
         key: ++nextDraftKey,
@@ -312,15 +358,18 @@
 
   /** Clears all editable state owned by the previous authenticated identity. */
   function resetIdentityOwnedDraft(): void {
+    cancelCustomFoodLoad();
     resetDraft();
+    customFoods = [];
+    customFoodStatus = "idle";
     lastEditSelectionKey = null;
   }
 
-  function foodCategories(item: FoodObject): ClassificationSummary[] {
+  function foodCategories(item: DailyDietFoodObject): ClassificationSummary[] {
     return item.classifications.filter((classification) => classification.kind === "food_category");
   }
 
-  function itemInitial(item: FoodObject): string {
+  function itemInitial(item: DailyDietFoodObject): string {
     const category = item.primaryFoodCategory ?? foodCategories(item)[0] ?? null;
     return (category?.name ?? item.name).charAt(0).toUpperCase();
   }
@@ -359,6 +408,27 @@
       <div class="grid gap-1">
         <span class="text-sm font-medium">Add foods or meals</span>
         <AutocompleteDropdown query={foodSearchQuery} placeholder="Search foods or meals to add…" focusKey={editingDietId ?? "new-daily-diet"} focusOnMount={false} selectFirstOnEnter={true} onQueryInput={(value) => (foodSearchQuery = value)} onSelect={(item) => void addFoodObject(item)} />
+      </div>
+
+      <div class="grid gap-1">
+        <label class="text-sm font-medium" for="daily-diet-custom-food">Add one of your custom foods</label>
+        {#if customFoodStatus === "loading"}
+          <p class="text-sm text-[var(--color-muted)]" role="status">Loading your custom foods…</p>
+        {:else if customFoodStatus === "error"}
+          <div class="flex items-center gap-2" role="alert">
+            <span class="text-sm">Your custom foods could not be loaded.</span>
+            <button type="button" class="rounded border px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" onclick={() => void loadCustomFoods()}>Try again</button>
+          </div>
+        {:else if customFoods.length === 0}
+          <p class="text-sm text-[var(--color-muted)]">You have no active custom foods yet.</p>
+        {:else}
+          <select id="daily-diet-custom-food" class="h-10 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]" value="" onchange={(event) => { addCustomFood((event.currentTarget as HTMLSelectElement).value); (event.currentTarget as HTMLSelectElement).value = ""; }} disabled={!canEdit}>
+            <option value="">Choose a custom food…</option>
+            {#each customFoods as item (item.id)}
+              <option value={item.id}>{item.name} · {item.physicalState} · {item.id.slice(-8)}</option>
+            {/each}
+          </select>
+        {/if}
       </div>
 
       {#if editingLoading}

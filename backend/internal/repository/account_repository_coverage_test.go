@@ -184,31 +184,45 @@ func TestComplianceRepositoryRemainingErrors(t *testing.T) {
 	}
 
 	repo = NewPostgresComplianceRepository(&fakeSQLExecutor{})
-	if err := repo.RecordDeletionFailure(ctx, uuid.Nil, "transient", "", nil); !IsKind(err, ErrorKindValidation) {
+	leaseExpiresAt := time.Now().Add(time.Minute)
+	if repo.WithDeletionLeaseDuration(0) != repo || repo.deletionLeaseDuration != 5*time.Minute {
+		t.Fatalf("non-positive deletion lease changed duration: %v", repo.deletionLeaseDuration)
+	}
+	repo.WithDeletionLeaseDuration(time.Second)
+	if repo.deletionLeaseDuration != time.Second {
+		t.Fatalf("configured deletion lease = %v", repo.deletionLeaseDuration)
+	}
+	if err := repo.RecordDeletionFailure(ctx, uuid.Nil, leaseExpiresAt, "transient", "", nil); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("RecordDeletionFailure() id error = %v", err)
 	}
-	if err := repo.RecordDeletionFailure(ctx, requestID, "bad", "", nil); !IsKind(err, ErrorKindValidation) {
+	if err := repo.RecordDeletionFailure(ctx, requestID, time.Time{}, "transient", "", nil); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("RecordDeletionFailure() lease error = %v", err)
+	}
+	if err := repo.RecordDeletionFailure(ctx, requestID, leaseExpiresAt, "bad", "", nil); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("RecordDeletionFailure() category error = %v", err)
 	}
 	repo = NewPostgresComplianceRepository(&fakeSQLExecutor{row: fakeRow{err: wantErr}})
-	if err := repo.RecordDeletionFailure(ctx, requestID, "transient", "", nil); !IsKind(err, ErrorKindConnection) {
+	if err := repo.RecordDeletionFailure(ctx, requestID, leaseExpiresAt, "transient", "", nil); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("RecordDeletionFailure() write error = %v", err)
 	}
 	repo = NewPostgresComplianceRepository(&fakeSQLExecutor{row: fakeRow{values: []any{requestID}}, execErr: wantErr})
-	if err := repo.RecordDeletionFailure(ctx, requestID, "unknown", "", nil); !IsKind(err, ErrorKindConnection) {
+	if err := repo.RecordDeletionFailure(ctx, requestID, leaseExpiresAt, "unknown", "", nil); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("RecordDeletionFailure() audit error = %v", err)
 	}
 
 	repo = NewPostgresComplianceRepository(&fakeSQLExecutor{})
-	if err := repo.CompleteDeletionRequest(ctx, uuid.Nil, receiptID, time.Now()); !IsKind(err, ErrorKindValidation) {
+	if err := repo.CompleteDeletionRequest(ctx, uuid.Nil, leaseExpiresAt, receiptID, time.Now()); !IsKind(err, ErrorKindValidation) {
 		t.Fatalf("CompleteDeletionRequest() validation error = %v", err)
 	}
+	if err := repo.CompleteDeletionRequest(ctx, requestID, time.Time{}, receiptID, time.Now()); !IsKind(err, ErrorKindValidation) {
+		t.Fatalf("CompleteDeletionRequest() lease error = %v", err)
+	}
 	repo = NewPostgresComplianceRepository(&fakeSQLExecutor{row: fakeRow{err: wantErr}})
-	if err := repo.CompleteDeletionRequest(ctx, requestID, receiptID, time.Now()); !IsKind(err, ErrorKindConnection) {
+	if err := repo.CompleteDeletionRequest(ctx, requestID, leaseExpiresAt, receiptID, time.Now()); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("CompleteDeletionRequest() write error = %v", err)
 	}
 	repo = NewPostgresComplianceRepository(&fakeSQLExecutor{row: fakeRow{values: []any{requestID}}, execErr: wantErr})
-	if err := repo.CompleteDeletionRequest(ctx, requestID, receiptID, time.Now()); !IsKind(err, ErrorKindConnection) {
+	if err := repo.CompleteDeletionRequest(ctx, requestID, leaseExpiresAt, receiptID, time.Now()); !IsKind(err, ErrorKindConnection) {
 		t.Fatalf("CompleteDeletionRequest() audit error = %v", err)
 	}
 }

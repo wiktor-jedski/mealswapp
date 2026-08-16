@@ -1,0 +1,34 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-STEP-03",
+    "P08-SWR056-STEP-04",
+    "P08-SWR056-ACCEPT-05"
+  ],
+  "kind": "item",
+  "entityId": "601156d2-e699-43d3-b0ab-580459fc5402",
+  "name": "Task 283 update only real-stack-mobile-chromium canonical",
+  "idempotencyKey": "3f0d448a-5e21-4dff-8c58-b4c34acf496e",
+  "requestIds": [
+    "91de5fac-69ae-49e1-a5d9-5466eae0846d",
+    "ddb69c72-10ac-48a1-8e0e-b60a0856aabb",
+    "7906563e-227a-4e6d-9799-2b42ea7a938e",
+    "2241d025-83bd-46f4-9828-26beb393d0e9",
+    "6596b57b-e601-4017-ba23-d49cf21fa897",
+    "4f06e7c9-9060-4e92-828a-15e47157a36c"
+  ],
+  "expected": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1,
+      "manual_update": 1
+    },
+    "idempotencyCount": 1,
+    "name": "Task 283 update only real-stack-mobile-chromium canonical",
+    "macros": {
+      "protein": 21.25,
+      "carbohydrates": 12.5,
+      "fat": 2.75
+    }
+  }
+}

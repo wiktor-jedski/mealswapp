@@ -1,0 +1,57 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 solid real-stack-mobile-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-01",
+      "P08-SWR056-STEP-02",
+      "P08-SWR056-ACCEPT-01",
+      "P08-SWR033-STEP-05"
+    ],
+    "entityId": "113c2d02-07e4-46cd-ad2d-9bc62838445f",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "idempotencyCount": 1,
+      "macros": {
+        "carbohydrates": 20,
+        "fat": 3,
+        "protein": 10
+      },
+      "metricBasis": "100g",
+      "ownerless": true,
+      "physicalState": "solid"
+    },
+    "idempotencyKey": "62d3c00e-5a7d-4068-8e69-725701500f75",
+    "kind": "item",
+    "name": "Task 283 solid real-stack-mobile-chromium",
+    "requestIds": [
+      "a42a4f0b-59c4-44bb-bcc9-af32686176a4"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

@@ -1,0 +1,268 @@
+{
+  "exitCode": 2,
+  "producerFailures": [],
+  "results": [
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-ACCEPT-01",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-ACCEPT-01",
+      "kind": "criterion",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 175
+      },
+      "status": "BLOCKED",
+      "text": "Events have timestamps and correlation/request IDs."
+    },
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-ACCEPT-02",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-ACCEPT-02",
+      "kind": "criterion",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 176
+      },
+      "status": "BLOCKED",
+      "text": "Successful and failed admin actions are distinguishable."
+    },
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-ACCEPT-03",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-ACCEPT-03",
+      "kind": "criterion",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 177
+      },
+      "status": "BLOCKED",
+      "text": "Logs do not contain names, emails, search text, item IDs, idempotency keys, secrets or provider payloads."
+    },
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-ACCEPT-04",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-ACCEPT-04",
+      "kind": "criterion",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 178
+      },
+      "status": "BLOCKED",
+      "text": "The deployment actually centralizes logs; console output alone does not fully satisfy the wording."
+    },
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-STEP-01",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-STEP-01",
+      "kind": "step",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 169
+      },
+      "status": "BLOCKED",
+      "text": "Perform a successful and failed admin mutation."
+    },
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-STEP-02",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-STEP-02",
+      "kind": "step",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 170
+      },
+      "status": "BLOCKED",
+      "text": "Perform external search/import."
+    },
+    {
+      "backendEvidence": [
+        "log_sink_state=blocked"
+      ],
+      "criterionId": "P08-SWR084-STEP-03",
+      "evidence": [
+        {
+          "path": "evidence/sink-evidence.json",
+          "type": "deployed-logs"
+        }
+      ],
+      "evidenceTypes": [
+        "playwright",
+        "backend",
+        "deployed-logs"
+      ],
+      "findingIds": [
+        "P08-FIND-285-001"
+      ],
+      "id": "P08-SWR084-STEP-03",
+      "kind": "step",
+      "owner": "platform-observability",
+      "requestIds": [],
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "requirement": "SW-REQ-084",
+      "resolvedRootCauseIds": [],
+      "rootCauseId": "ROOT-T285-DEPLOYED-ENVIRONMENT",
+      "scenarioId": "P08-SWR084-CENTRALIZED-LOGGING",
+      "source": {
+        "file": "req_tests.md",
+        "line": 171
+      },
+      "status": "BLOCKED",
+      "text": "Inspect deployed logs."
+    }
+  ],
+  "rootCauses": [
+    {
+      "criteria": [
+        "P08-SWR084-ACCEPT-01",
+        "P08-SWR084-ACCEPT-02",
+        "P08-SWR084-ACCEPT-03",
+        "P08-SWR084-ACCEPT-04",
+        "P08-SWR084-STEP-01",
+        "P08-SWR084-STEP-02",
+        "P08-SWR084-STEP-03"
+      ],
+      "id": "ROOT-T285-DEPLOYED-ENVIRONMENT"
+    }
+  ],
+  "runId": "task285-abcdab7626a34fa9ed348a6a",
+  "schema": "mealswapp.phase08-acceptance-report.v1",
+  "status": "BLOCKED"
+}

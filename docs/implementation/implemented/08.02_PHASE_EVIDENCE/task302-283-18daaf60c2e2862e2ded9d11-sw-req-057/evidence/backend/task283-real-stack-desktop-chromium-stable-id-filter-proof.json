@@ -1,0 +1,62 @@
+{
+  "actual": {
+    "active": true,
+    "auditActions": {
+      "classification.create": 1,
+      "classification.update": 1
+    },
+    "deleted": false,
+    "generationAfter": "10",
+    "generationBefore": "9",
+    "generationDelta": 1,
+    "kind": "food_category",
+    "name": "Task 283 filter real-stack-desktop-chromium renamed",
+    "parentId": null,
+    "requestAuditActions": {
+      "classification.create": 1,
+      "classification.update": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR019-STEP-01",
+      "P08-SWR019-STEP-02",
+      "P08-SWR019-STEP-03",
+      "P08-SWR019-STEP-04",
+      "P08-SWR057-ACCEPT-03",
+      "P08-SWR057-ACCEPT-05"
+    ],
+    "entityId": "d959b231-3ebb-4cb1-accc-8c27b6cc46c9",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "classification.create": 1,
+        "classification.update": 1
+      },
+      "generationAfter": "10",
+      "generationBefore": "9",
+      "generationDelta": 1,
+      "kind": "food_category",
+      "parentId": null
+    },
+    "generationSnapshots": {
+      "generationAfter": "12983576-4147-4430-9d23-6179b58c84ea",
+      "generationBefore": "0b8787dc-6b08-45c8-baaf-e9413e8d7cd7"
+    },
+    "kind": "classification",
+    "name": "Task 283 filter real-stack-desktop-chromium renamed",
+    "requestIds": [
+      "42687206-73ff-4ddc-ac77-69c8db6d6b45",
+      "5b24370a-8659-42f9-a155-af7eb099b1fa",
+      "2a283235-6320-4639-9d95-e87b0e396108",
+      "ab208076-c761-4125-9c03-59f0bc401817",
+      "121cfd81-55e3-46b2-901d-aa324feea84d",
+      "6068e4cd-e29d-46b5-af3a-7e2e19cabbe5"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

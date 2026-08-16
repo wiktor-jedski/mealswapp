@@ -14,7 +14,7 @@
 ### 1. Data Structures & Types
 - `interface UserProfile { userId: UUID; displayName?: string; unitSystem: "metric" | "imperial"; themePreference: "system" | "light" | "dark"; createdAt: time.Time; updatedAt: time.Time }`
 - `interface SavedItem { id: UUID; userId: UUID; itemId: UUID; kind: "favorite" | "saved_meal" | "saved_diet"; createdAt: time.Time }`
-- `type FoodObjectType = "food_item" | "meal"`
+- `type FoodObjectType = "food_item" | "meal" | "custom_food_item"`
 - `interface DailyDietEntry { id: UUID; foodObjectId: UUID; foodObjectType: FoodObjectType; quantity: number; unit: CanonicalQuantityUnit; position: number }`
 - `interface DailyDiet { id: UUID; userId: UUID; name: string; entries: DailyDietEntry[]; createdAt: time.Time; updatedAt: time.Time }`
 - `interface SearchHistoryEntry { id: UUID; userId: UUID; query: string; mode: string; filtersHash: string; createdAt: time.Time }`
@@ -25,7 +25,7 @@
 1. Require authenticated user context from ARCH-006 for every profile route.
 2. Read and write preferences through ARCH-005 using `user_id` predicates on every query.
 3. When unit preference changes, persist the value and return recalculation hints for currently displayed data.
-4. Save favorites, meals, diets, and optional history with the authenticated user ID supplied by the server, never by the client. Daily Diet names are unique per user after trimming and case folding. A Daily Diet entry identifies exactly one Food Item or Meal, and aggregate nutrition is derived from that authoritative Food Object.
+4. Save favorites, meals, diets, and optional history with the authenticated user ID supplied by the server, never by the client. Daily Diet names are unique per user after trimming and case folding. A Daily Diet entry identifies exactly one global Food Item, Meal, or active private Custom Food Item owned by the Daily Diet owner. Validate the mutually exclusive reference, ownership, active state, and quantity basis in the persistence transaction; derive aggregate nutrition from the matching authoritative repository.
 5. Data export loads profile, PII, saved data, custom items, diets, and history into an `ExportBundle`.
 6. JSON export writes a structured object; CSV export writes separate sections/files for tabular data.
 7. Account deletion builds a deletion plan, deletes production records in a transaction, and calls ARCH-011 to purge user cache keys.

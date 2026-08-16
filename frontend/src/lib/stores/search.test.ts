@@ -194,6 +194,9 @@ test("requestSubstitutionSearch submits only when substitution inputs exist", ()
 	requestSubstitutionSearch();
 	expect(get(searchStore).submittedQuery).toBe("");
 	expect(get(searchStore).searchSubmitted).toBe(true);
+	setQuery("target");
+	requestSubstitutionSearch();
+	expect(get(searchStore).submittedQuery).toBe("target");
 });
 
 // Implements DESIGN-001 SearchView filter change pagination reset verification.

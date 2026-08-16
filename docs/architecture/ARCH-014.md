@@ -27,5 +27,5 @@
 - *Alternative Considered:* Distributed logging with per-service log files
 - *Trade-off:* Centralized logging enables correlation across services for debugging and security auditing (SW-REQ-084). Distributed logs would be simpler but make cross-service analysis difficult. Centralized approach is essential for maintaining 99.9% availability (SW-REQ-081) through proactive monitoring.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

@@ -1,0 +1,67 @@
+{
+  "actual": {
+    "active": true,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1
+    },
+    "culinaryRoleIds": [],
+    "deleted": false,
+    "density": 0.92,
+    "densitySourceKind": "manual",
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 6.25,
+      "fat": 1.75,
+      "protein": 2.5
+    },
+    "metricBasis": "100ml",
+    "micros": {},
+    "name": "Task 283 liquid real-stack-desktop-chromium",
+    "ownerless": true,
+    "physicalState": "liquid",
+    "requestAuditActions": {
+      "manual_create": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-STEP-01",
+      "P08-SWR056-STEP-02",
+      "P08-SWR056-ACCEPT-01",
+      "P08-SWR033-STEP-05"
+    ],
+    "entityId": "a908ee42-1a26-4bb8-b2f6-9a384ef3a273",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "density": 0.92,
+      "densitySourceKind": "manual",
+      "idempotencyCount": 1,
+      "macros": {
+        "carbohydrates": 6.25,
+        "fat": 1.75,
+        "protein": 2.5
+      },
+      "metricBasis": "100ml",
+      "ownerless": true,
+      "physicalState": "liquid"
+    },
+    "idempotencyKey": "dd212e62-d336-49a9-a872-1d4c0a626593",
+    "kind": "item",
+    "name": "Task 283 liquid real-stack-desktop-chromium",
+    "requestIds": [
+      "b46b143d-3d4b-42a7-ad87-6ecea8db7a03",
+      "3f70e7ec-8975-45a3-a5f1-8f96db87a5e4",
+      "03635d55-5c45-4cd2-a9f9-74c5f6cb790d"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

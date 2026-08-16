@@ -95,6 +95,21 @@ func (r *memoryIdentityRepository) GetUserByNormalizedEmailDigest(_ context.Cont
 	return user, nil
 }
 
+func (r *memoryIdentityRepository) ReindexUserEmailDigest(_ context.Context, userID uuid.UUID, digest repository.LookupDigest) error {
+	if _, exists := r.byDigest[digest]; exists {
+		return repository.NewError(repository.ErrorKindConflict, "email digest conflict", nil)
+	}
+	user, exists := r.byID[userID]
+	if !exists {
+		return repository.NewError(repository.ErrorKindNotFound, "user not found", nil)
+	}
+	delete(r.byDigest, user.NormalizedEmailDigest)
+	user.NormalizedEmailDigest = digest
+	r.byDigest[digest] = user
+	r.byID[userID] = user
+	return nil
+}
+
 func (r *memoryIdentityRepository) UpsertOAuthIdentity(_ context.Context, identity repository.EncryptedOAuthIdentity) (uuid.UUID, error) {
 	if r.upsertErr != nil {
 		return uuid.Nil, r.upsertErr
@@ -557,12 +572,16 @@ func TestCoreAuthServiceOAuthBoundary(t *testing.T) {
 		}
 	}
 
-	created, err := service.CompleteOAuth(ctx, "apple", OAuthProfile{Provider: "apple", ProviderUserID: "apple-user-1", Email: "new-oauth@example.test", EmailVerified: true})
+	created, err := service.CompleteOAuth(ctx, "apple", OAuthProfile{Provider: "apple", ProviderUserID: "apple-user-1", Email: "New-OAuth@Example.TEST", EmailVerified: true})
 	if err != nil {
 		t.Fatalf("CompleteOAuth() create error = %v", err)
 	}
 	if !created.CreatedUser || !created.Linked || !created.Session.HasVerifiedLoginMethod || len(trials.called) != 1 || trials.called[0] != created.Session.UserID {
 		t.Fatalf("created oauth result=%#v trials=%v", created, trials.called)
+	}
+	canonicalOAuthEmailDigest, err := digests.DigestForWrite(ctx, []byte("new-oauth@example.test"))
+	if err != nil || identities.byID[created.Session.UserID].NormalizedEmailDigest != toRepositoryLookupDigest(canonicalOAuthEmailDigest) {
+		t.Fatalf("oauth account digest=%+v canonical=%+v err=%v", identities.byID[created.Session.UserID].NormalizedEmailDigest, canonicalOAuthEmailDigest, err)
 	}
 	appleDigest, err := digests.DigestForWrite(ctx, []byte("apple-user-1"))
 	if err != nil {
@@ -625,7 +644,7 @@ func TestCoreAuthServiceRegister(t *testing.T) {
 		t.Fatalf("Register() repository error = %v", err)
 	}
 	registrationRepo.err = nil
-	session, err := service.Register(ctx, " user@example.test ", "StrongerPassword1!", RegistrationConsent{PrivacyPolicyVersion: "privacy-v1", TermsVersion: "terms-v1"})
+	session, err := service.Register(ctx, " User@Example.TEST ", "StrongerPassword1!", RegistrationConsent{PrivacyPolicyVersion: "privacy-v1", TermsVersion: "terms-v1"})
 	if err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
@@ -634,6 +653,51 @@ func TestCoreAuthServiceRegister(t *testing.T) {
 	}
 	if session.Role != string(repository.UserRoleUser) {
 		t.Fatalf("default role = %q", session.Role)
+	}
+	canonicalDigest, err := security.NewLookupDigestService(keys).DigestForWrite(ctx, []byte("user@example.test"))
+	if err != nil || registrationRepo.user.NormalizedEmailDigest != toRepositoryLookupDigest(canonicalDigest) {
+		t.Fatalf("registered digest=%+v canonical=%+v err=%v", registrationRepo.user.NormalizedEmailDigest, canonicalDigest, err)
+	}
+}
+
+func TestCoreAuthServiceReindexesLegacyMixedCaseEmailWithoutMergingCollision(t *testing.T) {
+	ctx := context.Background()
+	service, identities, _, _, _, _, user := newCoreAuthFailureFixture(t)
+	legacyDigest, err := service.digests.DigestForWrite(ctx, []byte("User@Example.TEST"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalDigest, err := service.digests.DigestForWrite(ctx, []byte("user@example.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(identities.byDigest, user.NormalizedEmailDigest)
+	user.NormalizedEmailDigest = toRepositoryLookupDigest(legacyDigest)
+	identities.byDigest[user.NormalizedEmailDigest] = user
+	identities.byID[user.ID] = user
+
+	if _, err := service.Login(ctx, "User@Example.TEST", "StrongerPassword1!"); err != nil {
+		t.Fatalf("legacy Login() error = %v", err)
+	}
+	if _, exists := identities.byDigest[toRepositoryLookupDigest(legacyDigest)]; exists {
+		t.Fatal("legacy digest remained indexed")
+	}
+	if reindexed, exists := identities.byDigest[toRepositoryLookupDigest(canonicalDigest)]; !exists || reindexed.ID != user.ID {
+		t.Fatalf("canonical reindex=%+v exists=%v", reindexed, exists)
+	}
+	if _, err := service.Login(ctx, "USER@example.test", "StrongerPassword1!"); err != nil {
+		t.Fatalf("case-insensitive Login() after reindex error = %v", err)
+	}
+
+	other := repository.EncryptedAuthUser{ID: uuid.New(), NormalizedEmailDigest: toRepositoryLookupDigest(canonicalDigest)}
+	identities.byDigest[toRepositoryLookupDigest(legacyDigest)] = user
+	identities.byDigest[toRepositoryLookupDigest(canonicalDigest)] = other
+	identities.byID[other.ID] = other
+	if _, err := service.Login(ctx, "User@Example.TEST", "StrongerPassword1!"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("collision Login() error = %v", err)
+	}
+	if identities.byDigest[toRepositoryLookupDigest(canonicalDigest)].ID != other.ID {
+		t.Fatal("canonical collision was silently overwritten")
 	}
 }
 

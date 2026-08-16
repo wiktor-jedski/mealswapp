@@ -3,6 +3,7 @@ package auth
 // Implements DESIGN-006 PasswordHasher verification.
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -59,6 +60,60 @@ func TestPasswordHasherRejectsMalformedInputs(t *testing.T) {
 		if hasher.VerifyPassword("StrongerPassword1!", input.hash, input.salt) {
 			t.Fatalf("VerifyPassword() accepted malformed input %+v", input)
 		}
+	}
+}
+
+func TestIsUsablePasswordCredentialMatchesAuthenticationParser(t *testing.T) {
+	hasher, err := NewPasswordHasher(PasswordHashParams{MemoryKiB: 19 * 1024, Iterations: 1, Parallelism: 1, KeyLength: 32, SaltLength: 16, MinLength: 12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validHash, validSalt, err := hasher.HashPassword("StrongerPassword1!")
+	if err != nil || !IsUsablePasswordCredential(validHash, validSalt) {
+		t.Fatalf("generated credential rejected hash=%q salt=%q err=%v", validHash, validSalt, err)
+	}
+	for _, input := range []struct {
+		name string
+		hash string
+		salt string
+	}{
+		{"malformed parameters", "argon2id$v=19$m=bad,t=1,p=1$u67X4pB7vrPK0wZMLU3SXg", validSalt},
+		{"duplicate parameters", "argon2id$v=19$m=19456,m=19456,t=1,p=1$u67X4pB7vrPK0wZMLU3SXg", validSalt},
+		{"weak parameters", "argon2id$v=19$m=1,t=1,p=1$u67X4pB7vrPK0wZMLU3SXg", validSalt},
+		{"invalid hash base64", "argon2id$v=19$m=19456,t=1,p=1$not base64", validSalt},
+		{"short hash", "argon2id$v=19$m=19456,t=1,p=1$c2hvcnQ", validSalt},
+		{"oversized hash", "argon2id$v=19$m=19456,t=1,p=1$" + base64.RawStdEncoding.EncodeToString(make([]byte, maxStoredPasswordHashBytes+1)), validSalt},
+		{"invalid salt base64", validHash, "not base64"},
+		{"short salt", validHash, "c2hvcnQ"},
+	} {
+		t.Run(input.name, func(t *testing.T) {
+			if IsUsablePasswordCredential(input.hash, input.salt) || hasher.VerifyPassword("StrongerPassword1!", input.hash, input.salt) {
+				t.Fatalf("malformed credential accepted: hash=%q salt=%q", input.hash, input.salt)
+			}
+		})
+	}
+}
+
+func TestPasswordHasherKeyLengthMatchesStoredParserBoundary(t *testing.T) {
+	params := PasswordHashParams{MemoryKiB: 19 * 1024, Iterations: 1, Parallelism: 1, KeyLength: maxStoredPasswordHashBytes, SaltLength: 16, MinLength: 12}
+	hasher, err := NewPasswordHasher(params)
+	if err != nil {
+		t.Fatalf("NewPasswordHasher() rejected 64-byte key length: %v", err)
+	}
+	hash, salt, err := hasher.HashPassword("StrongerPassword1!")
+	if err != nil {
+		t.Fatalf("HashPassword() 64-byte credential error = %v", err)
+	}
+	if !hasher.VerifyPassword("StrongerPassword1!", hash, salt) || !IsUsablePasswordCredential(hash, salt) {
+		t.Fatal("generated 64-byte credential is not accepted by verification and bootstrap parsing")
+	}
+	if parsed, _, _, err := parseStoredPasswordCredential(hash, salt); err != nil || parsed.KeyLength != maxStoredPasswordHashBytes {
+		t.Fatalf("parseStoredPasswordCredential() params=%+v err=%v", parsed, err)
+	}
+
+	params.KeyLength = maxStoredPasswordHashBytes + 1
+	if _, err := NewPasswordHasher(params); err == nil {
+		t.Fatal("NewPasswordHasher() accepted 65-byte key length")
 	}
 }
 

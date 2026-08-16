@@ -18,7 +18,7 @@ const (
 	PhysicalStateLiquid PhysicalState = "liquid"
 )
 
-// UnitSystem identifies caller-facing unit conversion preferences.
+// UnitSystem identifies persisted frontend display preferences.
 // Implements DESIGN-005 UnitConverter.
 type UnitSystem string
 
@@ -31,9 +31,9 @@ const (
 // MacroValues stores protein, carbohydrates, and fat values.
 // Implements DESIGN-005 MacroNormalizer.
 type MacroValues struct {
-	Protein       float64
-	Carbohydrates float64
-	Fat           float64
+	Protein       float64 `json:"protein"`
+	Carbohydrates float64 `json:"carbohydrates"`
+	Fat           float64 `json:"fat"`
 }
 
 // MicroValues stores micronutrient values by canonical vocabulary key.
@@ -43,10 +43,10 @@ type MicroValues map[string]float64
 // MicronutrientVocabularyEntry stores one canonical micronutrient definition.
 // Implements DESIGN-005 MicronutrientVocabulary.
 type MicronutrientVocabularyEntry struct {
-	Key         string
-	DisplayName string
-	Unit        string
-	Active      bool
+	Key         string `json:"key"`
+	DisplayName string `json:"displayName"`
+	Unit        string `json:"unit"`
+	Active      bool   `json:"active"`
 }
 
 // ClassificationKind identifies Food Category and Culinary Role classification groups.
@@ -62,15 +62,16 @@ const (
 // ClassificationEntity stores global classification identity and optional hierarchy.
 // Implements DESIGN-005 ClassificationEntity.
 type ClassificationEntity struct {
-	ID       uuid.UUID
-	Name     string
-	Kind     ClassificationKind
-	ParentID *uuid.UUID
+	ID       uuid.UUID          `json:"id"`
+	Name     string             `json:"name"`
+	Kind     ClassificationKind `json:"kind"`
+	ParentID *uuid.UUID         `json:"parentId,omitempty"`
 }
 
 // FoodItemEntity stores normalized food item data owned by repositories.
 // Implements DESIGN-005 FoodItemEntity.
 type FoodItemEntity struct {
+	ExpectedUpdatedAt               *time.Time
 	ID                              uuid.UUID
 	Name                            string
 	PhysicalState                   PhysicalState
@@ -85,20 +86,57 @@ type FoodItemEntity struct {
 	Micros                          MicroValues
 	FoodCategories                  []ClassificationEntity
 	CulinaryRoles                   []ClassificationEntity
+	AllergenKeys                    []string
 	ImageURL                        string
 	DeletedAt                       *time.Time
 	CreatedAt                       time.Time
 	UpdatedAt                       time.Time
 }
 
-// FoodObjectType distinguishes the two object kinds accepted by Daily Diet entries.
+// CustomFoodItemEntity stores a private food item with its mandatory owner.
+// Implements DESIGN-005 FoodItemEntity owner-scoped custom-item persistence.
+type CustomFoodItemEntity struct {
+	FoodItemEntity
+	OwnerID uuid.UUID
+}
+
+// CustomFoodItemCreateClaim is one atomic private-item mutation and idempotency claim.
+// Implements DESIGN-008 ProfileController durable custom-item creation.
+type CustomFoodItemCreateClaim struct {
+	UserID   uuid.UUID
+	Key      string
+	BodyHash string
+	Item     CustomFoodItemEntity
+}
+
+// CustomFoodItemCreateClaimResult returns the immutable created or replayed response.
+// Implements DESIGN-008 ProfileController durable custom-item creation.
+type CustomFoodItemCreateClaimResult struct {
+	ResponseBody []byte
+	StatusCode   int
+	Replayed     bool
+}
+
+// CustomFoodItemResponseEncoder serializes the owner-free immutable create response.
+// Implements DESIGN-008 ProfileController durable custom-item creation.
+type CustomFoodItemResponseEncoder func(CustomFoodItemEntity) ([]byte, error)
+
+// RecordEvidenceRepository persists short-lived server-selected external records.
+// Implements DESIGN-012 DataNormalizer deployment-safe provenance coordination.
+type RecordEvidenceRepository interface {
+	StoreRecordEvidence(context.Context, string, string, string, time.Time) error
+	ResolveRecordEvidence(context.Context, string, time.Time) (string, string, error)
+}
+
+// FoodObjectType distinguishes the object kinds accepted by Daily Diet entries.
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 type FoodObjectType string
 
 // Implements DESIGN-008 SavedDataRepository Food Object entry contract.
 const (
-	FoodObjectTypeFoodItem FoodObjectType = "food_item"
-	FoodObjectTypeMeal     FoodObjectType = "meal"
+	FoodObjectTypeFoodItem       FoodObjectType = "food_item"
+	FoodObjectTypeMeal           FoodObjectType = "meal"
+	FoodObjectTypeCustomFoodItem FoodObjectType = "custom_food_item"
 )
 
 // MealType identifies opaque single and composite meals.
@@ -137,11 +175,10 @@ type MealEntity struct {
 	UpdatedAt                 time.Time
 }
 
-// RepositoryContext carries caller scoping and conversion preferences.
+// RepositoryContext carries caller scoping preferences.
 // Implements DESIGN-005 RepositoryInterfaces.
 type RepositoryContext struct {
 	UserID         *uuid.UUID
-	UnitSystem     UnitSystem
 	IncludeDeleted bool
 }
 
@@ -492,11 +529,24 @@ type CheckoutIdempotencyRecord struct {
 	UpdatedAt    time.Time
 }
 
-// AdminAuditEntry stores auditable administrative mutations.
+// AdminAuditActorKind identifies the truthful origin of an administrative action.
+// Implements DESIGN-009 AdminController.
+type AdminAuditActorKind string
+
+// Implements DESIGN-009 AdminController truthful audit attribution.
+const (
+	// AdminAuditActorAdministrator identifies an authenticated administrator.
+	AdminAuditActorAdministrator AdminAuditActorKind = "administrator"
+	// AdminAuditActorOperator identifies an infrastructure operator with no administrator account actor.
+	AdminAuditActorOperator AdminAuditActorKind = "operator"
+)
+
+// AdminAuditEntry stores auditable administrative mutations with a truthful nullable actor.
 // Implements DESIGN-009 AdminController.
 type AdminAuditEntry struct {
 	ID          uuid.UUID
-	AdminUserID uuid.UUID
+	ActorKind   AdminAuditActorKind
+	AdminUserID *uuid.UUID
 	Action      string
 	EntityType  string
 	EntityID    *uuid.UUID
@@ -505,6 +555,63 @@ type AdminAuditEntry struct {
 	RequestID   string
 	CreatedAt   time.Time
 }
+
+// AdminAuditChanges contains mutation-derived audit fields while gateway-owned identity stays immutable.
+// Implements DESIGN-009 AdminController fail-closed transactional audit boundary.
+type AdminAuditChanges struct {
+	EntityID *uuid.UUID
+	Before   []byte
+	After    []byte
+	Replayed bool
+}
+
+// AdministratorBootstrapSelector identifies exactly one existing account without exposing PII.
+// Implements DESIGN-009 AdminController operator-only bootstrap.
+type AdministratorBootstrapSelector struct {
+	UserID            *uuid.UUID
+	EmailDigest       *LookupDigest
+	LegacyEmailDigest *LookupDigest
+}
+
+// AdministratorBootstrapResult is the privacy-safe bootstrap outcome.
+// Implements DESIGN-009 AdminController operator-only bootstrap.
+type AdministratorBootstrapResult struct {
+	UserID    uuid.UUID
+	AuditID   *uuid.UUID
+	AuditedAt time.Time
+	Replayed  bool
+}
+
+// PasswordCredentialValidator validates stored password material using the authentication parser.
+// Implements DESIGN-009 AdminController bootstrap eligibility.
+type PasswordCredentialValidator func(string, string) bool
+
+// AdministratorBootstrapRepository atomically creates only the first administrator.
+// Implements DESIGN-009 AdminController operator-only bootstrap.
+type AdministratorBootstrapRepository interface {
+	BootstrapAdministrator(context.Context, AdministratorBootstrapSelector, string) (AdministratorBootstrapResult, error)
+}
+
+// ManualFoodItemCreateClaim is one atomic administrator-scoped global-item creation.
+// Implements DESIGN-009 ItemCurator idempotent create boundary.
+type ManualFoodItemCreateClaim struct {
+	AdminUserID uuid.UUID
+	Key         string
+	BodyHash    string
+	Item        FoodItemEntity
+}
+
+// ManualFoodItemCreateClaimResult returns the immutable created or replayed response.
+// Implements DESIGN-009 ItemCurator idempotent create boundary.
+type ManualFoodItemCreateClaimResult struct {
+	ResponseBody []byte
+	StatusCode   int
+	Replayed     bool
+}
+
+// ManualFoodItemResponseEncoder serializes the immutable global-item response.
+// Implements DESIGN-009 ItemCurator idempotent create boundary.
+type ManualFoodItemResponseEncoder func(FoodItemEntity) ([]byte, error)
 
 // ConsentRecord stores accepted legal consent versions.
 // Implements DESIGN-015 ConsentManager.
@@ -543,6 +650,43 @@ type DataDeletionAuditEntry struct {
 	CreatedAt  time.Time
 }
 
+// AdminUserRecord is the encrypted, privacy-minimized persistence projection for user administration.
+// Implements DESIGN-009 UserAdminPanel.
+type AdminUserRecord struct {
+	ID            uuid.UUID
+	Email         EncryptedField
+	EmailVerified bool
+	CreatedAt     time.Time
+	Deletion      *AdminDeletionSummary
+}
+
+// AdminDeletionSummary contains only deletion state needed for restricted administration.
+// Implements DESIGN-009 UserAdminPanel.
+type AdminDeletionSummary struct {
+	RequestID       uuid.UUID
+	Status          string
+	FailureCategory string
+	RetryCount      int
+	RequestedAt     time.Time
+}
+
+// AdminUserLookup constrains exact and cursor-based administrative lookup.
+// Implements DESIGN-009 UserAdminPanel.
+type AdminUserLookup struct {
+	UserID      *uuid.UUID
+	EmailDigest *LookupDigest
+	AfterID     *uuid.UUID
+	Limit       int
+}
+
+// AdminDeletionRetry captures the fixed metadata needed for a safe audit snapshot.
+// Implements DESIGN-009 UserAdminPanel.
+type AdminDeletionRetry struct {
+	RequestID       uuid.UUID
+	FailureCategory string
+	RetryCount      int
+}
+
 // CuratedImport stores external curation metadata.
 // Implements DESIGN-009 DataImporter.
 type CuratedImport struct {
@@ -557,6 +701,27 @@ type CuratedImport struct {
 	UpdatedAt      time.Time
 }
 
+// CuratedImportConfirmation is one validated transactional import attempt.
+// Implements DESIGN-009 DataImporter confirmation boundary.
+type CuratedImportConfirmation struct {
+	AdminUserID         uuid.UUID
+	IdempotencyKey      string
+	BodyHash            string
+	SourceProvider      string
+	ExternalID          string
+	ConfirmNameConflict bool
+	Item                FoodItemEntity
+}
+
+// CuratedImportConfirmationResult identifies a created or replayed import and its catalog item.
+// Implements DESIGN-009 DataImporter confirmation result.
+type CuratedImportConfirmationResult struct {
+	ImportID uuid.UUID
+	Item     FoodItemEntity
+	Merged   bool
+	Replayed bool
+}
+
 // FoodItemRepository defines food item persistence behavior.
 // Implements DESIGN-005 RepositoryInterfaces.
 type FoodItemRepository interface {
@@ -565,6 +730,49 @@ type FoodItemRepository interface {
 	Create(ctx context.Context, item FoodItemEntity) (uuid.UUID, error)
 	Update(ctx context.Context, item FoodItemEntity) error
 	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// CustomFoodItemRepository defines owner-scoped private food-item persistence behavior.
+// Implements DESIGN-005 RepositoryInterfaces owner-scoped custom-item persistence.
+type CustomFoodItemRepository interface {
+	GetByID(ctx context.Context, ownerID uuid.UUID, id uuid.UUID, rc RepositoryContext) (CustomFoodItemEntity, error)
+	List(ctx context.Context, ownerID uuid.UUID, rc RepositoryContext) ([]CustomFoodItemEntity, error)
+	ClaimCreate(ctx context.Context, claim CustomFoodItemCreateClaim, encode CustomFoodItemResponseEncoder) (CustomFoodItemCreateClaimResult, error)
+	Create(ctx context.Context, item CustomFoodItemEntity) (uuid.UUID, error)
+	Update(ctx context.Context, item CustomFoodItemEntity) error
+	Delete(ctx context.Context, ownerID uuid.UUID, id uuid.UUID) error
+}
+
+// CustomFoodItemMaintenanceRepository defines scheduled private-item marker maintenance.
+// Implements DESIGN-008 AccountDeleter marker retention.
+type CustomFoodItemMaintenanceRepository interface {
+	PurgeExpiredDeletedCustomFoodCreateKeys(context.Context) error
+}
+
+// CustomFoodDeletionConflict reports saved diets that prevent permanent deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+type CustomFoodDeletionConflict struct {
+	Diets []SavedDietDeletionReference
+}
+
+// Error returns a bounded, non-sensitive conflict message.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+func (e *CustomFoodDeletionConflict) Error() string {
+	return "custom food item is referenced by saved diets"
+}
+
+// Unwrap preserves the standard conflict classification for HTTP mapping.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+func (e *CustomFoodDeletionConflict) Unwrap() error {
+	return NewError(ErrorKindConflict, e.Error(), nil)
+}
+
+// SavedDietDeletionReference identifies one owner-scoped saved diet blocking deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+// Implements DESIGN-008 AccountDeleter permanent custom-item deletion.
+type SavedDietDeletionReference struct {
+	ID   uuid.UUID
+	Name string
 }
 
 // MealRepository defines meal and recipe persistence behavior.
@@ -587,12 +795,33 @@ type ClassificationRepository interface {
 	SoftDelete(ctx context.Context, id uuid.UUID) error
 }
 
+// ClassificationAdminRepository defines transaction-scoped global classification CRUD.
+// Implements DESIGN-009 TagManager.
+type ClassificationAdminRepository interface {
+	List(ctx context.Context, kind ClassificationKind) ([]ClassificationEntity, error)
+	GetByID(ctx context.Context, id uuid.UUID) (ClassificationEntity, error)
+	Create(ctx context.Context, classification ClassificationEntity) (ClassificationEntity, error)
+	Update(ctx context.Context, classification ClassificationEntity) (ClassificationEntity, error)
+	SoftDelete(ctx context.Context, id uuid.UUID) error
+}
+
 // MicronutrientVocabularyRepository defines micronutrient vocabulary persistence behavior.
 // Implements DESIGN-005 RepositoryInterfaces.
 type MicronutrientVocabularyRepository interface {
 	ListActive(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
 	IsAllowed(ctx context.Context, key string) (bool, error)
 	Upsert(ctx context.Context, entry MicronutrientVocabularyEntry) error
+}
+
+// MicronutrientVocabularyAdminRepository defines transaction-scoped canonical vocabulary management.
+// Implements DESIGN-005 MicronutrientVocabulary administrator management.
+type MicronutrientVocabularyAdminRepository interface {
+	ListAll(ctx context.Context) ([]MicronutrientVocabularyEntry, error)
+	Get(ctx context.Context, key string) (MicronutrientVocabularyEntry, error)
+	Create(ctx context.Context, entry MicronutrientVocabularyEntry) (MicronutrientVocabularyEntry, error)
+	UpdateDisplayName(ctx context.Context, key, displayName string) (MicronutrientVocabularyEntry, error)
+	UpdateUnit(ctx context.Context, key, unit string) (MicronutrientVocabularyEntry, error)
+	SetActive(ctx context.Context, key string, active bool) (MicronutrientVocabularyEntry, error)
 }
 
 // UserProfileRepository defines user profile and preference persistence behavior.
@@ -762,8 +991,8 @@ type DeletionRequestRepository interface {
 	UpdateDeletionStatus(ctx context.Context, requestID uuid.UUID, status string, note string) error
 	ListDeletionAudit(ctx context.Context, requestID uuid.UUID) ([]DataDeletionAuditEntry, error)
 	ClaimDeletionRequests(ctx context.Context, now time.Time, limit int) ([]DataDeletionRequest, error)
-	RecordDeletionFailure(ctx context.Context, requestID uuid.UUID, category string, note string, nextAttemptAt *time.Time) error
-	CompleteDeletionRequest(ctx context.Context, requestID uuid.UUID, receiptID uuid.UUID, completedAt time.Time) error
+	RecordDeletionFailure(ctx context.Context, requestID uuid.UUID, leaseExpiresAt time.Time, category string, note string, nextAttemptAt *time.Time) error
+	CompleteDeletionRequest(ctx context.Context, requestID uuid.UUID, leaseExpiresAt time.Time, receiptID uuid.UUID, completedAt time.Time) error
 }
 
 // CuratedImportRepository defines curated external-import persistence behavior.
@@ -773,10 +1002,34 @@ type CuratedImportRepository interface {
 	FindCuratedImport(ctx context.Context, provider string, externalID string) (CuratedImport, error)
 }
 
+// CuratedImportConfirmationRepository atomically persists curated food/import state in the gateway transaction.
+// Implements DESIGN-009 DataImporter transactional confirmation.
+type CuratedImportConfirmationRepository interface {
+	ConfirmCuratedImport(context.Context, AdminMutationExecutor, CuratedImportConfirmation) (CuratedImportConfirmationResult, error)
+}
+
 // AdminAuditRepository defines administrative mutation audit persistence behavior.
 // Implements DESIGN-009 AdminController.
 type AdminAuditRepository interface {
 	PersistAuditEntry(ctx context.Context, entry AdminAuditEntry) (uuid.UUID, error)
 	WithAudit(ctx context.Context, entry AdminAuditEntry, fn func(sqlExecutor) error) error
 	ListAuditForEntity(ctx context.Context, entityType string, entityID uuid.UUID) ([]AdminAuditEntry, error)
+}
+
+// AdminMutationExecutor is the transaction-scoped persistence surface supplied to an admin mutation.
+// Implements DESIGN-009 AdminController fail-closed transactional audit boundary.
+type AdminMutationExecutor = sqlExecutor
+
+// AdminMutationAuditRepository atomically commits an admin mutation and its request-correlated audit.
+// Implements DESIGN-009 AdminController fail-closed transactional audit boundary.
+type AdminMutationAuditRepository interface {
+	WithMutationAudit(context.Context, AdminAuditEntry, func(AdminMutationExecutor) (AdminAuditChanges, error)) error
+}
+
+// AdminUserRepository exposes only restricted lookup and scoped deletion retry behavior.
+// Implements DESIGN-009 UserAdminPanel.
+type AdminUserRepository interface {
+	LookupAdminUsers(context.Context, AdminUserLookup) ([]AdminUserRecord, error)
+	ReindexUserEmailDigest(context.Context, uuid.UUID, LookupDigest) error
+	RetryAdminDeletion(context.Context, AdminMutationExecutor, uuid.UUID, uuid.UUID) (AdminDeletionRetry, error)
 }

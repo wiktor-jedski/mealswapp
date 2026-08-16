@@ -61,7 +61,7 @@ func mapPostgresError(err error, fallback string) error {
 		switch pgErr.Code {
 		case "23505":
 			return NewError(ErrorKindConflict, fallback, err)
-		case "23502", "23503", "23514", "22001", "22003", "22P02":
+		case "23502", "23503", "23514", "22001", "22003", "22021", "22P02":
 			return NewError(ErrorKindValidation, fallback, err)
 		case "40001", "40P01":
 			return NewError(ErrorKindRetryable, fallback, err)

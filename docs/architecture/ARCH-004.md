@@ -36,5 +36,5 @@
 - *Alternative Considered:* Synchronous LP execution within API request lifecycle
 - *Trade-off:* Synchronous execution would block the Go Fiber event loop during CPU-intensive LP solving. With 1000 concurrent users (SW-REQ-082) and 200+ simultaneous diet searches, this creates a self-inflicted DoS condition, failing SW-REQ-080 (<2s response) and SW-REQ-081 (99.9% availability). Asynchronous queue isolates CPU work, maintains API responsiveness, and allows horizontal scaling of worker processes independently. A child process avoids CGO and library ABI coupling while the fixed deadline and bounded parser contain solver failures.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

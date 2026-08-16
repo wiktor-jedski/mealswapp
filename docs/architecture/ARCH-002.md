@@ -28,5 +28,5 @@
 - *Alternative Considered:* Elasticsearch/Algolia for full-text search
 - *Trade-off:* Custom module provides precise control over ranking algorithm (SW-REQ-004) and cosine similarity integration. External search services would require synchronization overhead and may not support custom similarity scoring. For the current scale (1000 users), custom solution is more cost-effective and controllable.
 
-**Reference Documentation:** 
+**Reference Documentation:**
 - 02_APPENDIX_A.md

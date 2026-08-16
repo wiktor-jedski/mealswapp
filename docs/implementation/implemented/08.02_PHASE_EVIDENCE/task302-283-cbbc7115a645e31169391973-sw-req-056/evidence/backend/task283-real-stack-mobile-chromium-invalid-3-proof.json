@@ -1,0 +1,37 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "30",
+    "generationBefore": "30",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-03"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "30",
+      "generationBefore": "30",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "f662e0c7-0aea-4b45-96ee-6cdcf9f7e124",
+      "generationBefore": "5ae9a219-b4dc-45a5-b9ba-c8bd0c497a43"
+    },
+    "idempotencyKey": "7bd7f964-f884-4fac-9d1d-140db0eb60ef",
+    "kind": "rejected_item",
+    "name": "Task 283 invalid image real-stack-mobile-chromium",
+    "requestIds": [
+      "4ea5041b-6a21-4f38-85d6-d4996609804c"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

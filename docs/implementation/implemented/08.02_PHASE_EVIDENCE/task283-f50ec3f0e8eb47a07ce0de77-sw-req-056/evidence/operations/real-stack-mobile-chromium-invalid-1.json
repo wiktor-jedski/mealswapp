@@ -1,0 +1,24 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-ACCEPT-03"
+  ],
+  "kind": "rejected_item",
+  "name": "Task 283 invalid nutrition real-stack-mobile-chromium",
+  "idempotencyKey": "28350347-b863-4c1d-85b8-806fe86ef4d2",
+  "requestIds": [
+    "ab827496-8470-40b5-b164-5352ee03e9d3"
+  ],
+  "expected": {
+    "rowCount": 0,
+    "auditCount": 0,
+    "idempotencyCount": 0,
+    "generationBefore": "30",
+    "generationAfter": "30",
+    "generationDelta": 0
+  },
+  "generationSnapshots": {
+    "generationBefore": "0a608fb3-1948-4071-a4d8-7dd84cd93dd3",
+    "generationAfter": "34e70b1d-b450-45e0-9bdc-9e6925f7c5ae"
+  }
+}

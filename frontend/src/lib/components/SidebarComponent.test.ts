@@ -139,6 +139,17 @@ test("declares authenticated Search and Subscription sidebar links only in the a
 	expect(source).toContain('aria-current={activeView === "subscription" ? "page" : undefined}');
 });
 
+// Implements DESIGN-009 UserAdminPanel admin-only sidebar navigation verification.
+test("uses the centralized fail-closed predicate for malformed and error-bearing admin sessions", () => {
+	expect(source).toContain('onNavigateAdministration?: () => void');
+	expect(source).toContain('import { resolveAdminAccess } from "../admin-access"');
+	expect(source).toContain('resolveAdminAccess($authSessionStore) === "allowed"');
+	expect(source).toContain("{#if administrationAllowed}");
+	expect(source).not.toContain('$authSessionStore.role === "admin"');
+	expect(source).toContain('data-sidebar-nav-administration');
+	expect(source).toContain('onSidebarNavigationSelect("administration")');
+});
+
 // Implements DESIGN-016 ComponentStyles legal sidebar footer navigation verification.
 test("declares sidebar footer links for Privacy Policy and Terms of Service", () => {
 	expect(source).toContain("data-sidebar-legal");
@@ -208,12 +219,14 @@ test("history and favorites use the standard compact h3 heading style", () => {
 
 // Implements DESIGN-001 SidebarComponent unit preference row verification.
 test("declares a compact account-level unit preference row", () => {
-	expect(source).toContain('import { preferencesStore, setUnitSystem } from "../stores/preferences"');
+	expect(source).toContain("unitPreferenceStatusStore");
 	expect(source).toContain('data-sidebar-units');
 	expect(source).toContain('for="sidebar-unit-system"');
 	expect(source).toContain("Units:");
 	expect(source).toContain("$preferencesStore.unitSystem");
 	expect(source).toContain("setUnitSystem");
+	expect(source).toContain("retryUnitPreference");
+	expect(source).toContain("data-sidebar-units-retry");
 	expect(source).toContain('value: "metric"');
 	expect(source).toContain('value: "imperial"');
 	expect(source).not.toContain("<SettingsPanel");

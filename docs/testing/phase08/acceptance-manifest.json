@@ -1,0 +1,218 @@
+{
+  "schema": "mealswapp.phase08-acceptance-manifest.v1",
+  "design": "DESIGN-014 MetricsCollector",
+  "source": "req_tests.md",
+  "projectScopeAllowList": {
+    "P08-SWR033-STEP-05": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-01": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-02": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-03": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-04": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-05": ["real-stack-mobile-chromium"],
+    "P08-SWR056-STEP-06": ["real-stack-mobile-chromium"],
+    "P08-SWR056-ACCEPT-01": ["real-stack-mobile-chromium"],
+    "P08-SWR056-ACCEPT-05": ["real-stack-mobile-chromium"],
+    "P08-SWR056-ACCEPT-06": ["real-stack-mobile-chromium"]
+  },
+  "scenarios": [
+    {
+      "id": "P08-SWR019-CLASSIFICATION-FILTERING",
+      "requirement": "SW-REQ-019",
+      "owner": "frontend-search",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend"],
+      "criteria": [
+        {"id":"P08-SWR019-STEP-01","kind":"step","source":{"file":"req_tests.md","line":88},"text":"Select an include classification and confirm only matching results appear."},
+        {"id":"P08-SWR019-STEP-02","kind":"step","source":{"file":"req_tests.md","line":89},"text":"Select an exclusion and confirm matching results disappear."},
+        {"id":"P08-SWR019-STEP-03","kind":"step","source":{"file":"req_tests.md","line":90},"text":"Verify requests use classification IDs, not display labels."},
+        {"id":"P08-SWR019-STEP-04","kind":"step","source":{"file":"req_tests.md","line":91},"text":"Rename a classification and confirm filtering still works."}
+      ]
+    },
+    {
+      "id": "P08-SWR032-IMPERIAL-CONVERSION",
+      "requirement": "SW-REQ-032",
+      "owner": "frontend-units",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend"],
+      "criteria": [
+        {"id":"P08-SWR032-STEP-01","kind":"step","source":{"file":"req_tests.md","line":100},"text":"Switch the UI between metric and imperial."},
+        {"id":"P08-SWR032-STEP-02","kind":"step","source":{"file":"req_tests.md","line":101},"text":"Verify solid and liquid displays."},
+        {"id":"P08-SWR032-STEP-03","kind":"step","source":{"file":"req_tests.md","line":102},"text":"Submit an imperial quantity and verify backend calculations match its metric equivalent."}
+      ]
+    },
+    {
+      "id": "P08-SWR033-STANDARDIZED-STORAGE",
+      "requirement": "SW-REQ-033",
+      "owner": "backend-domain",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend", "database"],
+      "criteria": [
+        {"id":"P08-SWR033-STEP-01","kind":"step","source":{"file":"req_tests.md","line":112},"text":"Import a solid provider item."},
+        {"id":"P08-SWR033-STEP-02","kind":"step","source":{"file":"req_tests.md","line":113},"text":"Import a liquid provider item."},
+        {"id":"P08-SWR033-STEP-03","kind":"step","source":{"file":"req_tests.md","line":114},"text":"Compare displayed/stored macro bases with 100g and 100ml."},
+        {"id":"P08-SWR033-STEP-04","kind":"step","source":{"file":"req_tests.md","line":115},"text":"Verify changing display units does not change canonical nutritional values."},
+        {"id":"P08-SWR033-STEP-05","kind":"step","source":{"file":"req_tests.md","line":116},"text":"Confirm no liquid path silently assumes 1 ml = 1 g."}
+      ]
+    },
+    {
+      "id": "P08-SWR043-PRIVATE-ITEM-ISOLATION",
+      "requirement": "SW-REQ-043",
+      "owner": "backend-privacy",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend", "database", "download"],
+      "criteria": [
+        {"id":"P08-SWR043-STEP-01","kind":"step","source":{"file":"req_tests.md","line":125},"text":"Create private items for users A and B."},
+        {"id":"P08-SWR043-STEP-02","kind":"step","source":{"file":"req_tests.md","line":126},"text":"Attempt to read, update and delete A’s item as B."},
+        {"id":"P08-SWR043-STEP-03","kind":"step","source":{"file":"req_tests.md","line":127},"text":"Attempt to guess A’s item ID."},
+        {"id":"P08-SWR043-STEP-04","kind":"step","source":{"file":"req_tests.md","line":128},"text":"Export both accounts."},
+        {"id":"P08-SWR043-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":130},"text":"Accept when B cannot discover whether A’s item exists and each export includes only its owner’s data."}
+      ]
+    },
+    {
+      "id": "P08-SWR054-ADMINISTRATIVE-ACCESS",
+      "requirement": "SW-REQ-054",
+      "owner": "admin-auth",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend"],
+      "criteria": [
+        {"id":"P08-SWR054-STEP-01","kind":"step","source":{"file":"req_tests.md","line":5},"text":"Visit /admin anonymously."},
+        {"id":"P08-SWR054-STEP-02","kind":"step","source":{"file":"req_tests.md","line":6},"text":"Visit /admin as an ordinary user."},
+        {"id":"P08-SWR054-STEP-03","kind":"step","source":{"file":"req_tests.md","line":7},"text":"Call representative admin endpoints directly as both."},
+        {"id":"P08-SWR054-STEP-04","kind":"step","source":{"file":"req_tests.md","line":8},"text":"Sign in as an admin and repeat."},
+        {"id":"P08-SWR054-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":12},"text":"Anonymous API calls return 401."},
+        {"id":"P08-SWR054-ACCEPT-02","kind":"criterion","source":{"file":"req_tests.md","line":13},"text":"Authenticated non-admin calls return 403."},
+        {"id":"P08-SWR054-ACCEPT-03","kind":"criterion","source":{"file":"req_tests.md","line":14},"text":"Admin calls succeed."},
+        {"id":"P08-SWR054-ACCEPT-04","kind":"criterion","source":{"file":"req_tests.md","line":15},"text":"Direct navigation does not reveal restricted data."},
+        {"id":"P08-SWR054-ACCEPT-05","kind":"criterion","source":{"file":"req_tests.md","line":16},"text":"Spoofing role/user information in the request does not help."}
+      ]
+    },
+    {
+      "id": "P08-SWR055-EXTERNAL-CURATION",
+      "requirement": "SW-REQ-055",
+      "owner": "external-data-curation",
+      "requiredEnvironment": "isolated-real-stack-controlled-providers",
+      "evidenceTypes": ["playwright", "backend", "database"],
+      "criteria": [
+        {"id":"P08-SWR055-STEP-01","kind":"step","source":{"file":"req_tests.md","line":20},"text":"Search USDA."},
+        {"id":"P08-SWR055-STEP-02","kind":"step","source":{"file":"req_tests.md","line":21},"text":"Search OpenFoodFacts."},
+        {"id":"P08-SWR055-STEP-03","kind":"step","source":{"file":"req_tests.md","line":22},"text":"Search both simultaneously."},
+        {"id":"P08-SWR055-STEP-04","kind":"step","source":{"file":"req_tests.md","line":23},"text":"Select a result."},
+        {"id":"P08-SWR055-STEP-05","kind":"step","source":{"file":"req_tests.md","line":24},"text":"Edit its name, nutrition, physical state and classifications."},
+        {"id":"P08-SWR055-STEP-06","kind":"step","source":{"file":"req_tests.md","line":25},"text":"Confirm import."},
+        {"id":"P08-SWR055-STEP-07","kind":"step","source":{"file":"req_tests.md","line":26},"text":"Search for the new item in the local catalog."},
+        {"id":"P08-SWR055-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":30},"text":"External search alone does not modify the local database."},
+        {"id":"P08-SWR055-ACCEPT-02","kind":"criterion","source":{"file":"req_tests.md","line":31},"text":"Provider warnings appear without exposing raw payloads."},
+        {"id":"P08-SWR055-ACCEPT-03","kind":"criterion","source":{"file":"req_tests.md","line":32},"text":"Edited values are used."},
+        {"id":"P08-SWR055-ACCEPT-04","kind":"criterion","source":{"file":"req_tests.md","line":33},"text":"Exactly one global item is imported."},
+        {"id":"P08-SWR055-ACCEPT-05","kind":"criterion","source":{"file":"req_tests.md","line":34},"text":"The imported item becomes locally searchable."},
+        {"id":"P08-SWR055-ACCEPT-06","kind":"criterion","source":{"file":"req_tests.md","line":35},"text":"Retrying a lost/ambiguous response does not duplicate it."},
+        {"id":"P08-SWR055-ACCEPT-07","kind":"criterion","source":{"file":"req_tests.md","line":36},"text":"One provider failing still allows results from the other."}
+      ]
+    },
+    {
+      "id": "P08-SWR056-MANUAL-GLOBAL-ITEMS",
+      "requirement": "SW-REQ-056",
+      "owner": "admin-item-curation",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend", "database", "redis"],
+      "criteria": [
+        {"id":"P08-SWR056-STEP-01","kind":"step","source":{"file":"req_tests.md","line":40},"text":"Create a solid item."},
+        {"id":"P08-SWR056-STEP-02","kind":"step","source":{"file":"req_tests.md","line":41},"text":"Create a liquid item with density."},
+        {"id":"P08-SWR056-STEP-03","kind":"step","source":{"file":"req_tests.md","line":42},"text":"Update their names and nutrition."},
+        {"id":"P08-SWR056-STEP-04","kind":"step","source":{"file":"req_tests.md","line":43},"text":"Verify updated search results."},
+        {"id":"P08-SWR056-STEP-05","kind":"step","source":{"file":"req_tests.md","line":44},"text":"Delete them."},
+        {"id":"P08-SWR056-STEP-06","kind":"step","source":{"file":"req_tests.md","line":45},"text":"Verify they disappear from search."},
+        {"id":"P08-SWR056-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":49},"text":"Created items are global and have no private owner."},
+        {"id":"P08-SWR056-ACCEPT-02","kind":"criterion","source":{"file":"req_tests.md","line":50},"text":"Liquid-density rules are enforced."},
+        {"id":"P08-SWR056-ACCEPT-03","kind":"criterion","source":{"file":"req_tests.md","line":51},"text":"Invalid nutrition/classification/image data is rejected."},
+        {"id":"P08-SWR056-ACCEPT-04","kind":"criterion","source":{"file":"req_tests.md","line":52},"text":"Create retry does not duplicate the item."},
+        {"id":"P08-SWR056-ACCEPT-05","kind":"criterion","source":{"file":"req_tests.md","line":53},"text":"Updates become visible in Catalog and Substitution Search."},
+        {"id":"P08-SWR056-ACCEPT-06","kind":"criterion","source":{"file":"req_tests.md","line":54},"text":"Deletion removes the item from active search."},
+        {"id":"P08-SWR056-ACCEPT-07","kind":"criterion","source":{"file":"req_tests.md","line":55},"text":"Audit failure rolls back the entire mutation."}
+      ]
+    },
+    {
+      "id": "P08-SWR057-CLASSIFICATIONS",
+      "requirement": "SW-REQ-057",
+      "owner": "classification-administration",
+      "requiredEnvironment": "isolated-real-stack-two-contexts",
+      "evidenceTypes": ["playwright", "backend", "database", "redis"],
+      "criteria": [
+        {"id":"P08-SWR057-STEP-01","kind":"step","source":{"file":"req_tests.md","line":61},"text":"Create a Food Category."},
+        {"id":"P08-SWR057-STEP-02","kind":"step","source":{"file":"req_tests.md","line":62},"text":"Create a Culinary Role."},
+        {"id":"P08-SWR057-STEP-03","kind":"step","source":{"file":"req_tests.md","line":63},"text":"Rename/reparent them."},
+        {"id":"P08-SWR057-STEP-04","kind":"step","source":{"file":"req_tests.md","line":64},"text":"Attach one to an item."},
+        {"id":"P08-SWR057-STEP-05","kind":"step","source":{"file":"req_tests.md","line":65},"text":"Attempt to create a duplicate or hierarchy cycle."},
+        {"id":"P08-SWR057-STEP-06","kind":"step","source":{"file":"req_tests.md","line":66},"text":"Attempt to delete an in-use classification."},
+        {"id":"P08-SWR057-STEP-07","kind":"step","source":{"file":"req_tests.md","line":67},"text":"Remove its use and delete it."},
+        {"id":"P08-SWR057-STEP-08","kind":"step","source":{"file":"req_tests.md","line":68},"text":"Open Substitution Search in another browser/application instance."},
+        {"id":"P08-SWR057-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":72},"text":"Duplicate and cycle attempts fail without mutation."},
+        {"id":"P08-SWR057-ACCEPT-02","kind":"criterion","source":{"file":"req_tests.md","line":73},"text":"In-use deletion returns a conflict."},
+        {"id":"P08-SWR057-ACCEPT-03","kind":"criterion","source":{"file":"req_tests.md","line":74},"text":"Successful rename appears in filter options."},
+        {"id":"P08-SWR057-ACCEPT-04","kind":"criterion","source":{"file":"req_tests.md","line":75},"text":"Successful deletion removes the option."},
+        {"id":"P08-SWR057-ACCEPT-05","kind":"criterion","source":{"file":"req_tests.md","line":76},"text":"Changes appear across application instances without a restart."},
+        {"id":"P08-SWR057-ACCEPT-06","kind":"criterion","source":{"file":"req_tests.md","line":77},"text":"Failed mutations do not invalidate the cache."}
+      ]
+    },
+    {
+      "id": "P08-SWR072-DATA-PORTABILITY",
+      "requirement": "SW-REQ-072",
+      "owner": "privacy-export",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend", "database", "download"],
+      "criteria": [
+        {"id":"P08-SWR072-STEP-01","kind":"step","source":{"file":"req_tests.md","line":139},"text":"Create a private custom item."},
+        {"id":"P08-SWR072-STEP-02","kind":"step","source":{"file":"req_tests.md","line":140},"text":"Create saved diet/history data."},
+        {"id":"P08-SWR072-STEP-03","kind":"step","source":{"file":"req_tests.md","line":141},"text":"Export JSON and CSV."},
+        {"id":"P08-SWR072-STEP-04","kind":"step","source":{"file":"req_tests.md","line":142},"text":"Confirm all owned data is present."},
+        {"id":"P08-SWR072-STEP-05","kind":"step","source":{"file":"req_tests.md","line":143},"text":"Confirm global and other-user data is absent."},
+        {"id":"P08-SWR072-STEP-06","kind":"step","source":{"file":"req_tests.md","line":144},"text":"Delete a private item and verify the chosen retention semantics are reflected correctly."}
+      ]
+    },
+    {
+      "id": "P08-SWR073-RIGHT-TO-ERASURE",
+      "requirement": "SW-REQ-073",
+      "owner": "privacy-erasure",
+      "requiredEnvironment": "isolated-real-stack-with-deletion-worker",
+      "evidenceTypes": ["playwright", "backend", "database", "redis"],
+      "criteria": [
+        {"id":"P08-SWR073-STEP-01","kind":"step","source":{"file":"req_tests.md","line":153},"text":"Create a disposable test account with private items and history."},
+        {"id":"P08-SWR073-STEP-02","kind":"step","source":{"file":"req_tests.md","line":154},"text":"Request account deletion."},
+        {"id":"P08-SWR073-STEP-03","kind":"step","source":{"file":"req_tests.md","line":155},"text":"Verify new writes are blocked while deletion is pending."},
+        {"id":"P08-SWR073-STEP-04","kind":"step","source":{"file":"req_tests.md","line":156},"text":"Let the worker complete deletion."},
+        {"id":"P08-SWR073-STEP-05","kind":"step","source":{"file":"req_tests.md","line":157},"text":"Attempt login, profile access, export and custom-item access."},
+        {"id":"P08-SWR073-STEP-06","kind":"step","source":{"file":"req_tests.md","line":158},"text":"Confirm another user and global items remain unaffected."}
+      ]
+    },
+    {
+      "id": "P08-SWR084-CENTRALIZED-LOGGING",
+      "requirement": "SW-REQ-084",
+      "owner": "platform-observability",
+      "requiredEnvironment": "deployed-test-with-centralized-log-sink",
+      "evidenceTypes": ["playwright", "backend", "deployed-logs"],
+      "criteria": [
+        {"id":"P08-SWR084-STEP-01","kind":"step","source":{"file":"req_tests.md","line":169},"text":"Perform a successful and failed admin mutation."},
+        {"id":"P08-SWR084-STEP-02","kind":"step","source":{"file":"req_tests.md","line":170},"text":"Perform external search/import."},
+        {"id":"P08-SWR084-STEP-03","kind":"step","source":{"file":"req_tests.md","line":171},"text":"Inspect deployed logs."},
+        {"id":"P08-SWR084-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":175},"text":"Events have timestamps and correlation/request IDs."},
+        {"id":"P08-SWR084-ACCEPT-02","kind":"criterion","source":{"file":"req_tests.md","line":176},"text":"Successful and failed admin actions are distinguishable."},
+        {"id":"P08-SWR084-ACCEPT-03","kind":"criterion","source":{"file":"req_tests.md","line":177},"text":"Logs do not contain names, emails, search text, item IDs, idempotency keys, secrets or provider payloads."},
+        {"id":"P08-SWR084-ACCEPT-04","kind":"criterion","source":{"file":"req_tests.md","line":178},"text":"The deployment actually centralizes logs; console output alone does not fully satisfy the wording."}
+      ]
+    },
+    {
+      "id": "P08-SWR090-MICRONUTRIENT-VOCABULARY",
+      "requirement": "SW-REQ-090",
+      "owner": "nutrition-domain",
+      "requiredEnvironment": "isolated-real-stack",
+      "evidenceTypes": ["playwright", "backend", "database"],
+      "criteria": [
+        {"id":"P08-SWR090-STEP-01","kind":"step","source":{"file":"req_tests.md","line":187},"text":"Create/import an item using Sodium."},
+        {"id":"P08-SWR090-STEP-02","kind":"step","source":{"file":"req_tests.md","line":188},"text":"Try the same using Na."},
+        {"id":"P08-SWR090-STEP-03","kind":"step","source":{"file":"req_tests.md","line":189},"text":"Try an unknown micronutrient."},
+        {"id":"P08-SWR090-STEP-04","kind":"step","source":{"file":"req_tests.md","line":190},"text":"Disable a vocabulary entry and retry."},
+        {"id":"P08-SWR090-ACCEPT-01","kind":"criterion","source":{"file":"req_tests.md","line":192},"text":"Accept when only active canonical keys are persisted."}
+      ]
+    }
+  ]
+}

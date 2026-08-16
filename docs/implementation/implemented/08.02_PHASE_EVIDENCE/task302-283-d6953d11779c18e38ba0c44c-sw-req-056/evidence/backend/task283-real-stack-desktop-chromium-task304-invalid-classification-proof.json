@@ -1,0 +1,39 @@
+{
+  "actual": {
+    "auditCount": 0,
+    "generationAfter": "30",
+    "generationBefore": "30",
+    "generationDelta": 0,
+    "idempotencyCount": 0,
+    "requestAuditActions": {},
+    "rowCount": 0
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-03"
+    ],
+    "expected": {
+      "auditCount": 0,
+      "generationAfter": "30",
+      "generationBefore": "30",
+      "generationDelta": 0,
+      "idempotencyCount": 0,
+      "requestAuditActions": {},
+      "rowCount": 0
+    },
+    "generationSnapshots": {
+      "generationAfter": "859655ab-5626-4594-8fd3-d30959e54179",
+      "generationBefore": "35706f97-0dcd-4003-b491-ec675184fbe3"
+    },
+    "idempotencyKey": "1dfd7da6-5a91-4f32-9a3f-3404676d9c53",
+    "kind": "rejected_item",
+    "name": "Task 283 Task 304 invalid classification real-stack-desktop-chromium",
+    "requestIds": [
+      "a8c0336c-6cb8-4837-af7c-131dbc31611c"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

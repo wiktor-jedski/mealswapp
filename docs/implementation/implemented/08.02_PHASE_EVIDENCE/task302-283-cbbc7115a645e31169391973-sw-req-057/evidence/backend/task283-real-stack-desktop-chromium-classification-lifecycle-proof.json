@@ -1,0 +1,63 @@
+{
+  "actual": {
+    "active": false,
+    "auditActions": {
+      "classification.create": 1,
+      "classification.delete": 1
+    },
+    "deleted": true,
+    "failedGenerationAfter": "18",
+    "failedGenerationBefore": "18",
+    "failedGenerationDelta": 0,
+    "kind": "food_category",
+    "name": "Task 283 lifecycle real-stack-desktop-chromium",
+    "parentId": null,
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR057-STEP-01",
+      "P08-SWR057-STEP-02",
+      "P08-SWR057-STEP-03",
+      "P08-SWR057-STEP-04",
+      "P08-SWR057-STEP-05",
+      "P08-SWR057-STEP-06",
+      "P08-SWR057-STEP-07",
+      "P08-SWR057-ACCEPT-01",
+      "P08-SWR057-ACCEPT-02",
+      "P08-SWR057-ACCEPT-04",
+      "P08-SWR057-ACCEPT-06"
+    ],
+    "entityId": "6cd5eb5d-3f64-471b-aa30-7abb81b8743f",
+    "expected": {
+      "active": false,
+      "auditActions": {
+        "classification.create": 1,
+        "classification.delete": 1
+      },
+      "deleted": true,
+      "failedGenerationAfter": "18",
+      "failedGenerationBefore": "18",
+      "failedGenerationDelta": 0,
+      "kind": "food_category"
+    },
+    "generationSnapshots": {
+      "failedGenerationAfter": "3f80c7cc-f11b-4064-a73c-d66ed1490a5d",
+      "failedGenerationBefore": "93ca3d2c-f8bc-48d9-af92-9b15fac69ef8"
+    },
+    "kind": "classification",
+    "name": "Task 283 lifecycle real-stack-desktop-chromium",
+    "requestIds": [
+      "573b2856-effb-4228-afae-ee4599c1c178",
+      "18346920-9cc8-4819-b9c0-51fe29c20867",
+      "c94f89b5-9f3e-43a7-be8c-eb54abee4f3c",
+      "f0574afe-334b-40b9-9147-47405a8e0542",
+      "0332c33a-2d5c-4fa2-98b2-e9233f98e4b3",
+      "f0692a90-3dfb-4042-bb22-4f6d935c7262"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

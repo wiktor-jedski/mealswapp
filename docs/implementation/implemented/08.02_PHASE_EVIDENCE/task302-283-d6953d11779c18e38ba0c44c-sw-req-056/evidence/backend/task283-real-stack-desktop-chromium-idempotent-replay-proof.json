@@ -1,0 +1,54 @@
+{
+  "actual": {
+    "active": true,
+    "allergenKeys": [],
+    "auditActions": {
+      "manual_create": 1
+    },
+    "culinaryRoleIds": [],
+    "deleted": false,
+    "density": null,
+    "densitySourceKind": null,
+    "foodCategoryIds": [],
+    "idempotencyCount": 1,
+    "macros": {
+      "carbohydrates": 20.0,
+      "fat": 3.0,
+      "protein": 10.0
+    },
+    "metricBasis": "100g",
+    "micros": {},
+    "name": "Task 283 replay real-stack-desktop-chromium",
+    "ownerless": true,
+    "physicalState": "solid",
+    "requestAuditActions": {
+      "manual_create": 1
+    },
+    "rowCount": 1
+  },
+  "assertionFailures": [],
+  "operation": {
+    "criterionIds": [
+      "P08-SWR056-ACCEPT-04"
+    ],
+    "entityId": "2bc1a49b-ffd2-44f4-b3d1-ae2d245811ef",
+    "expected": {
+      "active": true,
+      "auditActions": {
+        "manual_create": 1
+      },
+      "idempotencyCount": 1,
+      "rowCount": 1
+    },
+    "idempotencyKey": "e439a03e-0daa-4346-9327-c9ee17ef2db4",
+    "kind": "item",
+    "name": "Task 283 replay real-stack-desktop-chromium",
+    "requestIds": [
+      "3f984e13-956b-4b1c-9e5c-beb8775d4452",
+      "906988a5-c5f5-4150-a95e-d9060fc86181"
+    ],
+    "schema": "mealswapp.task283-operation.v1"
+  },
+  "schema": "mealswapp.task283-operation-proof.v1",
+  "transactionReadOnly": true
+}

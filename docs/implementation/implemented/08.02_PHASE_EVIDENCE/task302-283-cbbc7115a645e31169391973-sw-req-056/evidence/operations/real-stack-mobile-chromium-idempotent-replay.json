@@ -1,0 +1,22 @@
+{
+  "schema": "mealswapp.task283-operation.v1",
+  "criterionIds": [
+    "P08-SWR056-ACCEPT-04"
+  ],
+  "kind": "item",
+  "entityId": "2019b8a8-ab4f-4026-960f-3159add9c7f2",
+  "name": "Task 283 replay real-stack-mobile-chromium",
+  "idempotencyKey": "215bda75-19d2-4fd3-989c-648e9c0b0479",
+  "requestIds": [
+    "706cf2a7-c343-46e1-a1ba-9a9cba56942d",
+    "ec715dd1-7e4c-45c5-8e6e-0ca81b59f80c"
+  ],
+  "expected": {
+    "active": true,
+    "rowCount": 1,
+    "auditActions": {
+      "manual_create": 1
+    },
+    "idempotencyCount": 1
+  }
+}

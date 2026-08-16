@@ -1,8 +1,9 @@
 import type { SearchMode } from "./api/generated";
 
 // Implements DESIGN-001 SearchView canonical SPA routes and browser-history restoration.
+// Implements DESIGN-009 UserAdminPanel canonical administration route.
 
-export type ShellView = "search" | "subscription" | "privacy" | "terms";
+export type ShellView = "search" | "subscription" | "administration" | "privacy" | "terms";
 export type BillingReturnState = "success" | "cancel" | null;
 
 export interface ShellRoute {
@@ -23,6 +24,7 @@ export function parseShellRoute(value: string | URL): ShellRoute {
 	const url = value instanceof URL ? value : new URL(value, "http://frontend.local");
 	if (url.pathname === "/privacy") return { view: "privacy", mode: "catalog", billingReturn: null };
 	if (url.pathname === "/terms") return { view: "terms", mode: "catalog", billingReturn: null };
+	if (url.pathname === "/admin") return { view: "administration", mode: "catalog", billingReturn: null };
 	if (url.pathname === "/subscription") {
 		return {
 			view: "subscription",
@@ -55,6 +57,7 @@ export function shellViewRoute(view: ShellView, mode: SearchMode = "catalog"): s
 	switch (view) {
 		case "search": return searchRoute(mode);
 		case "subscription": return "/subscription";
+		case "administration": return "/admin";
 		case "privacy": return "/privacy";
 		case "terms": return "/terms";
 	}

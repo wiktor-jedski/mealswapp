@@ -30,6 +30,7 @@
   import LoginView from "./LoginView.svelte";
   import OAuthEntryPoint from "./OAuthEntryPoint.svelte";
   import RegisterView from "./RegisterView.svelte";
+  import AdministrationPanel from "./AdministrationPanel.svelte";
   import {
     authSurfaceStore,
     buildAuthGuardDecision,
@@ -47,6 +48,7 @@
   import { displayUnitForBasis } from "../units";
   import { clearDailyDietState, dailyDietStore, selectDailyDiet } from "../stores/daily-diet";
   import { parseShellRoute, searchRoute, shellViewRoute, type ShellView } from "../shell-routing";
+  import { resolveAdminAccess, verifiedAdminIdentity } from "../admin-access";
 
   // Implements DESIGN-001 SearchView shell composition: sidebar, mode controls, entitlement gate, autocomplete search bar, mode-specific controls, results, offline status, and DESIGN-018 login auth surface.
 
@@ -117,6 +119,15 @@
   /** Guards one direct subscription-route attempt after session probing resolves. */
   let guardedInitialSubscriptionRoute = $state(false);
 
+  /** Verified administrator identity owning feature-local administration state. */
+  let administrationIdentity = $state<string | null>(null);
+
+  /** Safe feedback after a denied direct route; never exposes protected controls or data. */
+  let administrationDenied = $state(false);
+
+  /** Administration presentation state derived only from the current server-refreshed session projection. */
+  let administrationAccess = $derived(resolveAdminAccess($authSessionStore));
+
   /** Guards one OAuth callback modal handoff while keeping the normal application shell mounted. */
   let handledOAuthCallbackReturn = $state(false);
 
@@ -125,6 +136,16 @@
     if (entitlementQuery.data) {
       setEntitlementStatus(entitlementQuery.data);
     }
+  });
+
+  $effect(() => {
+    if (activeView !== "administration" || administrationAccess === "loading" || administrationAccess === "error") return;
+    const identity = verifiedAdminIdentity($authSessionStore);
+    if (identity !== null && (administrationIdentity === null || administrationIdentity === identity)) {
+      administrationIdentity = identity;
+      return;
+    }
+    denyAdministrationRoute();
   });
 
   $effect(() => {
@@ -280,6 +301,35 @@
     }
   }
 
+  /** Opens the administration shell only for a verified admin projection; server authorization remains authoritative. */
+  function openAdministrationView(preserveCurrentURL = false): void {
+    if (administrationAccess !== "allowed") {
+      if (administrationAccess !== "loading" && administrationAccess !== "error") denyAdministrationRoute();
+      return;
+    }
+    administrationDenied = false;
+    administrationIdentity = verifiedAdminIdentity($authSessionStore);
+    activeView = "administration";
+    if (!preserveCurrentURL) pushBrowserRoute(shellViewRoute("administration"));
+  }
+
+  /** Fails a denied or changed-account administration route closed without clearing Search state. */
+  function denyAdministrationRoute(): void {
+    administrationIdentity = null;
+    administrationDenied = true;
+    activeView = "search";
+    replaceBrowserRoute(searchRoute($searchStore.mode));
+  }
+
+  /** Returns an imported item to ordinary local catalog search without retaining administration draft state. */
+  function viewImportedItemInLocalSearch(name: string): void {
+    setMode("catalog");
+    setQuery(name);
+    submitSearch(name);
+    activeView = "search";
+    pushBrowserRoute(searchRoute("catalog"));
+  }
+
   /** Selects a Search mode and records it for refresh and Back/Forward restoration. */
   function selectSearchMode(mode: SearchMode): void {
     setMode(mode);
@@ -298,6 +348,8 @@
     activeView = route.view;
     if (route.view === "subscription" && !authenticating()) {
       openSubscriptionView(true);
+    } else if (route.view === "administration" && administrationAccess !== "loading") {
+      openAdministrationView(true);
     }
   }
 
@@ -335,6 +387,7 @@
         {activeView}
         onNavigateSearch={openSearchView}
         onNavigateSubscription={openSubscriptionView}
+        onNavigateAdministration={openAdministrationView}
         onNavigatePrivacy={openPrivacyView}
         onNavigateTerms={openTermsView}
         onSignIn={() => {
@@ -346,7 +399,12 @@
     </aside>
 
     <div class="flex w-full max-w-5xl flex-col gap-5 sm:mx-auto sm:px-6 sm:py-6">
-      {#if activeView === "subscription"}
+      {#if activeView === "administration"}
+        <!-- Implements DESIGN-009 UserAdminPanel route-level fail-closed administration boundary. -->
+        {#if administrationAccess !== "denied"}
+          <AdministrationPanel access={administrationAccess} onViewLocalItem={viewImportedItemInLocalSearch} />
+        {/if}
+      {:else if activeView === "subscription"}
         <!-- Implements DESIGN-001 SidebarComponent authenticated Subscription navigation target, guarded by DESIGN-018. -->
         <section class="grid gap-4" data-subscription-view>
           <SubscriptionBilling />
@@ -377,6 +435,11 @@
           </p>
         </section>
       {:else}
+        {#if administrationDenied}
+          <p class="rounded border border-[var(--color-error)] bg-[var(--color-surface)] px-3 py-2 text-sm" role="alert" data-admin-access-denied>
+            Administration access is unavailable for this session.
+          </p>
+        {/if}
         <!-- Visual order: mode controls → autocomplete search bar → mode-specific controls → results → offline status. -->
         <SearchModes onModeChange={selectSearchMode} />
 
